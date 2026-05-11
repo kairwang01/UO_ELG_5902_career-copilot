@@ -7,13 +7,13 @@
 
 ## 1. Members
 
-| # | Name | Role | Email |
-|---|------|------|-------|
-| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination · Product Planning · Front-end | jacksonkai0408@gmail.com |
-| 2 | **Jingxuan Xu** | Backend · API Integration | — |
-| 3 | **Xiaoyan Yang** | UI · Testing · Documentation | — |
-| 4 | **Xiaoyi Zhang** | Database · Front-end · Testing | — |
-| 5 | **Jiaoyang Bi** | Documentation · Full Stack · Dev Support | — |
+| # | Name | Role | uOttawa Email |
+|---|------|------|---------------|
+| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination · Product Planning · Front-end | bwang105@uottawa.ca |
+| 2 | **Jingxuan Xu** | Backend · API Integration | jxu022@uottawa.ca |
+| 3 | **Xiaoyan Yang** | UI · Testing · Documentation | xyang015@uottawa.ca |
+| 4 | **Xiaoyi Zhang** | Database · Front-end · Testing | xzhan071@uottawa.ca |
+| 5 | **Jiaoyang Bi** | Documentation · Full Stack · Dev Support | jbi056@uottawa.ca |
 
 ---
 

@@ -18,20 +18,21 @@
 5. [System Architecture](#system-architecture)
 6. [Technology Stack](#technology-stack)
 7. [Project Scope (MVP → Production)](#project-scope-mvp--production)
-8. [Project Roadmap](#project-roadmap)
-9. [Team and Responsibilities](#team-and-responsibilities)
-10. [Repository Structure](#repository-structure)
-11. [Getting Started](#getting-started)
-12. [Development Workflow](#development-workflow)
-13. [Quality Assurance](#quality-assurance)
-14. [Documentation Index](#documentation-index)
-15. [Contact](#contact)
+8. [Official Course Deliverables](#official-course-deliverables)
+9. [Project Roadmap](#project-roadmap)
+10. [Team and Responsibilities](#team-and-responsibilities)
+11. [Repository Structure](#repository-structure)
+12. [Getting Started](#getting-started)
+13. [Development Workflow](#development-workflow)
+14. [Quality Assurance](#quality-assurance)
+15. [Documentation Index](#documentation-index)
+16. [Contact](#contact)
 
 ---
 
 ## Project Overview
 
-**Career CoPilot** is an innovative AI-powered platform designed to give job seekers a measurable advantage in a competitive recruitment market. Our existing functional MVP delivers the platform's three core capabilities:
+**Career CoPilot** is an innovative AI-powered platform designed to give job seekers a measurable advantage in a competitive recruitment market. The existing functional MVP delivers the platform's three core capabilities:
 
 - **AI Resume Optimization** — Tailored rewrite and ATS-readiness analysis.
 - **AI Interview Simulator** — Role- and industry-specific mock interviews with feedback.
@@ -204,20 +205,40 @@ The MVP is functional. Our scope is to make it **production-grade**. The five fo
 
 ---
 
+## Official Course Deliverables
+
+Team 8 is graded against the following deliverables. **All dates are firm.** Internal team deadlines run 48 hours ahead of each.
+
+| # | Deliverable | Weight | Due Date |
+|---|-------------|--------|----------|
+| 1 | Team Contract | 5 % | **13 May 2026** |
+| 2 | Project Proposal | 5 % | **20 May 2026** |
+| 3 | Minimum Viable Prototype (MVP) | 10 % | **17 June 2026** |
+| 4 | Beta Release | 10 % | **4 July 2026** |
+| 5 | Project Video | 5 % | **8 July 2026** |
+| 6 | Design Day | 10 % | **17 July 2026** |
+| 7 | Final Release Report | 15 % | **26 July 2026** |
+| 8 | Client Evaluation | 10 % | **27 July 2026** |
+| 9 | Technical Advisor Evaluation | 10 % | **27 July 2026** |
+
+*Team-based deliverables total 80 %. Remaining weighting is assigned to individual evaluation per course policy.*
+
+---
+
 ## Project Roadmap
 
-The project is structured into **five phases over approximately 14 weeks**, aligned with the academic schedule.
+The project runs from **May 2026 to late July 2026** (~11 weeks of active work after the team contract is signed). Phases are aligned directly with the official deliverables.
 
-| Phase | Duration | Milestones | Key Deliverables |
-|-------|----------|------------|------------------|
-| **Phase 0 — Initiation** | Weeks 1–2 | Team contract, repository setup, MVP audit | Team contract, project proposal, GitHub repo |
-| **Phase 1 — Discovery & Design** | Weeks 3–4 | Requirements, architecture, test strategy | Requirements doc, system design, test plan |
-| **Phase 2 — Hardening Sprint** | Weeks 5–8 | Database refactor, critical bug fixes | Migration scripts, fixed bug backlog, audit report |
-| **Phase 3 — QA & Automation** | Weeks 9–11 | Test pipelines, CI/CD, load testing | Automated test suite, CI workflows, performance report |
-| **Phase 4 — Production Readiness** | Weeks 12–13 | Security review, observability, deployment | Hardened deployment, runbooks, monitoring |
-| **Phase 5 — Final Review** | Week 14 | Demo, final report, handoff | Final demo, full documentation, presentation |
+| Phase | Window | Anchor Deliverable | Focus |
+|-------|--------|--------------------|-------|
+| **Phase 0 — Initiation** | 8 May – 13 May 2026 | Team Contract | Team setup, repository, MVP audit |
+| **Phase 1 — Proposal & Design** | 13 May – 20 May 2026 | Proposal | Requirements, architecture, test strategy |
+| **Phase 2 — MVP Hardening** | 20 May – 17 June 2026 | MVP | Database refactor, critical bug fixes, core flow stability |
+| **Phase 3 — Beta Release** | 17 June – 4 July 2026 | Beta Release | Automated test pipeline, performance, security pass |
+| **Phase 4 — Video & Launch Polish** | 4 July – 17 July 2026 | Video + Design Day | Video, public demo, deployment hardening, Design Day prep |
+| **Phase 5 — Final Report & Evaluation** | 17 July – 27 July 2026 | Final Report + Evaluations | Final write-up, retrospective, client and advisor evaluations |
 
-A more granular sprint-by-sprint plan lives in [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
+A sprint-by-sprint breakdown lives in [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 ---
 
@@ -225,13 +246,13 @@ A more granular sprint-by-sprint plan lives in [`docs/PROJECT_PLAN.md`](docs/PRO
 
 **Team 8 — ELG/DTI/GNG 5902, University of Ottawa**
 
-| # | Member | Primary Role | Areas of Ownership |
-|---|--------|--------------|---------------------|
-| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination, Product Planning, Front-end | Roadmap, sprint planning, stakeholder communication, front-end architecture, UI components |
-| 2 | **Jingxuan Xu** | Backend / API Integration | RESTful API design, business logic, third-party AI integration, backend services |
-| 3 | **Xiaoyan Yang** | UI / Testing / Documentation | UI implementation, manual & automated test design, documentation maintenance |
-| 4 | **Xiaoyi Zhang** | Database / Front-end / Testing | Database schema, migrations, query optimization, front-end support, test coverage |
-| 5 | **Jiaoyang Bi** | Documentation / Full Stack / Dev Support | Cross-stack support, documentation, developer tooling, build/CI support |
+| # | Member | Primary Role | uOttawa Email | Areas of Ownership |
+|---|--------|--------------|---------------|---------------------|
+| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination, Product Planning, Front-end | bwang105@uottawa.ca | Roadmap, sprint planning, stakeholder communication, front-end architecture, UI components |
+| 2 | **Jingxuan Xu** | Backend / API Integration | jxu022@uottawa.ca | RESTful API design, business logic, third-party AI integration, backend services |
+| 3 | **Xiaoyan Yang** | UI / Testing / Documentation | xyang015@uottawa.ca | UI implementation, manual & automated test design, documentation maintenance |
+| 4 | **Xiaoyi Zhang** | Database / Front-end / Testing | xzhan071@uottawa.ca | Database schema, migrations, query optimization, front-end support, test coverage |
+| 5 | **Jiaoyang Bi** | Documentation / Full Stack / Dev Support | jbi056@uottawa.ca | Cross-stack support, documentation, developer tooling, build/CI support |
 
 **Project Coordinator:** Kair Wang is responsible for sprint orchestration, agenda-setting, timeline tracking, and external communication.
 
@@ -275,8 +296,8 @@ career-copilot/
 
 ### Initial Setup (planned)
 ```bash
-git clone https://github.com/kairwang01/career-copilot.git
-cd career-copilot
+git clone https://github.com/kairwang01/UO_ELG_5902_career-copilot.git
+cd UO_ELG_5902_career-copilot
 docker compose up -d         # Start postgres + redis
 pnpm install                 # Install workspace dependencies
 pnpm dev                     # Run frontend + backend
@@ -342,8 +363,19 @@ Detailed strategy will be published in `docs/TEST_STRATEGY.md` during Phase 1.
 
 **Project Coordinator** — Kair Wang
 University of Ottawa, ELG/DTI/GNG 5902, Team 8
+✉ bwang105@uottawa.ca
 
-For questions about this repository, please open an issue.
+**Team Contacts**
+
+| Member | uOttawa Email |
+|--------|---------------|
+| Kair Wang | bwang105@uottawa.ca |
+| Jingxuan Xu | jxu022@uottawa.ca |
+| Xiaoyan Yang | xyang015@uottawa.ca |
+| Xiaoyi Zhang | xzhan071@uottawa.ca |
+| Jiaoyang Bi | jbi056@uottawa.ca |
+
+For questions about this repository, please open an issue or contact the Project Coordinator.
 
 ---
 

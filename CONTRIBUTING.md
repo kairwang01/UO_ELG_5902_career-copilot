@@ -31,8 +31,8 @@ We expect every contributor to be respectful, constructive, and inclusive. Feedb
 
 ```bash
 # Clone the repository
-git clone https://github.com/kairwang01/career-copilot.git
-cd career-copilot
+git clone https://github.com/kairwang01/UO_ELG_5902_career-copilot.git
+cd UO_ELG_5902_career-copilot
 
 # (Planned) Install dependencies and run dev environment
 docker compose up -d

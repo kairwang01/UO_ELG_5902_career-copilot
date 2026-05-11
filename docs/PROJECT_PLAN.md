@@ -3,181 +3,231 @@
 **Course:** ELG/DTI/GNG 5902 — University of Ottawa
 **Team:** Team 8
 **Project Coordinator:** Kair Wang
-**Document Version:** 1.0 (Draft, May 2026)
+**Document Version:** 1.1 (Aligned to official deliverables, May 2026)
 
 ---
 
 ## 1. Plan Overview
 
-This document is the **execution plan** for transitioning Career CoPilot from a functional MVP into a production-ready platform. It defines the schedule, sprint structure, deliverables, ownership, and review cadence over the 14-week academic term.
+This document is the **execution plan** for transitioning Career CoPilot from a functional MVP into a production-ready platform. It defines the schedule, sprint structure, deliverables, ownership, and review cadence over the course's official timeline (May 2026 → late July 2026).
 
-The plan follows a **lightweight agile methodology** with **two-week sprints**, weekly team meetings, and trunk-based development on GitHub.
-
----
-
-## 2. Timeline at a Glance
-
-```
-Week  │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │ 10 │ 11 │ 12 │ 13 │ 14
-──────┼───┼───┼───┼───┼───┼───┼───┼───┼───┼────┼────┼────┼────┼────
-Phase │ 0     │ 1     │ 2             │ 3              │ 4       │ 5
-Sprint│ S0    │ S1    │ S2    │ S3    │ S4     │ S5    │ S6      │ Final
-```
-
-| Phase | Weeks | Sprint(s) | Theme |
-|-------|-------|-----------|-------|
-| 0 — Initiation | 1–2 | Sprint 0 | Team setup, MVP audit |
-| 1 — Discovery & Design | 3–4 | Sprint 1 | Requirements, architecture, test strategy |
-| 2 — Hardening | 5–8 | Sprints 2–3 | Database refactor, critical bugs |
-| 3 — QA & Automation | 9–11 | Sprints 4–5 | Test pipelines, CI/CD, load testing |
-| 4 — Production Readiness | 12–13 | Sprint 6 | Security, observability, deployment |
-| 5 — Final Review | 14 | — | Demo, final report |
+The plan follows a **lightweight agile methodology** with **short sprints anchored to course deliverables**, weekly team meetings, and trunk-based development on GitHub.
 
 ---
 
-## 3. Phase 0 — Initiation (Weeks 1–2)
+## 2. Official Deliverables (Anchor Dates)
+
+All work is anchored to these dates. Internal team deadlines run **48 hours ahead** of each.
+
+| # | Deliverable | Weight | Official Date | Internal Target |
+|---|-------------|--------|---------------|-----------------|
+| 1 | Team Contract | 5 % | **2026-05-13** | 2026-05-11 |
+| 2 | Project Proposal | 5 % | **2026-05-20** | 2026-05-18 |
+| 3 | Minimum Viable Prototype | 10 % | **2026-06-17** | 2026-06-15 |
+| 4 | Beta Release | 10 % | **2026-07-04** | 2026-07-02 |
+| 5 | Project Video | 5 % | **2026-07-08** | 2026-07-06 |
+| 6 | Design Day | 10 % | **2026-07-17** | — (live) |
+| 7 | Final Release Report | 15 % | **2026-07-26** | 2026-07-24 |
+| 8 | Client Evaluation | 10 % | **2026-07-27** | — |
+| 9 | Technical Advisor Evaluation | 10 % | **2026-07-27** | — |
+
+---
+
+## 3. Timeline at a Glance
+
+```
+ May            │   June              │   July
+ ──────────────────────────────────────────────────────────────────────
+ [P0] [P1]  ─── Phase 2: MVP Hardening ──── [P3 Beta] [P4] [P4]  [P5]
+ 8    13  20                              17        4   8    17   26 27
+ │    │   │                               │         │   │     │   │
+ │    │   │                               │         │   │     │   └─ Evals (7/27)
+ │    │   │                               │         │   │     └───── Design Day (7/17)
+ │    │   │                               │         │   └─────────── Video (7/8)
+ │    │   │                               │         └─────────────── Beta (7/4)
+ │    │   │                               └───────────────────────── MVP (6/17)
+ │    │   └───────────────────────────────────────────────────────── Proposal (5/20)
+ │    └───────────────────────────────────────────────────────────── Team Contract (5/13)
+ └──────────────────────────────────────────────────────────────── Project Start
+```
+
+| Phase | Window | Sprint(s) | Anchor Deliverable |
+|-------|--------|-----------|--------------------|
+| **P0** — Initiation | 8 May – 13 May | Sprint 0 | Team Contract |
+| **P1** — Proposal & Design | 13 May – 20 May | Sprint 1 | Proposal |
+| **P2** — MVP Hardening | 20 May – 17 June | Sprints 2–3 | MVP |
+| **P3** — Beta Release | 17 June – 4 July | Sprints 4–5 | Beta Release |
+| **P4** — Video & Launch Polish | 4 July – 17 July | Sprint 6 | Video + Design Day |
+| **P5** — Final Report & Evaluations | 17 July – 27 July | Sprint 7 | Final Report + Evals |
+
+---
+
+## 4. Phase 0 — Initiation (May 8 – May 13)
+
+**Anchor:** Team Contract (5 %) — due **13 May 2026**.
 
 **Goal:** Establish the team, project infrastructure, and a shared understanding of the MVP.
 
-### Sprint 0 (Weeks 1–2)
+| Task | Owner | Deliverable | Internal Due |
+|------|-------|-------------|--------------|
+| Team contract drafted and signed | All | `Team8_Contract_5902.pdf` | 2026-05-11 |
+| GitHub repository initialized | Kair Wang | README, docs/ scaffold | 2026-05-11 |
+| Communication channels (Discord/WeChat/Teams) set up | Kair Wang | Posted in Discord | 2026-05-11 |
+| MVP codebase access confirmed | Jingxuan Xu, Xiaoyi Zhang | Repo access granted | 2026-05-12 |
+| Submit team contract on Brightspace | Kair Wang | Submission confirmation | **2026-05-13** |
 
-| Task | Owner | Deliverable | Due |
-|------|-------|-------------|-----|
-| Team contract finalized and signed | All | `Team_Contract.pdf` | Week 1 |
-| GitHub repository initialized with README & docs | Kair Wang | `README.md`, `docs/*` | Week 1 |
-| Project proposal drafted | Kair Wang | `docs/PROPOSAL.md` | Week 2 |
-| MVP codebase audit | Jingxuan Xu, Xiaoyi Zhang | `docs/MVP_AUDIT.md` | Week 2 |
-| Bug backlog triage | All | Triaged GitHub issues | Week 2 |
-| Development environment standardized | Jiaoyang Bi | `docs/DEV_SETUP.md` | Week 2 |
-| Communication & meeting cadence confirmed | Kair Wang | Posted in Discord | Week 1 |
-
-**Exit criteria:** All Phase 0 deliverables published; team agrees on the MVP audit findings; backlog is prioritized.
+**Exit criteria:** Team contract submitted; repository live with documentation; all members have access.
 
 ---
 
-## 4. Phase 1 — Discovery & Design (Weeks 3–4)
+## 5. Phase 1 — Proposal & Design (May 13 – May 20)
+
+**Anchor:** Project Proposal (5 %) — due **20 May 2026**.
 
 **Goal:** Define what we will build, how we will build it, and how we will know it works.
 
-### Sprint 1 (Weeks 3–4)
+### Sprint 1 (May 13 – May 20)
 
-| Task | Owner | Deliverable | Due |
-|------|-------|-------------|-----|
-| Functional & non-functional requirements | Kair Wang, Xiaoyan Yang | `docs/REQUIREMENTS.md` | Week 3 |
-| System architecture & data model | Jingxuan Xu, Kair Wang | `docs/ARCHITECTURE.md` | Week 4 |
-| Database refactor design | Xiaoyi Zhang | `docs/DB_DESIGN.md` | Week 4 |
-| Test strategy & coverage plan | Xiaoyan Yang | `docs/TEST_STRATEGY.md` | Week 4 |
-| CI/CD strategy | Jiaoyang Bi | `docs/CICD.md` | Week 4 |
-| Risk register | Kair Wang | `docs/RISKS.md` | Week 4 |
-| Stack finalization | All (consensus) | Decision recorded in `ARCHITECTURE.md` | Week 4 |
+| Task | Owner | Deliverable | Internal Due |
+|------|-------|-------------|--------------|
+| Project proposal | Kair Wang (lead), all contribute | `docs/PROPOSAL.md` | 2026-05-18 |
+| MVP audit (high-level) | Jingxuan Xu, Xiaoyi Zhang | `docs/MVP_AUDIT.md` | 2026-05-17 |
+| System architecture v1 | Jingxuan Xu, Kair Wang | `docs/ARCHITECTURE.md` | 2026-05-19 |
+| Database refactor plan | Xiaoyi Zhang | `docs/DB_DESIGN.md` | 2026-05-19 |
+| Test strategy v1 | Xiaoyan Yang | `docs/TEST_STRATEGY.md` | 2026-05-19 |
+| Bug backlog triage | All | Triaged GitHub issues | 2026-05-19 |
+| Submit proposal on Brightspace | Kair Wang | Submission confirmation | **2026-05-20** |
 
-**Exit criteria:** Designs approved by team; ready to begin implementation in Phase 2.
+**Exit criteria:** Proposal submitted; design docs published; backlog prioritized; team aligned on the engineering plan.
 
 ---
 
-## 5. Phase 2 — Hardening Sprint (Weeks 5–8)
+## 6. Phase 2 — MVP Hardening (May 20 – June 17)
 
-**Goal:** Re-engineer the database, resolve critical bugs, harden core flows.
+**Anchor:** Minimum Viable Prototype (10 %) — due **17 June 2026**.
 
-### Sprint 2 (Weeks 5–6) — Database & Foundational Fixes
+**Goal:** Re-engineer the database, resolve critical bugs, and stabilize the three core flows (resume, interview, verified profile) to MVP quality.
+
+### Sprint 2 (May 20 – June 3) — Database & Critical Bugs (Wave 1)
 
 | Task | Owner | Deliverable |
 |------|-------|-------------|
 | Database migration scripts | Xiaoyi Zhang | `database/migrations/*` |
 | Data-integrity test suite | Xiaoyi Zhang, Xiaoyan Yang | `tests/integrity/*` |
-| Backend refactor — auth & user services | Jingxuan Xu | PR(s) merged to `main` |
-| Critical bug fixes (Wave 1) | All | Issues closed |
+| Auth & user services refactor | Jingxuan Xu | PR(s) merged |
+| Critical bug fixes — Wave 1 | All | Issues closed |
 | Front-end alignment with new APIs | Kair Wang | PR(s) merged |
+| Local dev environment standardized | Jiaoyang Bi | `docs/DEV_SETUP.md` |
 
-### Sprint 3 (Weeks 7–8) — Feature Hardening
+### Sprint 3 (June 3 – June 17) — Feature Hardening + MVP Demo
 
 | Task | Owner | Deliverable |
 |------|-------|-------------|
-| Resume engine reliability improvements | Jingxuan Xu | Resilience tests, retries, fallback |
+| Resume engine resilience | Jingxuan Xu | Retries, fallback, tests |
 | Interview simulator stability | Jingxuan Xu, Jiaoyang Bi | Bug fixes, error handling |
 | Verified profile service hardening | Xiaoyi Zhang | Migration + tests |
-| Front-end error handling pass | Kair Wang, Xiaoyan Yang | UI states for all error cases |
-| Critical bug fixes (Wave 2) | All | Issues closed |
+| Front-end error handling pass | Kair Wang, Xiaoyan Yang | UI states for error cases |
+| MVP smoke-test pass | All | Manual QA checklist passed |
+| MVP demo preparation | Kair Wang | Demo script + slides |
+| **Submit MVP** | Kair Wang | **2026-06-17** |
 
-**Exit criteria:** All P0/P1 bugs from initial triage resolved; database refactor live; integration tests passing.
+**Exit criteria:** All P0/P1 bugs resolved; database refactor live; MVP demonstration ready.
 
 ---
 
-## 6. Phase 3 — QA & Automation (Weeks 9–11)
+## 7. Phase 3 — Beta Release (June 17 – July 4)
 
-**Goal:** Stand up a comprehensive, automated quality pipeline.
+**Anchor:** Beta Release (10 %) — due **4 July 2026**.
 
-### Sprint 4 (Weeks 9–10) — Test Automation Build-out
+**Goal:** Stand up a comprehensive automated test pipeline, measure and improve performance, and harden the product to Beta quality.
+
+### Sprint 4 (June 17 – June 30) — QA & Test Automation
 
 | Task | Owner | Deliverable |
 |------|-------|-------------|
-| Unit test coverage to ≥ 80 % on core logic | Jingxuan Xu, Xiaoyi Zhang | Coverage report |
-| API/integration tests for all public endpoints | Xiaoyan Yang | `tests/api/*` |
+| Unit-test coverage ≥ 80 % (core logic) | Jingxuan Xu, Xiaoyi Zhang | Coverage report |
+| API/integration tests | Xiaoyan Yang | `tests/api/*` |
 | E2E test suite — golden paths | Xiaoyan Yang, Jiaoyang Bi | `tests/e2e/*` (Playwright) |
-| CI pipeline (lint, build, test) on every PR | Jiaoyang Bi | `.github/workflows/*` |
-| Test data and fixtures strategy | Xiaoyi Zhang | `tests/fixtures/*` |
+| CI pipeline (lint/build/test) on every PR | Jiaoyang Bi | `.github/workflows/*` |
+| Performance baseline + load tests | Jingxuan Xu | `docs/PERFORMANCE.md` |
+| Query optimization round | Xiaoyi Zhang | Benchmark improvement |
 
-### Sprint 5 (Week 11) — Performance & Load Testing
-
-| Task | Owner | Deliverable |
-|------|-------|-------------|
-| Load test scenarios | Jingxuan Xu | `tests/load/*` |
-| Baseline performance benchmarks | Jingxuan Xu | `docs/PERFORMANCE.md` |
-| Query optimization round | Xiaoyi Zhang | Benchmark improvement table |
-| Manual QA scripts for non-automatable journeys | Xiaoyan Yang | `docs/MANUAL_QA.md` |
-
-**Exit criteria:** CI is green; coverage targets hit; performance report published.
-
----
-
-## 7. Phase 4 — Production Readiness (Weeks 12–13)
-
-**Goal:** Make the platform safe, observable, and deployable.
-
-### Sprint 6 (Weeks 12–13)
+### Sprint 5 (June 30 – July 4) — Beta Polish
 
 | Task | Owner | Deliverable |
 |------|-------|-------------|
-| Security review (OWASP top 10 checklist) | Jiaoyang Bi, Jingxuan Xu | `docs/SECURITY_REVIEW.md` |
-| Secrets & configuration hygiene | Jiaoyang Bi | Audit + remediation PRs |
-| Structured logging & error reporting (Sentry) | Jingxuan Xu | Live in staging |
-| Health checks & monitoring dashboard | Jiaoyang Bi | Dashboard URL |
-| Production deployment + runbook | Kair Wang, Jiaoyang Bi | `docs/RUNBOOK.md` |
-| Rollback & incident response procedures | Kair Wang | `docs/INCIDENT_RESPONSE.md` |
+| Security review (OWASP top 10) | Jiaoyang Bi, Jingxuan Xu | `docs/SECURITY_REVIEW.md` |
+| Observability (Sentry, structured logs) | Jingxuan Xu | Live in staging |
+| Manual QA scripts | Xiaoyan Yang | `docs/MANUAL_QA.md` |
+| Beta release notes | Kair Wang | `docs/RELEASE_NOTES_BETA.md` |
+| **Submit Beta release** | Kair Wang | **2026-07-04** |
 
-**Exit criteria:** Platform deployed to a production-equivalent environment; runbooks published; monitoring live.
-
----
-
-## 8. Phase 5 — Final Review (Week 14)
-
-**Goal:** Deliver, present, and document the project.
-
-| Task | Owner | Deliverable |
-|------|-------|-------------|
-| Final report | All | `docs/FINAL_REPORT.md` (or PDF) |
-| Final demo | All | Recorded demo + live presentation |
-| Documentation index review | Kair Wang | `README.md` updates |
-| Project handoff package | Kair Wang | Zip / branch tag |
-| Post-mortem & retrospective | All | `docs/RETROSPECTIVE.md` |
+**Exit criteria:** CI green; coverage targets hit; Beta deployed to staging-equivalent; security pass complete.
 
 ---
 
-## 9. Meeting Cadence
+## 8. Phase 4 — Video & Launch Polish (July 4 – July 17)
+
+**Anchors:** Project Video (5 %) — **8 July 2026**; Design Day (10 %) — **17 July 2026**.
+
+**Goal:** Produce the project video and prepare for the public Design Day showcase.
+
+### Sprint 6 (July 4 – July 17)
+
+| Task | Owner | Deliverable | Due |
+|------|-------|-------------|-----|
+| Video script + storyboard | Kair Wang | `docs/video/script.md` | 2026-07-05 |
+| Video screen captures & voice-over | All (rotating) | Raw recordings | 2026-07-06 |
+| Video editing & final cut | Jiaoyang Bi, Xiaoyan Yang | `video/final.mp4` | 2026-07-07 |
+| **Submit project video** | Kair Wang | — | **2026-07-08** |
+| Production deployment | Kair Wang, Jiaoyang Bi | Live URL + `docs/RUNBOOK.md` | 2026-07-10 |
+| Design Day demo plan | Kair Wang | `docs/DESIGN_DAY_PLAN.md` | 2026-07-12 |
+| Design Day poster/handout | Xiaoyan Yang, Kair Wang | Printed materials | 2026-07-15 |
+| Live demo rehearsal | All | Dry-run pass | 2026-07-16 |
+| **Design Day** | All | Live presentation | **2026-07-17** |
+
+**Exit criteria:** Video submitted; production deployment live; Design Day demo executed.
+
+---
+
+## 9. Phase 5 — Final Report & Evaluations (July 17 – July 27)
+
+**Anchors:** Final Release Report (15 %) — **26 July 2026**; Client Evaluation (10 %) and Technical Advisor Evaluation (10 %) — **27 July 2026**.
+
+**Goal:** Document, evaluate, and hand off.
+
+### Sprint 7 (July 17 – July 26)
+
+| Task | Owner | Deliverable | Due |
+|------|-------|-------------|-----|
+| Final report — draft | Kair Wang (lead), all contribute | `docs/FINAL_REPORT.md` | 2026-07-22 |
+| Final report — review pass | All | Reviewed in PR | 2026-07-23 |
+| Final report — polish & PDF export | Kair Wang | Final PDF | 2026-07-24 |
+| Retrospective | All | `docs/RETROSPECTIVE.md` | 2026-07-25 |
+| Documentation index refresh | Kair Wang | `README.md` updated | 2026-07-25 |
+| **Submit Final Release Report** | Kair Wang | — | **2026-07-26** |
+| Client evaluation participation | All | — | **2026-07-27** |
+| Technical advisor evaluation participation | All | — | **2026-07-27** |
+
+**Exit criteria:** Final report submitted; project handoff complete; evaluations submitted.
+
+---
+
+## 10. Meeting Cadence
 
 | Meeting | Frequency | Day/Time | Owner | Purpose |
 |---------|-----------|----------|-------|---------|
 | Weekly Team Sync | Weekly | Sunday 8 PM EST (MS Teams) | Kair Wang | Status, blockers, next steps |
-| Sprint Planning | Every 2 weeks | At sprint boundary | Kair Wang | Plan upcoming sprint |
-| Sprint Retro | Every 2 weeks | At sprint boundary | Kair Wang | Learnings, process tweaks |
+| Sprint Planning | At sprint boundary | Sunday meeting slot | Kair Wang | Plan upcoming sprint |
+| Sprint Retro | At sprint boundary | Sunday meeting slot | Kair Wang | Learnings, process tweaks |
 | Stakeholder Check-in | Bi-weekly | TBD | Kair Wang | Update instructor / sponsor |
-| Ad-hoc Working Sessions | As needed | — | Task owner | Deep work, pairing |
+| Working Sessions | As needed | — | Task owner | Deep work, pairing |
 
 **Agenda Policy:** Agendas distributed via Discord at least **12 hours** before each meeting.
 
 ---
 
-## 10. Communication Channels
+## 11. Communication Channels
 
 | Channel | Use For |
 |---------|---------|
@@ -185,45 +235,38 @@ Sprint│ S0    │ S1    │ S2    │ S3    │ S4     │ S5    │ S6      �
 | **WeChat (group)** | Real-time team chat |
 | **Microsoft Teams** | Official document sharing, meeting calls |
 | **GitHub Issues / PRs** | All technical work, decisions, code review |
-| **Email** | External / formal communications only |
+| **Email (uOttawa)** | External / formal communications, course submissions |
 
 ---
 
-## 11. Workflow & Conventions
+## 12. Workflow & Conventions
 
-### 11.1 Branching
+### 12.1 Branching
 - `main` — always green; production-ready.
 - `feature/<name>` — new features.
 - `fix/<name>` — bug fixes.
 - `docs/<name>` — documentation changes.
 - Short-lived branches (≤ 5 days where possible).
 
-### 11.2 Pull Request Rules
+### 12.2 Pull Request Rules
 - Required reviewers: **≥ 1 teammate**.
 - CI must pass (lint + tests + build).
 - Squash-merge into `main`.
 - PR description must include: what changed, why, how it was tested.
 
-### 11.3 Commit Messages
-Follow the **Conventional Commits** style:
-```
-feat(resume): add ATS scoring endpoint
-fix(auth): handle expired refresh tokens
-docs(plan): add sprint 3 deliverables
-test(api): add user endpoint coverage
-```
+### 12.3 Commit Messages
+Conventional Commits style: `feat(scope): subject`, `fix(scope): subject`, etc.
 
-### 11.4 Definition of Done
-A task is "Done" when:
-1. Code is merged into `main`.
-2. Tests are written and passing in CI.
-3. Documentation is updated.
+### 12.4 Definition of Done
+1. Code merged into `main`.
+2. Tests written and passing in CI.
+3. Documentation updated.
 4. Reviewer has approved.
 5. No new lint or type errors introduced.
 
 ---
 
-## 12. Roles and Ownership Matrix
+## 13. Roles and Ownership Matrix
 
 | Area | Primary | Secondary |
 |------|---------|-----------|
@@ -238,20 +281,19 @@ A task is "Done" when:
 
 ---
 
-## 13. Risk Tracking
-
-The full risk register lives in [`docs/RISKS.md`](RISKS.md) (to be created in Sprint 1). High-level risks tracked at the plan level:
+## 14. Risk Tracking
 
 | ID | Risk | Owner | Status |
 |----|------|-------|--------|
-| R1 | MVP code quality unknown until Phase 1 audit | Jingxuan Xu | Active — mitigated by Phase 0 audit |
-| R2 | Scope creep | Kair Wang | Active — scope gate at each sprint review |
+| R1 | MVP code quality unknown until Phase 1 audit | Jingxuan Xu | Active — Phase 1 audit |
+| R2 | Scope creep | Kair Wang | Active — scope gate at every sprint boundary |
 | R3 | AI API costs | Jingxuan Xu | Active — caching + budget alerts |
-| R4 | Team availability around midterms / finals | Kair Wang | Active — buffer in Sprint 5 |
+| R4 | Team availability around midterms / finals | Kair Wang | Active — slack built into Phase 5 |
+| R5 | Compressed schedule between Beta (Jul 4) and Design Day (Jul 17) | Kair Wang | Active — Sprint 6 buffer protected |
 
 ---
 
-## 14. Change Control
+## 15. Change Control
 
 Any change to scope, schedule, or major design decisions must:
 1. Be proposed in a GitHub Discussion or team meeting.
@@ -262,14 +304,14 @@ The Project Coordinator owns the final call on schedule trade-offs after team in
 
 ---
 
-## 15. Document Status
+## 16. Document Status
 
 | Field | Value |
 |-------|-------|
 | Author | Kair Wang |
 | Reviewers | All Team 8 members |
-| Status | Draft v1.0 |
-| Next Review | End of Sprint 0 (Week 2) |
+| Status | v1.1 — Aligned to official deliverables |
+| Next Review | End of Sprint 0 (2026-05-13) |
 
 ---
 

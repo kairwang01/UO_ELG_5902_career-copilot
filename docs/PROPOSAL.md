@@ -119,14 +119,16 @@ We will adopt a **lightweight agile process** with **two-week sprints**, weekly 
 
 ### 7.1 Phased Approach
 
-| Phase | Focus |
-|-------|-------|
-| 0 — Initiation | Team contract, repository, MVP audit |
-| 1 — Discovery & Design | Requirements, architecture, test strategy |
-| 2 — Hardening Sprint | Database refactor, critical bug fixes |
-| 3 — QA & Automation | Automated test pipelines, CI/CD |
-| 4 — Production Readiness | Security review, observability, deployment |
-| 5 — Final Review | Demo, final report, handoff |
+Phases are aligned directly with the official course deliverables.
+
+| Phase | Window | Anchor Deliverable |
+|-------|--------|--------------------|
+| 0 — Initiation | 8 May – 13 May 2026 | Team Contract |
+| 1 — Proposal & Design | 13 May – 20 May 2026 | Proposal |
+| 2 — MVP Hardening | 20 May – 17 June 2026 | MVP |
+| 3 — Beta Release | 17 June – 4 July 2026 | Beta Release |
+| 4 — Video & Launch Polish | 4 July – 17 July 2026 | Video + Design Day |
+| 5 — Final Report & Evaluations | 17 July – 27 July 2026 | Final Report + Evals |
 
 Detailed timeline in [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 
@@ -197,19 +199,35 @@ The user-facing workflow draws inspiration from **BOSS Zhipin** — specifically
 
 ## 11. Team
 
-| # | Member | Role | Primary Responsibilities |
-|---|--------|------|--------------------------|
-| 1 | Kair Wang | Project Coordination, Product Planning, Front-end | Roadmap, sprint planning, stakeholder communication, front-end |
-| 2 | Jingxuan Xu | Backend / API Integration | RESTful API, business logic, third-party integrations |
-| 3 | Xiaoyan Yang | UI / Testing / Documentation | UI, manual & automated testing, docs |
-| 4 | Xiaoyi Zhang | Database / Front-end / Testing | Schema, migrations, query optimization, testing |
-| 5 | Jiaoyang Bi | Documentation / Full Stack / Dev Support | Cross-stack support, docs, build/CI |
+| # | Member | Role | uOttawa Email | Primary Responsibilities |
+|---|--------|------|---------------|--------------------------|
+| 1 | Kair Wang | Project Coordination, Product Planning, Front-end | bwang105@uottawa.ca | Roadmap, sprint planning, stakeholder communication, front-end |
+| 2 | Jingxuan Xu | Backend / API Integration | jxu022@uottawa.ca | RESTful API, business logic, third-party integrations |
+| 3 | Xiaoyan Yang | UI / Testing / Documentation | xyang015@uottawa.ca | UI, manual & automated testing, docs |
+| 4 | Xiaoyi Zhang | Database / Front-end / Testing | xzhan071@uottawa.ca | Schema, migrations, query optimization, testing |
+| 5 | Jiaoyang Bi | Documentation / Full Stack / Dev Support | jbi056@uottawa.ca | Cross-stack support, docs, build/CI |
 
 See [`TEAM.md`](TEAM.md) for full responsibilities and decision-making policy.
 
 ---
 
-## 12. Approval
+## 12. Schedule (Official Deliverables)
+
+| # | Deliverable | Weight | Due Date |
+|---|-------------|--------|----------|
+| 1 | Team Contract | 5 % | 2026-05-13 |
+| 2 | Project Proposal *(this document)* | 5 % | 2026-05-20 |
+| 3 | Minimum Viable Prototype | 10 % | 2026-06-17 |
+| 4 | Beta Release | 10 % | 2026-07-04 |
+| 5 | Project Video | 5 % | 2026-07-08 |
+| 6 | Design Day | 10 % | 2026-07-17 |
+| 7 | Final Release Report | 15 % | 2026-07-26 |
+| 8 | Client Evaluation | 10 % | 2026-07-27 |
+| 9 | Technical Advisor Evaluation | 10 % | 2026-07-27 |
+
+---
+
+## 13. Approval
 
 This proposal is submitted for approval by the course instructor and project sponsor.
 
