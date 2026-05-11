@@ -1,0 +1,116 @@
+# Career CoPilot — .gitignore
+
+# ──────────────────────────────────────────────
+# OS / Editor
+# ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.history/
+
+# ──────────────────────────────────────────────
+# Logs
+# ──────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ──────────────────────────────────────────────
+# Node / Frontend / Backend
+# ──────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+.pnp
+.pnp.js
+.npm
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.turbo/
+.vite/
+coverage/
+*.tsbuildinfo
+.tsbuildinfo
+
+# ──────────────────────────────────────────────
+# Python (if used for any tooling)
+# ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ──────────────────────────────────────────────
+# Environment / Secrets — NEVER COMMIT
+# ──────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.staging
+*.pem
+*.key
+secrets/
+.secrets/
+
+# ──────────────────────────────────────────────
+# Database
+# ──────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+postgres-data/
+
+# ──────────────────────────────────────────────
+# Test artifacts
+# ──────────────────────────────────────────────
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+*.lcov
+
+# ──────────────────────────────────────────────
+# Misc
+# ──────────────────────────────────────────────
+tmp/
+temp/
+*.bak
+*.tmp
+.cache/
+.parcel-cache/
+
+# ──────────────────────────────────────────────
+# Local dev / Docker
+# ──────────────────────────────────────────────
+docker-compose.override.yml
+.docker/
+
+# ──────────────────────────────────────────────
+# Keep — don't ignore documentation drafts
+# ──────────────────────────────────────────────
+!docs/**/*.md
