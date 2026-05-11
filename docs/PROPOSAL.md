@@ -90,7 +90,7 @@ A specialized recruiting agency seeking pre-verified, high-signal candidates wit
 - Fix the prioritized backlog of critical bugs.
 - Harden the platform for production: security, observability, error handling.
 - Document architecture, processes, and operational runbooks.
-- Apply a workflow model inspired by direct-recruiter platforms (e.g., BOSS Zhipin's workflow concept, **not** its UI/visual design).
+- Implement the end-to-end user workflow defined in [`WORKFLOW.md`](WORKFLOW.md) (candidate journey, agency journey, shared rules).
 
 ### 6.2 Out of Scope (for this engagement)
 
@@ -107,7 +107,7 @@ A specialized recruiting agency seeking pre-verified, high-signal candidates wit
 
 ### 6.4 Constraints
 
-- 14-week academic schedule.
+- Academic schedule: 8 May – 27 July 2026 (approximately 11–12 weeks).
 - Five-person team with mixed time availability.
 - Free or low-cost infrastructure tier (student/academic).
 
@@ -132,14 +132,16 @@ Phases are aligned directly with the official course deliverables.
 
 Detailed timeline in [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 
-### 7.2 Inspiration for Workflow Design
+### 7.2 User Workflow Summary
 
-The user-facing workflow draws inspiration from **BOSS Zhipin** — specifically its direct candidate–recruiter chat workflow, AI-driven matching, and integrated interview prep — while diverging in two important ways:
+The platform supports two main roles — **candidate** and **agency user** — plus an internal **admin** for moderation and verification approval. The full end-to-end workflow is defined in [`WORKFLOW.md`](WORKFLOW.md).
 
-1. **Trust through verification:** Career CoPilot profiles are verified, raising the floor of recruiter trust.
-2. **Candidate monetization:** Candidates can monetize verified profiles directly, aligning incentives.
+The candidate journey covers sign-up, profile building, resume upload, AI resume review, optional verification, AI interview practice, viewing the recruiter feed, starting a chat with an agency, and tracking outcomes. The agency journey covers sign-up, role posting, receiving a candidate shortlist, chatting with candidates, and updating placement status.
 
-> Note: We borrow only the *workflow concept*. Visual design and brand identity for Career CoPilot are independent and will be finalized later.
+Two rules govern data sharing across the workflow:
+
+1. **Consent before disclosure** — verified profile and full resume are only shared after the owner of the information gives explicit consent in the chat.
+2. **Verified badge scope** — the badge confirms that documents have been manually reviewed by an admin; it does not represent legal identity verification.
 
 ---
 

@@ -63,42 +63,40 @@ This project, undertaken by **Team 8 at the University of Ottawa (ELG/DTI/GNG 59
 
 ## User Workflow
 
-Our workflow is inspired by the **direct-recruiter model** popularized by BOSS Zhipin (only the workflow concept — not the visual design), reimagined around AI-augmented candidate quality and verified trust.
+Career CoPilot supports two main user roles — **candidate** and **agency user** — plus an internal **admin** role for moderation. The full workflow is defined in [`docs/WORKFLOW.md`](docs/WORKFLOW.md); the summary below shows the candidate journey.
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          CAREER COPILOT WORKFLOW                          │
-└──────────────────────────────────────────────────────────────────────────┘
-
-  ┌──────────┐    ┌──────────────┐    ┌─────────────────┐    ┌──────────┐
-  │ 1. Sign  │ →  │ 2. Upload    │ →  │ 3. AI Resume    │ →  │ 4. Verify │
-  │   Up     │    │    Resume    │    │   Optimization  │    │  Identity │
-  └──────────┘    └──────────────┘    └─────────────────┘    └────┬─────┘
-                                                                    │
-                                                                    ▼
-  ┌──────────────┐    ┌──────────────────┐    ┌──────────────────────────┐
-  │ 7. Connect   │ ←  │ 6. Get Matched   │ ←  │ 5. AI Interview Practice │
-  │   w/ Agency  │    │    w/ Recruiters │    │   (Scored & Adaptive)    │
-  └──────┬───────┘    └──────────────────┘    └──────────────────────────┘
-         │
-         ▼
-  ┌──────────────┐    ┌──────────────────┐
-  │ 8. Direct    │ →  │ 9. Monetized     │
-  │    Chat      │    │    Placement     │
-  └──────────────┘    └──────────────────┘
+ 1. Sign up     →  2. Build profile  →  3. Upload resume  →  4. Resume review
+                                                                      │
+                                                                      ▼
+ 8. Track       ←  7. Chat with     ←  6. View recruiter  ←  5. Interview practice
+    outcomes        agency              feed                  (text-based, scored)
 ```
 
-**Workflow stages:**
+### Candidate Journey (Summary)
 
-1. **Sign Up** — Email/SSO registration, role selection (candidate vs. recruiter).
-2. **Upload Resume** — Parsed into structured data.
-3. **AI Resume Optimization** — Section-level rewrites, keyword tuning, ATS scoring.
-4. **Identity Verification** — KYC-style credential checks producing a verified badge.
-5. **AI Interview Practice** — Adaptive mock interviews with scored feedback.
-6. **Recruiter Matching** — Verified profile surfaced to relevant partner agencies.
-7. **Agency Connection** — Candidate opts in; recruiter requests a chat.
-8. **Direct Chat** — Real-time secure messaging.
-9. **Placement & Monetization** — Successful placements unlock candidate earnings.
+1. **Sign up** — email + password registration with email verification.
+2. **Build profile** — personal information, education, work history, skills.
+3. **Upload resume** — PDF or DOCX; system extracts structured fields.
+4. **Resume review** — AI returns a resume quality score inspired by common ATS screening criteria, plus section-by-section suggestions.
+5. **Interview practice** — text-based mock interview with end-of-session score and feedback.
+6. **View recruiter feed** — list of agencies and open roles matching the profile.
+7. **Chat with agency** — five standard chat actions: send message, schedule a call, share verified profile (consent required), send full resume (consent required), end conversation.
+8. **Track outcomes** — status board for chats started, interviews scheduled, offers, and placements.
+
+### Agency Journey (Summary)
+
+1. **Sign up** — agency account created and approved by an admin after document checks.
+2. **Post a role** — title, description, requirements, location, salary range.
+3. **Receive shortlist** — candidates whose profiles match the role.
+4. **Chat with candidate** — same five-action toolbar; agency must request consent to view verified profile or full resume.
+5. **Update status** — record outcome (interview → offer → placement).
+
+### Key Rules
+
+- **Consent before disclosure.** Verified profile and full resume are only shared after the owner of the information gives explicit consent in the chat.
+- **Verified badge.** Added after an admin reviews the supporting documents (transcript, employment letter, certification). The badge means documents have been manually reviewed — it does not represent legal identity verification.
+- **Response rate.** Each profile shows the percentage of messages replied to within 48 hours for transparency only; it does not affect ranking in the MVP.
 
 ---
 
@@ -271,6 +269,7 @@ career-copilot/
 ├── docs/
 │   ├── PROPOSAL.md              # Project proposal
 │   ├── PROJECT_PLAN.md          # Sprint plan and timeline
+│   ├── WORKFLOW.md              # End-to-end user workflow & MVP scope
 │   ├── ARCHITECTURE.md          # System architecture & design
 │   ├── TEAM.md                  # Roles, decisions, processes
 │   ├── TEST_STRATEGY.md         # QA approach (to be added)
@@ -353,6 +352,7 @@ Detailed strategy will be published in `docs/TEST_STRATEGY.md` during Phase 1.
 |----------|---------|
 | [Project Proposal](docs/PROPOSAL.md) | Problem statement, goals, success criteria |
 | [Project Plan](docs/PROJECT_PLAN.md) | Sprint-by-sprint timeline and deliverables |
+| [Workflow](docs/WORKFLOW.md) | End-to-end user workflow, MVP scope, non-functional requirements |
 | [Architecture](docs/ARCHITECTURE.md) | System design, data model, infrastructure |
 | [Team](docs/TEAM.md) | Roles, decision-making, communication |
 | [Contributing](CONTRIBUTING.md) | Contribution and code review process |
