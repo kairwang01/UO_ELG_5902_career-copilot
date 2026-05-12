@@ -70,7 +70,7 @@ All work is anchored to these dates. Internal team deadlines run **48 hours ahea
 
 | Task | Owner | Deliverable | Internal Due |
 |------|-------|-------------|--------------|
-| Team contract drafted and signed | All | `Team8_Contract_5902.pdf` | 2026-05-11 |
+| Team contract drafted and signed | All | `Team_Contract_5902.pdf` | 2026-05-11 |
 | GitHub repository initialized | Kair Wang | README, docs/ scaffold | 2026-05-11 |
 | Communication channels (Discord/WeChat/Teams) set up | Kair Wang | Posted in Discord | 2026-05-11 |
 | MVP codebase access confirmed | Jingxuan Xu, Xiaoyi Zhang | Repo access granted | 2026-05-12 |
