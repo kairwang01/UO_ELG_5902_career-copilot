@@ -204,12 +204,12 @@ Two rules govern data sharing across the workflow:
 
 | # | Member | Role | uOttawa Email | Primary Responsibilities |
 |---|--------|------|---------------|--------------------------|
-| 1 | Kair Wang | Project Coordination, Product Planning, Front-end | bwang105@uottawa.ca | Roadmap, sprint planning, stakeholder communication, front-end |
-| 2 | Jingxuan Xu | Backend / API Integration | jxu022@uottawa.ca | RESTful API, business logic, LLM provider integration plumbing |
-| 3 | Xiaoyan Yang | UI / Testing / Documentation | xyang015@uottawa.ca | UI, manual & automated testing, docs |
-| 4 | Xiaoyi Zhang | Database / Front-end / Testing | xzhan071@uottawa.ca | Schema, migrations, query optimization, testing |
-| 5 | Jiaoyang Bi | Documentation / Full Stack / Dev Support | jbi056@uottawa.ca | Cross-stack support, docs, build/CI |
-| 6 | Xiang Zhao | AI / NLP Engineer — Chatbot & Scoring | *TBD* | AI Interview Simulator, resume scoring logic, candidate ↔ role matching, prompt design and evaluation |
+| 1 | Kair Wang | Project Coordinator · Product Planning · Front-end Developer | bwang105@uottawa.ca | Roadmap, sprint planning, stakeholder communication, front-end architecture and core components |
+| 2 | Jingxuan Xu | Backend & API Lead | jxu022@uottawa.ca | RESTful API; auth, user, messaging, verification services; LLM provider integration plumbing |
+| 3 | Xiaoyi Zhang | Database Engineer | xzhan071@uottawa.ca | PostgreSQL schema, migrations, query optimization, data-integrity tests, backup and recovery |
+| 4 | Xiaoyan Yang | QA Lead + UI Implementation Support | xyang015@uottawa.ca | Test strategy; unit, integration, and E2E pipelines; manual QA; UI implementation support to Kair |
+| 5 | Jiaoyang Bi | DevOps Engineer + Documentation Lead | jbi056@uottawa.ca | CI/CD, Docker, deployment, observability, runbooks, documentation maintenance |
+| 6 | Xiang Zhao | AI / NLP Engineer | xzhao022@uottawa.ca | AI Interview Simulator, resume scoring logic, candidate ↔ role matching, prompt design and evaluation |
 
 See [`TEAM.md`](TEAM.md) for full responsibilities and decision-making policy.
 
@@ -237,11 +237,11 @@ This proposal is submitted for approval by the course instructor and project spo
 
 | Name | Role | Date | Signature |
 |------|------|------|-----------|
-| Kair Wang | Project Coordinator | May 8, 2026 | ✍︎ |
-| Jingxuan Xu | Backend / API | May 8, 2026 | ✍︎ |
-| Xiaoyan Yang | UI / Testing / Docs | May 8, 2026 | ✍︎ |
-| Xiaoyi Zhang | Database / Front-end / Testing | May 8, 2026 | ✍︎ |
-| Jiaoyang Bi | Documentation / Full Stack | May 8, 2026 | ✍︎ |
+| Kair Wang | Project Coordinator · Product Planning · Front-end Developer | May 8, 2026 | ✍︎ |
+| Jingxuan Xu | Backend & API Lead | May 8, 2026 | ✍︎ |
+| Xiaoyi Zhang | Database Engineer | May 8, 2026 | ✍︎ |
+| Xiaoyan Yang | QA Lead + UI Implementation Support | May 8, 2026 | ✍︎ |
+| Jiaoyang Bi | DevOps Engineer + Documentation Lead | May 8, 2026 | ✍︎ |
 | Xiang Zhao | AI / NLP Engineer | *pending — joined after contract signing* | — |
 
 ---

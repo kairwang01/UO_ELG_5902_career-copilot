@@ -271,19 +271,23 @@ Conventional Commits style: `feat(scope): subject`, `fix(scope): subject`, etc.
 
 ## 13. Roles and Ownership Matrix
 
+Each domain has exactly **one primary owner**. Secondary owners cover the domain when capacity allows or when the primary is unavailable.
+
 | Area | Primary | Secondary |
 |------|---------|-----------|
 | Project Coordination | Kair Wang | — |
 | Product Planning | Kair Wang | Xiaoyan Yang |
-| Front-end | Kair Wang | Xiaoyi Zhang, Xiaoyan Yang |
-| Backend / API | Jingxuan Xu | Jiaoyang Bi |
-| Database | Xiaoyi Zhang | Jingxuan Xu |
-| AI / NLP — Interview Simulator, Scoring, Matching | Xiang Zhao | Jingxuan Xu |
+| Front-end Architecture & Core Components | Kair Wang | Xiaoyan Yang |
+| Front-end Implementation Support | Xiaoyan Yang | Xiaoyi Zhang |
+| Backend & API Services | Jingxuan Xu | Jiaoyang Bi |
 | LLM Provider Integration (auth, retries, cost tracking) | Jingxuan Xu | Xiang Zhao |
-| Testing & QA | Xiaoyan Yang | Xiaoyi Zhang, Jiaoyang Bi |
-| AI Output Evaluation (accuracy, hallucination, consistency) | Xiang Zhao | Xiaoyan Yang |
+| Database (schema, migrations, performance) | Xiaoyi Zhang | Jingxuan Xu |
+| AI / NLP Logic — Interview Simulator, Scoring, Matching | Xiang Zhao | Jingxuan Xu |
+| Prompt Design & AI Output Evaluation | Xiang Zhao | Xiaoyan Yang |
+| Testing & QA (unit, integration, E2E, manual) | Xiaoyan Yang | Xiaoyi Zhang |
+| DevOps · CI/CD · Deployment | Jiaoyang Bi | Jingxuan Xu |
+| Observability (Sentry, logging, monitoring) | Jiaoyang Bi | Jingxuan Xu |
 | Documentation | Jiaoyang Bi | Xiaoyan Yang, Kair Wang |
-| DevOps / CI | Jiaoyang Bi | Jingxuan Xu |
 
 ---
 

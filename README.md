@@ -246,12 +246,12 @@ A sprint-by-sprint breakdown lives in [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN
 
 | # | Member | Primary Role | uOttawa Email | Areas of Ownership |
 |---|--------|--------------|---------------|---------------------|
-| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination, Product Planning, Front-end | bwang105@uottawa.ca | Roadmap, sprint planning, stakeholder communication, front-end architecture, UI components |
-| 2 | **Jingxuan Xu** | Backend / API Integration | jxu022@uottawa.ca | RESTful API design, business logic, AI provider integration plumbing, backend services |
-| 3 | **Xiaoyan Yang** | UI / Testing / Documentation | xyang015@uottawa.ca | UI implementation, manual & automated test design, documentation maintenance |
-| 4 | **Xiaoyi Zhang** | Database / Front-end / Testing | xzhan071@uottawa.ca | Database schema, migrations, query optimization, front-end support, test coverage |
-| 5 | **Jiaoyang Bi** | Documentation / Full Stack / Dev Support | jbi056@uottawa.ca | Cross-stack support, documentation, developer tooling, build/CI support |
-| 6 | **Xiang Zhao** | AI / NLP Engineer — Chatbot & Scoring | *TBD* | AI Interview Simulator (dialog flow, turn handling, scoring); AI Resume Coach scoring and feedback logic; candidate ↔ role matching and ranking; prompt design and evaluation |
+| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination, Product Planning, Front-end Developer | bwang105@uottawa.ca | Roadmap, sprint planning, stakeholder communication; front-end architecture and core component development |
+| 2 | **Jingxuan Xu** | Backend & API Lead | jxu022@uottawa.ca | RESTful API design; auth, user, messaging, and verification services; LLM provider integration plumbing (auth, retries, rate limiting, cost tracking); backend performance |
+| 3 | **Xiaoyi Zhang** | Database Engineer | xzhan071@uottawa.ca | PostgreSQL schema, migrations, query optimization, data-integrity tests, backup and recovery; light front-end support when DB work is light |
+| 4 | **Xiaoyan Yang** | QA Lead + UI Implementation Support | xyang015@uottawa.ca | Test strategy; unit, integration, and E2E test pipelines; manual QA scripts and regression suites; UI component implementation alongside Kair |
+| 5 | **Jiaoyang Bi** | DevOps Engineer + Documentation Lead | jbi056@uottawa.ca | CI/CD pipelines (GitHub Actions); Docker; deployment; observability (Sentry, structured logs); developer environment; runbooks; documentation maintenance |
+| 6 | **Xiang Zhao** | AI / NLP Engineer | xzhao022@uottawa.ca | AI Interview Simulator (dialog flow, turn handling, scoring); Resume Coach scoring and feedback logic; candidate ↔ role matching and ranking; prompt design and AI output evaluation |
 
 **Project Coordinator:** Kair Wang is responsible for sprint orchestration, agenda-setting, timeline tracking, and external communication.
 
@@ -375,7 +375,7 @@ University of Ottawa, ELG/DTI/GNG 5902, Team 8
 | Xiaoyan Yang | xyang015@uottawa.ca |
 | Xiaoyi Zhang | xzhan071@uottawa.ca |
 | Jiaoyang Bi | jbi056@uottawa.ca |
-| Xiang Zhao | *TBD* |
+| Xiang Zhao | xzhao022@uottawa.ca |
 
 For questions about this repository, please open an issue or contact the Project Coordinator.
 

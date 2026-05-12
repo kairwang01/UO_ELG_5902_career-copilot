@@ -9,29 +9,56 @@
 
 | # | Name | Role | uOttawa Email |
 |---|------|------|---------------|
-| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination · Product Planning · Front-end | bwang105@uottawa.ca |
-| 2 | **Jingxuan Xu** | Backend · API Integration | jxu022@uottawa.ca |
-| 3 | **Xiaoyan Yang** | UI · Testing · Documentation | xyang015@uottawa.ca |
-| 4 | **Xiaoyi Zhang** | Database · Front-end · Testing | xzhan071@uottawa.ca |
-| 5 | **Jiaoyang Bi** | Documentation · Full Stack · Dev Support | jbi056@uottawa.ca |
-| 6 | **Xiang Zhao** | AI / NLP Engineer · Chatbot · Scoring | *TBD* |
+| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination · Product Planning · Front-end Developer | bwang105@uottawa.ca |
+| 2 | **Jingxuan Xu** | Backend & API Lead | jxu022@uottawa.ca |
+| 3 | **Xiaoyi Zhang** | Database Engineer | xzhan071@uottawa.ca |
+| 4 | **Xiaoyan Yang** | QA Lead + UI Implementation Support | xyang015@uottawa.ca |
+| 5 | **Jiaoyang Bi** | DevOps Engineer + Documentation Lead | jbi056@uottawa.ca |
+| 6 | **Xiang Zhao** | AI / NLP Engineer | xzhao022@uottawa.ca |
 
 ---
 
 ## 2. Role Responsibilities
 
-### Kair Wang — Project Coordinator / Product / Front-end
+### Kair Wang — Project Coordinator · Product Planning · Front-end Developer
 - Owns the overall project roadmap, sprint plan, and milestones.
 - Coordinates weekly meetings, agendas, and stakeholder communication.
-- Front-end architecture, component library decisions, integration with API.
-- Maintains documentation index and ensures docs stay current.
+- Owns the front-end architecture: tooling, component library, routing, integration with the API.
+- Develops core front-end components and pages alongside Xiaoyan.
+- Maintains the documentation index at the project level.
 - Final escalation point for scope and schedule decisions.
 
-### Jingxuan Xu — Backend / API
-- Designs and implements the RESTful API and core business services.
-- Owns the API plumbing into the AI service layer and the integration with third-party LLM providers (auth, retries, rate limiting, cost tracking).
-- Drives performance, resilience, and reliability of backend systems.
-- Authors backend portions of the architecture and security review.
+### Jingxuan Xu — Backend & API Lead
+- Designs and implements the RESTful API and core business services (auth, user, profile, messaging, verification, recruiter, notifications).
+- Owns the API plumbing into the AI service layer and the integration with third-party LLM providers (auth, retries, rate limiting, cost tracking, response caching).
+- Drives backend performance, resilience, and reliability.
+- Authors the backend portions of the architecture document and the security review.
+- Provides backup support to Xiang on AI service interfaces.
+
+### Xiaoyi Zhang — Database Engineer
+- Owns the PostgreSQL schema and migration discipline.
+- Resolves identified database issues and produces the data-integrity test suite.
+- Owns query performance and indexing decisions.
+- Owns the backup and recovery procedure.
+- Builds test fixtures and seed data for development and CI.
+- Provides light front-end support when database work is light.
+
+### Xiaoyan Yang — QA Lead + UI Implementation Support
+- Owns the overall test strategy and the quality gate policy.
+- Owns the automated test pipeline: unit tests, API/integration tests, and E2E tests (Playwright).
+- Writes and maintains manual QA scripts and regression suites for the critical user journeys.
+- Triages new bugs and produces release-readiness reports.
+- Implements UI components alongside Kair, focusing on routine implementation and styling so Kair can focus on architecture.
+- Reviews documentation produced by other members.
+
+### Jiaoyang Bi — DevOps Engineer + Documentation Lead
+- Owns CI/CD pipelines (GitHub Actions): lint, build, test, deploy.
+- Owns Docker and the local developer environment (Docker Compose, env templates, setup docs).
+- Owns deployment to staging and production environments.
+- Owns observability: Sentry, structured logging, health checks, monitoring dashboard.
+- Authors and maintains operational runbooks and the deployment guide.
+- Drives the documentation system end to end (structure, freshness, index hygiene).
+- Provides backup support to Jingxuan on backend tasks where capacity allows.
 
 ### Xiang Zhao — AI / NLP Engineer
 - Owns the AI Interview Simulator: dialog flow, turn handling, end-of-session scoring, and feedback generation.
@@ -40,30 +67,12 @@
 - Designs prompts and runs evaluations on AI outputs (accuracy, consistency, hallucination checks).
 - Works with Jingxuan on AI service interfaces and with Xiaoyan on test methodology for AI features.
 
-### Xiaoyan Yang — UI / Testing / Documentation
-- Implements UI components and screens in collaboration with Kair.
-- Owns the test strategy: unit, integration, E2E, and manual QA.
-- Maintains test fixtures, golden-path scripts, and regression suites.
-- Documents user-facing flows and QA outcomes.
-
-### Xiaoyi Zhang — Database / Front-end / Testing
-- Owns the database schema, migrations, and query performance.
-- Resolves identified database issues and produces the data-integrity test suite.
-- Supports front-end work where capacity allows.
-- Contributes to test coverage on data-layer code paths.
-
-### Jiaoyang Bi — Documentation / Full Stack / Dev Support
-- Cross-stack support: helps unblock any role where needed.
-- Owns CI/CD pipelines, build tooling, and developer environment setup.
-- Maintains the documentation system and contributes to runbooks.
-- Drives observability and operational tooling.
-
 ---
 
 ## 3. Decision-Making Policy
 
 1. **Default — Consensus.** Most decisions are made by team consensus during meetings or in writing on GitHub.
-2. **If consensus stalls — Majority Vote.** Five-member team; three votes carry the decision.
+2. **If consensus stalls — Majority Vote.** Six-member team; four votes carry the decision.
 3. **Tie-breaker — Project Coordinator.** Kair Wang has tie-breaking authority *only* when a vote is deadlocked.
 4. **Scope & schedule disputes — Project Coordinator owns the call** after team input, to keep the project on time.
 
