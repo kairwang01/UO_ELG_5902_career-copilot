@@ -123,8 +123,11 @@ All work is anchored to these dates. Internal team deadlines run **48 hours ahea
 
 | Task | Owner | Deliverable |
 |------|-------|-------------|
-| Resume engine resilience | Jingxuan Xu | Retries, fallback, tests |
-| Interview simulator stability | Jingxuan Xu, Jiaoyang Bi | Bug fixes, error handling |
+| Resume engine resilience (API & infra) | Jingxuan Xu | Retries, fallback, tests |
+| Resume scoring logic and prompts | Xiang Zhao | Scoring function, prompt set, eval notes |
+| Interview simulator dialog & scoring | Xiang Zhao | Dialog flow, scoring rubric, sample sessions |
+| Interview simulator API & error handling | Jingxuan Xu, Jiaoyang Bi | Bug fixes, error handling |
+| Candidate ↔ role matching (v1) | Xiang Zhao | Ranking function + tests |
 | Verified profile service hardening | Xiaoyi Zhang | Migration + tests |
 | Front-end error handling pass | Kair Wang, Xiaoyan Yang | UI states for error cases |
 | MVP smoke-test pass | All | Manual QA checklist passed |
@@ -275,7 +278,10 @@ Conventional Commits style: `feat(scope): subject`, `fix(scope): subject`, etc.
 | Front-end | Kair Wang | Xiaoyi Zhang, Xiaoyan Yang |
 | Backend / API | Jingxuan Xu | Jiaoyang Bi |
 | Database | Xiaoyi Zhang | Jingxuan Xu |
+| AI / NLP — Interview Simulator, Scoring, Matching | Xiang Zhao | Jingxuan Xu |
+| LLM Provider Integration (auth, retries, cost tracking) | Jingxuan Xu | Xiang Zhao |
 | Testing & QA | Xiaoyan Yang | Xiaoyi Zhang, Jiaoyang Bi |
+| AI Output Evaluation (accuracy, hallucination, consistency) | Xiang Zhao | Xiaoyan Yang |
 | Documentation | Jiaoyang Bi | Xiaoyan Yang, Kair Wang |
 | DevOps / CI | Jiaoyang Bi | Jingxuan Xu |
 

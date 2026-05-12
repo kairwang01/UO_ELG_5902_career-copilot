@@ -14,6 +14,7 @@
 | 3 | **Xiaoyan Yang** | UI · Testing · Documentation | xyang015@uottawa.ca |
 | 4 | **Xiaoyi Zhang** | Database · Front-end · Testing | xzhan071@uottawa.ca |
 | 5 | **Jiaoyang Bi** | Documentation · Full Stack · Dev Support | jbi056@uottawa.ca |
+| 6 | **Xiang Zhao** | AI / NLP Engineer · Chatbot · Scoring | *TBD* |
 
 ---
 
@@ -28,9 +29,16 @@
 
 ### Jingxuan Xu — Backend / API
 - Designs and implements the RESTful API and core business services.
-- Owns integration with the AI service layer and third-party LLM providers.
+- Owns the API plumbing into the AI service layer and the integration with third-party LLM providers (auth, retries, rate limiting, cost tracking).
 - Drives performance, resilience, and reliability of backend systems.
 - Authors backend portions of the architecture and security review.
+
+### Xiang Zhao — AI / NLP Engineer
+- Owns the AI Interview Simulator: dialog flow, turn handling, end-of-session scoring, and feedback generation.
+- Owns the AI Resume Coach scoring and feedback logic (resume quality score inspired by common ATS screening criteria).
+- Owns the candidate ↔ role matching and ranking logic.
+- Designs prompts and runs evaluations on AI outputs (accuracy, consistency, hallucination checks).
+- Works with Jingxuan on AI service interfaces and with Xiaoyan on test methodology for AI features.
 
 ### Xiaoyan Yang — UI / Testing / Documentation
 - Implements UI components and screens in collaboration with Kair.

@@ -107,12 +107,14 @@ This document describes the **target production architecture** for Career CoPilo
 - **Notifications** — email / in-app notifications.
 
 ### 4.4 AI Service Layer
-**Owner:** Jingxuan Xu, Jiaoyang Bi
+**AI logic owner:** Xiang Zhao
+**API & infrastructure owner:** Jingxuan Xu (with Jiaoyang Bi)
 - Wraps all LLM provider calls behind an internal API.
-- Owns prompt templates, retries, cost tracking, response caching.
-- **Resume Engine** — parsing, rewriting, ATS scoring.
-- **Interview Simulator** — turn-based interview sessions with scoring.
-- **Scoring & Feedback** — pluggable scoring functions per use case.
+- The API plumbing (auth, retries, rate limiting, cost tracking, response caching) is owned by Jingxuan.
+- The AI logic (prompt design, dialog flow, scoring rubrics, ranking functions, evaluation) is owned by Xiang.
+- **Resume Engine** — parsing, rewriting, resume quality score inspired by common ATS screening criteria.
+- **Interview Simulator** — turn-based interview sessions with end-of-session scoring.
+- **Scoring & Feedback** — pluggable scoring functions per use case (resume, interview, matching).
 
 ### 4.5 Data Layer
 **Owner:** Xiaoyi Zhang

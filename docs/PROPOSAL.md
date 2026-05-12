@@ -186,16 +186,17 @@ Two rules govern data sharing across the workflow:
 | D2 | Project proposal *(this document)* | Kair Wang | 0 |
 | D3 | Repository skeleton & docs | Kair Wang | 0 |
 | D4 | MVP audit report | Jingxuan Xu, Xiaoyi Zhang | 1 |
-| D5 | System architecture document | Jingxuan Xu, Kair Wang | 1 |
+| D5 | System architecture document | Jingxuan Xu, Kair Wang, Xiang Zhao | 1 |
 | D6 | Test strategy | Xiaoyan Yang | 1 |
 | D7 | Database migration & integrity report | Xiaoyi Zhang | 2 |
 | D8 | Closed bug backlog | All | 2 |
 | D9 | Automated test pipeline (CI green) | Xiaoyan Yang, Jiaoyang Bi | 3 |
 | D10 | Performance & load test report | Jingxuan Xu | 3 |
-| D11 | Security & observability hardening report | Jiaoyang Bi | 4 |
-| D12 | Production deployment runbook | Kair Wang, Jiaoyang Bi | 4 |
-| D13 | Final demo & presentation | All | 5 |
-| D14 | Final project report | All | 5 |
+| D11 | AI feature evaluation report (resume scoring, interview, matching) | Xiang Zhao | 3 |
+| D12 | Security & observability hardening report | Jiaoyang Bi | 4 |
+| D13 | Production deployment runbook | Kair Wang, Jiaoyang Bi | 4 |
+| D14 | Final demo & presentation | All | 5 |
+| D15 | Final project report | All | 5 |
 
 ---
 
@@ -204,10 +205,11 @@ Two rules govern data sharing across the workflow:
 | # | Member | Role | uOttawa Email | Primary Responsibilities |
 |---|--------|------|---------------|--------------------------|
 | 1 | Kair Wang | Project Coordination, Product Planning, Front-end | bwang105@uottawa.ca | Roadmap, sprint planning, stakeholder communication, front-end |
-| 2 | Jingxuan Xu | Backend / API Integration | jxu022@uottawa.ca | RESTful API, business logic, third-party integrations |
+| 2 | Jingxuan Xu | Backend / API Integration | jxu022@uottawa.ca | RESTful API, business logic, LLM provider integration plumbing |
 | 3 | Xiaoyan Yang | UI / Testing / Documentation | xyang015@uottawa.ca | UI, manual & automated testing, docs |
 | 4 | Xiaoyi Zhang | Database / Front-end / Testing | xzhan071@uottawa.ca | Schema, migrations, query optimization, testing |
 | 5 | Jiaoyang Bi | Documentation / Full Stack / Dev Support | jbi056@uottawa.ca | Cross-stack support, docs, build/CI |
+| 6 | Xiang Zhao | AI / NLP Engineer — Chatbot & Scoring | *TBD* | AI Interview Simulator, resume scoring logic, candidate ↔ role matching, prompt design and evaluation |
 
 See [`TEAM.md`](TEAM.md) for full responsibilities and decision-making policy.
 
@@ -240,6 +242,7 @@ This proposal is submitted for approval by the course instructor and project spo
 | Xiaoyan Yang | UI / Testing / Docs | May 8, 2026 | ✍︎ |
 | Xiaoyi Zhang | Database / Front-end / Testing | May 8, 2026 | ✍︎ |
 | Jiaoyang Bi | Documentation / Full Stack | May 8, 2026 | ✍︎ |
+| Xiang Zhao | AI / NLP Engineer | *pending — joined after contract signing* | — |
 
 ---
 
