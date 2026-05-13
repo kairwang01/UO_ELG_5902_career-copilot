@@ -231,19 +231,4 @@ See [`TEAM.md`](TEAM.md) for full responsibilities and decision-making policy.
 
 ---
 
-## 13. Approval
-
-This proposal is submitted for approval by the course instructor and project sponsor.
-
-| Name | Role | Date | Signature |
-|------|------|------|-----------|
-| Kair Wang | Project Coordinator · Product Planning · Front-end Developer | May 8, 2026 | ✍︎ |
-| Jingxuan Xu | Backend & API Lead | May 8, 2026 | ✍︎ |
-| Xiaoyi Zhang | Database Engineer | May 8, 2026 | ✍︎ |
-| Xiaoyan Yang | QA Lead + UI Implementation Support | May 8, 2026 | ✍︎ |
-| Jiaoyang Bi | DevOps Engineer + Documentation Lead | May 8, 2026 | ✍︎ |
-| Xiang Zhao | AI / NLP Engineer | *pending — joined after contract signing* | — |
-
----
-
 *Document version: 1.0 — Initial draft. Will be reviewed and finalized in Week 2.*

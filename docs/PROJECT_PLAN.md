@@ -126,7 +126,7 @@ If any task on this critical path slips, the Project Coordinator must call a re-
 
 | # | Task | Owner | Support | Depends on | Deliverable | Internal Due |
 |---|------|-------|---------|------------|-------------|--------------|
-| T0.1 | Team contract drafted | Kair Wang | All members | — | `docs/TEAM_CONTRACT.md` | 2026-05-10 |
+| T0.1 | Team contract drafted | Kair Wang | All members | — | `Team_Contract_5902.pdf` | 2026-05-10 |
 | T0.2 | Team contract signed by all members | Kair Wang | All members | T0.1 | `Team_Contract_5902.pdf` | 2026-05-11 |
 | T0.3 | GitHub repository initialized | Kair Wang | — | — | README, `docs/` scaffold | 2026-05-11 |
 | T0.4 | Communication channels set up (WeChat, Teams) | Kair Wang | — | — | Channels live, links shared | 2026-05-11 |
