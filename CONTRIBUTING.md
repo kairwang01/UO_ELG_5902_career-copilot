@@ -212,36 +212,52 @@ Markdown style:
 
 ---
 
-## Issue Reporting
+## Issue and Task Reporting
 
-Use GitHub Issues for **bugs**, **enhancements**, and **questions**.
+**Jira is the single source of truth for tasks, bugs, and enhancements.** Use Jira tickets for all internal work. GitHub Pull Requests are used for code review only and must reference the related Jira ticket ID.
 
-### Bug Report Template
+### When to create a Jira ticket
+- Confirmed bug.
+- New feature or enhancement.
+- Refactor, technical debt, or chore.
+- Documentation work.
+
+### Ticket template
 ```
-**What happened?**
+Summary: <short, action-oriented title>
 
-**What did you expect?**
+Description:
+- What happened / what is needed
+- What is expected
+- Steps to reproduce (for bugs)
+- Environment (for bugs)
+- Logs / screenshots (if relevant)
 
-**Steps to reproduce**
-
-**Environment** (browser, OS, branch/commit)
-
-**Logs / screenshots** (if relevant)
+Acceptance criteria:
+- [ ] ...
+- [ ] ...
 ```
 
-### Labels (used during triage)
-- `bug` — confirmed defect.
-- `enhancement` — feature or improvement request.
-- `documentation` — docs work.
-- `priority/P0` — production-blocking.
-- `priority/P1` — should fix this sprint.
-- `priority/P2` — nice to have.
-- `good first issue` — small, well-scoped, suitable for new contributors.
+### Issue types and priorities (Jira)
+- **Bug** — confirmed defect.
+- **Story** — feature or user-facing improvement.
+- **Task** — internal work item.
+- **Subtask** — under a story / task.
+- Priority levels: **P0** (production-blocking) · **P1** (this sprint) · **P2** (nice to have).
+
+### Linking PRs to Jira
+Every pull-request title must start with the Jira ticket ID, for example:
+
+```
+CCP-42 feat(resume): add ATS scoring endpoint
+```
+
+This keeps code and tasks traceable in both directions.
 
 ---
 
 ## Questions?
 
-Open an issue or ask in the team Discord. We're happy to help.
+Open a question ticket in Jira or ask in the team chat (WeChat / Discord). We're happy to help.
 
 — Team 8

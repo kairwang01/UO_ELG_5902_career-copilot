@@ -95,7 +95,7 @@ All work is anchored to these dates. Internal team deadlines run **48 hours ahea
 | System architecture v1 | Jingxuan Xu, Kair Wang | `docs/ARCHITECTURE.md` | 2026-05-19 |
 | Database refactor plan | Xiaoyi Zhang | `docs/DB_DESIGN.md` | 2026-05-19 |
 | Test strategy v1 | Xiaoyan Yang | `docs/TEST_STRATEGY.md` | 2026-05-19 |
-| Bug backlog triage | All | Triaged GitHub issues | 2026-05-19 |
+| Bug backlog triage | All | Triaged Jira tickets | 2026-05-19 |
 | Submit proposal on Brightspace | Kair Wang | Submission confirmation | **2026-05-20** |
 
 **Exit criteria:** Proposal submitted; design docs published; backlog prioritized; team aligned on the engineering plan.
@@ -237,7 +237,8 @@ All work is anchored to these dates. Internal team deadlines run **48 hours ahea
 | **Discord** | Day-to-day chat, urgent questions, async standups |
 | **WeChat (group)** | Real-time team chat |
 | **Microsoft Teams** | Official document sharing, meeting calls |
-| **GitHub Issues / PRs** | All technical work, decisions, code review |
+| **Jira** | Task tracking, sprint board, ticket backlog |
+| **GitHub Pull Requests** | Code review and technical decisions of record (each PR links to a Jira ticket) |
 | **Email (uOttawa)** | External / formal communications, course submissions |
 
 ---

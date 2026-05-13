@@ -90,7 +90,8 @@ All decisions of consequence are recorded:
 | Discord (server) | Day-to-day chat, async standups, urgent pings |
 | WeChat (group) | Quick real-time discussion |
 | Microsoft Teams | Official meetings, document sharing |
-| GitHub Issues / PRs | All technical work, decisions, code review |
+| Jira | Task tracking, sprint board, ticket backlog |
+| GitHub Pull Requests | Code review and technical decisions of record (each PR links to a Jira ticket) |
 | Email | External / formal communication only |
 
 **Response-time expectations**

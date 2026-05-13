@@ -48,7 +48,8 @@
 | **Discord — "Team 8 – Career CoPilot"** | Day-to-day chat, async standups, urgent pings, file links, meeting reminders | All members |
 | **WeChat group "Team 8 (5902)"** | Quick real-time discussion | All members |
 | **Microsoft Teams** | Meeting calls, official document sharing, calendar invites | Kair Wang (admin) |
-| **GitHub Issues / Pull Requests** | All technical work, code review, decisions of record | All members |
+| **Jira** | Task tracking, sprint board, ticket backlog | All members (board admin: Kair Wang) |
+| **GitHub Pull Requests** | Code review and technical decisions of record (each PR linked to a Jira ticket) | All members |
 | **uOttawa email** | External communications with the instructor, TA, and client | Kair Wang (primary contact) |
 
 **Response-time expectations**
@@ -61,11 +62,11 @@
 
 ### 3. Decision-Making Policy
 
-1. **Default — Consensus.** Most decisions are made by team consensus, either in the weekly meeting or asynchronously in the relevant GitHub Issue or Discussion. A proposal is considered accepted by consensus when **no member objects within 48 hours** of being posted.
+1. **Default — Consensus.** Most decisions are made by team consensus, either in the weekly meeting or asynchronously in the relevant Jira ticket or GitHub Discussion. A proposal is considered accepted by consensus when **no member objects within 48 hours** of being posted.
 2. **If consensus is not reached — Majority Vote.** A formal vote is called by the Project Coordinator. Each member has one vote. With six members, **four votes carry** the decision. Voting takes place either via a Discord poll open for 24 hours, or by show-of-hands in a meeting when all members are present.
 3. **Tie-breaker.** If a vote is deadlocked at 3–3, **Kair Wang (Project Coordinator) has tie-breaking authority**. This authority is used only when a vote is genuinely tied.
 4. **Scope, schedule, or budget decisions.** When a decision materially affects course-deliverable scope or deadlines, the Project Coordinator owns the final call after the team has been heard, to protect the project timeline.
-5. **Recording.** Every formal decision is recorded in the meeting minutes and, when technical, in the originating GitHub Issue or Discussion thread.
+5. **Recording.** Every formal decision is recorded in the meeting minutes and, when technical, in the originating Jira ticket or GitHub Discussion thread.
 
 ### 4. Setting and Following Meeting Agendas
 
@@ -101,8 +102,9 @@
 
 **2. Strategies to fulfill these standards**
 
-- **GitHub** is the single source of truth for version control, issues, and the project board.
-- **GitHub Projects (kanban)** tracks every task by sprint, with columns: Backlog · In Progress · In Review · Done.
+- **GitHub** is the single source of truth for version control and code review (pull requests).
+- **Jira** is the single source of truth for task management. Every task is tracked as a Jira ticket and progresses through the columns: Backlog · To Do · In Progress · In Review · Done.
+- Every pull request title and description must reference the related Jira ticket ID (e.g., `CCP-42`) so code and tasks stay linked.
 - **Internal deadlines** are set **48 hours before** every official course deadline, to leave room for revision and integration testing.
 - A **pre-submission checklist** (in `docs/PRE_SUBMISSION_CHECKLIST.md`) is run by the Project Coordinator before any Brightspace submission.
 
@@ -122,7 +124,7 @@
 
 **3. Strategies for keeping on task**
 
-- Sprint goals are set at the start of each two-week sprint and tracked on the GitHub Projects board.
+- Sprint goals are set at the start of each two-week sprint and tracked on the Jira board.
 - Each member posts a brief async standup in Discord `#standups` on **Wednesday and Friday** during active sprints, in the format: *yesterday / today / blockers*.
 - Blockers are surfaced to the Project Coordinator **as soon as identified**, not at the next meeting.
 
