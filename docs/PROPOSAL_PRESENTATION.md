@@ -58,11 +58,11 @@ Presented by (in speaking order):
 **Problem statement**
 
 - **What is the problem?**
-  Job seekers lack accessible, trustworthy tools to polish their resumes, prepare for real interviews, and connect efficiently with recruiting agencies. The existing Career CoPilot MVP demonstrates the product idea but is not production-ready: it has database integrity gaps, no automated test pipeline, an open critical-bug backlog, and infrastructure that has not been hardened for real traffic.
+  Job seekers do not have an affordable way to improve their resumes, practise interviews, and reach recruiting agencies through a single trusted channel. The Career CoPilot MVP works as a product idea but is not ready for real users. It has database integrity gaps, no automated test pipeline, an open list of critical bugs, and infrastructure that has not been hardened against real traffic.
 - **Who has the problem?**
-  Two user groups — **candidates** (career switchers and recent graduates) and **recruiting agencies** seeking pre-qualified, verified talent.
+  Two user groups: **candidates** (career switchers and recent graduates) and **recruiting agencies** that need pre-qualified, verified candidates.
 - **What form will the solution take?**
-  A web-based platform that delivers AI-driven resume review, AI interview practice, manually verified profiles, and direct chat between candidates and partner agencies — re-engineered for production reliability and quality.
+  A web platform with four features: an AI resume review, an AI interview simulator, a manually verified candidate profile, and direct chat between candidates and partner agencies. The team's job is to re-engineer the platform so it runs reliably under real user traffic.
 
 **Project Mentor:** [TBD — confirm with Prof. Gita whether she is the mentor or whether one will be assigned]
 
@@ -70,29 +70,29 @@ Presented by (in speaking order):
 
 **Why this matters to the sponsor**
 
-- CaIoT has a functional MVP but needs production-readiness work before public launch.
-- Team 8 will deliver the engineering hardening (database, tests, bug fixes, infrastructure) that is normally hardest for a small founding team to staff.
+- CaIoT has a working MVP but needs the engineering work that turns an MVP into a launchable product.
+- Team 8 takes on the database, testing, bug-fix, and infrastructure work that a small founding team usually cannot staff full-time.
 
 **Potential benefits**
 
-- For candidates — clearer resume feedback, structured interview practice, verified-profile access to vetted agencies.
-- For recruiting agencies — pre-verified candidate pipeline, reduced sourcing cost.
-- For CaIoT — production-grade platform ready for a professional launch.
+- For candidates: clearer resume feedback, structured interview practice, and a verified profile that can be shared with vetted agencies.
+- For recruiting agencies: a pre-verified candidate pipeline.
+- For CaIoT: a platform stable enough to put in front of real users.
 
 **End users**
 
-- Primary: candidates (career switchers, recent graduates).
+- Primary: candidates (career switchers and recent graduates).
 - Secondary: recruiting agency users.
 
 **General approach**
 
-- Audit the MVP, prioritize the bug backlog with the sponsor, then execute six two-week sprints that systematically harden the database, tests, AI features, and infrastructure.
+- Audit the MVP with the sponsor, prioritise the bug backlog together, then run six two-week sprints that work through the database, tests, AI features, and infrastructure in order.
 
 **What the team hopes to learn**
 
-- Production-grade web engineering on a real client product.
-- AI integration patterns and evaluation methodology.
-- End-to-end QA and infrastructure hardening discipline.
+- How to take a working prototype to a state where it can be put in front of real users.
+- How to integrate and evaluate AI features (resume scoring, interview dialog, candidate-role matching).
+- How to design and run an end-to-end testing pipeline on a real codebase.
 
 ---
 
@@ -156,23 +156,23 @@ Presented by (in speaking order):
 
 **Team and ownership** (see [TEAM.md](TEAM.md) and [PROJECT_PLAN.md](PROJECT_PLAN.md))
 
-| Member | Primary Role | Why suited |
+| Member | Primary Role | Background (one line) |
 |---|---|---|
-| Kair Wang | Project Coordinator · Product Planning · Front-end Developer | Coordination, product thinking, front-end development experience |
-| Jingxuan Xu | Backend & API Lead | RESTful API and backend service experience |
-| Xiaoyi Zhang | Database Engineer | Database schema, migrations, query performance experience |
-| Xiaoyan Yang | QA Lead + UI Implementation Support | Test design and execution; UI implementation experience |
-| Jiaoyang Bi | DevOps Engineer + Documentation Lead | CI/CD, deployment, and documentation experience |
-| Xiang Zhao | AI / NLP Engineer | Prior work on candidate prescreening chatbot, NLP dialogue, candidate scoring, recommendation logic |
+| Kair Wang | Project Coordinator · Product Planning · Front-end Developer | [TBD — one-line background to be supplied by Kair] |
+| Jingxuan Xu | Backend & API Lead | [TBD — one-line background to be supplied by Jingxuan] |
+| Xiaoyi Zhang | Database Engineer | [TBD — one-line background to be supplied by Xiaoyi] |
+| Xiaoyan Yang | QA Lead + UI Implementation Support | [TBD — one-line background to be supplied by Xiaoyan] |
+| Jiaoyang Bi | DevOps Engineer + Documentation Lead | [TBD — one-line background to be supplied by Jiaoyang] |
+| Xiang Zhao | AI / NLP Engineer | Built a candidate prescreening chatbot in a prior role: NLP dialogue, candidate scoring, recommendation logic |
 
 **Knowledge gaps and how they will be filled**
 
 | Gap | How we will close it |
 |---|---|
-| Production-scale deployment patterns | Technical advisor; sponsor's experience |
-| LLM cost and reliability operations | Sponsor (existing usage patterns); independent reading |
-| Recruiting / agency domain knowledge | Sponsor walk-through; internal team interviews |
-| Real-user evaluation of AI features | Sponsor's existing user data (if available) + internal user test scripts |
+| Deploying a system that handles real user traffic | Technical advisor and the sponsor's prior experience |
+| Keeping LLM costs in budget and handling provider outages | Walk-through with the sponsor on current usage, plus independent reading |
+| Recruiting and agency domain knowledge | Sponsor walk-through and short interviews with one or two agency contacts |
+| Evaluating AI feature quality against real-user inputs | Sample data from the sponsor where shareable, plus an internal evaluation set built by the team |
 
 **Team contract:** signed by all six members and submitted 2026-05-13 (see `Team_Contract_5902.pdf` in the repo).
 
@@ -229,10 +229,10 @@ Presented by (in speaking order):
 
 **Benefits to end users**
 
-- Faster resume improvement.
-- Structured, role-specific interview practice.
-- Verified profile that reduces noise for both sides.
-- Direct candidate ↔ agency channel.
+- Section-by-section resume feedback the candidate can act on the same day.
+- Interview practice that is scored against a fixed rubric, so the candidate can see what to work on.
+- A verified profile, so agencies know the candidate's claims have been checked by a human reviewer.
+- A direct chat with an agency, with consent required before the verified profile or full resume is shared.
 
 ---
 
@@ -300,15 +300,15 @@ Presented by (in speaking order):
 
 | # | Metric | Ideal | Marginally acceptable | Reasoning |
 |---|---|---|---|---|
-| M1 | TTI on 3G simulated | < 3 s | < 5 s | Frontend SPA budget for non-broadband users |
-| M2 | Read API P95 | < 150 ms | < 300 ms | Smooth feel; consistent with industry baselines |
-| M3 | AI API P95 | < 3 s | < 8 s | Bounded by LLM provider latency |
-| M4 | Error rate | < 0.1 % | < 1 % | Industry-standard reliability bands |
-| M5 | Coverage | ≥ 90 % | ≥ 80 % | Sponsor confidence and grading rubric |
-| M6 | P0 / P1 at submission | 0 | ≤ 2 P1, 0 P0 | Production-readiness standard |
-| M7 | Resume score agreement | ≥ 90 % | ≥ 75 % | Trust threshold for candidate-facing feedback |
-| M8 | Interview scoring consistency | ≥ 90 % | ≥ 80 % | Reproducibility of scored sessions |
-| M9 | Monthly infra cost | $0 (free tiers) | < $30 | Student-budget constraint |
+| M1 | TTI on 3G simulated | < 3 s | < 5 s | Page must be usable on a typical mobile connection |
+| M2 | Read API P95 | < 150 ms | < 300 ms | Within the Web Vitals "Good" interaction band |
+| M3 | AI API P95 | < 3 s | < 8 s | Floor is set by the LLM provider's typical latency |
+| M4 | Error rate | < 0.1 % | < 1 % | Below this, the platform feels broken to users |
+| M5 | Coverage | ≥ 90 % | ≥ 80 % | Standard expectation for a graded engineering project |
+| M6 | P0 / P1 at submission | 0 | ≤ 2 P1, 0 P0 | The team's definition of "shippable" for Beta |
+| M7 | Resume score agreement | ≥ 90 % | ≥ 75 % | Below this, candidate-facing feedback cannot be trusted |
+| M8 | Interview scoring consistency | ≥ 90 % | ≥ 80 % | The same answer should not get very different scores |
+| M9 | Monthly infra cost | $0 (free tiers) | < $30 | Limited by the team's student budget |
 
 **Benchmarking — comparable products**
 
@@ -317,7 +317,7 @@ Presented by (in speaking order):
 - **Resume.io** — guided resume builder with template-based feedback.
 - **Big Interview** — structured AI interview practice.
 
-Career CoPilot differentiates by combining all four functions (resume coach + interview simulator + verified profile + direct chat) in a single workflow with explicit candidate consent and a verified-profile trust layer.
+Career CoPilot covers all four functions (resume coach, interview simulator, verified profile, direct chat) in a single workflow. The two features that the reference products do not have, and that Career CoPilot does, are explicit candidate consent before profile disclosure and an admin-reviewed verification step.
 
 *(Images / screenshots of each benchmark to be added to the slide.)*
 
@@ -343,36 +343,36 @@ Career CoPilot differentiates by combining all four functions (resume coach + in
 
 | Component | Method / Tool | Why |
 |---|---|---|
-| Resume scoring | Prompt-engineered LLM scoring + rule-based ATS checks | Combines LLM flexibility with deterministic rule coverage |
-| Interview simulator | Turn-based dialog with scoring rubric | Bounded structure; reproducible scoring |
-| Candidate ↔ role matching | Semantic-similarity ranking + tag filters | Lightweight baseline; can evolve |
-| Auth | JWT access tokens + rotating refresh tokens | Industry standard |
-| Storage | PostgreSQL + Redis + S3-compatible object storage | Proven, low-ops stack |
-| Test pipeline | Jest · Supertest · Playwright · k6 | Layered coverage across unit, API, E2E, load |
-| Observability | Sentry + structured logs | Error visibility and traceability |
-| Project mgmt | Jira sprints + GitHub PRs | Industry-standard, traceable |
+| Resume scoring | LLM scoring driven by a fixed prompt set, combined with rule-based ATS checks | The LLM handles open-ended feedback; the rule-based checks cover the things rules are good at, such as keyword and formatting checks |
+| Interview simulator | Turn-based dialog with a fixed scoring rubric | A turn-based flow is easier to test, and a fixed rubric makes scores comparable across sessions |
+| Candidate ↔ role matching | Semantic-similarity ranking and tag filters | Light enough to ship in the MVP; we can replace the ranker later once we have real usage data |
+| Auth | JWT access tokens with rotating refresh tokens | Widely documented, well-understood failure modes |
+| Storage | PostgreSQL, Redis, S3-compatible object storage | The team already knows this stack; the operational cost is low |
+| Test pipeline | Jest, Supertest, Playwright, k6 | Unit, API, end-to-end, and load layers each catch a different class of bug |
+| Observability | Sentry and structured logs | Errors and request traces are visible without building our own tooling |
+| Project management | Jira sprints and GitHub pull requests | Easy to audit (ticket-to-PR links) and familiar to anyone reviewing the project |
 
 **New methods or structures**
 
-- The project uses well-established methods; no novel algorithm is being developed. The contribution is the **integration, productionisation, and evaluation methodology** for AI features in this specific career-platform workflow.
+- The project uses established methods. No new algorithm is invented. The team's contribution is the way these methods are put together, deployed, and evaluated inside this career-platform workflow.
 
 ---
 
 ## Slide 11 — Learning Outcomes
 
-**Knowledge** — Learn production-grade Node.js / TypeScript service architecture and the integration patterns required to use third-party LLM APIs reliably.
+**Knowledge.** Learn production Node.js and TypeScript service architecture, and the techniques needed to use third-party LLM APIs without breaking when the provider is slow or down.
 
-**Problem Analysis and Research** — Conduct an MVP gap analysis with the sponsor, triage and prioritise the existing bug backlog, and evaluate AI output quality against an evaluation set.
+**Problem Analysis and Research.** Run an MVP gap analysis with the sponsor, triage the existing bug backlog, and measure AI feature quality against a held-out evaluation set.
 
-**Design** — Design for security, scalability, and ease of use; design the AI prompt and scoring methodology; design the test pipeline and observability strategy.
+**Design.** Design the system for security, for scaling under traffic, and for ease of use. Design the prompt set and scoring rubric for the AI features. Design the test pipeline and the observability setup.
 
-**Verification and Validation Techniques** — Apply unit testing, integration testing, end-to-end testing (Playwright), load testing (k6), manual regression QA, and AI output evaluation.
+**Verification and Validation Techniques.** Unit testing, integration testing, end-to-end testing in Playwright, load testing in k6, manual regression QA, and an evaluation script for AI output quality.
 
-**Tools** — GitHub, Jira, Docker, Playwright, Sentry, OpenAI / Anthropic API, PostgreSQL, Redis, k6.
+**Tools.** GitHub, Jira, Docker, Playwright, Sentry, OpenAI or Anthropic API, PostgreSQL, Redis, k6.
 
-**Project Management and Professional Skills** — Sprint planning and retrospectives, written and verbal stakeholder communication, written documentation, peer code review, written final report.
+**Project Management and Professional Skills.** Sprint planning and retrospectives, written and spoken communication with the sponsor and the course staff, peer code review, and the written final report.
 
-**Society and Sustainable Development** — Understand how AI tools can lower the barrier to professional career resources for candidates who lack access to expensive coaching or curated networks.
+**Society and Sustainable Development.** Understand how AI tools can lower the barrier to career resources for candidates who do not have access to expensive coaching or to a strong professional network.
 
 ---
 
@@ -416,15 +416,16 @@ Career CoPilot differentiates by combining all four functions (resume coach + in
 | # | Open Item | Owner | Notes |
 |---|---|---|---|
 | 1 | Collect six uOttawa student IDs | Kair Wang | Slide 2 |
-| 2 | Confirm Project Mentor identity | Kair Wang | Slide 3, Slide 5 |
-| 3 | Confirm Technical Advisor identity | Kair Wang | Slide 5 |
-| 4 | Capture Abi K's LinkedIn URL and CaIoT website | Kair Wang | Slide 5 — get from May 13 meeting |
-| 5 | Confirm with sponsor: LLM provider, infra cost expectations, existing test data | Kair Wang | Slide 7, Slide 8 — May 13 meeting |
-| 6 | Add benchmark screenshots (LinkedIn, Indeed, Resume.io, Big Interview) | Xiaoyan Yang | Slide 9 |
-| 7 | Confirm speaking order and assign slides to presenters | Kair Wang | Slide 2 |
-| 8 | Choose visual theme (non-default) | Xiaoyan Yang | All slides |
-| 9 | Apply consistent fonts and minimal animation | Xiaoyan Yang | All slides |
-| 10 | Convert this markdown into a `.pptx` file | Kair Wang (Claude assist) | After content sign-off |
+| 2 | Each member writes a one-line background for Slide 6 | All members | Slide 6 |
+| 3 | Confirm Project Mentor identity | Kair Wang | Slide 3, Slide 5 |
+| 4 | Confirm Technical Advisor identity | Kair Wang | Slide 5 |
+| 5 | Capture Abi K's LinkedIn URL and CaIoT website | Kair Wang | Slide 5 — get from May 13 meeting |
+| 6 | Confirm with sponsor: LLM provider, infra cost expectations, existing test data | Kair Wang | Slide 7, Slide 8 — May 13 meeting |
+| 7 | Add benchmark screenshots (LinkedIn, Indeed, Resume.io, Big Interview) | Xiaoyan Yang | Slide 9 |
+| 8 | Confirm speaking order and assign slides to presenters | Kair Wang | Slide 2 |
+| 9 | Choose visual theme (non-default) | Xiaoyan Yang | All slides |
+| 10 | Apply consistent fonts and minimal animation | Xiaoyan Yang | All slides |
+| 11 | Convert this markdown into a `.pptx` file | Kair Wang (Claude assist) | After content sign-off |
 
 ---
 
@@ -433,3 +434,4 @@ Career CoPilot differentiates by combining all four functions (resume coach + in
 | Date | Version | Change | Author |
 |---|---|---|---|
 | 2026-05-12 | 0.1 | Initial draft pre-client-meeting. Content pulled from `PROPOSAL.md`, `ARCHITECTURE.md`, `WORKFLOW.md`, `PROJECT_PLAN.md`. | Kair Wang |
+| 2026-05-12 | 0.2 | Polish pass: removed marketing language and AI-tell phrasing; replaced vague justifications with specific reasoning; left member backgrounds as `[TBD]` so each member can write their own. | Kair Wang |
