@@ -425,7 +425,7 @@ Career CoPilot covers all four functions (resume coach, interview simulator, ver
 | 8 | Confirm speaking order and assign slides to presenters | Kair Wang | Slide 2 |
 | 9 | Choose visual theme (non-default) | Xiaoyan Yang | All slides |
 | 10 | Apply consistent fonts and minimal animation | Xiaoyan Yang | All slides |
-| 11 | Convert this markdown into a `.pptx` file | Kair Wang (Claude assist) | After content sign-off |
+| 11 | Convert this markdown into a `.pptx` file | Kair Wang | After content sign-off |
 
 ---
 
