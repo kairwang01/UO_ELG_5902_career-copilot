@@ -12,21 +12,15 @@
 ## Table of Contents
 
 1. [Project Overview](#project-overview)
-2. [Mission Statement](#mission-statement)
-3. [Core Features](#core-features)
-4. [User Workflow](#user-workflow)
-5. [System Architecture](#system-architecture)
-6. [Technology Stack](#technology-stack)
-7. [Project Scope (MVP → Production)](#project-scope-mvp--production)
-8. [Official Course Deliverables](#official-course-deliverables)
-9. [Project Roadmap](#project-roadmap)
-10. [Team and Responsibilities](#team-and-responsibilities)
-11. [Repository Structure](#repository-structure)
-12. [Getting Started](#getting-started)
-13. [Development Workflow](#development-workflow)
-14. [Quality Assurance](#quality-assurance)
-15. [Documentation Index](#documentation-index)
-16. [Contact](#contact)
+2. [Core Features](#core-features)
+3. [System Architecture](#system-architecture)
+4. [Technology Stack](#technology-stack)
+5. [Repository Structure](#repository-structure)
+6. [Getting Started](#getting-started)
+7. [Development Workflow](#development-workflow)
+8. [Quality Assurance](#quality-assurance)
+9. [Documentation](#documentation)
+10. [Contact](#contact)
 
 ---
 
@@ -39,12 +33,6 @@
 - **Verified Profile Monetization** — Direct candidate–recruiter channel with verified, monetizable profiles.
 
 This project, undertaken by **Team 8 at the University of Ottawa (ELG/DTI/GNG 5902)**, focuses on transitioning the platform from a functional MVP into a **scalable, production-ready, secure, and reliable** application capable of handling real-world traffic. Our scope is heavily concentrated on **backend reliability, database engineering, automated and manual QA pipelines, critical bug fixing, and infrastructure hardening**.
-
----
-
-## Mission Statement
-
-> To empower every job seeker with enterprise-grade career tooling that is reliable, secure, and intelligent — and to give recruiters a verified, high-signal pipeline of talent.
 
 ---
 
@@ -203,83 +191,22 @@ The MVP is functional. Our scope is to make it **production-grade**. The five fo
 
 ---
 
-## Official Course Deliverables
-
-Team 8 is graded against the following deliverables. **All dates are firm.** Internal team deadlines run 48 hours ahead of each.
-
-| # | Deliverable | Weight | Due Date |
-|---|-------------|--------|----------|
-| 1 | Team Contract | 5 % | **13 May 2026** |
-| 2 | Project Proposal | 5 % | **20 May 2026** |
-| 3 | Minimum Viable Prototype (MVP) | 10 % | **17 June 2026** |
-| 4 | Beta Release | 10 % | **4 July 2026** |
-| 5 | Project Video | 5 % | **8 July 2026** |
-| 6 | Design Day | 10 % | **17 July 2026** |
-| 7 | Final Release Report | 15 % | **26 July 2026** |
-| 8 | Client Evaluation | 10 % | **27 July 2026** |
-| 9 | Technical Advisor Evaluation | 10 % | **27 July 2026** |
-
-*Team-based deliverables total 80 %. Remaining weighting is assigned to individual evaluation per course policy.*
-
----
-
-## Project Roadmap
-
-The project runs from **May 2026 to late July 2026** (~11 weeks of active work after the team contract is signed). Phases are aligned directly with the official deliverables.
-
-| Phase | Window | Anchor Deliverable | Focus |
-|-------|--------|--------------------|-------|
-| **Phase 0 — Initiation** | 8 May – 13 May 2026 | Team Contract | Team setup, repository, MVP audit |
-| **Phase 1 — Proposal & Design** | 13 May – 20 May 2026 | Proposal | Requirements, architecture, test strategy |
-| **Phase 2 — MVP Hardening** | 20 May – 17 June 2026 | MVP | Database refactor, critical bug fixes, core flow stability |
-| **Phase 3 — Beta Release** | 17 June – 4 July 2026 | Beta Release | Automated test pipeline, performance, security pass |
-| **Phase 4 — Video & Launch Polish** | 4 July – 17 July 2026 | Video + Design Day | Video, public demo, deployment hardening, Design Day prep |
-| **Phase 5 — Final Report & Evaluation** | 17 July – 27 July 2026 | Final Report + Evaluations | Final write-up, retrospective, client and advisor evaluations |
-
-A sprint-by-sprint breakdown lives in [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
-
----
-
-## Team and Responsibilities
-
-**Team 8 — ELG/DTI/GNG 5902, University of Ottawa**
-
-| # | Member | Primary Role | uOttawa Email | Areas of Ownership |
-|---|--------|--------------|---------------|---------------------|
-| 1 | **Kair Wang** *(Project Coordinator)* | Project Coordination, Product Planning, Front-end Developer | bwang105@uottawa.ca | Roadmap, sprint planning, stakeholder communication; front-end architecture and core component development |
-| 2 | **Jingxuan Xu** | Backend & API Lead | jxu022@uottawa.ca | RESTful API design; auth, user, messaging, and verification services; LLM provider integration plumbing (auth, retries, rate limiting, cost tracking); backend performance |
-| 3 | **Xiaoyi Zhang** | Database Engineer | xzhan071@uottawa.ca | PostgreSQL schema, migrations, query optimization, data-integrity tests, backup and recovery; light front-end support when DB work is light |
-| 4 | **Xiaoyan Yang** | QA Lead + UI Implementation Support | xyang015@uottawa.ca | Test strategy; unit, integration, and E2E test pipelines; manual QA scripts and regression suites; UI component implementation alongside Kair |
-| 5 | **Jiaoyang Bi** | DevOps Engineer + Documentation Lead | jbi056@uottawa.ca | CI/CD pipelines (GitHub Actions); Docker; deployment; observability (Sentry, structured logs); developer environment; runbooks; documentation maintenance |
-| 6 | **Xiang Zhao** | AI / NLP Engineer | xzhao022@uottawa.ca | AI Interview Simulator (dialog flow, turn handling, scoring); Resume Coach scoring and feedback logic; candidate ↔ role matching and ranking; prompt design and AI output evaluation |
-
-**Project Coordinator:** Kair Wang is responsible for sprint orchestration, agenda-setting, timeline tracking, and external communication.
-
-Detailed role responsibilities and decision-making policies live in [`docs/TEAM.md`](docs/TEAM.md).
-
----
-
 ## Repository Structure
 
 ```
 career-copilot/
-├── README.md                    # This file — project entry point
-├── LICENSE                      # MIT License
+├── README.md
+├── LICENSE
 ├── .gitignore
-├── CONTRIBUTING.md              # Contribution guidelines
+├── CONTRIBUTING.md
 ├── docs/
-│   ├── PROPOSAL.md              # Project proposal
-│   ├── PROJECT_PLAN.md          # Sprint plan and timeline
-│   ├── WORKFLOW.md              # End-to-end user workflow & MVP scope
 │   ├── ARCHITECTURE.md          # System architecture & design
-│   ├── TEAM.md                  # Roles, decisions, processes
-│   ├── TEST_STRATEGY.md         # QA approach (to be added)
-│   └── meeting-minutes/         # Weekly meeting notes
-├── frontend/                    # React + TypeScript (planned)
-├── backend/                     # Node.js + Express (planned)
-├── database/                    # Schema, migrations, seeds (planned)
-├── infra/                       # Docker, CI/CD configs (planned)
-└── tests/                       # End-to-end and integration tests (planned)
+│   └── WORKFLOW.md              # User workflow
+├── frontend/                    # planned
+├── backend/                     # planned
+├── database/                    # planned
+├── infra/                       # planned
+└── tests/                       # planned
 ```
 
 ---
@@ -343,42 +270,18 @@ Quality is the **central theme** of this project. Our QA approach is multi-layer
 | Security Tests | npm audit, OWASP ZAP (manual) | All public surfaces |
 | Manual QA | Checklist-driven | Full regression before each release |
 
-Detailed strategy will be published in `docs/TEST_STRATEGY.md` during Phase 1.
-
 ---
 
-## Documentation Index
+## Documentation
 
 | Document | Purpose |
-|----------|---------|
-| [Project Proposal](docs/PROPOSAL.md) | Problem statement, goals, success criteria |
-| [Project Plan](docs/PROJECT_PLAN.md) | Sprint-by-sprint timeline and deliverables |
-| [Workflow](docs/WORKFLOW.md) | End-to-end user workflow, MVP scope, non-functional requirements |
-| [Architecture](docs/ARCHITECTURE.md) | System design, data model, infrastructure |
-| [Team](docs/TEAM.md) | Roles, decision-making, communication |
+|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | System design and data flow |
+| [Workflow](docs/WORKFLOW.md) | User workflow |
 | [Contributing](CONTRIBUTING.md) | Contribution and code review process |
 
 ---
 
 ## Contact
 
-**Project Coordinator** — Kair Wang
-University of Ottawa, ELG/DTI/GNG 5902, Team 8
-✉ bwang105@uottawa.ca
-
-**Team Contacts**
-
-| Member | uOttawa Email |
-|--------|---------------|
-| Kair Wang | bwang105@uottawa.ca |
-| Jingxuan Xu | jxu022@uottawa.ca |
-| Xiaoyan Yang | xyang015@uottawa.ca |
-| Xiaoyi Zhang | xzhan071@uottawa.ca |
-| Jiaoyang Bi | jbi056@uottawa.ca |
-| Xiang Zhao | xzhao022@uottawa.ca |
-
-For questions about this repository, please open an issue or contact the Project Coordinator.
-
----
-
-*Career CoPilot — Helping every job seeker become the best version of their professional self.*
+For questions about this repository, please open an issue.
