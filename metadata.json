@@ -1,0 +1,8 @@
+{
+  "name": "Career CoPilot",
+  "description": "Your AI partner for every step of your career. Get help with resumes, interviews, career pathing, salary negotiation, and more.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

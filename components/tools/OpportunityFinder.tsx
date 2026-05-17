@@ -1,0 +1,203 @@
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { findOpportunities } from '../../services/geminiService';
+import type { OpportunityResult, Opportunity } from '../../types';
+import LoadingSpinner from '../LoadingSpinner';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabaseClient';
+import { renderFormattedText } from './ToolUtils';
+
+interface OpportunityFinderProps {
+  resumeText: string;
+  market: string;
+  openTool: (tool: string, input?: string) => void;
+  session: Session | null;
+  t: (key: string) => string;
+}
+
+const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, market, openTool, session, t }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<OpportunityResult | null>(null);
+  const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
+  const [opportunityFilters, setOpportunityFilters] = useState<{ company: string, location: string }>({ company: 'all', location: 'all' });
+  const [appliedJobs, setAppliedJobs] = useState<Set<number>>(new Set());
+
+  const applyToInternalJob = async (jobId: number, compatibilityScore: number | undefined) => {
+    if (!session?.user) {
+        alert('You must be signed in to apply.');
+        return;
+    }
+    
+    try {
+        const { error } = await supabase
+            .from('job_applications')
+            .insert({
+                job_id: jobId,
+                candidate_id: session.user.id,
+                status: 'Applied',
+                compatibility_score: compatibilityScore ?? null,
+            });
+        if (error) throw error;
+
+        setAppliedJobs(prev => new Set(prev).add(jobId));
+    } catch (err) {
+        console.error('Error applying to job:', err);
+        alert(t('tool_opportunity_finder_apply_error'));
+    }
+  };
+
+  const fetchAppliedJobs = useCallback(async () => {
+    if (!session?.user) return;
+    try {
+        const { data, error } = await supabase
+            .from('job_applications')
+            .select('job_id')
+            .eq('candidate_id', session.user.id);
+        
+        if (error) throw error;
+        if (data) {
+            setAppliedJobs(new Set(data.map(app => app.job_id)));
+        }
+    } catch (err) {
+        console.error("Could not fetch applied jobs:", err);
+        setError(t('tool_opportunity_finder_error_fetch_applied'));
+    }
+  }, [session, t]);
+
+  const runTool = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await fetchAppliedJobs();
+      const apiResult = await findOpportunities(resumeText, market, session);
+      setResult(apiResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  }, [resumeText, market, session, fetchAppliedJobs]);
+  
+  useEffect(() => {
+    runTool();
+  }, [runTool]);
+
+  if (loading) return <LoadingSpinner market={market} />;
+  if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
+  if (!result) return null;
+
+  const { opportunities, jobSearchStrategies, groundingChunks } = result;
+  
+  const companyOptions = ['all', ...Array.from(new Set(opportunities.map(o => o.company)))];
+  const locationOptions = ['all', ...Array.from(new Set(opportunities.map(o => o.location)))];
+  
+  const filteredOpportunities = opportunities.filter(o => {
+      const companyMatch = opportunityFilters.company === 'all' || o.company === opportunityFilters.company;
+      const locationMatch = opportunityFilters.location === 'all' || o.location === opportunityFilters.location;
+      return companyMatch && locationMatch;
+  });
+  
+  const renderStrategyWithBold = (text: string) => {
+    return text.split(/(\*\*.*?\*\*)/g).map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        return part;
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <h4 className="text-lg font-bold">{t('tool_opportunity_finder_results_title')}</h4>
+      
+      {jobSearchStrategies && jobSearchStrategies.length > 0 && (
+        <div className="p-4 mb-6 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg">
+            <h5 className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 7.072l.707-.707a1 1 0 111.414 1.414l-.707.707a1 1 0 01-1.414-1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" />
+                </svg>
+                AI-Powered Job Search Strategies
+            </h5>
+            <ul className="list-disc list-inside mt-2 space-y-2 text-sm text-blue-800 dark:text-blue-300">
+                {jobSearchStrategies.map((strategy, i) => (
+                    <li key={i}>{renderStrategyWithBold(strategy)}</li>
+                ))}
+            </ul>
+        </div>
+      )}
+
+      <div className="flex gap-4 items-center text-sm p-2 bg-gray-100 dark:bg-slate-800 rounded-md">
+        <span>{t('tool_opportunity_finder_filter_label')}:</span>
+        <select value={opportunityFilters.company} onChange={e => setOpportunityFilters(p => ({...p, company: e.target.value}))} className="border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
+          {companyOptions.map(c => <option key={c} value={c}>{c === 'all' ? t('tool_opportunity_finder_filter_all_companies') : c}</option>)}
+        </select>
+        <select value={opportunityFilters.location} onChange={e => setOpportunityFilters(p => ({...p, location: e.target.value}))} className="border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
+          {locationOptions.map(l => <option key={l} value={l}>{l === 'all' ? t('tool_opportunity_finder_filter_all_locations') : l}</option>)}
+        </select>
+      </div>
+      {filteredOpportunities.length === 0 && <p className="text-gray-600 dark:text-gray-400">{t('tool_opportunity_finder_no_results')}</p>}
+      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+        {filteredOpportunities.map((job, i) => {
+            const isExpanded = expandedUrl === job.url;
+            const jobId = job.isInternal ? parseInt(job.url.replace('#internal-job-', ''), 10) : -1;
+            const hasApplied = job.isInternal && appliedJobs.has(jobId);
+
+            return (
+                <div key={job.url + i} className="p-3 border rounded-lg bg-white dark:bg-slate-800 shadow-sm transition-all duration-300">
+                    <button onClick={() => setExpandedUrl(isExpanded ? null : job.url)} className="w-full text-left flex justify-between items-center" aria-expanded={isExpanded}>
+                        <div className="flex-grow">
+                             <div className="flex items-center gap-2 flex-wrap">
+                                <h5 className="font-bold text-blue-800 dark:text-blue-300 text-base">{job.jobTitle}</h5>
+                                {job.isInternal && (
+                                    <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                        {t('tool_opportunity_finder_internal_badge')}
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-gray-700 dark:text-gray-400 mt-1">{job.company} - {job.location}</p>
+                        </div>
+                        <div className="flex items-center gap-4 ml-4">
+                             {job.isInternal && job.compatibilityScore && (
+                                <div className="text-right">
+                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('tool_opportunity_finder_match_label')}</p>
+                                    <p className="text-lg font-bold text-green-600">{job.compatibilityScore}%</p>
+                                </div>
+                            )}
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-gray-500 transition-transform duration-300 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        </div>
+                    </button>
+                    {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700 animate-fade-in">
+                        <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2 prose prose-sm dark:prose-invert max-w-none">{renderFormattedText(job.summary)}</div>
+                        <div className="mt-4 flex flex-wrap gap-2 justify-end">
+                             {job.isInternal ? (
+                                <button onClick={() => applyToInternalJob(jobId, job.compatibilityScore)} disabled={hasApplied} className={`text-sm text-white px-3 py-1.5 rounded-md transition-colors ${hasApplied ? 'bg-green-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                    {hasApplied ? t('tool_opportunity_finder_applied_button') : t('tool_opportunity_finder_apply_button')}
+                                </button>
+                             ) : (
+                                <a href={job.url} target="_blank" rel="noopener noreferrer" className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700">{t('tool_opportunity_finder_view_apply_button')}</a>
+                             )}
+                             <button onClick={() => openTool('cover-letter', `Job Title: ${job.jobTitle}\nCompany: ${job.company}\n\n[Paste full job description here]`)} className="text-sm bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-md">{t('tool_opportunity_finder_generate_cover_letter_button')}</button>
+                        </div>
+                        </div>
+                    )}
+                </div>
+            )
+        })}
+      </div>
+      {groundingChunks && groundingChunks.length > 0 && (
+        <div className="pt-2 border-t text-xs text-gray-500 dark:text-gray-400">
+          <p className="font-semibold mb-1">{t('tool_opportunity_finder_sources_label')}:</p>
+          <ul className="list-disc list-inside">
+            {groundingChunks.filter((chunk: any) => chunk.web).map((chunk: any, i: number) => (
+              <li key={i}><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">{chunk.web.title}</a></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default OpportunityFinder;

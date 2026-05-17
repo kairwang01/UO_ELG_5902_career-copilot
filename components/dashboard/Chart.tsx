@@ -1,0 +1,52 @@
+import React from 'react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+
+interface ChartDataPoint {
+  label: string;
+  value: number;
+}
+
+interface ChartProps {
+  data: ChartDataPoint[];
+  width?: number; // Kept for type compatibility but ignored
+  height?: number; // Default to 250
+  t: (key: string) => string;
+}
+
+const Chart: React.FC<ChartProps> = ({ data, height = 250, t }) => {
+  if (!data || data.length < 2) {
+    return (
+        <div style={{ height }} className="flex items-center justify-center bg-gray-100 rounded-lg text-gray-500 w-full">
+            {t('chart_no_data')}
+        </div>
+    );
+  }
+
+  return (
+    <div className="w-full font-sans" style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={data}
+          margin={{ top: 20, right: 20, left: 0, bottom: 0 }}
+        >
+          <defs>
+            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="label" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+          <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} dx={-10} />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+          <Tooltip 
+            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
+            itemStyle={{ color: '#1f2937', fontWeight: 'bold' }}
+          />
+          <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorValue)" />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+export default Chart;
