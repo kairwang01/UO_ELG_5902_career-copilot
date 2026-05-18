@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { AnalysisResult, FormattedResume, CoverLetter, LinkedInOptimization, ResumeImage, CareerPathResult, AgilePracticeTestResult, SalaryNegotiationResult, EnglishProResult, ProfessionalEmailResult, Opportunity, OpportunityResult, PortfolioContent, PortfolioWebsiteResult, InclusivitySuggestion, CandidateMatchAnalysis, NetworkingStrategyResult, SkillBridgeProject, Improvement, PerformanceReviewResult, LearningPlanResult, IndustryEvent, EventScoutResult, UserProfile, SpokenEnglishAnalysisResult, EnglishReadingAnalysisResult, EnglishListeningAnalysisResult, ReadingEvaluation, ComprehensionQuestion, ReadingPracticePassage, VocabularyFlashcard, CandidatePrepKit } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -14,11 +12,16 @@ export const setApiStatusUpdater = (updater: (status: 'online' | 'degraded' | 'o
   updateApiStatus = updater;
 };
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
+// 1. Get Key from Vite local env variable
+const apiKey = import.meta.env.VITE_API_KEY;
+
+// 2. Check Key
+if (!apiKey) {
+  throw new Error("API_KEY environment variable not set in .env.local");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// 3. Initialize with Key
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
 const extractJson = (str: string): any => {
     const match = str.match(/```json\s*([\s\S]*?)\s*```/);
