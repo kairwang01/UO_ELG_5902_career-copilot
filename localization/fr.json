@@ -1,4 +1,3 @@
-
 {
   "nav_features": "Fonctionnalités",
   "nav_how_it_works": "Comment ça marche",
@@ -46,6 +45,7 @@
   "faq_title": "Questions frequently posées",
   "faq_subtitle": "Vous avez des questions ? Nous avons des réponses. Si vous ne trouvez pas ce que vous cherchez, n'hésitez pas à nous contacter.",
   "dashboard_welcome": "Content de vous revoir, ",
+  "dashboard_subtitle": "Votre aperçu de carrière et vos prochaines priorités.",
   "dashboard_update_prompt": "Téléchargez une nouvelle version de votre CV pour obtenir une nouvelle analyse, ou annulez pour revenir à votre tableau de bord.",
   "dashboard_new_user_prompt": "Prêt à décrocher votre prochain emploi ? Commençons par analyser votre CV.",
   "dashboard_cancel_update": "Annuler la mise à jour",

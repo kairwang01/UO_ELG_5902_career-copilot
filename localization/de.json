@@ -1,4 +1,3 @@
-
 {
   "nav_features": "Funktionen",
   "nav_how_it_works": "Wie es funktioniert",
@@ -46,6 +45,7 @@
   "faq_title": "Häufig gestellte Fragen",
   "faq_subtitle": "Haben Sie Fragen? Wir haben Antworten. Wenn Sie nicht finden, was Sie suchen, können Sie uns gerne kontaktieren.",
   "dashboard_welcome": "Willkommen zurück, ",
+  "dashboard_subtitle": "Ihr Karriere-Überblick und die nächsten Schritte.",
   "dashboard_update_prompt": "Laden Sie eine neue Version Ihres Lebenslaufs hoch, um eine neue Analyse zu erhalten, oder brechen Sie ab, um zu Ihrem Dashboard zurückzukehren.",
   "dashboard_new_user_prompt": "Bereit, Ihren nächsten Job zu landen? Beginnen wir mit der Analyse Ihres Lebenslaufs.",
   "dashboard_cancel_update": "Update abbrechen",

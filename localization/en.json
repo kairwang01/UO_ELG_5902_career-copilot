@@ -1,4 +1,3 @@
-
 {
   "nav_features": "Features",
   "nav_how_it_works": "How It Works",
@@ -46,6 +45,7 @@
   "faq_title": "Frequently Asked Questions",
   "faq_subtitle": "Have questions? We've got answers. If you can't find what you're looking for, feel free to contact us.",
   "dashboard_welcome": "Welcome back, ",
+  "dashboard_subtitle": "Here's your career snapshot and what to focus on next.",
   "dashboard_update_prompt": "Upload a new version of your resume to get a fresh analysis, or cancel to go back to your dashboard.",
   "dashboard_new_user_prompt": "Ready to land your next job? Let's start by analyzing your resume.",
   "dashboard_cancel_update": "Cancel Update",
