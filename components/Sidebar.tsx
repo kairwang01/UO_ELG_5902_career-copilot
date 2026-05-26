@@ -20,7 +20,6 @@ import {
 } from 'lucide-react';
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
-import { TOOL_ACCESS, hasAccess } from '../config';
 
 interface SidebarProps {
   activeView: 'dashboard' | 'toolkit' | 'resume' | 'portfolio' | 'account' | 'credentials' | 'business';
@@ -60,7 +59,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'credentials', label: 'Identity & Wallet', icon: ShieldCheck },
   ];
 
-  const userPlan = profile?.subscription_status || 'free';
+  // Turn a raw subscription_status (e.g. "pending_essentials") into a readable label.
+  const formatPlanStatus = (status?: string | null): string => {
+    if (!status || status === 'free') return 'Free Plan';
+    const pending = status.startsWith('pending_');
+    const planKey = status.replace('pending_biz_', '').replace('pending_', '');
+    const name = planKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return pending ? `${name} (payment pending)` : name;
+  };
 
   return (
     <aside className="w-64 flex-shrink-0 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col h-screen sticky top-0">
@@ -122,7 +128,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="space-y-0.5 animate-fade-in">
                     {ALL_TOOLS_CONFIG.map((tool) => {
                         const isToolActive = activeTool === tool.key;
-                        const hasToolAccess = hasAccess(userPlan, TOOL_ACCESS[tool.key]);
+                        // Tools are credit-based: anyone can open them and the run cost is
+                        // charged in credits. The only gate is AI Mode being on.
                         const toolRequiresAI = !isAIMode && tool.aiDependent !== false;
 
                         return (
@@ -130,27 +137,22 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 key={tool.key}
                                 onClick={() => {
                                     if (toolRequiresAI) {
-                                        alert("This feature requires AI Mode to be enabled.");
+                                        alert("Enable AI Mode to use this tool.");
                                         return;
                                     }
-                                    if (hasToolAccess) {
-                                        onViewChange('toolkit');
-                                        onToolSelect(tool.key);
-                                    } else {
-                                        onViewChange('account'); 
-                                    }
+                                    onViewChange('toolkit');
+                                    onToolSelect(tool.key);
                                 }}
                                 className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-[11px] font-medium transition-all ${
                                     isToolActive
                                         ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
                                         : 'text-gray-500 dark:text-slate-500 hover:text-gray-800 dark:hover:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800/30'
-                                } ${(!hasToolAccess || toolRequiresAI) ? 'opacity-50' : ''}`}
+                                } ${toolRequiresAI ? 'opacity-50' : ''}`}
                             >
                                 <div className={`flex-shrink-0 transition-transform duration-200 ${isToolActive ? 'scale-110' : 'group-hover:scale-110'}`}>
                                     {React.cloneElement(tool.icon, { className: 'h-3.5 w-3.5' })}
                                 </div>
                                 <span className="truncate">{t(`tool_${tool.key.replace(/-/g, '_')}_title`)}</span>
-                                {!hasToolAccess && <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-yellow-500 ml-auto" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>}
                             </button>
                         );
                     })}
@@ -246,7 +248,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center gap-1.5">
                     <div className="h-1 w-1 rounded-full bg-green-500 animate-pulse"></div>
                     <p className="text-[9px] text-gray-400 truncate uppercase tracking-tight">
-                        {profile?.subscription_status || 'Free Plan'}
+                        {formatPlanStatus(profile?.subscription_status)}
                     </p>
                 </div>
             </div>
