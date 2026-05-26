@@ -83,6 +83,8 @@ const AppContent: React.FC = () => {
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);
   const pricingSectionRef = useRef<HTMLDivElement>(null);
+  // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
+  const currentUserIdRef = useRef<string | null>(null);
   
   // Initialize theme from localStorage or system preference
   useEffect(() => {
@@ -315,20 +317,17 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      currentUserIdRef.current = session?.user?.id ?? null;
       setSession(session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const newUserId = session?.user?.id ?? null;
+      const userChanged = newUserId !== currentUserIdRef.current;
+      currentUserIdRef.current = newUserId;
+
       setSession(session);
-      setIsProfileLoaded(false);
-      if (_event === 'SIGNED_IN') {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('payment_success') === 'true') {
-            alert("Payment successful! Your plan has been upgraded.");
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-        setView('home');
-      }
+
       if (_event === 'SIGNED_OUT') {
         setView('home');
         setProfile(null);
@@ -336,6 +335,22 @@ const AppContent: React.FC = () => {
         setResumeText('');
         setCredits(0);
         sessionStorage.clear();
+        return;
+      }
+
+      // Only reset the view and reload on a genuine new sign-in. Token refreshes
+      // and tab refocus fire SIGNED_IN with the same user, so we skip those to keep
+      // the user on their current page.
+      if (userChanged) {
+        setIsProfileLoaded(false);
+        if (_event === 'SIGNED_IN') {
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('payment_success') === 'true') {
+            alert("Payment successful! Your plan has been upgraded.");
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+          setView('home');
+        }
       }
     });
 
