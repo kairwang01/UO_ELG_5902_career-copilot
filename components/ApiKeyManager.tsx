@@ -20,6 +20,7 @@ interface ApiKey {
 const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) => {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const { addToast } = useToast();
@@ -33,12 +34,16 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
       .order('created_at', { ascending: false });
 
     if (error) {
-      addToast('Failed to fetch API keys.', 'error');
+      // Don't pop a toast on the automatic load — a transient first-render error
+      // would flash a notification. Show an inline message instead.
+      console.error('Failed to fetch API keys:', error.message);
+      setFetchError(true);
     } else {
       setKeys(data as ApiKey[]);
+      setFetchError(false);
     }
     setLoading(false);
-  }, [session.user.id, addToast]);
+  }, [session.user.id]);
 
   useEffect(() => {
     fetchKeys();
@@ -148,7 +153,13 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
           </div>
         ))}
         {loading && !keys.length && <p className="text-sm text-gray-500">Loading keys...</p>}
-        {!loading && keys.length === 0 && <p className="text-sm text-gray-500">You have no API keys yet.</p>}
+        {!loading && fetchError && (
+          <div className="flex items-center justify-between gap-3 text-sm text-red-600 dark:text-red-400">
+            <span>Couldn't load your API keys.</span>
+            <button onClick={fetchKeys} className="font-semibold hover:underline">Retry</button>
+          </div>
+        )}
+        {!loading && !fetchError && keys.length === 0 && <p className="text-sm text-gray-500">You have no API keys yet.</p>}
       </div>
     </div>
   );
