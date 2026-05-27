@@ -1,20 +1,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import type { Session } from '@supabase/supabase-js';
+import { data as dataClient } from '@/lib/data';
+import type { AppSession, ApiKey } from '@/lib/data';
 import { useToast } from './Toast';
 
 interface ApiKeyManagerProps {
-  session: Session;
+  session: AppSession;
   onViewDocs: () => void;
-}
-
-interface ApiKey {
-  id: number;
-  key_name: string;
-  created_at: string;
-  last_used_at: string | null;
-  request_count: number;
 }
 
 const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) => {
@@ -27,11 +19,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('api_keys')
-      .select('id, key_name, created_at, last_used_at, request_count')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false });
+    const { data, error } = await dataClient.apiKeys.list(session.user.id);
 
     if (error) {
       // Don't pop a toast on the automatic load — a transient first-render error
@@ -39,7 +27,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
       console.error('Failed to fetch API keys:', error.message);
       setFetchError(true);
     } else {
-      setKeys(data as ApiKey[]);
+      setKeys(data ?? []);
       setFetchError(false);
     }
     setLoading(false);
@@ -55,10 +43,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
       return;
     }
     setLoading(true);
-    const { data, error } = await supabase.rpc('create_api_key', {
-      p_user_id: session.user.id,
-      p_key_name: newKeyName.trim(),
-    });
+    const { data, error } = await dataClient.apiKeys.create(session.user.id, newKeyName.trim());
 
     if (error) {
       addToast(`Failed to create key: ${error.message}`, 'error');
@@ -76,10 +61,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
       return;
     }
     setLoading(true);
-    const { error } = await supabase.rpc('delete_api_key', {
-      p_key_id: keyId,
-      p_user_id: session.user.id,
-    });
+    const { error } = await dataClient.apiKeys.remove(keyId, session.user.id);
 
     if (error) {
       addToast(`Failed to delete key: ${error.message}`, 'error');
