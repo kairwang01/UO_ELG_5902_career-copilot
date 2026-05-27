@@ -207,6 +207,17 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                             </div>
                                         )}
                                         <div className="py-1 border-t border-gray-100 dark:border-slate-600" role="none">
+                                            {/* Employers have no side nav, so the menu is their only way back to the dashboard or plans. */}
+                                            {profile.role === 'employer' && (
+                                                <>
+                                                    <button onClick={() => { onSetView('home'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600 font-medium" role="menuitem">
+                                                        Dashboard
+                                                    </button>
+                                                    <button onClick={() => { onSetView('business'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">
+                                                        Plans &amp; Pricing
+                                                    </button>
+                                                </>
+                                            )}
                                             <div className="px-4 py-2 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-600">
                                                 <span className="text-sm text-gray-700 dark:text-gray-200 font-medium">AI Features</span>
                                                 <button
