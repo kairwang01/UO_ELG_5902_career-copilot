@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
+import { useToast } from './Toast';
 
 interface SidebarProps {
   activeView: 'dashboard' | 'toolkit' | 'resume' | 'portfolio' | 'account' | 'credentials' | 'business';
@@ -51,6 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   t 
 }) => {
   const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(true);
+  const { addToast } = useToast();
 
   const workspaceItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -137,7 +139,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 key={tool.key}
                                 onClick={() => {
                                     if (toolRequiresAI) {
-                                        alert("Enable AI Mode to use this tool.");
+                                        addToast('Enable AI Mode to use this tool.', 'info');
                                         return;
                                     }
                                     onViewChange('toolkit');
