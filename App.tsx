@@ -24,6 +24,7 @@ import Audience from './components/Audience';
 import FAQ from './components/FAQ';
 import Footer from './components/Footer';
 import UploadSection from './components/UploadSection';
+import EmptyState from './components/EmptyState';
 import AnalysisDisplay from './components/AnalysisDisplay';
 import LoadingSpinner from './components/LoadingSpinner';
 import Pricing from './components/Pricing';
@@ -83,6 +84,8 @@ const AppContent: React.FC = () => {
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);
   const pricingSectionRef = useRef<HTMLDivElement>(null);
+  // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
+  const currentUserIdRef = useRef<string | null>(null);
   
   // Initialize theme from localStorage or system preference
   useEffect(() => {
@@ -315,20 +318,17 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      currentUserIdRef.current = session?.user?.id ?? null;
       setSession(session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const newUserId = session?.user?.id ?? null;
+      const userChanged = newUserId !== currentUserIdRef.current;
+      currentUserIdRef.current = newUserId;
+
       setSession(session);
-      setIsProfileLoaded(false);
-      if (_event === 'SIGNED_IN') {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('payment_success') === 'true') {
-            alert("Payment successful! Your plan has been upgraded.");
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-        setView('home');
-      }
+
       if (_event === 'SIGNED_OUT') {
         setView('home');
         setProfile(null);
@@ -336,6 +336,22 @@ const AppContent: React.FC = () => {
         setResumeText('');
         setCredits(0);
         sessionStorage.clear();
+        return;
+      }
+
+      // Only reset the view and reload on a genuine new sign-in. Token refreshes
+      // and tab refocus fire SIGNED_IN with the same user, so we skip those to keep
+      // the user on their current page.
+      if (userChanged) {
+        setIsProfileLoaded(false);
+        if (_event === 'SIGNED_IN') {
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('payment_success') === 'true') {
+            alert("Payment successful! Your plan has been upgraded.");
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+          setView('home');
+        }
       }
     });
 
@@ -499,19 +515,26 @@ const AppContent: React.FC = () => {
                         <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto mb-6">The AI Toolkit features professional career tools powered by advanced AI models. Enable AI Mode from the sidebar to access them.</p>
                         <button onClick={() => setDashboardView('portfolio')} className="text-blue-600 dark:text-blue-400 font-bold hover:underline">Or try the Professional Showcase (AI optional) &rarr;</button>
                     </div>
+                ) : !resumeText ? (
+                    <EmptyState
+                        icon="🧰"
+                        title="Upload your résumé to use the AI Toolkit"
+                        description="The toolkit tailors every result to your experience, so it needs your résumé first. Add it and these tools unlock right away."
+                        action={{ label: 'Upload résumé', onClick: () => { setActiveTool(null); setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                    />
                 ) : (
-                    <AnalysisDisplay 
-                        t={t} 
-                        result={null} 
-                        onReset={handleReset} 
-                        resumeText={resumeText} 
-                        userPlan={userPlan} 
-                        market={market} 
-                        navigateToPricing={navigateToPricing} 
-                        session={session} 
-                        profile={profile} 
-                        refreshProfile={getProfile} 
-                        onApplyImprovements={handleApplyImprovements} 
+                    <AnalysisDisplay
+                        t={t}
+                        result={null}
+                        onReset={handleReset}
+                        resumeText={resumeText}
+                        userPlan={userPlan}
+                        market={market}
+                        navigateToPricing={navigateToPricing}
+                        session={session}
+                        profile={profile}
+                        refreshProfile={getProfile}
+                        onApplyImprovements={handleApplyImprovements}
                         activeTool={activeTool}
                         setActiveTool={setActiveTool}
                     />
@@ -536,31 +559,39 @@ const AppContent: React.FC = () => {
 
         {dashboardView === 'portfolio' && (
             <div id="portfolio-panel">
-                 <AnalysisDisplay 
-                    t={t} 
-                    result={null} 
-                    onReset={handleReset} 
-                    resumeText={resumeText} 
-                    userPlan={userPlan} 
-                    market={market} 
-                    navigateToPricing={navigateToPricing} 
-                    session={session} 
-                    profile={profile} 
-                    refreshProfile={getProfile} 
-                    onApplyImprovements={handleApplyImprovements} 
-                    activeTool="website-builder"
-                    setActiveTool={(tool) => setActiveTool(tool)}
-                />
+                 {!resumeText ? (
+                    <EmptyState
+                        icon="🌐"
+                        title="Upload your résumé to build your Showcase"
+                        description="Your Showcase turns your résumé into a shareable professional profile. Add your résumé to get started."
+                        action={{ label: 'Upload résumé', onClick: () => { setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                    />
+                 ) : (
+                    <AnalysisDisplay
+                        t={t}
+                        result={null}
+                        onReset={handleReset}
+                        resumeText={resumeText}
+                        userPlan={userPlan}
+                        market={market}
+                        navigateToPricing={navigateToPricing}
+                        session={session}
+                        profile={profile}
+                        refreshProfile={getProfile}
+                        onApplyImprovements={handleApplyImprovements}
+                        activeTool="website-builder"
+                        setActiveTool={(tool) => setActiveTool(tool)}
+                    />
+                 )}
             </div>
         )}
 
         {dashboardView === 'credentials' && session && (
             <div id="credentials-panel" className="space-y-10 animate-slide-in-up">
+                {/* Identity & Wallet shows verification only. Account settings live in their
+                    own view — rendering Account here too duplicated the whole panel (QA C13). */}
                 <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm">
                     <VerifiedTalentSection t={t} />
-                </div>
-                <div className="max-w-4xl mx-auto">
-                    <Account session={session} onSetView={handleSetView} onSubscriptionChange={getProfile} navigateToPricing={navigateToPricing} t={t} />
                 </div>
             </div>
         )}
@@ -627,7 +658,10 @@ const AppContent: React.FC = () => {
                     </header>
                     <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-6 md:p-10">
                         <div className="max-w-6xl mx-auto">
-                            {isUpdatingResume || !resumeText ? (
+                            {/* The résumé upload lab is the home for the dashboard/resume views.
+                                Other views render their own content (with empty states when there's
+                                no résumé yet) so the sidebar nav always produces a visible change. */}
+                            {(isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                                 <div className="mt-4 animate-slide-in-up">
                                     <div className="text-center mb-10">
                                         <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Resume Laboratory</h2>
