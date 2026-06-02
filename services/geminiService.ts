@@ -23,6 +23,25 @@ if (!apiKey) {
 // 3. Initialize with Key
 const ai = new GoogleGenAI({ apiKey: apiKey });
 
+const PRIMARY_MODEL = import.meta.env.VITE_GEMINI_PRIMARY_MODEL || 'gemini-3-flash-preview';
+const FALLBACK_MODEL = import.meta.env.VITE_GEMINI_FALLBACK_MODEL || 'gemini-flash-latest';
+
+const isQuotaError = (error: any): boolean => {
+    const message = (error?.message || '').toLowerCase();
+    return message.includes('resource_exhausted') || message.includes('quota exceeded') || error?.status === 429;
+};
+
+const generateJsonContent = async (model: string, contents: any, responseSchema: any) => {
+    return ai.models.generateContent({
+        model,
+        contents,
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema,
+        },
+    });
+};
+
 const extractJson = (str: string): any => {
     const match = str.match(/```json\s*([\s\S]*?)\s*```/);
     let jsonStr = (match && match[1]) ? match[1].trim() : str.trim();
@@ -54,14 +73,17 @@ const extractJson = (str: string): any => {
 
 const callGemini = async (contents: any, responseSchema: any) => {
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview",
-            contents: contents,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: responseSchema,
-            },
-        });
+        let response;
+        try {
+            response = await generateJsonContent(PRIMARY_MODEL, contents, responseSchema);
+        } catch (firstError: any) {
+            if (isQuotaError(firstError) && FALLBACK_MODEL !== PRIMARY_MODEL) {
+                console.warn(`Primary Gemini model ${PRIMARY_MODEL} hit quota limits. Retrying with fallback model ${FALLBACK_MODEL}.`);
+                response = await generateJsonContent(FALLBACK_MODEL, contents, responseSchema);
+            } else {
+                throw firstError;
+            }
+        }
 
         if (!response.text) {
             throw new Error("The AI returned an empty response.");
@@ -314,11 +336,24 @@ export const generateSalaryNegotiationStrategy = async (resumeText: string, jobT
         6.  **Objection Handlers:** Provide advice on how to handle 2-3 common objections (e.g., "This is our final offer," "That's above our budget").
     `;
     
-    const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
-        contents: prompt,
-        config: { tools: [{ googleSearch: {} }] },
-    });
+    let response;
+    try {
+        response = await ai.models.generateContent({
+            model: PRIMARY_MODEL,
+            contents: prompt,
+            config: { tools: [{ googleSearch: {} }] },
+        });
+    } catch (firstError: any) {
+        if (isQuotaError(firstError) && FALLBACK_MODEL !== PRIMARY_MODEL) {
+            response = await ai.models.generateContent({
+                model: FALLBACK_MODEL,
+                contents: prompt,
+                config: { tools: [{ googleSearch: {} }] },
+            });
+        } else {
+            throw firstError;
+        }
+    }
     
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     const parsedResponse = extractJson(response.text || '{}');

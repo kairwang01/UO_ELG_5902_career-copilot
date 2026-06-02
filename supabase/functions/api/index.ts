@@ -7,6 +7,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 // FIX: Import GoogleGenAI SDK to follow best practices instead of using direct fetch.
 import { GoogleGenAI } from 'https://esm.sh/@google/genai@0.14.0';
 
+const PRIMARY_MODEL = Deno.env.get('GEMINI_PRIMARY_MODEL') || 'gemini-3-flash-preview';
+const FALLBACK_MODEL = Deno.env.get('GEMINI_FALLBACK_MODEL') || 'gemini-flash-latest';
+
+const isQuotaError = (error: any): boolean => {
+  const message = (error?.message || '').toLowerCase();
+  return message.includes('resource_exhausted') || message.includes('quota exceeded') || error?.status === 429;
+};
+
 // FIX: Added a robust JSON extraction function to handle markdown and other formatting inconsistencies from the AI.
 const extractJson = (str: string): any => {
     // Find JSON string within markdown ```json ... ```
@@ -50,14 +58,28 @@ const callGeminiServer = async (geminiApiKey: string, prompt: string) => {
     // Ask the model to format the response as JSON
     const updatedPrompt = `${prompt}. Respond ONLY with a valid JSON object. Do not include markdown formatting like \`\`\`json.`;
     
-    // FIX: Use the recommended gemini-3-pro-preview model for complex tasks and follow SDK usage guidelines.
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: updatedPrompt,
-        config: {
-            responseMimeType: "application/json",
-        }
-    });
+    let response;
+    try {
+      response = await ai.models.generateContent({
+          model: PRIMARY_MODEL,
+          contents: updatedPrompt,
+          config: {
+              responseMimeType: 'application/json',
+          }
+      });
+    } catch (firstError: any) {
+      if (isQuotaError(firstError) && FALLBACK_MODEL !== PRIMARY_MODEL) {
+        response = await ai.models.generateContent({
+          model: FALLBACK_MODEL,
+          contents: updatedPrompt,
+          config: {
+            responseMimeType: 'application/json',
+          }
+        });
+      } else {
+        throw firstError;
+      }
+    }
 
     // FIX: Use response.text property to extract content from GenerateContentResponse as per guidelines.
     if (!response.text) {
