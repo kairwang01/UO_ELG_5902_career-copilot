@@ -54,12 +54,19 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(true);
   const { addToast } = useToast();
 
-  const workspaceItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'resume', label: 'Resume', icon: FileText },
-    { id: 'portfolio', label: 'Showcase', icon: Globe },
-    { id: 'credentials', label: 'Identity & Wallet', icon: ShieldCheck },
-  ];
+  const isEmployer = profile?.role === 'employer';
+
+  const workspaceItems = isEmployer
+    ? [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'business', label: 'Plans & Pricing', icon: CreditCard },
+      ]
+    : [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'resume', label: 'Resume', icon: FileText },
+        { id: 'portfolio', label: 'Showcase', icon: Globe },
+        { id: 'credentials', label: 'Identity & Wallet', icon: ShieldCheck },
+      ];
 
   // Turn a raw subscription_status (e.g. "pending_essentials") into a readable label.
   const formatPlanStatus = (status?: string | null): string => {
@@ -114,7 +121,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             })}
         </div>
 
-        {/* AI Toolkit Section */}
+        {/* AI Toolkit Section — candidates only */}
+        {!isEmployer && (
         <div className="space-y-1">
             <div className="flex items-center justify-between px-4 mb-2">
                 <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">AI Toolkit</h3>
@@ -161,6 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             )}
         </div>
+        )}
 
         {/* Support & Settings */}
         <div className="space-y-1">
@@ -245,7 +254,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
             <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold text-gray-900 dark:text-white truncate">
-                    {profile?.full_name || 'My Profile'}
+                    {profile?.full_name || profile?.company_name || 'My Profile'}
                 </p>
                 <div className="flex items-center gap-1.5">
                     <div className="h-1 w-1 rounded-full bg-green-500 animate-pulse"></div>

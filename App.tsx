@@ -227,12 +227,8 @@ const AppContent: React.FC = () => {
     }
   }, [session, setCredits]);
 
-  // Set default view for employers
-  useEffect(() => {
-    if (isProfileLoaded && profile?.role === 'employer' && dashboardView === 'dashboard') {
-        setDashboardView('business');
-    }
-  }, [isProfileLoaded, profile?.role, dashboardView]);
+  // Employers render in their own dashboard shell (see the employer branch in the
+  // main layout), so no default-view redirect is needed here.
   
   const handleSubscriptionRedirect = useCallback(async (planKey: string) => {
     if (!session) {
@@ -624,20 +620,23 @@ const AppContent: React.FC = () => {
   };
 
   const isUserLoggedIn = session && !showHomePageOverride && view !== 'business' && profile?.role === 'candidate';
+  // Employers get the same left-sidebar shell as candidates (QA E3 — consistent navigation).
+  const isEmployerShell = !!session && !showHomePageOverride && view === 'home' && profile?.role === 'employer';
+  const showAppShell = isUserLoggedIn || isEmployerShell;
 
   return (
     <ToastProvider>
-      <div className={`min-h-screen w-full font-sans bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200 ${isUserLoggedIn ? 'flex' : 'block'}`}>
+      <div className={`min-h-screen w-full font-sans bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200 ${showAppShell ? 'flex' : 'block'}`}>
         <style>{`.animate-fade-in { animation: fade-in 0.5s ease-out forwards; } .animate-slide-in-up { animation: slide-in-up 0.6s ease-out forwards; } .animate-pulse-mic { animation: pulse-mic 1.5s ease-in-out infinite; } .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; } .animate-aurora { animation: aurora 20s infinite linear; } .animate-holographic-text { animation: holographic-text 5s infinite linear; } .animate-crystal-glow { animation: crystal-glow 2.5s ease-in-out infinite; } .static-crystal-glow { filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.7)); } @keyframes fade-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } } @keyframes slide-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } } @keyframes pulse-mic { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } } @keyframes pulse-glow { 0%, 100% { opacity: 0.8; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } } @keyframes aurora { from { background-position: 50% 50%, 50% 50%; } to { background-position: 350% 50%, 350% 50%; } } @keyframes holographic-text { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } } @keyframes crystal-glow { 0%, 100% { filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.6)); } 50% { filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.9)); } }`}</style>
         {isRedirecting && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4 animate-fade-in"><div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-8 text-center flex flex-col items-center"><h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Finalizing Your Upgrade!</h3><p className="mt-2 text-gray-600 dark:text-gray-300">To activate your new plan, we're opening our secure payment page.</p><div className="mt-6 w-12 h-12 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div></div></div>}
         {isDevModeOpen && session && <DevModeModal session={session} profile={profile} onClose={() => setIsDevModeOpen(false)} onSetPlan={handleSetPlanForDev} />}
         <CreditModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} onConfirm={() => { setIsCreditModalOpen(false); performAnalysis(); }} onNavigateToPricing={navigateToPricing} cost={analysisCost} currentCredits={credits} />
         
-        {isUserLoggedIn ? (
+        {showAppShell ? (
             <>
-                <Sidebar 
+                <Sidebar
                     activeView={dashboardView}
-                    onViewChange={(v) => { setDashboardView(v); setIsUpdatingResume(false); }}
+                    onViewChange={(v) => { if (v === 'business') { navigateToBusinessPricing(); return; } setDashboardView(v); setIsUpdatingResume(false); }}
                     profile={profile}
                     credits={credits}
                     theme={theme}
@@ -658,10 +657,16 @@ const AppContent: React.FC = () => {
                     </header>
                     <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-6 md:p-10">
                         <div className="max-w-6xl mx-auto">
-                            {/* The résumé upload lab is the home for the dashboard/resume views.
-                                Other views render their own content (with empty states when there's
-                                no résumé yet) so the sidebar nav always produces a visible change. */}
-                            {(isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
+                            {/* Employers get their dashboard / account settings in this same shell.
+                                Candidates: the résumé upload lab is the home for the dashboard/resume
+                                views; other views render their own content (with empty states). */}
+                            {profile?.role === 'employer' ? (
+                                dashboardView === 'account' ? (
+                                    <Account key={session!.user.id} session={session!} onSetView={handleSetView} onSubscriptionChange={getProfile} navigateToPricing={navigateToPricing} t={t} />
+                                ) : (
+                                    <EmployerDashboard session={session!} profile={profile} refreshProfile={getProfile} navigateToBusinessPricing={navigateToBusinessPricing} t={t} />
+                                )
+                            ) : (isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                                 <div className="mt-4 animate-slide-in-up">
                                     <div className="text-center mb-10">
                                         <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Resume Laboratory</h2>
