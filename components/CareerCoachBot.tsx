@@ -113,7 +113,7 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
 
     useEffect(() => {
         if (isOpen) {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
             
             let systemInstruction = "You are 'Alex', an empathetic and encouraging AI career coach. Your tone is warm, friendly, and professional yet conversational. Avoid being overly robotic. Use natural language, ask clarifying questions, and use markdown for formatting like **bolding** key terms. Start by asking the user if they are a job seeker or an employer to tailor your advice.";
             
