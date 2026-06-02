@@ -81,7 +81,9 @@ const UploadSection: React.FC<UploadSectionProps> = ({ resumeText, setResumeText
             setInfoMessage(null);
         }
     } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred while processing the URL.');
+        // Some sites (e.g. LinkedIn) block automated import — always leave the user a way forward.
+        const detail = err instanceof Error ? err.message : 'An unknown error occurred while processing the URL.';
+        setError(`${detail} If the page can't be imported, please paste your resume text manually instead.`);
         setInfoMessage(null);
     } finally {
         setIsUrlProcessing(false);
