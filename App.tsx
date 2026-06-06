@@ -23,6 +23,7 @@ import Features from './components/Features';
 import Audience from './components/Audience';
 import FAQ from './components/FAQ';
 import Footer from './components/Footer';
+import CookieConsent from './components/CookieConsent';
 import UploadSection from './components/UploadSection';
 import EmptyState from './components/EmptyState';
 import AnalysisDisplay from './components/AnalysisDisplay';
@@ -687,9 +688,11 @@ const AppContent: React.FC = () => {
                 <ApiStatusBanner />
                 <Header session={session} profile={profile} onSetView={handleSetView} navigateToPricing={navigateToPricing} t={t} changeLanguage={changeLanguage} currentLang={currentLang} theme={theme} toggleTheme={toggleTheme} view={view} credits={credits} />
                 <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{renderContent()}</main>
-                <Footer onOpenDevMode={handleOpenDevMode} t={t} />
+                <Footer onOpenDevMode={handleOpenDevMode} t={t} changeLanguage={changeLanguage} currentLang={currentLang} />
             </div>
         )}
+
+        <CookieConsent t={t} />
 
         {isAIMode && <button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white w-16 h-16 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 z-40 flex items-center justify-center" aria-label="Open AI Career Coach"><svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></button>}
         {isAIMode && isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} />}

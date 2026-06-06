@@ -193,6 +193,10 @@
   "footer_contact": "Liên hệ",
   "footer_location": "Toronto, ON, Canada",
   "footer_copyright_end": "Bảo lưu mọi quyền. Trao quyền cho người tìm việc toàn cầu bằng AI.",
+  "footer_beta_notice": "Đây là phiên bản beta, chỉ được cung cấp cho mục đích thử nghiệm và trình diễn. Tính năng, nội dung và dữ liệu có thể thay đổi bất cứ lúc nào và không nên được coi là cuối cùng.",
+  "footer_academic_credit": "Đại học Ottawa · ELG 5902 — Kair Wang, Jingxuan Xu, Xiaoyi Zhang, Jiaoyang Bi, Xiang Zhao, Xiaoyan Yang",
+  "footer_launch_prefix": "Ngày ra mắt chính thức đang chờ phê duyệt từ ",
+  "footer_launch_suffix": ".",
   "faq_1_q": "Career CoPilot là gì và nó có thể giúp tôi như thế nào?",
   "faq_1_a": "Career CoPilot là một bộ công cụ sự nghiệp toàn diện do AI cung cấp, được thiết kế để giúp bạn ở mọi giai đoạn tìm kiếm việc làm. Nó không chỉ đơn thuần là kiểm tra CV mà còn cung cấp các công cụ để luyện phỏng vấn, lập kế hoạch lộ trình sự nghiệp, tìm kiếm cơ hội việc làm, đàm phán lương và nhiều hơn nữa, tất cả đều được tùy chỉnh cho hồ sơ cụ thể và thị trường mục tiêu của bạn.",
   "faq_2_q": "Phân tích CV bằng AI hoạt động như thế nào?",
@@ -586,5 +590,9 @@
   "header_web3_staked": "Hồ sơ của bạn đang hoạt động trong Kho Nhân tài. Bây giờ bạn đang kiếm được phần thưởng!",
   "header_vault_access_denied": "Nâng cấp lên Gói tuyển dụng để mở khóa Kho Nhân tài đã xác minh và kết nối với các ứng viên ưu tú, đã đặt cược.",
   "header_vault_access_granted": "Bạn có quyền truy cập vào Kho Nhân tài đã xác minh. Khám phá các chuyên gia hàng đầu, tích cực.",
-  "header_vault_earnings": "Thu nhập từ Kho"
+  "header_vault_earnings": "Thu nhập từ Kho",
+  "cookie_consent_message": "Chúng tôi sử dụng cookie để nâng cao trải nghiệm của bạn, duy trì đăng nhập và ghi nhớ tùy chọn của bạn. Bằng cách nhấp vào “Chấp nhận”, bạn đồng ý việc chúng tôi sử dụng cookie.",
+  "cookie_consent_accept": "Chấp nhận",
+  "cookie_consent_decline": "Từ chối",
+  "cookie_consent_learn_more": "Tìm hiểu thêm"
 }

@@ -193,6 +193,10 @@
   "footer_contact": "Contact",
   "footer_location": "Toronto, ON, Canada",
   "footer_copyright_end": "All rights reserved. Empowering global job seekers with AI.",
+  "footer_beta_notice": "This is a beta version, provided for testing and demonstration purposes only. Features, content, and data may change at any time and should not be considered final.",
+  "footer_academic_credit": "University of Ottawa · ELG 5902 — Kair Wang, Jingxuan Xu, Xiaoyi Zhang, Jiaoyang Bi, Xiang Zhao, Xiaoyan Yang",
+  "footer_launch_prefix": "Official launch date pending approval from ",
+  "footer_launch_suffix": ".",
   "faq_1_q": "What is Career CoPilot and how can it help me?",
   "faq_1_a": "Career CoPilot is an all-in-one AI-powered career toolkit designed to help you at every stage of your job search. It goes beyond simple resume checking by offering tools for interview practice, career path planning, finding job opportunities, salary negotiation, and much more, all tailored to your specific profile and target market.",
   "faq_2_q": "How does the AI Resume Analysis work?",
@@ -586,5 +590,9 @@
   "header_web3_staked": "Your profile is active in the Talent Vault. You're now earning rewards!",
   "header_vault_access_denied": "Upgrade to a Job Pack to unlock the Verified Talent Vault and connect with elite, staked candidates.",
   "header_vault_access_granted": "You have access to the Verified Talent Vault. Discover top-tier, engaged professionals.",
-  "header_vault_earnings": "Vault Earnings"
+  "header_vault_earnings": "Vault Earnings",
+  "cookie_consent_message": "We use cookies to enhance your experience, keep you signed in, and remember your preferences. By clicking “Accept”, you agree to our use of cookies.",
+  "cookie_consent_accept": "Accept",
+  "cookie_consent_decline": "Decline",
+  "cookie_consent_learn_more": "Learn more"
 }

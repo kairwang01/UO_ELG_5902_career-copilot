@@ -193,6 +193,10 @@
   "footer_contact": "联系我们",
   "footer_location": "多伦多，安大略省，加拿大",
   "footer_copyright_end": "版权所有。用人工智能赋予全球求职者力量。",
+  "footer_beta_notice": "这是测试版（Beta），仅供测试与演示用途。功能、内容与数据可能随时变更，不应视为最终版本。",
+  "footer_academic_credit": "渥太华大学 · ELG 5902 — Kair Wang, Jingxuan Xu, Xiaoyi Zhang, Jiaoyang Bi, Xiang Zhao, Xiaoyan Yang",
+  "footer_launch_prefix": "正式上线时间待 ",
+  "footer_launch_suffix": " 批准。",
   "faq_1_q": "什么是 Career CoPilot，它如何帮助我？",
   "faq_1_a": "Career CoPilot 是一个一站式的人工智能职业工具包，旨在在您求职的每个阶段帮助您。它不仅仅进行简单的简历检查，还提供面试练习、职业路径规划、寻找职业机会、薪酬谈判等工具，所有这些都针对您的特定资料和目标市场进行了定制。",
   "faq_2_q": "人工智能简历分析如何工作？",
@@ -586,5 +590,9 @@
   "header_web3_staked": "您的资料在人才库中处于活跃状态。您现在正在获得奖励！",
   "header_vault_access_denied": "升级到职位包以解锁认证人才库并与精英、已质押的候选人联系。",
   "header_vault_access_granted": "您可以访问认证人才库。发现顶级、积极进取的专业人士。",
-  "header_vault_earnings": "库收入"
+  "header_vault_earnings": "库收入",
+  "cookie_consent_message": "我们使用 Cookie 来提升您的使用体验、保持登录状态并记住您的偏好设置。点击“接受”即表示您同意我们使用 Cookie。",
+  "cookie_consent_accept": "接受",
+  "cookie_consent_decline": "拒绝",
+  "cookie_consent_learn_more": "了解更多"
 }

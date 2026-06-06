@@ -193,6 +193,10 @@
   "footer_contact": "Kontakt",
   "footer_location": "Toronto, ON, Kanada",
   "footer_copyright_end": "Alle Rechte vorbehalten. Stärkung globaler Arbeitssuchender mit KI.",
+  "footer_beta_notice": "Dies ist eine Beta-Version, die nur zu Test- und Demonstrationszwecken bereitgestellt wird. Funktionen, Inhalte und Daten können sich jederzeit ändern und gelten nicht als endgültig.",
+  "footer_academic_credit": "Universität Ottawa · ELG 5902 — Kair Wang, Jingxuan Xu, Xiaoyi Zhang, Jiaoyang Bi, Xiang Zhao, Xiaoyan Yang",
+  "footer_launch_prefix": "Offizielles Startdatum steht unter dem Vorbehalt der Genehmigung durch ",
+  "footer_launch_suffix": ".",
   "faq_1_q": "Was ist Career CoPilot und wie kann es mir helfen?",
   "faq_1_a": "Career CoPilot ist ein all-in-one KI-gestütztes Karriere-Toolkit, das Sie in jeder Phase Ihrer Jobsuche unterstützt. Es geht über eine einfache Lebenslaufprüfung hinaus und bietet Tools für das Üben von Vorstellungsgesprächen, die Karrierepfadplanung, das Finden von Jobmöglichkeiten, Gehaltsverhandlungen und vieles mehr, alles zugeschnitten auf Ihr spezifisches Profil und Ihren Zielmarkt.",
   "faq_2_q": "Wie funktioniert die KI-Lebenslaufanalyse?",
@@ -586,5 +590,9 @@
   "header_web3_staked": "Ihr Profil ist im Talent Vault aktiv. Sie verdienen jetzt Belohnungen!",
   "header_vault_access_denied": "Upgraden Sie auf ein Job-Paket, um den verifizierten Talent Vault freizuschalten und sich mit Elite-Kandidaten zu verbinden.",
   "header_vault_access_granted": "Sie haben Zugang zum verifizierten Talent Vault. Entdecken Sie erstklassige, engagierte Fachkräfte.",
-  "header_vault_earnings": "Vault-Einnahmen"
+  "header_vault_earnings": "Vault-Einnahmen",
+  "cookie_consent_message": "Wir verwenden Cookies, um Ihr Erlebnis zu verbessern, Sie angemeldet zu halten und Ihre Einstellungen zu speichern. Durch Klicken auf „Akzeptieren“ stimmen Sie unserer Verwendung von Cookies zu.",
+  "cookie_consent_accept": "Akzeptieren",
+  "cookie_consent_decline": "Ablehnen",
+  "cookie_consent_learn_more": "Mehr erfahren"
 }

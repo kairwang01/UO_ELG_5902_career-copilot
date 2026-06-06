@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SUPPORTED_LANGUAGES = [
+export const SUPPORTED_LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇺🇸' },
     { code: 'zh', name: '中文', flag: '🇨🇳' },
     { code: 'ja', name: '日本語', flag: '🇯🇵' },

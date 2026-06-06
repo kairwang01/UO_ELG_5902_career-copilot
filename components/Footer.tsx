@@ -1,12 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { Globe } from 'lucide-react';
+import { SUPPORTED_LANGUAGES } from './LanguageSwitcher';
 
 interface FooterProps {
     onOpenDevMode: () => void;
     t: (key: string) => string;
+    changeLanguage: (lang: string) => void;
+    currentLang: string;
 }
 
-const Footer: React.FC<FooterProps> = ({ onOpenDevMode, t }) => {
+const Footer: React.FC<FooterProps> = ({ onOpenDevMode, t, changeLanguage, currentLang }) => {
     const [clickCount, setClickCount] = useState(0);
+
+    const handleSelectLanguage = (langCode: string) => {
+        try {
+            localStorage.setItem('preferred_language', langCode);
+        } catch (error) {
+            console.error('Error saving language preference to local storage:', error);
+        }
+        changeLanguage(langCode);
+    };
 
     const handleDevModeClick = () => {
         setClickCount(currentCount => {
@@ -68,7 +81,7 @@ const Footer: React.FC<FooterProps> = ({ onOpenDevMode, t }) => {
             <ul>
               <li className="mb-1"><a href="#audience-section" onClick={(e) => handleNavClick(e, 'audience-section')} className="text-gray-400 hover:text-white transition">{t('footer_success_stories')}</a></li>
               <li className="mb-1"><a href="#faq-section" onClick={(e) => handleNavClick(e, 'faq-section')} className="text-gray-400 hover:text-white transition">{t('faq_title')}</a></li>
-              <li className="mb-1"><a href="#" className="text-gray-400 hover:text-white transition">{t('footer_privacy')}</a></li>
+              <li className="mb-1"><a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition">{t('footer_privacy')}</a></li>
               <li className="mb-1"><a href="#" className="text-gray-400 hover:text-white transition">{t('footer_terms')}</a></li>
             </ul>
           </div>
@@ -80,8 +93,37 @@ const Footer: React.FC<FooterProps> = ({ onOpenDevMode, t }) => {
             </ul>
           </div>
         </div>
-        <div className="mt-8 pt-8 border-t border-gray-800 text-center text-sm text-gray-500">
+        <div className="mt-8 pt-8 border-t border-gray-800 flex flex-col-reverse sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
           <p>&copy; {new Date().getFullYear()} <span onClick={handleDevModeClick} className="cursor-pointer" title="Developer mode trigger">Career CoPilot</span>. {t('footer_copyright_end')}</p>
+          <div className="flex items-center gap-2">
+            <Globe size={16} className="text-gray-400" aria-hidden="true" />
+            <select
+              aria-label="Language"
+              value={currentLang}
+              onChange={(e) => handleSelectLanguage(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-gray-200 rounded-md py-1.5 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="mt-6 pt-6 border-t border-gray-800 text-center text-xs text-gray-500 space-y-2">
+          <p className="max-w-3xl mx-auto">{t('footer_beta_notice')}</p>
+          <p className="text-gray-400">{t('footer_academic_credit')}</p>
+          <p>
+            {t('footer_launch_prefix')}
+            <a
+              href="https://caiot.co/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline transition"
+            >
+              caiot.co
+            </a>
+            {t('footer_launch_suffix')}
+          </p>
         </div>
       </div>
     </footer>

@@ -794,7 +794,7 @@ const App: React.FC = () => {
         </main>
 
         {/* The footer is only shown on the public-facing homepage (when not logged in, or when overriding to show pricing), not on the user's dashboard. */}
-        {(!session || showHomePageOverride) && <Footer onOpenDevMode={handleOpenDevMode} t={t} />}
+        {(!session || showHomePageOverride) && <Footer onOpenDevMode={handleOpenDevMode} t={t} changeLanguage={changeLanguage} currentLang={currentLang} />}
         
         {/* Career Coach FAB */}
          <button

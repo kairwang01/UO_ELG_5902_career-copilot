@@ -193,6 +193,10 @@
   "footer_contact": "Contact",
   "footer_location": "Toronto, ON, Canada",
   "footer_copyright_end": "Tous droits réservés. Autonomiser les chercheurs d'emploi du monde entier grâce à l'IA.",
+  "footer_beta_notice": "Ceci est une version bêta, fournie uniquement à des fins de test et de démonstration. Les fonctionnalités, le contenu et les données peuvent changer à tout moment et ne doivent pas être considérés comme définitifs.",
+  "footer_academic_credit": "Université d'Ottawa · ELG 5902 — Kair Wang, Jingxuan Xu, Xiaoyi Zhang, Jiaoyang Bi, Xiang Zhao, Xiaoyan Yang",
+  "footer_launch_prefix": "Date de lancement officielle en attente d'approbation par ",
+  "footer_launch_suffix": ".",
   "faq_1_q": "Qu'est-ce que Career CoPilot et comment peut-il m'aider ?",
   "faq_1_a": "Career CoPilot est une boîte à outils de carrière tout-en-un alimentée par l'IA, conçue pour vous aider à chaque étape de votre recherche d'emploi. Elle va au-delà de la simple vérification de CV en offrant des outils pour la pratique des entretiens, la planification de parcours de carrière, la recherche d'opportunités d'emploi, la négociation salariale, et bien plus encore, le tout adapté à votre profil spécifique et à votre marché cible.",
   "faq_2_q": "Comment fonctionne l'analyse de CV par IA ?",
@@ -586,5 +590,9 @@
   "header_web3_staked": "Votre profil est actif dans le Coffre à Talents. Vous gagnez maintenant des récompenses !",
   "header_vault_access_denied": "Passez à un Pack d'offres pour déverrouiller le Coffre à Talents Vérifiés et vous connecter avec des candidats d'élite.",
   "header_vault_access_granted": "Vous avez accès au Coffre à Talents Vérifiés. Découvrez des professionnels de premier ordre et engagés.",
-  "header_vault_earnings": "Gains du Coffre"
+  "header_vault_earnings": "Gains du Coffre",
+  "cookie_consent_message": "Nous utilisons des cookies pour améliorer votre expérience, vous garder connecté et mémoriser vos préférences. En cliquant sur « Accepter », vous acceptez notre utilisation des cookies.",
+  "cookie_consent_accept": "Accepter",
+  "cookie_consent_decline": "Refuser",
+  "cookie_consent_learn_more": "En savoir plus"
 }
