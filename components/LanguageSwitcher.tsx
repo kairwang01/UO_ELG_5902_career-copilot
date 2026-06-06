@@ -2,6 +2,7 @@ import React from 'react';
 
 const SUPPORTED_LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇺🇸' },
+    { code: 'zh', name: '中文', flag: '🇨🇳' },
     { code: 'ja', name: '日本語', flag: '🇯🇵' },
     { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
     { code: 'fr', name: 'Français', flag: '🇫🇷' },

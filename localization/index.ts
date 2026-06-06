@@ -26,6 +26,7 @@ export const getTranslations = (lang: string): Promise<{ [key: string]: string }
         vi: 'vi.json',
         de: 'de.json',
         fr: 'fr.json',
+        zh: 'zh.json',
     };
     const fileName = langFileMap[lang] || 'en.json';
     return fetchTranslation(fileName);
