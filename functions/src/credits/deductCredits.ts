@@ -1,0 +1,111 @@
+/**
+ * deductCredits — atomic Firestore credit deduction.
+ *
+ * This is the M9 core: a Firestore transaction that reads the user's credit
+ * balance, rejects the request if insufficient, and writes the new balance —
+ * all atomically. The LLM is only called AFTER this commits.
+ *
+ * Design guarantees:
+ *  - Atomic: no partial deductions. Either the full cost is deducted or nothing.
+ *  - Un-bypassable: runs server-side inside a Cloud Function; the client cannot skip it.
+ *  - Concurrency-safe: Firestore transactions auto-retry on contention.
+ *    A bounded retry cap prevents infinite loops under pathological load.
+ *  - Single write target: users/{uid}.credits — one document per user,
+ *    so per-user contention is low (M9's 100-concurrent target is across users).
+ *
+ * When Xiaoyi delivers the real schema:
+ *  - Update USERS_COLLECTION and USER_FIELDS in schema.ts ONLY.
+ *  - This file does not change.
+ */
+
+import * as admin from "firebase-admin";
+import { HttpsError } from "firebase-functions/v2/https";
+import { USERS_COLLECTION, USER_FIELDS } from "./schema";
+
+// Initialise the Admin SDK once (idempotent — safe to call multiple times).
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const db = admin.firestore();
+
+/**
+ * Maximum number of transaction retries before surfacing a hard error.
+ * Firestore retries automatically on contention; this cap prevents
+ * runaway retries under extreme load.
+ */
+const MAX_RETRIES = 3;
+
+/**
+ * Atomically deducts `cost` credits from `users/{uid}`.
+ *
+ * @param uid   - Firebase Auth user ID.
+ * @param cost  - Number of credits to deduct (must be > 0).
+ * @param tool  - Tool name for error messages (e.g. "resume-analysis").
+ *
+ * @throws HttpsError("failed-precondition") — insufficient credits.
+ * @throws HttpsError("not-found")           — user document does not exist.
+ * @throws HttpsError("resource-exhausted")  — too many concurrent requests; retry.
+ * @throws HttpsError("internal")            — unexpected error.
+ */
+export async function deductCredits(
+  uid: string,
+  cost: number,
+  tool: string
+): Promise<void> {
+  const userRef = db.collection(USERS_COLLECTION).doc(uid);
+
+  let attempt = 0;
+
+  while (attempt < MAX_RETRIES) {
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+
+        if (!snap.exists) {
+          throw new HttpsError(
+            "not-found",
+            `User profile not found. Please sign out and sign back in.`
+          );
+        }
+
+        const current: number = snap.get(USER_FIELDS.credits) ?? 0;
+
+        if (current < cost) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Insufficient credits for ${tool}. ` +
+              `Required: ${cost}, available: ${current}. ` +
+              `Please purchase more credits.`
+          );
+        }
+
+        tx.update(userRef, { [USER_FIELDS.credits]: current - cost });
+      });
+
+      // Transaction committed — deduction succeeded.
+      return;
+    } catch (err) {
+      // Re-throw our own HttpsErrors immediately — no retry needed.
+      if (err instanceof HttpsError) throw err;
+
+      attempt++;
+
+      if (attempt >= MAX_RETRIES) {
+        console.error(`deductCredits: all ${MAX_RETRIES} attempts failed`, {
+          uid,
+          cost,
+          tool,
+          err,
+        });
+        throw new HttpsError(
+          "resource-exhausted",
+          "Too many concurrent requests. Please try again in a moment."
+        );
+      }
+
+      // Brief back-off before retry (exponential: 50ms, 100ms, 200ms …)
+      await new Promise((r) => setTimeout(r, 50 * Math.pow(2, attempt - 1)));
+    }
+  }
+}

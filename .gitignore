@@ -25,3 +25,6 @@ dist-ssr
 
 # Key
 .env.local
+
+# Local project planning docs (not for GitHub)
+project-planning/
