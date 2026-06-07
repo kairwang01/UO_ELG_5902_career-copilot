@@ -2,11 +2,15 @@
  * Cloud Functions entry point.
  *
  * All exported symbols from this file become callable/HTTP Cloud Functions.
- * Add new handlers here as they are implemented.
  *
- * Phase A:  analyzeResume (AI proxy — auth verified, key server-side)
- * Phase B:  mockInterview, careerPath, coverLetter, ... (replicate the pattern)
+ * Phase A:  analyzeResume        — AI proxy, key server-side
+ * Phase B:  mockInterview        — interview question generation + answer evaluation
+ *           generateCoverLetter  — cover letter generation
+ *           generateCareerPath   — career roadmap planning
  * Phase C:  createCheckout, stripeWebhook, publicApi
  */
 
-export { analyzeResumeFunction as analyzeResume } from "./handlers/analyzeResume";
+export { analyzeResumeFunction        as analyzeResume        } from "./handlers/analyzeResume";
+export { mockInterviewFunction        as mockInterview        } from "./handlers/mockInterview";
+export { generateCoverLetterFunction  as generateCoverLetter  } from "./handlers/generateCoverLetter";
+export { generateCareerPathFunction   as generateCareerPath   } from "./handlers/generateCareerPath";

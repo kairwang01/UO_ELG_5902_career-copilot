@@ -4,10 +4,7 @@
  * Secure replacement for the client-side geminiService.analyzeResume().
  * The Gemini API key never leaves the server.
  *
- * Flow: verify auth → call LLM → return result
- *
- * NOTE: Credit deduction is intentionally omitted in Phase A.
- *       Phase B (B2/B3) will add: deductCredits(uid, cost) BEFORE the LLM call.
+ * Flow: verify auth → deduct credits → call LLM → return result
  *       The TODO below marks the exact insertion point.
  *
  * Frontend integration:
@@ -23,6 +20,8 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { getProvider } from "../llm/router";
+import { deductCredits } from "../credits/deductCredits";
+import { TOOL_CREDIT_COSTS } from "../credits/schema";
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -109,10 +108,9 @@ export const analyzeResumeFunction = onCall(async (request) => {
     );
   }
 
-  // Step 3: TODO — deduct credits before the LLM call (Phase B / B2-B3).
-  // Insert here: await deductCredits(uid, TOOL_CREDIT_COSTS.RESUME_ANALYSIS);
-  // The uid is available; cost table is in config/credits.ts on the frontend.
-  void uid; // suppress unused-variable warning until Phase B wires this up
+  // Step 3: Deduct credits BEFORE the LLM call — atomic, server-side, un-bypassable.
+  // If the user has insufficient credits, this throws and the LLM is never called.
+  await deductCredits(uid, TOOL_CREDIT_COSTS["resume-analysis"], "resume-analysis");
 
   // Step 4: Build the prompt
   const basePrompt = `Analyze this resume for the ${data.marketName} market. Provide a score (0-100), summary, strengths, improvements (area + suggestion), and keywords.`;
