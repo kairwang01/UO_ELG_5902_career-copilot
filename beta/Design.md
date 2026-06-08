@@ -136,7 +136,15 @@ VITE_BETA_REDESIGN=true npm run dev
 
 MVP default: flag unset or `false` → existing `App.tsx` behavior, no router.
 
-When flag is `true`, MVP app runs at `/app/*` so marketing routes (`/`, `/employers`, etc.) do not replace the June 17 deliverable.
+When flag is `true`, MVP app runs at `/app/*` (lazy-loaded) so marketing routes (`/`, `/employers`, etc.) do not replace the June 17 deliverable.
+
+## i18n
+
+Beta copy uses `beta_*` keys in `localization/en.json`, loaded via `useBetaI18n()`. Do not add new hardcoded English strings in `beta/pages/**`.
+
+## Fonts
+
+Beta shell uses system font stack only — no Google Fonts import in `beta-theme.css`.
 
 ## References
 

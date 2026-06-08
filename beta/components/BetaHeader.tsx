@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BETA_ROUTES } from '../../config/beta';
+import { useBetaI18n } from '../hooks/useBetaI18n';
 
 export const BetaHeader: React.FC = () => {
   const { pathname } = useLocation();
   const isEmployer = pathname.startsWith(BETA_ROUTES.employers);
+  const { t } = useBetaI18n();
 
   return (
     <header className="border-b border-[var(--beta-border)] bg-[var(--beta-surface)] sticky top-0 z-50">
@@ -16,20 +18,20 @@ export const BetaHeader: React.FC = () => {
           {!isEmployer && (
             <>
               <a href="#workflow" className="text-[var(--beta-text-muted)] hover:text-[var(--beta-text)]">
-                How it works
+                {t('beta_nav_how_it_works')}
               </a>
               <Link to={BETA_ROUTES.sampleReport} className="text-[var(--beta-text-muted)] hover:text-[var(--beta-text)]">
-                Sample report
+                {t('beta_nav_sample_report')}
               </Link>
             </>
           )}
           {isEmployer && (
             <a href="#workflow" className="text-[var(--beta-text-muted)] hover:text-[var(--beta-text)]">
-              Hiring workflow
+              {t('beta_nav_hiring_workflow')}
             </a>
           )}
           <Link to={BETA_ROUTES.pricing} className="text-[var(--beta-text-muted)] hover:text-[var(--beta-text)]">
-            Pricing
+            {t('beta_nav_pricing')}
           </Link>
         </nav>
         <div className="flex items-center gap-3">
@@ -38,21 +40,21 @@ export const BetaHeader: React.FC = () => {
               to={BETA_ROUTES.home}
               className="text-sm text-[var(--beta-text-muted)] hover:text-[var(--beta-text)]"
             >
-              For job seekers
+              {t('beta_nav_for_jobseekers')}
             </Link>
           ) : (
             <Link
               to={BETA_ROUTES.employers}
               className="text-sm text-[var(--beta-text-muted)] hover:text-[var(--beta-text)]"
             >
-              For employers
+              {t('beta_nav_for_employers')}
             </Link>
           )}
           <Link
             to={BETA_ROUTES.portal}
             className="text-sm font-medium text-[var(--beta-action)] hover:underline"
           >
-            Sign in
+            {t('beta_nav_sign_in')}
           </Link>
         </div>
       </div>
