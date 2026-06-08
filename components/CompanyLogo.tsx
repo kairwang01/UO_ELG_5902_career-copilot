@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import React, { useEffect, useRef, useState } from 'react';
+import { getAuth } from 'firebase/auth';
+import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { app } from '../lib/firebaseClient';
 
 interface CompanyLogoProps {
   url: string | null;
@@ -10,35 +12,38 @@ interface CompanyLogoProps {
 const CompanyLogo: React.FC<CompanyLogoProps> = ({ url, size, onUpload }) => {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (url) {
-      const { data } = supabase.storage.from('company-logos').getPublicUrl(url);
-      setLogoUrl(`${data.publicUrl}?t=${new Date().getTime()}`);
-    }
+    setLogoUrl(url && url.startsWith('http') ? url : null);
   }, [url]);
 
   const uploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
-        setUploading(true);
-        if (!event.target.files || event.target.files.length === 0) {
-            throw new Error('You must select an image to upload.');
-        }
+      setUploading(true);
 
-        const file = event.target.files[0];
-        const fileExt = file.name.split('.').pop();
-        const filePath = `${Math.random()}.${fileExt}`;
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error('You must select an image to upload.');
+      }
 
-        const { error: uploadError } = await supabase.storage
-            .from('company-logos')
-            .upload(filePath, file);
+      const auth = getAuth(app);
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('You must be signed in to upload a logo.');
 
-        if (uploadError) throw uploadError;
-        if (onUpload) onUpload(filePath);
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}.${fileExt}`;
+      const storage = getStorage(app);
+      const storageRef = ref(storage, `company-logos/${uid}/${filePath}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(snapshot.ref);
+
+      setLogoUrl(downloadUrl);
+      onUpload?.(downloadUrl);
     } catch (error) {
-        alert((error as Error).message);
+      alert((error as Error).message);
     } finally {
-        setUploading(false);
+      setUploading(false);
     }
   };
 
@@ -57,31 +62,32 @@ const CompanyLogo: React.FC<CompanyLogoProps> = ({ url, size, onUpload }) => {
           />
         ) : (
           <div className="flex items-center justify-center rounded-lg bg-gray-100" style={{ height: size, width: size }}>
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-1/2 w-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-             </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-1/2 w-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
           </div>
         )}
         {onUpload && (
-            <div className="absolute -bottom-3 -right-3">
-                <label htmlFor="logo-upload" className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 shadow-md inline-block">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                    </svg>
-                </label>
-                <input
-                    style={{ visibility: 'hidden', position: 'absolute' }}
-                    type="file"
-                    id="logo-upload"
-                    accept="image/*"
-                    onChange={uploadLogo}
-                    disabled={uploading}
-                />
-            </div>
+          <div className="absolute -bottom-3 -right-3">
+            <label htmlFor="logo-upload" className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 shadow-md inline-block">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+            </label>
+            <input
+              ref={fileInputRef}
+              style={{ visibility: 'hidden', position: 'absolute' }}
+              type="file"
+              id="logo-upload"
+              accept="image/*"
+              onChange={uploadLogo}
+              disabled={uploading}
+            />
+          </div>
         )}
       </div>
-       {onUpload && (
-         <p className="text-sm text-gray-500">{uploading ? 'Uploading...' : 'Upload your company logo'}</p>
+      {onUpload && (
+        <p className="text-sm text-gray-500">{uploading ? 'Uploading...' : 'Upload your company logo'}</p>
       )}
     </div>
   );

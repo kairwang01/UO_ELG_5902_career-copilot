@@ -1,29 +1,28 @@
 
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
 import { analyzeResume, setApiStatusUpdater } from './services/geminiService';
 import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
-import { supabase } from './lib/supabaseClient';
-import type { Json } from './lib/supabaseClient';
-import type { Session } from '@supabase/supabase-js';
-import { data } from './lib/data';
+import { httpsCallable } from 'firebase/functions';
+import { firebaseFunctions } from './lib/firebaseClient';
+import { data, type AppSession as Session } from './lib/data';
+import { logToolUsage, logResumeAnalysis } from './lib/analytics';
 import { useLocalization } from './hooks/useLocalization';
-import { FileText } from 'lucide-react';
 import { ToastProvider } from './components/Toast';
 import { CreditsProvider, useCredits } from './contexts/CreditsContext';
 import { ApiStatusProvider, useApiStatus } from './contexts/ApiStatusContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import ApiStatusBanner from './components/ApiStatusBanner';
 import CreditModal from './components/modals/CreditModal';
-import { TOOL_CREDIT_COSTS, PLAN_CREDITS } from './config/credits';
+import { INITIAL_USER_CREDITS, TOOL_CREDIT_COSTS } from './config/credits';
 
 import Header from './components/Header';
 import Hero from './components/Hero';
 import Features from './components/Features';
 import Audience from './components/Audience';
 import FAQ from './components/FAQ';
-import Footer from './components/Footer';
 import CookieConsent from './components/CookieConsent';
 import UploadSection from './components/UploadSection';
 import EmptyState from './components/EmptyState';
@@ -33,20 +32,63 @@ import Pricing from './components/Pricing';
 import Auth from './components/Auth';
 import Account from './components/Account';
 import DevModeModal from './components/DevModeModal';
-import ResumePreview from './components/ResumePreview';
 import Dashboard from './components/dashboard/Dashboard';
+import {
+  CareerPlanPage,
+  InterviewPracticePage,
+  JobMatchPage,
+  ResumeReadinessPage,
+} from './components/dashboard/CandidateWorkspacePages';
 import Sidebar from './components/Sidebar';
-import BusinessPage from './components/BusinessPage';
-import EmployerDashboard from './components/EmployerDashboard';
-import { EmployerPortal } from './components/employer/EmployerPortal';
 import type { PortalPage } from './components/employer/EmployerPortal';
-import AgencyHub from './components/AgencyHub';
 import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';
 import ApiDocsViewer from './components/ApiDocsViewer';
-import { BETA_REDESIGN_ENABLED } from './config/beta';
+import { SiteLayout } from './marketing/components/SiteLayout';
+import './marketing/site-theme.css';
 
-const AppContent: React.FC = () => {
+const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
+const EmployerDashboard = React.lazy(() => import('./components/EmployerDashboard'));
+const EmployerPortal = React.lazy(() =>
+  import('./components/employer/EmployerPortal').then((module) => ({
+    default: module.EmployerPortal,
+  })),
+);
+const AgencyHub = React.lazy(() => import('./components/AgencyHub'));
+
+interface AppContentProps {
+  siteShell?: boolean;
+}
+
+const buildLocalProfile = (
+  userId: string,
+  patch: Partial<UserProfile>,
+): UserProfile => ({
+  id: userId,
+  updated_at: new Date().toISOString(),
+  full_name: null,
+  avatar_url: null,
+  subscription_status: 'free',
+  role: 'candidate',
+  company_name: null,
+  company_website: null,
+  company_description: null,
+  company_logo_url: null,
+  resume_text: null,
+  preferred_language: null,
+  wallet_address: null,
+  nft_minted: null,
+  nft_staked: null,
+  nft_earnings: null,
+  nft_token_id: null,
+  english_pro_streak: null,
+  english_pro_last_practice: null,
+  credits: INITIAL_USER_CREDITS,
+  ...patch,
+});
+
+const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
+  const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs'>('home');
@@ -64,7 +106,7 @@ const AppContent: React.FC = () => {
   const [isUpdatingResume, setIsUpdatingResume] = useState(false);
   const [showHomePageOverride, setShowHomePageOverride] = useState(false);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
-  const [dashboardView, setDashboardView] = useState<'dashboard' | 'toolkit' | 'resume' | 'portfolio' | 'account' | 'credentials' | 'business'>('dashboard');
+  const [dashboardView, setDashboardView] = useState<'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials' | 'business'>('dashboard');
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -161,10 +203,52 @@ const AppContent: React.FC = () => {
         throw new Error(error.message);
       }
 
+      const applyProfile = async (p: UserProfile | null) => {
+        if (!p) return;
+        setProfile(p);
+        setResumeText(p.resume_text || '');
+
+        let userCredits = p.credits || 0;
+        if (user.email === 'abhishek.ip@gmail.com' && userCredits < 5000) {
+          userCredits = 5000;
+        }
+        setCredits(userCredits);
+
+        const pendingPlan = sessionStorage.getItem('pending_plan');
+        const pendingMode = sessionStorage.getItem('pending_mode');
+        if (!pendingMode) return;
+
+        sessionStorage.removeItem('pending_plan');
+        sessionStorage.removeItem('pending_mode');
+
+        try {
+          const role: 'candidate' | 'employer' | 'agency' =
+            pendingMode === 'business' ? 'employer' : 'candidate';
+
+          if (pendingPlan) {
+            const planKey = pendingMode === 'business'
+              ? `pending_biz_${pendingPlan}`
+              : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`;
+            const setSubscriptionStatus = httpsCallable(firebaseFunctions, 'setSubscriptionStatus');
+            await setSubscriptionStatus({ planKey });
+          }
+
+          if (p.role !== role) {
+            await data.profiles.update(user.id, { role });
+          }
+
+          const { data: refreshed } = await data.profiles.get(user.id);
+          if (refreshed) {
+            setProfile(refreshed);
+            setCredits(refreshed.credits || userCredits);
+          }
+        } catch (planErr) {
+          console.error('Failed to apply pending plan/role:', (planErr as Error).message);
+        }
+      };
+
       if (profileData) {
-        setProfile(profileData);
-        setResumeText(profileData.resume_text || '');
-        setCredits(profileData.credits || 0);
+        await applyProfile(profileData);
       } else {
         // Profile not found — onUserCreated trigger may still be in flight.
         // Retry after 1.5s before giving up.
@@ -172,11 +256,45 @@ const AppContent: React.FC = () => {
         await new Promise(r => setTimeout(r, 1500));
         const { data: retryData } = await data.profiles.get(user.id);
         if (retryData) {
-          setProfile(retryData);
-          setResumeText(retryData.resume_text || '');
-          setCredits(retryData.credits || 0);
+          await applyProfile(retryData);
         } else {
-          console.warn("Profile still not found after retry — user may need to refresh.");
+          const pendingPlan = sessionStorage.getItem('pending_plan');
+          const pendingMode = sessionStorage.getItem('pending_mode');
+          const role: 'candidate' | 'employer' = pendingMode === 'business' ? 'employer' : 'candidate';
+          const subscriptionStatus = pendingPlan
+            ? pendingMode === 'business'
+              ? `pending_biz_${pendingPlan}`
+              : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`
+            : 'free';
+          const now = new Date().toISOString();
+          const fallbackProfile = buildLocalProfile(user.id, {
+            full_name: user.user_metadata?.full_name || '',
+            avatar_url: user.user_metadata?.avatar_url || null,
+            subscription_status: subscriptionStatus,
+            resume_text: '',
+            role,
+            credits: INITIAL_USER_CREDITS,
+            updated_at: now,
+            english_pro_streak: 0,
+          });
+
+          const { error: createError } = await data.profiles.upsert({
+            id: user.id,
+            full_name: fallbackProfile.full_name,
+            avatar_url: fallbackProfile.avatar_url,
+            subscription_status: fallbackProfile.subscription_status,
+            resume_text: '',
+            role: fallbackProfile.role,
+            credits: INITIAL_USER_CREDITS,
+            english_pro_streak: 0,
+            created_at: now,
+            updated_at: now,
+          });
+          if (createError) throw new Error(createError.message);
+
+          sessionStorage.removeItem('pending_plan');
+          sessionStorage.removeItem('pending_mode');
+          await applyProfile(fallbackProfile);
         }
       }
     } catch (error) {
@@ -201,8 +319,9 @@ const AppContent: React.FC = () => {
     try {
         let targetPlanKey = planKey;
         let plan;
+        const isBiz = planKey.startsWith('pending_biz_');
 
-        if (planKey.startsWith('pending_biz_')) {
+        if (isBiz) {
             targetPlanKey = planKey.replace('pending_biz_', '');
             plan = BUSINESS_PLANS[targetPlanKey as keyof typeof BUSINESS_PLANS];
         } else if (planKey.startsWith('pending_')) {
@@ -212,37 +331,46 @@ const AppContent: React.FC = () => {
             throw new Error(`Invalid pending plan key format: ${planKey}`);
         }
 
-        if (!plan || !plan.stripeLink) {
-            throw new Error(`Stripe payment link is not configured for the ${targetPlanKey} plan.`);
-        }
-        
-        const stripeUrl = new URL(plan.stripeLink);
-        stripeUrl.searchParams.append('client_reference_id', session.user.id);
-        if (session.user.email) {
-            stripeUrl.searchParams.append('prefilled_email', session.user.email);
-        }
-        
-        setTimeout(() => {
-            window.open(stripeUrl.toString(), '_blank');
+        const stripeReady = plan?.stripeLink && !plan.stripeLink.includes('/test_');
+
+        if (stripeReady) {
+            const stripeUrl = new URL(plan.stripeLink!);
+            stripeUrl.searchParams.append('client_reference_id', session.user.id);
+            if (session.user.email) {
+                stripeUrl.searchParams.append('prefilled_email', session.user.email);
+            }
+
+            setTimeout(() => {
+                window.open(stripeUrl.toString(), '_blank');
+                setIsRedirecting(false);
+            }, 1500);
+        } else {
+            const setSubscriptionStatus = httpsCallable(firebaseFunctions, 'setSubscriptionStatus');
+            await setSubscriptionStatus({ planKey: targetPlanKey });
+
+            if (isBiz) {
+                await data.profiles.update(session.user.id, { role: 'employer' });
+            }
+
+            await getProfile();
             setIsRedirecting(false);
-        }, 1500);
+        }
     } catch (error) {
         setError(`Error preparing for checkout: ${(error as Error).message}`);
         setIsRedirecting(false);
     }
-  }, [session]);
+  }, [session, getProfile]);
 
   const handleBusinessPlanSelection = async (planKey: string) => {
     if (!session) return;
-    // Free tier is immediate; paid tiers stay pending until checkout.
-    const status = planKey === 'free' ? 'free' : `pending_biz_${planKey}`;
-    const { error } = await data.profiles.update(session.user.id, { subscription_status: status });
-    if (error) {
-      console.error('Error setting business plan:', error.message);
-      alert(`Failed to set plan: ${error.message}`);
-      return;
+    try {
+      const setSubscriptionStatus = httpsCallable(firebaseFunctions, 'setSubscriptionStatus');
+      await setSubscriptionStatus({ planKey: `pending_biz_${planKey}` });
+      await getProfile();
+    } catch (error) {
+      console.error('Error setting business plan:', (error as Error).message);
+      alert(`Failed to set plan: ${(error as Error).message}`);
     }
-    await getProfile();
   };
   
   const handleOpenDevMode = () => {
@@ -256,11 +384,8 @@ const AppContent: React.FC = () => {
   const handleSetPlanForDev = async (planKey: string): Promise<boolean> => {
     if (!session) return false;
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ subscription_status: planKey })
-        .eq('id', session.user.id);
-      if (error) throw error;
+      const setSubscriptionStatus = httpsCallable(firebaseFunctions, 'setSubscriptionStatus');
+      await setSubscriptionStatus({ planKey });
       await getProfile();
       return true;
     } catch (error) {
@@ -345,6 +470,10 @@ const AppContent: React.FC = () => {
 
   const navigateToPricing = () => {
     setAnalysisResult(null);
+    if (siteShell) {
+      navigate('/pricing');
+      return;
+    }
     setView('home');
     setShowHomePageOverride(true);
     setTimeout(() => {
@@ -386,12 +515,17 @@ const AppContent: React.FC = () => {
       
       if (session?.user) {
         try {
-            const { data: eventData, error: eventError } = await supabase.from('tool_usage_events').insert({ user_id: session.user.id, tool_key: 'resume-analysis', metadata: { market } }).select().single();
-            if (eventError) throw eventError;
-            const { error: analysisError } = await supabase.from('resume_analyses').insert({ user_id: session.user.id, event_id: eventData?.event_id, score: result.score, market_name: market, summary: result.summary, strengths: result.strengths, improvements: result.improvements as unknown as Json, keywords: result.keywords });
-            if (analysisError) throw analysisError;
+            const eventId = await logToolUsage(session.user.id, 'resume-analysis', { market });
+            await logResumeAnalysis(session.user.id, eventId, {
+              score: result.score,
+              market_name: market,
+              summary: result.summary,
+              strengths: result.strengths,
+              improvements: result.improvements,
+              keywords: result.keywords,
+            });
         } catch (dbError) {
-            console.error("Error saving analysis to database:", (dbError as Error).message);
+            console.error("Error saving analysis to Firestore:", (dbError as Error).message);
         }
       }
       
@@ -434,21 +568,50 @@ const AppContent: React.FC = () => {
     handleReset();
   };
 
+  const uploadVariant = siteShell ? 'site' as const : 'legacy' as const;
+
   const renderAppEntry = () => (
     <>
-      <div className="text-center mb-10 max-w-2xl mx-auto">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-          {t('beta_app_entry_title')}
+      <div className="text-center mb-8 sm:mb-10 max-w-2xl mx-auto">
+        <h1
+          className={
+            siteShell
+              ? 'text-[clamp(1.5rem,3vw,2.25rem)] font-semibold tracking-tight text-[var(--site-text)] mb-3'
+              : 'text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-3'
+          }
+        >
+          {t('site_app_entry_title')}
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">{t('beta_app_entry_subtitle')}</p>
-        <a href="/" className="inline-block mt-4 text-sm font-medium text-blue-700 dark:text-blue-400 hover:underline">
-          {t('beta_app_entry_back')}
-        </a>
+        <p className={siteShell ? 'text-[var(--site-text-muted)]' : 'text-gray-600 dark:text-gray-400'}>
+          {t('site_app_entry_subtitle')}
+        </p>
       </div>
       <div id="upload-section" ref={uploadSectionRef} className="scroll-mt-20">
-        <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} />
+        <UploadSection
+          t={t}
+          resumeText={resumeText}
+          setResumeText={setResumeText}
+          resumeImages={resumeImages}
+          setResumeImages={setResumeImages}
+          onInitiateAnalysis={handleInitiateAnalysis}
+          isLoading={isLoading}
+          error={error}
+          setError={setError}
+          market={market}
+          setMarket={setMarket}
+          variant={uploadVariant}
+        />
       </div>
     </>
+  );
+
+  const renderWorkspaceBody = () => (
+    <section className="py-10 sm:py-14">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <ApiStatusBanner />
+        {renderContent()}
+      </div>
+    </section>
   );
 
   const renderHomePage = () => (
@@ -465,33 +628,56 @@ const AppContent: React.FC = () => {
     </>
   );
 
+  const openWorkspaceTool = (tool: string) => {
+    setActiveTool(tool);
+    setDashboardView('toolkit');
+  };
+
+  const openResumeUpload = () => {
+    setActiveTool(null);
+    setDashboardView('resume');
+    setIsUpdatingResume(true);
+  };
+
   const renderDashboard = () => (
     <div className="flex flex-col gap-6 animate-slide-in-up">
         {dashboardView === 'dashboard' && (
-            <>
-                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tighter text-gray-900 dark:text-gray-100 mb-2">
-                    Welcome back, <span className="text-blue-700 dark:text-blue-400">{profile?.full_name?.split(' ')[0] || 'there'}</span>
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mb-8">{t('dashboard_subtitle')}</p>
-                <div id="dashboard-panel"><Dashboard session={session} profile={profile} t={t} /></div>
-            </>
+            <div id="dashboard-panel">
+              <Dashboard
+                session={session}
+                profile={profile}
+                t={t}
+                hasResume={!!resumeText.trim()}
+                onNavigate={(nextView) => {
+                  setDashboardView(nextView);
+                  if (nextView === 'resume' && !resumeText.trim()) setIsUpdatingResume(true);
+                }}
+              />
+            </div>
         )}
         
         {dashboardView === 'toolkit' && (
             <div id="toolkit-panel">
                 {!isAIMode ? (
                     <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 text-center animate-fade-in min-h-[60vh]">
-                        <div className="text-5xl mb-4">🤖</div>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">AI Mode Recommended</h3>
-                        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto mb-6">The AI Toolkit features professional career tools powered by advanced AI models. Enable AI Mode from the sidebar to access them.</p>
+                        <div className="mb-4 h-12 w-12 rounded-lg border border-blue-100 bg-blue-50 p-2" aria-hidden="true">
+                          <div className="flex h-full flex-col justify-between">
+                            <div className="h-1.5 rounded-full bg-blue-700" />
+                            <div className="space-y-1">
+                              <div className="h-1 rounded-full bg-blue-200" />
+                              <div className="h-1 w-2/3 rounded-full bg-blue-200" />
+                            </div>
+                          </div>
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Assisted tools are off</h3>
+                        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto mb-6">Turn on assistance from the sidebar to use generated career tools. The core workspace remains available.</p>
                         <button onClick={() => setDashboardView('portfolio')} className="text-blue-600 dark:text-blue-400 font-bold hover:underline">Or try the Professional Showcase (AI optional) &rarr;</button>
                     </div>
                 ) : !resumeText ? (
                     <EmptyState
-                        icon="🧰"
-                        title="Upload your résumé to use the AI Toolkit"
-                        description="The toolkit tailors every result to your experience, so it needs your résumé first. Add it and these tools unlock right away."
-                        action={{ label: 'Upload résumé', onClick: () => { setActiveTool(null); setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                        title="Upload your resume to use the toolkit"
+                        description="The toolkit tailors every result to your experience, so it needs your resume first. Add it and these tools unlock right away."
+                        action={{ label: 'Upload resume', onClick: () => { setActiveTool(null); setDashboardView('resume'); setIsUpdatingResume(true); } }}
                     />
                 ) : (
                     <AnalysisDisplay
@@ -514,17 +700,54 @@ const AppContent: React.FC = () => {
         )}
         
         {dashboardView === 'resume' && (
-            <div id="resume-panel" className="max-w-4xl mx-auto w-full">
-                <div className="p-8 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('dashboard_resume_title')}</h2>
-                        <button onClick={() => setIsUpdatingResume(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-all text-sm">
-                            <FileText className="h-4 w-4" />
-                            Update Resume
-                        </button>
-                    </div>
-                    <ResumePreview resumeText={resumeText} market={market} t={t} />
-                </div>
+            <div id="resume-panel">
+              <ResumeReadinessPage
+                resumeText={resumeText}
+                market={market}
+                t={t}
+                onUploadResume={openResumeUpload}
+                onOpenTool={openWorkspaceTool}
+                onViewChange={setDashboardView}
+              />
+            </div>
+        )}
+
+        {dashboardView === 'jobs' && (
+            <div id="jobs-panel">
+              <JobMatchPage
+                resumeText={resumeText}
+                market={market}
+                t={t}
+                onUploadResume={openResumeUpload}
+                onOpenTool={openWorkspaceTool}
+                onViewChange={setDashboardView}
+              />
+            </div>
+        )}
+
+        {dashboardView === 'interview' && (
+            <div id="interview-panel">
+              <InterviewPracticePage
+                resumeText={resumeText}
+                market={market}
+                t={t}
+                onUploadResume={openResumeUpload}
+                onOpenTool={openWorkspaceTool}
+                onViewChange={setDashboardView}
+              />
+            </div>
+        )}
+
+        {dashboardView === 'plan' && (
+            <div id="plan-panel">
+              <CareerPlanPage
+                resumeText={resumeText}
+                market={market}
+                t={t}
+                onUploadResume={openResumeUpload}
+                onOpenTool={openWorkspaceTool}
+                onViewChange={setDashboardView}
+              />
             </div>
         )}
 
@@ -532,10 +755,9 @@ const AppContent: React.FC = () => {
             <div id="portfolio-panel">
                  {!resumeText ? (
                     <EmptyState
-                        icon="🌐"
-                        title="Upload your résumé to build your Showcase"
-                        description="Your Showcase turns your résumé into a shareable professional profile. Add your résumé to get started."
-                        action={{ label: 'Upload résumé', onClick: () => { setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                        title="Upload your resume to build your Showcase"
+                        description="Your Showcase turns your resume into a shareable professional profile. Add your resume to get started."
+                        action={{ label: 'Upload resume', onClick: () => { setDashboardView('resume'); setIsUpdatingResume(true); } }}
                     />
                  ) : (
                     <AnalysisDisplay
@@ -579,8 +801,20 @@ const AppContent: React.FC = () => {
     if (view === 'auth') { return <Auth t={t} onClose={() => setView('home')} initialView={initialAuthView} mode={authMode} />; }
     if (view === 'account' && session) { return <Account key={session.user.id} session={session} onSetView={handleSetView} onSubscriptionChange={getProfile} navigateToPricing={navigateToPricing} t={t} />; }
     if (view === 'api_docs') { return <ApiDocsViewer onClose={() => setView('account')} />; }
-    if (view === 'business') { return <BusinessPage t={t} session={session} profile={profile} onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')} onSignInClick={() => handleSetView('auth', 'sign_in', 'business')} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} refreshProfile={getProfile} />; }
-    if (view === 'agency' && session && profile) { return <AgencyHub session={session} profile={profile} t={t} />; }
+    if (view === 'business') {
+        return (
+            <React.Suspense fallback={<LoadingSpinner market={market} />}>
+                <BusinessPage t={t} session={session} profile={profile} onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')} onSignInClick={() => handleSetView('auth', 'sign_in', 'business')} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} refreshProfile={getProfile} />
+            </React.Suspense>
+        );
+    }
+    if (view === 'agency' && session && profile) {
+        return (
+            <React.Suspense fallback={<LoadingSpinner market={market} />}>
+                <AgencyHub session={session} profile={profile} t={t} />
+            </React.Suspense>
+        );
+    }
     if (isLoading) { return <LoadingSpinner market={market} />; }
     if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} />; }
     if (session && !showHomePageOverride) {
@@ -588,37 +822,42 @@ const AppContent: React.FC = () => {
         if (profile?.role === 'employer') {
             // Full-screen portal — renders its own sidebar/layout outside the candidate shell
             return (
-                <EmployerPortal
-                    session={session}
-                    profile={profile}
-                    refreshProfile={getProfile}
-                    navigateToBusinessPricing={navigateToBusinessPricing}
-                    onGoHome={() => handleSetView('business')}
-                    t={t}
-                    initialPage={portalInitialPage}
-                    isAIMode={isAIMode}
-                    onToggleAIMode={toggleAIMode}
-                    theme={theme}
-                    onToggleTheme={toggleTheme}
-                    currentLang={currentLang}
-                    onLanguageChange={changeLanguage}
-                />
+                <React.Suspense fallback={<LoadingSpinner market={market} />}>
+                    <EmployerPortal
+                        session={session}
+                        profile={profile}
+                        refreshProfile={getProfile}
+                        navigateToBusinessPricing={navigateToBusinessPricing}
+                        onGoHome={() => handleSetView('business')}
+                        t={t}
+                        initialPage={portalInitialPage}
+                        isAIMode={isAIMode}
+                        onToggleAIMode={toggleAIMode}
+                        theme={theme}
+                        onToggleTheme={toggleTheme}
+                        currentLang={currentLang}
+                        onLanguageChange={changeLanguage}
+                    />
+                </React.Suspense>
             );
         }
         return renderDashboard();
     }
     if (!isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600">Loading...</p></div>; }
-    if (BETA_REDESIGN_ENABLED) return renderAppEntry();
-    return renderHomePage();
+    return renderAppEntry();
   };
 
   const isUserLoggedIn = session && !showHomePageOverride && view !== 'business' && profile?.role === 'candidate';
   // Employers get the hiring portal (EmployerPortal), not the candidate sidebar shell.
   const showAppShell = isUserLoggedIn;
 
+  const rootClass = siteShell
+    ? `beta-root min-h-screen w-full ${showAppShell ? 'flex' : 'block'}`
+    : `min-h-screen w-full font-sans bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200 ${showAppShell ? 'flex' : 'block'}`;
+
   return (
     <ToastProvider>
-      <div className={`min-h-screen w-full font-sans bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200 ${showAppShell ? 'flex' : 'block'}`}>
+      <div className={rootClass}>
         {isRedirecting && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4 animate-fade-in"><div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-8 text-center flex flex-col items-center"><h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Finalizing Your Upgrade!</h3><p className="mt-2 text-gray-600 dark:text-gray-300">To activate your new plan, we're opening our secure payment page.</p><div className="mt-6 w-12 h-12 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div></div></div>}
         {isDevModeOpen && session && <DevModeModal session={session} profile={profile} onClose={() => setIsDevModeOpen(false)} onSetPlan={handleSetPlanForDev} />}
         <CreditModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} onConfirm={() => { setIsCreditModalOpen(false); performAnalysis(); }} onNavigateToPricing={navigateToPricing} cost={analysisCost} currentCredits={credits} />
@@ -642,13 +881,25 @@ const AppContent: React.FC = () => {
                     onLanguageChange={changeLanguage}
                 />
                 <div className="flex-1 flex flex-col h-screen overflow-hidden">
-                    <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 shrink-0">
+                    <header
+                      className={
+                        siteShell
+                          ? 'h-16 bg-[var(--site-surface)] border-b border-[var(--site-border)] flex items-center justify-between px-8 shrink-0'
+                          : 'h-16 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 shrink-0'
+                      }
+                    >
                         <ApiStatusBanner />
                         <div className="flex items-center gap-4 ml-auto text-gray-400">
                              <div className="text-xs font-bold uppercase tracking-widest">{dashboardView}</div>
                         </div>
                     </header>
-                    <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-6 md:p-10">
+                    <main
+                      className={
+                        siteShell
+                          ? 'flex-1 overflow-y-auto bg-[var(--site-surface-muted)] p-6 md:p-10'
+                          : 'flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-6 md:p-10'
+                      }
+                    >
                         <div className="max-w-6xl mx-auto">
                             {/* Employers get their dashboard / account settings in this same shell.
                                 Candidates: the résumé upload lab is the home for the dashboard/resume
@@ -656,7 +907,9 @@ const AppContent: React.FC = () => {
                             {profile?.role === 'employer' ? (
                                 // Employer portal is full-screen; this shell branch is unreachable for employers
                                 // because isEmployerShell is false after we redirect. Left as fallback.
-                                <EmployerDashboard session={session!} profile={profile} refreshProfile={getProfile} navigateToBusinessPricing={navigateToBusinessPricing} t={t} />
+                                <React.Suspense fallback={<LoadingSpinner market={market} />}>
+                                    <EmployerDashboard session={session!} profile={profile} refreshProfile={getProfile} navigateToBusinessPricing={navigateToBusinessPricing} t={t} />
+                                </React.Suspense>
                             ) : (isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                                 <div className="mt-4 animate-slide-in-up">
                                     <div className="text-center mb-10">
@@ -664,7 +917,7 @@ const AppContent: React.FC = () => {
                                         <p className="text-gray-600 dark:text-gray-400">{resumeText ? t('dashboard_update_prompt') : t('dashboard_new_user_prompt')}</p>
                                     </div>
                                     <div id="upload-section" ref={uploadSectionRef} className="scroll-mt-20">
-                                        <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} />
+                                        <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} variant={uploadVariant} />
                                     </div>
                                     {resumeText && (<div className="text-center mt-6"><button onClick={() => setIsUpdatingResume(false)} className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-semibold bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 px-6 py-2 rounded-lg transition-colors">{t('dashboard_cancel_update')}</button></div>)}
                                 </div>
@@ -673,18 +926,18 @@ const AppContent: React.FC = () => {
                     </main>
                 </div>
             </>
+        ) : siteShell ? (
+            <SiteLayout showBanner={false} pageId="workspace" marketingShell={false}>
+              {renderWorkspaceBody()}
+            </SiteLayout>
         ) : (
             <div className="flex flex-col min-h-screen">
                 <ApiStatusBanner />
                 <Header session={session} profile={profile} onSetView={handleSetView} navigateToPricing={navigateToPricing} t={t} changeLanguage={changeLanguage} currentLang={currentLang} theme={theme} toggleTheme={toggleTheme} view={view} credits={credits} />
                 <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{renderContent()}</main>
-                {BETA_REDESIGN_ENABLED ? (
-                  <div className="border-t border-gray-200 dark:border-slate-700 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                    <a href="/" className="hover:text-gray-800 dark:hover:text-gray-200">{t('beta_app_entry_back')}</a>
-                  </div>
-                ) : (
-                  <Footer onOpenDevMode={handleOpenDevMode} t={t} changeLanguage={changeLanguage} currentLang={currentLang} />
-                )}
+                <div className="border-t border-gray-200 dark:border-slate-700 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <a href="/" className="hover:text-gray-800 dark:hover:text-gray-200">{t('site_app_entry_back')}</a>
+                </div>
             </div>
         )}
 
@@ -697,11 +950,15 @@ const AppContent: React.FC = () => {
   );
 };
 
-const AppWrapper: React.FC = () => (
+interface AppWrapperProps {
+  siteShell?: boolean;
+}
+
+const AppWrapper: React.FC<AppWrapperProps> = ({ siteShell }) => (
     <ApiStatusProvider>
         <CreditsProvider>
             <SettingsProvider>
-                <AppContent />
+                <AppContent siteShell={siteShell} />
             </SettingsProvider>
         </CreditsProvider>
     </ApiStatusProvider>

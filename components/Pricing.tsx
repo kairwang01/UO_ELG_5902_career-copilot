@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import type { Plan, UserProfile } from '../types';
 import { ALL_PLANS, PLAN_HIERARCHY, STRIPE_CUSTOMER_PORTAL_LINK } from '../config';
 import { CREDIT_PACKS } from '../config/credits';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 
 // --- PROPS ---
 

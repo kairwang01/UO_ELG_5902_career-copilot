@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../../../lib/data';
 import Account from '../../Account';
 import { PortalTopBar } from '../PortalTopBar';
 

@@ -7,6 +7,7 @@ import {
   Globe,
   Settings,
   CreditCard,
+  CalendarCheck,
   ChevronRight,
   LogOut,
   Moon,
@@ -23,9 +24,11 @@ import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import { useToast } from './Toast';
 import LanguageSwitcher from './LanguageSwitcher';
 
+type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials' | 'business';
+
 interface SidebarProps {
-  activeView: 'dashboard' | 'toolkit' | 'resume' | 'portfolio' | 'account' | 'credentials' | 'business';
-  onViewChange: (view: 'dashboard' | 'toolkit' | 'resume' | 'portfolio' | 'account' | 'credentials' | 'business') => void;
+  activeView: SidebarView;
+  onViewChange: (view: SidebarView) => void;
   profile: UserProfile | null;
   credits: number;
   theme: 'light' | 'dark';
@@ -61,7 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const isEmployer = profile?.role === 'employer';
 
-  const workspaceItems = isEmployer
+  const workspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = isEmployer
     ? [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'business', label: 'Plans & Pricing', icon: CreditCard },
@@ -69,6 +72,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     : [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'resume', label: 'Resume', icon: FileText },
+        { id: 'jobs', label: 'Jobs', icon: Briefcase },
+        { id: 'interview', label: 'Interview', icon: MessageSquare },
+        { id: 'plan', label: 'Plan', icon: CalendarCheck },
         { id: 'portfolio', label: 'Showcase', icon: Globe },
         { id: 'credentials', label: 'Identity & Wallet', icon: ShieldCheck },
       ];
@@ -93,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <h1 className="text-xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
                 Career Studio
             </h1>
-            <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 font-bold">Professional AI</p>
+            <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 font-bold">Career Workbench</p>
         </div>
       </div>
 
@@ -130,7 +136,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {!isEmployer && (
         <div className="space-y-1">
             <div className="flex items-center justify-between px-4 mb-2">
-                <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">AI Toolkit</h3>
+                <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Assisted Tools</h3>
                 <button 
                     onClick={() => setIsToolkitExpanded(!isToolkitExpanded)}
                     className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
@@ -152,7 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 key={tool.key}
                                 onClick={() => {
                                     if (toolRequiresAI) {
-                                        addToast('Enable AI Mode to use this tool.', 'info');
+                                        addToast('Enable assisted tools to use this feature.', 'info');
                                         return;
                                     }
                                     onViewChange('toolkit');
@@ -202,7 +208,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                         <MessageSquare className="h-3 w-3" />
-                        AI Mode
+                        Assistance
                     </span>
                     <button
                         onClick={onToggleAIMode}
@@ -212,7 +218,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                 </div>
                 <p className="text-[9px] text-gray-500 dark:text-slate-500">
-                    {isAIMode ? "AI features are enabled" : "AI features are restricted"}
+                    {isAIMode ? "Assisted tools are enabled" : "Assisted tools are restricted"}
                 </p>
              </div>
         </div>

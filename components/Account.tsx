@@ -1,8 +1,10 @@
 
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { data } from '@/lib/data';
-import type { Session } from '@supabase/supabase-js';
+import { firestoreDb } from '@/lib/firebaseClient';
+import type { AppSession as Session } from '../lib/data';
 import Avatar from './Avatar';
 import { STRIPE_CUSTOMER_PORTAL_LINK, ALL_PLANS, PLAN_HIERARCHY } from '../config';
 import { ethers } from 'ethers';
@@ -112,7 +114,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
             setNftStaked(newValues.nft_staked);
             setNftEarnings(newValues.nft_earnings);
             
-            await supabase.from('profiles').update(newValues).eq('id', session.user.id);
+            await data.profiles.update(session.user.id, newValues);
 
         } else {
             const newValues = {
@@ -127,7 +129,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
             setNftStaked(newValues.nft_staked);
             setNftEarnings(newValues.nft_earnings);
 
-            await supabase.from('profiles').update(newValues).eq('id', session.user.id);
+            await data.profiles.update(session.user.id, newValues);
         }
         setMessage(null); // Clear info message on successful sync
     } catch (err) {
@@ -147,8 +149,16 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
   useEffect(() => {
     const checkEligibility = async () => {
         if (walletAddress && resumeText) {
-            const { data } = await supabase.from('resume_analyses').select('score').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(1);
-            setIsEligibleForNFT(data?.[0]?.score >= 85);
+            const analysesQuery = query(
+                collection(firestoreDb, 'users', session.user.id, 'resume_analyses'),
+                orderBy('created_at', 'desc'),
+                limit(1),
+            );
+            const analysesSnapshot = await getDocs(analysesQuery);
+            const latestScore = analysesSnapshot.empty
+                ? 0
+                : Number(analysesSnapshot.docs[0].data().score ?? 0);
+            setIsEligibleForNFT(latestScore >= 85);
         } else {
             setIsEligibleForNFT(false);
         }
@@ -368,7 +378,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
             const newTokenId = Number(parsedLog.args.tokenId);
             setTokenId(newTokenId);
             setNftMinted(true);
-            await supabase.from('profiles').update({ nft_minted: true, nft_token_id: newTokenId }).eq('id', session.user.id);
+            await data.profiles.update(session.user.id, { nft_minted: true, nft_token_id: newTokenId });
             setMessage({ type: 'success', text: `Proof-of-Talent NFT #${newTokenId} successfully minted!` });
         } else { throw new Error("Could not find Minted event in transaction receipt."); }
     } catch (error: any) {
@@ -391,7 +401,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
 
         const newStakedStatus = !nftStaked;
         setNftStaked(newStakedStatus);
-        await supabase.from('profiles').update({ nft_staked: newStakedStatus }).eq('id', session.user.id);
+        await data.profiles.update(session.user.id, { nft_staked: newStakedStatus });
         setMessage({ type: 'success', text: `NFT #${tokenId} successfully ${action}d!` });
     } catch (error: any) {
         setMessage({ type: 'error', text: error.message || `Failed to ${action} NFT.` });
@@ -417,7 +427,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
         const newEarnings = parseFloat(ethers.formatEther(rewards));
         setNftEarnings(newEarnings);
 
-        await supabase.from('profiles').update({ nft_earnings: newEarnings }).eq('id', session.user.id);
+        await data.profiles.update(session.user.id, { nft_earnings: newEarnings });
         setMessage({ type: 'success', text: 'Rewards claimed successfully!' });
     } catch (error: any) {
         setMessage({ type: 'error', text: error.message || 'Failed to claim rewards.' });

@@ -5,7 +5,7 @@ import type { AnalysisResult, UserProfile } from '../types';
 import ToolRunner from './ToolRunner';
 import InterviewSimulator from './InterviewSimulator';
 import { TOOL_ACCESS, hasAccess, ALL_PLANS, PLAN_HIERARCHY } from '../config';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 import { applyResumeImprovements } from '../services/geminiService';
 import { renderFormattedText } from './tools/ToolUtils';
 import ResumePreview from './ResumePreview';
@@ -265,7 +265,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
               disabled={isOptimizing}
               className="mt-4 px-6 py-2.5 bg-white text-blue-700 font-bold rounded-full shadow-md hover:bg-gray-100 transition-all duration-300 transform hover:scale-105 disabled:opacity-70 disabled:cursor-wait"
             >
-              {isOptimizing ? 'Optimizing...' : '✨ Apply All Suggestions with AI'}
+              {isOptimizing ? 'Optimizing...' : 'Apply All Suggestions'}
             </button>
             {optimizationError && <p className="text-xs text-red-300 mt-2">{optimizationError}</p>}
         </div>

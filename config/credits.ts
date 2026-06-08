@@ -31,6 +31,20 @@ export const PLAN_CREDITS = {
     executive: 2000,
 };
 
+export const PLAN_MONTHLY_CREDITS = {
+    free: 50,
+    essentials: 200,
+    accelerator: 750,
+    executive: 2000,
+};
+
+export const BUSINESS_PLAN_CREDITS = {
+    single_post: 0,
+    job_pack: 0,
+};
+
+export const INITIAL_USER_CREDITS = 100;
+
 export const CREDIT_PACKS = [
     {
         key: 'pack_100',

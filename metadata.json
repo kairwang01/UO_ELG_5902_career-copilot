@@ -1,6 +1,6 @@
 {
   "name": "Career CoPilot",
-  "description": "Your AI partner for every step of your career. Get help with resumes, interviews, career pathing, salary negotiation, and more.",
+  "description": "Upload your resume, get an instant score, practice interviews, map your career path, and negotiate offers — all backed by AI that actually helps.",
   "requestFramePermissions": [
     "camera",
     "microphone"

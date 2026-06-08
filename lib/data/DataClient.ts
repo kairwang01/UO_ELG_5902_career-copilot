@@ -1,22 +1,24 @@
-// Backend-agnostic data-access contract for the front end.
-// Components talk to this interface, never to a concrete backend (Supabase today,
-// Firebase later). Swapping backends means writing a new adapter, not editing UI.
-
-import type { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
+import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfile } from '../../types';
 
-// One acknowledged seam: session/user/event are still the Supabase shapes so we don't
-// have to retype every `Session` prop across the app yet. On the Firebase move, redefine
-// these three and adjust the adapter; the components stay untouched.
-export type AppSession = Session;
-export type AppUser = User;
-export type AppAuthEvent = AuthChangeEvent;
+export type AppAuthEvent = 'INITIAL_SESSION' | 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
+
+export type AppUser = FirebaseUser & {
+  id: string;
+  user_metadata: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+};
+
+export interface AppSession {
+  user: AppUser;
+}
 
 export interface DataError {
   message: string;
 }
 
-// Mirrors the { data, error } shape the app already expects, minus the backend specifics.
 export interface DataResult<T> {
   data: T | null;
   error: DataError | null;
@@ -47,7 +49,7 @@ export interface AuthApi {
 
 export interface ProfilesApi {
   get(userId: string): Promise<DataResult<UserProfile>>;
-  upsert(profile: Partial<UserProfile> & { id: string }): Promise<DataResult<void>>;
+  upsert(profile: Partial<UserProfile> & { id: string; created_at?: string }): Promise<DataResult<void>>;
   update(userId: string, patch: Partial<UserProfile>): Promise<DataResult<void>>;
 }
 
@@ -57,8 +59,6 @@ export interface ApiKeysApi {
   remove(keyId: number, userId: string): Promise<DataResult<void>>;
 }
 
-// The full contract. New domains (jobs, applications, analyses, insights, tool events,
-// file storage) follow the same pattern and get added here as each view is migrated.
 export interface DataClient {
   auth: AuthApi;
   profiles: ProfilesApi;

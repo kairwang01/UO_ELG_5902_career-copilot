@@ -1,12 +1,12 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 import type { UserProfile, BulkAnalysisItem, CandidatePrepKit } from '../types';
 import { analyzeResume, anonymizeResume, calculateCompatibility, generateClientPitchEmail, generateCandidatePrepKit, extractTextFromUrl } from '../services/geminiService';
 import { parseFile } from '../services/fileHelpers';
 import { SUPPORTED_MARKETS, DEFAULT_MARKET } from '../config';
 import { DownloadButtons } from './tools/ToolUtils';
-import { supabase } from '../lib/supabaseClient';
+import { listActiveEmployerJobs } from '../lib/recruitingData';
 import { useToast } from './Toast';
 
 interface AgencyHubProps {
@@ -116,7 +116,8 @@ const AnalysisResultModal = ({ file, onClose }: { file: BulkAnalysisItem, onClos
                     {/* Improvements */}
                     <div>
                         <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
-                            <span className="text-yellow-500">⚡</span> Areas for Improvement
+                            <span className="h-2 w-2 rounded-full bg-yellow-500" aria-hidden="true" />
+                            Areas for Improvement
                         </h4>
                         <div className="space-y-3">
                             {improvements.map((imp, i) => (
@@ -318,11 +319,11 @@ const PrepKitModal: React.FC<{
 
     const formatForDownload = () => {
         let content = `# Interview Prep Kit for ${candidateName}\n\n`;
-        content += `## ⚠️ Potential Weak Spots (Be Prepared!)\n`;
+        content += `## Potential Weak Spots (Be Prepared)\n`;
         weakSpots.forEach(item => content += `* ${item}\n`);
-        content += `\n## 🏆 Key Projects to Highlight\n`;
+        content += `\n## Key Projects to Highlight\n`;
         keyProjects.forEach(item => content += `* ${item}\n`);
-        content += `\n## ❓ Predicted Interview Questions\n`;
+        content += `\n## Predicted Interview Questions\n`;
         predictedQuestions.forEach(item => content += `* ${item}\n`);
         return content;
     };
@@ -342,7 +343,8 @@ const PrepKitModal: React.FC<{
                 <div className="flex-grow overflow-y-auto p-6 space-y-6">
                     <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-lg">
                         <h4 className="font-bold text-yellow-800 dark:text-yellow-200 mb-2 flex items-center gap-2">
-                            <span>⚠️</span> Potential Weak Spots
+                            <span className="h-2 w-2 rounded-full bg-yellow-500" aria-hidden="true" />
+                            Potential Weak Spots
                         </h4>
                         <ul className="list-disc list-inside space-y-1 text-sm text-yellow-900 dark:text-yellow-100">
                             {weakSpots.map((item, i) => <li key={i}>{item}</li>)}
@@ -351,7 +353,8 @@ const PrepKitModal: React.FC<{
 
                     <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50 rounded-lg">
                         <h4 className="font-bold text-green-800 dark:text-green-200 mb-2 flex items-center gap-2">
-                            <span>🏆</span> Projects to Highlight
+                            <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
+                            Projects to Highlight
                         </h4>
                         <ul className="list-disc list-inside space-y-1 text-sm text-green-900 dark:text-green-100">
                             {keyProjects.map((item, i) => <li key={i}>{item}</li>)}
@@ -360,7 +363,8 @@ const PrepKitModal: React.FC<{
 
                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg">
                         <h4 className="font-bold text-blue-800 dark:text-blue-200 mb-2 flex items-center gap-2">
-                            <span>❓</span> Predicted Questions
+                            <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true" />
+                            Predicted Questions
                         </h4>
                         <ul className="list-decimal list-inside space-y-1 text-sm text-blue-900 dark:text-blue-100">
                             {predictedQuestions.map((item, i) => <li key={i}>{item}</li>)}
@@ -415,7 +419,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     const [jobDescription, setJobDescription] = useState('');
     const [jdUrl, setJdUrl] = useState('');
     const [isExtractingJd, setIsExtractingJd] = useState(false);
-    const [internalJobs, setInternalJobs] = useState<{id: number, title: string, description: string | null}[]>([]);
+    const [internalJobs, setInternalJobs] = useState<{id: string, title: string, description: string | null}[]>([]);
     const [selectedInternalJobId, setSelectedInternalJobId] = useState<string>('');
 
     const [viewPitchId, setViewPitchId] = useState<string | null>(null);
@@ -427,16 +431,12 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     useEffect(() => {
         if (mode === 'matching' && jdSource === 'select') {
             const fetchInternalJobs = async () => {
-                const { data, error } = await supabase
-                    .from('job_postings')
-                    .select('id, title, description')
-                    .eq('employer_id', session.user.id)
-                    .eq('is_active', true)
-                    .order('created_at', { ascending: false });
-                
-                if (!error && data) {
-                    setInternalJobs(data);
-                }
+                const jobs = await listActiveEmployerJobs(session.user.id);
+                setInternalJobs(jobs.map((job) => ({
+                    id: job.id,
+                    title: job.title,
+                    description: job.description,
+                })));
             };
             fetchInternalJobs();
         }
@@ -463,7 +463,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     const handleInternalJobSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const jobId = e.target.value;
         setSelectedInternalJobId(jobId);
-        const job = internalJobs.find(j => j.id.toString() === jobId);
+        const job = internalJobs.find(j => j.id === jobId);
         if (job && job.description) {
             setJobDescription(job.description);
         }
@@ -870,10 +870,15 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                                                     {displayFiles.filter(f => f.status === 'complete').map((file, index) => {
-                                                        let rankBadge = <span className="text-gray-500 font-mono">#{index + 1}</span>;
-                                                        if (index === 0) rankBadge = <span className="text-2xl">🥇</span>;
-                                                        if (index === 1) rankBadge = <span className="text-2xl">🥈</span>;
-                                                        if (index === 2) rankBadge = <span className="text-2xl">🥉</span>;
+                                                        const rankBadge = (
+                                                            <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
+                                                                index < 3
+                                                                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                                                                    : 'bg-gray-50 text-gray-500 border border-gray-100'
+                                                            }`}>
+                                                                {index + 1}
+                                                            </span>
+                                                        );
 
                                                         const score = getScore(file);
                                                         const summary = mode === 'matching' ? file.matchSummary : file.result?.summary;

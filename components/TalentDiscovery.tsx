@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
 import { calculateCompatibility } from '../services/geminiService';
 import type { UserProfile } from '../types';
 import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';
+import { listCandidateProfilesWithResume } from '../lib/recruitingData';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -32,14 +32,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
         const fetchVerifiedTalent = async () => {
             setLoading(true);
             try {
-                const { data: candidates, error } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('role', 'candidate')
-                    .eq('nft_staked', true)
-                    .not('resume_text', 'is', null)
-                    .limit(10);
-                if (error) throw error;
+                const candidates = (await listCandidateProfilesWithResume(50))
+                    .filter((candidate) => candidate.nft_staked)
+                    .slice(0, 10);
 
                 // Simulate a generic match score for display before a specific search
                 const pseudoMatched = candidates.map(c => ({
@@ -68,14 +63,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
         setError(null);
         setRegularResults(null);
         try {
-             const { data: candidates, error: candidateError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('role', 'candidate')
-                .not('resume_text', 'is', null)
-                .limit(50); 
-            if (candidateError) throw candidateError;
-            if (!candidates || candidates.length === 0) {
+            const candidates = await listCandidateProfilesWithResume(50);
+            if (candidates.length === 0) {
                 setRegularResults([]);
                 setVerifiedResults([]);
                 return;

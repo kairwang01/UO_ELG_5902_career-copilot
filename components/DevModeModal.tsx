@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 import { ALL_PLANS, BUSINESS_PLANS } from '../config';
 import type { UserProfile } from '../types';
 

@@ -3,8 +3,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { findOpportunities } from '../../services/geminiService';
 import type { OpportunityResult, Opportunity } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
-import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../../lib/supabaseClient';
+import type { AppSession as Session } from '../../lib/data';
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  getFirestore,
+  query,
+  serverTimestamp,
+  where,
+} from 'firebase/firestore';
+import { app as firebaseApp } from '../../lib/firebaseClient';
 import { renderFormattedText } from './ToolUtils';
 
 interface OpportunityFinderProps {
@@ -21,24 +32,33 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const [result, setResult] = useState<OpportunityResult | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [opportunityFilters, setOpportunityFilters] = useState<{ company: string, location: string }>({ company: 'all', location: 'all' });
-  const [appliedJobs, setAppliedJobs] = useState<Set<number>>(new Set());
+  const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
 
-  const applyToInternalJob = async (jobId: number, compatibilityScore: number | undefined) => {
+  const applyToInternalJob = async (jobId: string, compatibilityScore: number | undefined) => {
     if (!session?.user) {
         alert('You must be signed in to apply.');
         return;
     }
     
     try {
-        const { error } = await supabase
-            .from('job_applications')
-            .insert({
-                job_id: jobId,
-                candidate_id: session.user.id,
-                status: 'Applied',
-                compatibility_score: compatibilityScore ?? null,
-            });
-        if (error) throw error;
+        const db = getFirestore(firebaseApp);
+        const jobSnap = await getDoc(doc(db, 'job_postings', jobId));
+        if (!jobSnap.exists()) {
+          throw new Error('Job posting not found.');
+        }
+        const jobData = jobSnap.data();
+        const candidateName = session.user.user_metadata?.full_name || session.user.email || 'Candidate';
+        await addDoc(collection(db, 'job_applications'), {
+          job_id: jobId,
+          candidate_id: session.user.id,
+          employer_id: jobData.employer_id,
+          job_title: jobData.title,
+          candidate_name: candidateName,
+          status: 'Applied',
+          compatibility_score: compatibilityScore ?? null,
+          notes: null,
+          application_date: serverTimestamp(),
+        });
 
         setAppliedJobs(prev => new Set(prev).add(jobId));
     } catch (err) {
@@ -50,15 +70,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const fetchAppliedJobs = useCallback(async () => {
     if (!session?.user) return;
     try {
-        const { data, error } = await supabase
-            .from('job_applications')
-            .select('job_id')
-            .eq('candidate_id', session.user.id);
-        
-        if (error) throw error;
-        if (data) {
-            setAppliedJobs(new Set(data.map(app => app.job_id)));
-        }
+        const db = getFirestore(firebaseApp);
+        const snap = await getDocs(
+          query(
+            collection(db, 'job_applications'),
+            where('candidate_id', '==', session.user.id),
+          ),
+        );
+        setAppliedJobs(new Set(snap.docs.map((app) => app.data().job_id as string)));
     } catch (err) {
         console.error("Could not fetch applied jobs:", err);
         setError(t('tool_opportunity_finder_error_fetch_applied'));
@@ -140,7 +159,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
       <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
         {filteredOpportunities.map((job, i) => {
             const isExpanded = expandedUrl === job.url;
-            const jobId = job.isInternal ? parseInt(job.url.replace('#internal-job-', ''), 10) : -1;
+            const jobId = job.isInternal ? job.url.replace('#internal-job-', '') : '';
             const hasApplied = job.isInternal && appliedJobs.has(jobId);
 
             return (

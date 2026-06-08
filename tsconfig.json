@@ -27,8 +27,6 @@
     "noEmit": true
   },
   "exclude": [
-    "node_modules",
-    "lib/supabaseClient.ts",
-    "lib/data/supabaseDataClient.ts"
+    "node_modules"
   ]
 }

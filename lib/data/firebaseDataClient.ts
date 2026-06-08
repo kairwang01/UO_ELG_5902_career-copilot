@@ -1,160 +1,210 @@
-// Firebase implementation of the DataClient contract.
-// Replaces supabaseDataClient — the rest of the app is untouched.
-//
-// AppSession / AppUser are still typed as Supabase shapes in DataClient.ts
-// (the one acknowledged seam). Here we return Firebase-backed objects cast
-// to those shapes. The only fields the app actually reads are:
-//   session.user.id, session.user.email,
-//   user.user_metadata.full_name, user.user_metadata.avatar_url
-// — all of which Firebase provides via uid / email / displayName / photoURL.
-
 import {
-  getAuth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as fbSignOut,
-  sendPasswordResetEmail,
-  updatePassword as fbUpdatePassword,
   GoogleAuthProvider,
-  signInWithPopup,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
-  type User as FirebaseUser,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updatePassword,
+  type User,
 } from 'firebase/auth';
 import {
-  getFirestore,
+  Timestamp,
   doc,
   getDoc,
   setDoc,
   updateDoc,
-  serverTimestamp,
+  type DocumentData,
 } from 'firebase/firestore';
-import { app } from '../firebaseClient';
+import { firebaseAuth, firestoreDb } from '../firebaseClient';
 import type { UserProfile } from '../../types';
 import type {
-  DataClient,
-  DataResult,
+  AppAuthEvent,
   AppSession,
   AppUser,
-  Subscription,
   ApiKey,
+  DataClient,
+  DataError,
+  DataResult,
+  Subscription,
 } from './DataClient';
 
-const auth = getAuth(app);
-const db = getFirestore(app);
+const toError = (error: unknown): DataError => ({
+  message: error instanceof Error ? error.message : 'Unexpected Firebase error.',
+});
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const toTimestamp = (value: unknown): Timestamp | null => {
+  if (!value) return null;
+  if (value instanceof Timestamp) return value;
+  if (value instanceof Date) return Timestamp.fromDate(value);
+  if (typeof value === 'string') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : Timestamp.fromDate(date);
+  }
+  return null;
+};
 
-/** Map a Firebase User to the AppUser shape the app expects. */
-function toAppUser(fbUser: FirebaseUser): AppUser {
-  return {
-    id: fbUser.uid,
-    email: fbUser.email ?? '',
-    user_metadata: {
-      full_name: fbUser.displayName ?? '',
-      avatar_url: fbUser.photoURL ?? '',
-    },
-    // Supabase-compat stubs (app never reads these for Firebase users)
-    app_metadata: {},
-    aud: 'authenticated',
-    created_at: '',
-  } as unknown as AppUser;
-}
+const toIsoString = (value: unknown): string | null => {
+  if (!value) return null;
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string') return value;
+  return null;
+};
 
-/** Wrap a Firebase User in an AppSession-compatible object. */
-function toAppSession(fbUser: FirebaseUser): AppSession {
-  return {
-    user: toAppUser(fbUser),
-    access_token: '',   // not used; Firebase callable functions use ID tokens internally
-    token_type: 'bearer',
-    expires_in: 3600,
-    expires_at: 0,
-  } as unknown as AppSession;
-}
+const toAppUser = (user: User): AppUser => {
+  const appUser = user as AppUser;
+  appUser.id = user.uid;
+  appUser.user_metadata = {
+    full_name: user.displayName ?? undefined,
+    avatar_url: user.photoURL ?? undefined,
+  };
+  return appUser;
+};
 
-/** Convert any error to a DataResult error. */
-function toError(err: unknown): DataResult<unknown>['error'] {
-  if (err instanceof Error) return { message: err.message };
-  return { message: String(err) };
-}
+const toSession = (user: User | null): AppSession | null => (
+  user ? { user: toAppUser(user) } : null
+);
 
-// ---------------------------------------------------------------------------
-// Client
-// ---------------------------------------------------------------------------
+const USER_DOCUMENT_FIELDS = new Set([
+  'role',
+  'full_name',
+  'avatar_url',
+  'subscription_status',
+  'resume_text',
+  'company_name',
+  'company_description',
+  'company_logo_url',
+  'company_website',
+  'english_pro_streak',
+  'english_pro_last_practice',
+  'wallet_address',
+  'credits',
+  'created_at',
+  'updated_at',
+  'preferred_language',
+  'nft_minted',
+  'nft_staked',
+  'nft_earnings',
+  'nft_token_id',
+]);
+
+const sanitizeProfileForFirestore = (
+  profile: Partial<UserProfile> & { id?: string; created_at?: string },
+): DocumentData => {
+  const { id: _id, ...rest } = profile;
+  const data: DocumentData = {};
+
+  Object.entries(rest).forEach(([key, value]) => {
+    if (!USER_DOCUMENT_FIELDS.has(key)) return;
+    if (value === undefined) return;
+    if (
+      value === '' &&
+      ['avatar_url', 'company_logo_url', 'company_website'].includes(key)
+    ) {
+      data[key] = null;
+      return;
+    }
+    if (key === 'created_at' || key === 'updated_at' || key === 'english_pro_last_practice') {
+      const timestamp = toTimestamp(value);
+      if (timestamp) data[key] = timestamp;
+      return;
+    }
+    data[key] = value;
+  });
+
+  return data;
+};
+
+const mapProfile = (id: string, data: DocumentData): UserProfile => ({
+  id,
+  updated_at: toIsoString(data.updated_at) ?? '',
+  full_name: data.full_name ?? null,
+  avatar_url: data.avatar_url ?? null,
+  subscription_status: data.subscription_status ?? 'free',
+  role: data.role ?? 'candidate',
+  company_name: data.company_name ?? null,
+  company_website: data.company_website ?? null,
+  company_description: data.company_description ?? null,
+  company_logo_url: data.company_logo_url ?? null,
+  resume_text: data.resume_text ?? null,
+  preferred_language: data.preferred_language ?? null,
+  wallet_address: data.wallet_address ?? null,
+  nft_minted: data.nft_minted ?? null,
+  nft_staked: data.nft_staked ?? null,
+  nft_earnings: data.nft_earnings ?? null,
+  nft_token_id: data.nft_token_id ?? null,
+  english_pro_streak: data.english_pro_streak ?? null,
+  english_pro_last_practice: toIsoString(data.english_pro_last_practice),
+  credits: data.credits ?? null,
+});
 
 export const firebaseDataClient: DataClient = {
   auth: {
     async getSession(): Promise<AppSession | null> {
-      const user = auth.currentUser;
-      return user ? toAppSession(user) : null;
+      return toSession(firebaseAuth.currentUser);
     },
-
     onAuthStateChange(handler): Subscription {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (user) {
-          handler('SIGNED_IN' as any, toAppSession(user));
-        } else {
-          handler('SIGNED_OUT' as any, null);
-        }
+      let isInitial = true;
+      const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+        const event: AppAuthEvent = isInitial
+          ? 'INITIAL_SESSION'
+          : user ? 'SIGNED_IN' : 'SIGNED_OUT';
+        isInitial = false;
+        handler(event, toSession(user));
       });
       return { unsubscribe };
     },
-
     async signInWithPassword(email, password): Promise<DataResult<AppSession>> {
       try {
-        const { user } = await signInWithEmailAndPassword(auth, email, password);
-        return { data: toAppSession(user), error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+        const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+        return { data: toSession(credential.user), error: null };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
-
     async signUp(email, password): Promise<DataResult<AppUser>> {
       try {
-        const { user } = await createUserWithEmailAndPassword(auth, email, password);
-        return { data: toAppUser(user), error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+        const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+        return { data: toAppUser(credential.user), error: null };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
-
     async signInWithGoogle(): Promise<DataResult<void>> {
       try {
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
+        await signInWithPopup(firebaseAuth, provider);
         return { data: null, error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
-
     async signOut(): Promise<DataResult<void>> {
       try {
-        await fbSignOut(auth);
+        await signOut(firebaseAuth);
         return { data: null, error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
-
     async resetPassword(email): Promise<DataResult<void>> {
       try {
-        await sendPasswordResetEmail(auth, email);
+        await sendPasswordResetEmail(firebaseAuth, email);
         return { data: null, error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
-
     async updatePassword(password): Promise<DataResult<AppUser>> {
       try {
-        const user = auth.currentUser;
-        if (!user) throw new Error('Not signed in.');
-        await fbUpdatePassword(user, password);
+        const user = firebaseAuth.currentUser;
+        if (!user) throw new Error('You must be signed in to update your password.');
+        await updatePassword(user, password);
         return { data: toAppUser(user), error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
   },
@@ -162,37 +212,45 @@ export const firebaseDataClient: DataClient = {
   profiles: {
     async get(userId): Promise<DataResult<UserProfile>> {
       try {
-        const snap = await getDoc(doc(db, 'users', userId));
-        if (!snap.exists()) return { data: null, error: { message: 'Profile not found.' } };
-        return { data: { id: userId, ...snap.data() } as UserProfile, error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+        const snap = await getDoc(doc(firestoreDb, 'users', userId));
+        if (!snap.exists()) return { data: null, error: null };
+        return { data: mapProfile(snap.id, snap.data()), error: null };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
-
     async upsert(profile): Promise<DataResult<void>> {
       try {
-        const { id, ...rest } = profile;
-        await setDoc(doc(db, 'users', id), { ...rest, updated_at: new Date().toISOString() }, { merge: true });
+        const profileWithTimestamp = {
+          ...profile,
+          updated_at: profile.updated_at ?? new Date().toISOString(),
+        };
+        await setDoc(
+          doc(firestoreDb, 'users', profile.id),
+          sanitizeProfileForFirestore(profileWithTimestamp),
+          { merge: true },
+        );
         return { data: null, error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
-
     async update(userId, patch): Promise<DataResult<void>> {
       try {
-        await updateDoc(doc(db, 'users', userId), { ...patch, updated_at: new Date().toISOString() });
+        await updateDoc(
+          doc(firestoreDb, 'users', userId),
+          sanitizeProfileForFirestore({
+            ...patch,
+            updated_at: patch.updated_at ?? new Date().toISOString(),
+          }),
+        );
         return { data: null, error: null };
-      } catch (err) {
-        return { data: null, error: toError(err) };
+      } catch (error) {
+        return { data: null, error: toError(error) };
       }
     },
   },
 
-  // API keys are a Phase C feature (public developer API).
-  // Stubbed for MVP — the UI sections that use these are gated behind conditions
-  // that will not trigger in the demo flow.
   apiKeys: {
     async list(): Promise<DataResult<ApiKey[]>> {
       return { data: [], error: null };

@@ -1,11 +1,9 @@
 import React from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../../../lib/data';
 import type { UserProfile } from '../../../types';
 import JobPostForm from '../../JobPostForm';
-import type { Database } from '../../../lib/supabaseClient';
+import type { JobPosting } from '../../../lib/recruitingData';
 import { PortalTopBar } from '../PortalTopBar';
-
-type JobPosting = Database['public']['Tables']['job_postings']['Row'];
 
 interface PortalPostJobProps {
   session: Session;

@@ -13,12 +13,8 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { PortalTopBar } from '../PortalTopBar';
-import type { Database } from '../../../lib/supabaseClient';
+import type { JobPostingWithCount } from '../../../lib/recruitingData';
 import type { PortalPage } from '../PortalSidebar';
-
-type JobPostingWithCount = Database['public']['Tables']['job_postings']['Row'] & {
-  applicant_count: number;
-};
 
 interface PortalJobListingsProps {
   jobPostings: JobPostingWithCount[];

@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../../lib/supabaseClient';
+import { data, type AppSession as Session } from '../../lib/data';
 import { analyzeEnglishProficiency, analyzeSpokenEnglish, analyzeEnglishReading, evaluateReadingComprehension, analyzeEnglishListening, generateReadingPracticePassage, generateSpeakingTopics, generateVocabularyFlashcards } from '../../services/geminiService';
 import type { EnglishProResult, SpokenEnglishAnalysisResult, EnglishReadingAnalysisResult, ReadingEvaluation, EnglishListeningAnalysisResult, ReadingPracticePassage, VocabularyFlashcard, UserProfile, VocabularyItem, ComprehensionQuestion } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
@@ -145,13 +144,10 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
         }
 
         try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    english_pro_streak: newStreak,
-                    english_pro_last_practice: todayStr,
-                })
-                .eq('id', session.user.id);
+            const { error } = await data.profiles.update(session.user.id, {
+                english_pro_streak: newStreak,
+                english_pro_last_practice: todayStr,
+            });
 
             if (error) throw error;
 
@@ -363,7 +359,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         <p className="text-gray-600">Keep practicing daily to build your streak!</p>
                     </div>
                 </div>
-                {dailyGoalComplete && <p className="text-green-600 font-semibold mt-3">✅ Your daily practice goal is complete!</p>}
+                {dailyGoalComplete && <p className="text-green-600 font-semibold mt-3">Daily practice goal complete.</p>}
             </div>
 
             <div className="space-y-3">
@@ -376,19 +372,19 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button onClick={() => setPracticeMode('written')} className="p-6 bg-white border rounded-lg text-left hover:shadow-lg hover:border-blue-300">
-                    <h4 className="font-bold text-lg">✍️ Written Practice</h4>
+                    <h4 className="font-bold text-lg">Written Practice</h4>
                     <p className="text-sm text-gray-600">Write professional emails and get instant feedback on grammar, tone, and vocabulary.</p>
                 </button>
                  <button onClick={() => setPracticeMode('spoken')} className="p-6 bg-white border rounded-lg text-left hover:shadow-lg hover:border-blue-300">
-                    <h4 className="font-bold text-lg">🗣️ Spoken Practice</h4>
+                    <h4 className="font-bold text-lg">Spoken Practice</h4>
                     <p className="text-sm text-gray-600">Practice speaking on professional topics and get analyzed for clarity, pacing, and filler words.</p>
                 </button>
                  <button onClick={() => setPracticeMode('reading')} className="p-6 bg-white border rounded-lg text-left hover:shadow-lg hover:border-blue-300">
-                    <h4 className="font-bold text-lg">📚 Reading Practice</h4>
+                    <h4 className="font-bold text-lg">Reading Practice</h4>
                     <p className="text-sm text-gray-600">Test your comprehension with AI-generated passages and questions or practice vocabulary with flashcards.</p>
                 </button>
                  <button onClick={() => setPracticeMode('listening')} className="p-6 bg-white border rounded-lg text-left hover:shadow-lg hover:border-blue-300">
-                    <h4 className="font-bold text-lg">🎧 Listening Practice</h4>
+                    <h4 className="font-bold text-lg">Listening Practice</h4>
                     <p className="text-sm text-gray-600">Listen to short audio clips and transcribe them to test your listening accuracy.</p>
                 </button>
             </div>

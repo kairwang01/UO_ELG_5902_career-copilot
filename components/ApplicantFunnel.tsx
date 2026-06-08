@@ -1,13 +1,14 @@
 
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Database } from '../lib/supabaseClient';
-import { supabase } from '../lib/supabaseClient';
 import { analyzeCandidateMatch } from '../services/geminiService';
 import type { UserProfile, CandidateMatchAnalysis } from '../types';
 import FunnelChart from './FunnelChart';
-
-type JobPosting = Database['public']['Tables']['job_postings']['Row'];
+import {
+    getCandidateProfilesByIds,
+    listJobApplications,
+    type JobPosting,
+} from '../lib/recruitingData';
 
 interface ApplicantFunnelProps {
   job: JobPosting;
@@ -33,13 +34,9 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
             setLoading(true);
             setError(null);
 
-            const { data: applications, error: appError } = await supabase
-                .from('job_applications')
-                .select('candidate_id, application_date')
-                .eq('job_id', job.id);
+            const applications = await listJobApplications(job.id);
 
-            if (appError) throw appError;
-            if (!applications || applications.length === 0) {
+            if (applications.length === 0) {
                 setApplicants([]);
                 return;
             }
@@ -47,12 +44,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
             setLoadingMessage(`Analyzing ${applications.length} applicant(s)...`);
 
             const candidateIds = applications.map(a => a.candidate_id);
-            const { data: profiles, error: profileError } = await supabase
-                .from('profiles')
-                .select('*')
-                .in('id', candidateIds);
-
-            if (profileError) throw profileError;
+            const profiles = await getCandidateProfilesByIds(candidateIds);
             
             const analyzedApplicants: Applicant[] = [];
             let count = 1;
@@ -165,15 +157,15 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                             </div>
                             
                             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                <h4 className="font-semibold text-green-800">✅ Strengths</h4>
+                                <h4 className="font-semibold text-green-800">Strengths</h4>
                                 <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-green-900">{selectedApplicant.match_analysis.strengths.map((s,i) => <li key={i}>{s}</li>)}</ul>
                             </div>
                             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                <h4 className="font-semibold text-yellow-800">🔍 Potential Gaps</h4>
+                                <h4 className="font-semibold text-yellow-800">Potential Gaps</h4>
                                 <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-yellow-900">{selectedApplicant.match_analysis.potentialGaps.map((g,i) => <li key={i}>{g}</li>)}</ul>
                             </div>
                              <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                                <h4 className="font-semibold text-indigo-800">🎙️ Suggested Interview Questions</h4>
+                                <h4 className="font-semibold text-indigo-800">Suggested Interview Questions</h4>
                                 <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-indigo-900">{selectedApplicant.match_analysis.suggestedQuestions.map((q,i) => <li key={i}>{q}</li>)}</ul>
                             </div>
                         </div>

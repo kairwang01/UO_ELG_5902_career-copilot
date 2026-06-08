@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import JobPostForm from './JobPostForm';
 import CompanyProfileForm from './CompanyProfileForm';
-import { supabase } from '../lib/supabaseClient';
-import { Database } from '../lib/supabaseClient';
 import CompanyLogo from './CompanyLogo';
 import ApplicantFunnel from './ApplicantFunnel';
 import TalentDiscovery from './TalentDiscovery';
 import EmployerKPIs from './EmployerKPIs';
 import TopPerformingJobsWidget from './TopPerformingJobsWidget';
-
-type JobPosting = Database['public']['Tables']['job_postings']['Row'];
-type JobPostingWithCount = JobPosting & { applicant_count: number };
+import {
+    listApplicationsForJobs,
+    listEmployerJobsWithCounts,
+    type JobPosting,
+    type JobPostingWithCount,
+} from '../lib/recruitingData';
 
 interface EmployerDashboardProps {
     session: Session;
@@ -39,48 +40,30 @@ const EmployerDashboard: React.FC<EmployerDashboardProps> = ({ session, profile,
         setLoading(true);
         setError(null);
         try {
-            // 1. Fetch job postings with applicant counts directly. This is more efficient and RLS-friendly.
-            const { data: jobsWithCounts, error: jobsError } = await supabase
-                .from('job_postings')
-                .select('*, job_applications(count)')
-                .eq('employer_id', session.user.id)
-                .order('created_at', { ascending: false });
-
-            if (jobsError) throw jobsError;
+            const jobsWithCounts = await listEmployerJobsWithCounts(session.user.id);
             
-            if (!jobsWithCounts || jobsWithCounts.length === 0) {
+            if (jobsWithCounts.length === 0) {
                 setJobPostings([]);
                 setKpiData({ activeJobs: 0, totalApplicants: 0, newApplicants: 0, avgMatchScore: 0 });
                 setLoading(false);
                 return;
             }
 
-            // Map the data to the expected format
-            const formattedJobs: JobPostingWithCount[] = jobsWithCounts.map(job => ({
-                ...job,
-                // Supabase returns the count as an array with a single object: [{ count: X }]
-                applicant_count: Array.isArray(job.job_applications) ? job.job_applications[0]?.count ?? 0 : 0,
-            }));
+            const formattedJobs: JobPostingWithCount[] = jobsWithCounts;
             setJobPostings(formattedJobs);
             
-            // 2. Separately, fetch detailed application data for KPIs in a try/catch for graceful degradation.
             try {
                 const jobIds = jobsWithCounts.map(j => j.id);
-                const { data: allApplications, error: appsError } = await supabase
-                    .from('job_applications')
-                    .select('application_date, compatibility_score')
-                    .in('job_id', jobIds);
+                const allApplications = await listApplicationsForJobs(jobIds);
 
-                if (appsError) throw appsError;
-
-                const totalApplicants = allApplications?.length || 0;
+                const totalApplicants = allApplications.length || 0;
                 const activeJobs = jobsWithCounts.filter(job => job.is_active).length;
 
                 const sevenDaysAgo = new Date();
                 sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                const newApplicants = allApplications?.filter(app => new Date(app.application_date) >= sevenDaysAgo).length || 0;
+                const newApplicants = allApplications.filter(app => new Date(app.application_date) >= sevenDaysAgo).length || 0;
                 
-                const scoredApplications = allApplications?.filter(app => app.compatibility_score !== null) || [];
+                const scoredApplications = allApplications.filter(app => app.compatibility_score !== null) || [];
                 let avgMatchScore = 0;
                 if (scoredApplications.length > 0) {
                     const totalScore = scoredApplications.reduce((sum, app) => sum + (app.compatibility_score!), 0);

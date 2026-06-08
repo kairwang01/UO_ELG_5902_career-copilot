@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabaseClient';
+import type { AppSession as Session } from '@/lib/data';
+import { data } from '@/lib/data';
 import { Menu, X } from 'lucide-react';
 import Avatar from './Avatar';
 import type { UserProfile } from '../types';
@@ -231,7 +231,7 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                                 Agency Portal
                                             </button>
                                             <button onClick={() => { onSetView('account'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">Account Settings</button>
-                                            <button onClick={async () => { setIsMenuOpen(false); await supabase.auth.signOut({ scope: 'local' }); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">
+                                            <button onClick={async () => { setIsMenuOpen(false); await data.auth.signOut('local'); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">
                                                 Sign out
                                             </button>
                                         </div>

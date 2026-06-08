@@ -2,30 +2,23 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App';
-import { BETA_REDESIGN_ENABLED } from './config/beta';
 
-const BetaApp = React.lazy(() => import('./beta/BetaApp'));
-const RootApp = BETA_REDESIGN_ENABLED ? BetaApp : App;
+const SiteApp = React.lazy(() => import('./marketing/SiteApp'));
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
+  throw new Error('Could not find root element to mount to');
 }
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    {BETA_REDESIGN_ENABLED ? (
-      <React.Suspense
-        fallback={
-          <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>
-        }
-      >
-        <RootApp />
-      </React.Suspense>
-    ) : (
-      <App />
-    )}
+    <React.Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>
+      }
+    >
+      <SiteApp />
+    </React.Suspense>
   </React.StrictMode>
 );

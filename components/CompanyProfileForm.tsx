@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabaseClient';
+import type { AppSession as Session } from '../lib/data';
+import { data } from '../lib/data';
 import CompanyLogo from './CompanyLogo';
 
 type CompanyProfileData = {
@@ -54,10 +54,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ session, existi
                 updated_at: new Date().toISOString(),
             };
 
-            const { error } = await supabase
-                .from('profiles')
-                .update(updates)
-                .eq('id', session.user.id);
+            const { error } = await data.profiles.update(session.user.id, updates);
 
             if (error) throw error;
             

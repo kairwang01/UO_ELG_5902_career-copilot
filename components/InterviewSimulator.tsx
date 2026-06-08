@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Chat } from '@google/genai';
 import { startInterviewChat, saveInterviewExchange } from '../services/geminiService';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 
 interface InterviewSimulatorProps {
   resumeText: string;

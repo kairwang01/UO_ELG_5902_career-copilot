@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
-import type { Database } from '../../lib/supabaseClient';
-import { supabase } from '../../lib/supabaseClient';
 import { data } from '../../lib/data';
+import AgencyHub from '../AgencyHub';
 import ApplicantFunnel from '../ApplicantFunnel';
 import { PortalSidebar, type PortalPage } from './PortalSidebar';
 import { PortalTopBar } from './PortalTopBar';
@@ -14,9 +13,12 @@ import { PortalTalentPool } from './pages/PortalTalentPool';
 import { PortalOrgProfile } from './pages/PortalOrgProfile';
 import { PortalAccountSettings } from './pages/PortalAccountSettings';
 import { PortalBilling } from './pages/PortalBilling';
-
-type JobPosting = Database['public']['Tables']['job_postings']['Row'];
-type JobPostingWithCount = JobPosting & { applicant_count: number };
+import {
+  listApplicationsForJobs,
+  listEmployerJobsWithCounts,
+  type JobPosting,
+  type JobPostingWithCount,
+} from '../../lib/recruitingData';
 
 interface KpiData {
   activeJobs: number;
@@ -80,45 +82,31 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const { data: jobsWithCounts, error: jobsError } = await supabase
-        .from('job_postings')
-        .select('*, job_applications(count)')
-        .eq('employer_id', session.user.id)
-        .order('created_at', { ascending: false });
+      const jobsWithCounts = await listEmployerJobsWithCounts(session.user.id);
 
-      if (jobsError) throw jobsError;
-
-      if (!jobsWithCounts || jobsWithCounts.length === 0) {
+      if (jobsWithCounts.length === 0) {
         setJobPostings([]);
         setKpiData({ activeJobs: 0, totalApplicants: 0, newApplicants: 0, avgMatchScore: 0 });
         setLoading(false);
         return;
       }
 
-      const formatted: JobPostingWithCount[] = jobsWithCounts.map((job) => ({
-        ...job,
-        applicant_count: Array.isArray(job.job_applications) ? job.job_applications[0]?.count ?? 0 : 0,
-      }));
+      const formatted: JobPostingWithCount[] = jobsWithCounts;
       setJobPostings(formatted);
 
       // KPI details
       try {
         const jobIds = jobsWithCounts.map((j) => j.id);
-        const { data: allApps, error: appsError } = await supabase
-          .from('job_applications')
-          .select('application_date, compatibility_score')
-          .in('job_id', jobIds);
-
-        if (appsError) throw appsError;
+        const allApps = await listApplicationsForJobs(jobIds);
 
         const activeJobs = jobsWithCounts.filter((j) => j.is_active).length;
-        const totalApplicants = allApps?.length || 0;
+        const totalApplicants = allApps.length || 0;
 
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - 7);
-        const newApplicants = allApps?.filter((a) => new Date(a.application_date) >= cutoff).length || 0;
+        const newApplicants = allApps.filter((a) => new Date(a.application_date) >= cutoff).length || 0;
 
-        const scored = allApps?.filter((a) => a.compatibility_score !== null) || [];
+        const scored = allApps.filter((a) => a.compatibility_score !== null) || [];
         const avgMatchScore = scored.length > 0
           ? Math.round(scored.reduce((s, a) => s + (a.compatibility_score ?? 0), 0) / scored.length)
           : 0;
@@ -287,8 +275,8 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         {currentPage === 'agency-hub' && (
           <>
             <PortalTopBar title="Agency Hub" darkMode={darkMode} />
-            <div className="max-w-[1088px] mx-auto p-8">
-              <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Coming soon.</p>
+            <div className={`max-w-[1088px] mx-auto p-8 ${darkMode ? 'text-white' : ''}`}>
+              <AgencyHub session={session} profile={profile} t={t} />
             </div>
           </>
         )}

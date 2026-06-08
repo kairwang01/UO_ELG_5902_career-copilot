@@ -1,0 +1,187 @@
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+  type DocumentData,
+  type Timestamp,
+} from 'firebase/firestore';
+import { firestoreDb } from './firebaseClient';
+import type { UserProfile } from '../types';
+
+export interface JobPosting {
+  id: string;
+  employer_id: string;
+  title: string;
+  location: string | null;
+  description: string | null;
+  salary_range: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface JobPostingWithCount extends JobPosting {
+  applicant_count: number;
+}
+
+export interface JobApplication {
+  id: string;
+  job_id: string;
+  candidate_id: string;
+  application_date: string;
+  compatibility_score: number | null;
+}
+
+export interface JobPostingPatch {
+  title: string;
+  location: string;
+  description: string;
+  salary_range: string;
+}
+
+const toIsoString = (value: unknown): string => {
+  if (!value) return new Date().toISOString();
+  if (typeof value === 'object' && 'toDate' in value) {
+    return (value as Timestamp).toDate().toISOString();
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string') return value;
+  return new Date().toISOString();
+};
+
+const sortByCreatedDesc = <T extends { created_at: string }>(rows: T[]) => (
+  [...rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+);
+
+const mapJobPosting = (id: string, data: DocumentData): JobPosting => ({
+  id,
+  employer_id: String(data.employer_id ?? ''),
+  title: String(data.title ?? ''),
+  location: data.location ?? null,
+  description: data.description ?? null,
+  salary_range: data.salary_range ?? null,
+  is_active: data.is_active ?? true,
+  created_at: toIsoString(data.created_at),
+  updated_at: data.updated_at ? toIsoString(data.updated_at) : null,
+});
+
+const mapApplication = (id: string, data: DocumentData): JobApplication => ({
+  id,
+  job_id: String(data.job_id ?? ''),
+  candidate_id: String(data.candidate_id ?? ''),
+  application_date: toIsoString(data.application_date),
+  compatibility_score: data.compatibility_score ?? null,
+});
+
+const mapUserProfile = (id: string, data: DocumentData): UserProfile => ({
+  id,
+  updated_at: data.updated_at ? toIsoString(data.updated_at) : '',
+  full_name: data.full_name ?? null,
+  avatar_url: data.avatar_url ?? null,
+  subscription_status: data.subscription_status ?? 'free',
+  role: data.role ?? 'candidate',
+  company_name: data.company_name ?? null,
+  company_website: data.company_website ?? null,
+  company_description: data.company_description ?? null,
+  company_logo_url: data.company_logo_url ?? null,
+  resume_text: data.resume_text ?? null,
+  preferred_language: data.preferred_language ?? null,
+  wallet_address: data.wallet_address ?? null,
+  nft_minted: data.nft_minted ?? null,
+  nft_staked: data.nft_staked ?? null,
+  nft_earnings: data.nft_earnings ?? null,
+  nft_token_id: data.nft_token_id ?? null,
+  english_pro_streak: data.english_pro_streak ?? null,
+  english_pro_last_practice: data.english_pro_last_practice
+    ? toIsoString(data.english_pro_last_practice)
+    : null,
+  credits: data.credits ?? null,
+});
+
+export const listEmployerJobs = async (employerId: string): Promise<JobPosting[]> => {
+  const jobsQuery = query(
+    collection(firestoreDb, 'job_postings'),
+    where('employer_id', '==', employerId),
+  );
+  const snap = await getDocs(jobsQuery);
+  return sortByCreatedDesc(snap.docs.map((jobDoc) => mapJobPosting(jobDoc.id, jobDoc.data())));
+};
+
+export const listJobApplications = async (jobId: string): Promise<JobApplication[]> => {
+  const appsQuery = query(
+    collection(firestoreDb, 'job_applications'),
+    where('job_id', '==', jobId),
+  );
+  const snap = await getDocs(appsQuery);
+  return snap.docs.map((appDoc) => mapApplication(appDoc.id, appDoc.data()));
+};
+
+export const listApplicationsForJobs = async (jobIds: string[]): Promise<JobApplication[]> => {
+  const results = await Promise.all(jobIds.map((jobId) => listJobApplications(jobId)));
+  return results.flat();
+};
+
+export const listEmployerJobsWithCounts = async (employerId: string): Promise<JobPostingWithCount[]> => {
+  const jobs = await listEmployerJobs(employerId);
+  const withCounts = await Promise.all(jobs.map(async (job) => {
+    const applications = await listJobApplications(job.id);
+    return { ...job, applicant_count: applications.length };
+  }));
+  return withCounts;
+};
+
+export const listActiveEmployerJobs = async (employerId: string): Promise<JobPosting[]> => (
+  (await listEmployerJobs(employerId)).filter((job) => job.is_active)
+);
+
+export const saveJobPosting = async (
+  employerId: string,
+  patch: JobPostingPatch,
+  existingJobId?: string,
+): Promise<void> => {
+  const jobData = {
+    title: patch.title,
+    location: patch.location,
+    description: patch.description,
+    salary_range: patch.salary_range,
+    updated_at: serverTimestamp(),
+  };
+
+  if (existingJobId) {
+    await updateDoc(doc(firestoreDb, 'job_postings', existingJobId), jobData);
+    return;
+  }
+
+  await addDoc(collection(firestoreDb, 'job_postings'), {
+    ...jobData,
+    employer_id: employerId,
+    is_active: true,
+    created_at: serverTimestamp(),
+  });
+};
+
+export const getCandidateProfilesByIds = async (candidateIds: string[]): Promise<UserProfile[]> => {
+  const uniqueIds = Array.from(new Set(candidateIds));
+  const snaps = await Promise.all(uniqueIds.map((candidateId) => getDoc(doc(firestoreDb, 'users', candidateId))));
+  return snaps
+    .filter((snap) => snap.exists())
+    .map((snap) => mapUserProfile(snap.id, snap.data()));
+};
+
+export const listCandidateProfilesWithResume = async (limitCount = 50): Promise<UserProfile[]> => {
+  const candidatesQuery = query(
+    collection(firestoreDb, 'users'),
+    where('role', '==', 'candidate'),
+  );
+  const snap = await getDocs(candidatesQuery);
+  return snap.docs
+    .map((candidateDoc) => mapUserProfile(candidateDoc.id, candidateDoc.data()))
+    .filter((candidate) => Boolean(candidate.resume_text))
+    .slice(0, limitCount);
+};

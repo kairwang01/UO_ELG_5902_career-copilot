@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react';
 import { useCredits } from '../contexts/CreditsContext';
 import { TOOL_CREDIT_COSTS } from '../config/credits';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 
 type ToolKey = keyof typeof TOOL_CREDIT_COSTS;
 

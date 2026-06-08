@@ -1,6 +1,6 @@
 
 import React, { useRef } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import BusinessSignInModal from './business/BusinessSignInModal';
 import BusinessSignUpModal from './business/BusinessSignUpModal';

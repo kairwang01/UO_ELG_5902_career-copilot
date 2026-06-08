@@ -3,7 +3,7 @@ import { generateCareerPath, generateSkillBridgeProject } from '../../services/g
 import type { CareerPathResult, SkillBridgeProject } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 import { DownloadButtons } from './ToolUtils';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../../lib/data';
 
 interface CareerPathPlannerProps {
   resumeText: string;
@@ -146,7 +146,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                         <div className="flex justify-between items-start">
                            <span><strong>{gap.skill}:</strong> {gap.reason}</span>
                            <button onClick={() => handleGenerateProject(gap.skill)} disabled={generatingProjectForSkill === gap.skill} className="ml-2 flex-shrink-0 text-xs bg-yellow-100 text-yellow-800 font-semibold px-2 py-1 rounded-full hover:bg-yellow-200 disabled:opacity-50">
-                               {generatingProjectForSkill === gap.skill ? '...' : '✨'}
+                               {generatingProjectForSkill === gap.skill ? '...' : 'Project'}
                            </button>
                         </div>
                     </li>

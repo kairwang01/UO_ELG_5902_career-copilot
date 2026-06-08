@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../../../lib/data';
+import { data } from '../../../lib/data';
 import type { UserProfile } from '../../../types';
-import { supabase } from '../../../lib/supabaseClient';
 import CompanyLogo from '../../CompanyLogo';
 import { Building2 } from 'lucide-react';
 import { PortalTopBar } from '../PortalTopBar';
@@ -16,7 +16,7 @@ interface PortalOrgProfileProps {
 
 /*
   Inline version of CompanyProfileForm adapted as a full page (no modal wrapper).
-  Wired to the same Supabase 'profiles' table and CompanyLogo uploader.
+  Wired to the shared Firebase profile adapter and CompanyLogo uploader.
 */
 export function PortalOrgProfile({ session, profile, darkMode, onSaved }: PortalOrgProfileProps) {
   const dm = darkMode;
@@ -39,16 +39,12 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved }: Portal
     setSaving(true);
     setMessage(null);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          company_name: companyName,
-          company_website: website,
-          company_description: description,
-          company_logo_url: logoUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', session.user.id);
+      const { error } = await data.profiles.update(session.user.id, {
+        company_name: companyName,
+        company_website: website,
+        company_description: description,
+        company_logo_url: logoUrl,
+      });
 
       if (error) throw error;
       await onSaved();

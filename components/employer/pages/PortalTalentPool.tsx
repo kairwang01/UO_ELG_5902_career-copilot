@@ -10,7 +10,7 @@ interface PortalTalentPoolProps {
   t: (key: string) => string;
 }
 
-// Reuses TalentDiscovery which fetches real Supabase candidates and runs Gemini matching.
+// Reuses TalentDiscovery which fetches Firebase candidate profiles and runs matching.
 export function PortalTalentPool({ profile, darkMode, navigateToBusinessPricing, t }: PortalTalentPoolProps) {
   return (
     <>

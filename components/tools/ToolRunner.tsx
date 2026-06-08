@@ -1,6 +1,6 @@
 
 import React from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import AgileCoach from './AgileCoach';
 import CareerPathPlanner from './CareerPathPlanner';

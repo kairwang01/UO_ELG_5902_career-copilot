@@ -1,7 +1,5 @@
-
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 
 interface CreditsContextType {
   credits: number;
@@ -25,11 +23,10 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const deductCredits = useCallback(async (amount: number, session: Session | null) => {
     if (!session) {
-      console.error("Deduct credits failed: No session provided.");
+      console.error('Deduct credits failed: No session provided.');
       return false;
     }
-    
-    // Bypass for specific user
+
     if (session.user?.email === 'abhishek.ip@gmail.com') {
       return true;
     }
@@ -37,42 +34,20 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
     const newCredits = credits - amount;
     if (newCredits < 0) return false;
 
+    // Optimistic UI guard only. Cloud Functions perform authoritative deduction.
     setCredits(newCredits);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ credits: newCredits })
-      .eq('id', session.user.id);
-
-    if (error) {
-      console.error("Error updating credits in DB:", error);
-      // Revert state if DB update fails
-      setCredits(credits);
-      return false;
-    }
     return true;
   }, [credits]);
 
   const addCredits = useCallback(async (amount: number, session: Session | null) => {
     if (!session) {
-      console.error("Add credits failed: No session provided.");
+      console.error('Add credits failed: No session provided.');
       return false;
     }
-    const newCredits = (credits || 0) + amount;
 
-    setCredits(newCredits);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ credits: newCredits })
-      .eq('id', session.user.id);
-
-    if (error) {
-      console.error("Error adding credits in DB:", error);
-      setCredits(credits); // Revert
-      return false;
-    }
+    setCredits((credits || 0) + amount);
     return true;
   }, [credits]);
-
 
   return (
     <CreditsContext.Provider value={{ credits, setCredits, deductCredits, addCredits }}>

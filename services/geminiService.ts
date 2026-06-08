@@ -1,8 +1,6 @@
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { AnalysisResult, FormattedResume, CoverLetter, LinkedInOptimization, ResumeImage, CareerPathResult, AgilePracticeTestResult, SalaryNegotiationResult, EnglishProResult, ProfessionalEmailResult, Opportunity, OpportunityResult, PortfolioContent, PortfolioWebsiteResult, InclusivitySuggestion, CandidateMatchAnalysis, NetworkingStrategyResult, SkillBridgeProject, Improvement, PerformanceReviewResult, LearningPlanResult, IndustryEvent, EventScoutResult, UserProfile, SpokenEnglishAnalysisResult, EnglishReadingAnalysisResult, EnglishListeningAnalysisResult, ReadingEvaluation, ComprehensionQuestion, ReadingPracticePassage, VocabularyFlashcard, CandidatePrepKit } from '../types';
-import { supabase } from '../lib/supabaseClient';
-import type { Json } from '../lib/supabaseClient';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 
 // This is a simplified "hook" to be used within this service file.
 // In a full React app, you'd import the context directly.
@@ -25,6 +23,7 @@ const ai = new GoogleGenAI({ apiKey: apiKey });
 
 const PRIMARY_MODEL = import.meta.env.VITE_GEMINI_PRIMARY_MODEL || 'gemini-3-flash-preview';
 const FALLBACK_MODEL = import.meta.env.VITE_GEMINI_FALLBACK_MODEL || 'gemini-flash-latest';
+const OPPORTUNITY_USE_GOOGLE_SEARCH = import.meta.env.VITE_OPPORTUNITY_USE_GOOGLE_SEARCH === 'true';
 
 const isQuotaError = (error: any): boolean => {
     const message = (error?.message || '').toLowerCase();
@@ -36,6 +35,18 @@ const generateJsonContent = async (model: string, contents: any, responseSchema:
         model,
         contents,
         config: {
+            responseMimeType: 'application/json',
+            responseSchema,
+        },
+    });
+};
+
+const generateSearchJsonContent = async (model: string, contents: any, responseSchema: any) => {
+    return ai.models.generateContent({
+        model,
+        contents,
+        config: {
+            tools: [{ googleSearch: {} }],
             responseMimeType: 'application/json',
             responseSchema,
         },
@@ -211,6 +222,75 @@ export const calculateCompatibility = async (resumeText: string, jobDescription:
 };
 
 export const findOpportunities = async (resumeText: string, marketName: string, session: Session | null): Promise<OpportunityResult> => {
+    const quotaNotice = 'Live Google Search grounding is temporarily unavailable because the Gemini search/tool quota has been exhausted. Results below are AI-generated suggestions without live web sources.';
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            opportunities: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        jobTitle: { type: Type.STRING },
+                        company: { type: Type.STRING },
+                        location: { type: Type.STRING },
+                        url: { type: Type.STRING },
+                        summary: { type: Type.STRING },
+                    },
+                    required: ['jobTitle', 'company', 'location', 'url', 'summary']
+                }
+            },
+            jobSearchStrategies: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+            }
+        },
+        required: ['opportunities', 'jobSearchStrategies']
+    };
+    const quotaLimitedResult = (): OpportunityResult => ({
+        opportunities: [],
+        jobSearchStrategies: [
+            `Search directly on LinkedIn, Indeed, and company career pages using role keywords from your resume and the ${marketName} location filter.`,
+            'Set up saved searches and email alerts so new postings are captured without repeatedly running AI search.',
+            'Prioritize recent postings and tailor the top third of your resume to the exact job title before applying.',
+            'Track applications in batches and follow up with recruiters or hiring managers when a role strongly matches your experience.',
+        ],
+        groundingChunks: undefined,
+        notice: quotaNotice,
+    });
+    const generateWithoutLiveSearch = async (): Promise<OpportunityResult> => {
+        const offlinePrompt = `
+            Based on the provided resume for the ${marketName} market, suggest realistic job targets and job search strategies.
+            Do not claim these are live postings. Do not invent application URLs. Use "#" for each URL.
+
+            Return JSON with:
+            - "opportunities": up to 8 suggested target roles with jobTitle, company, location, url, and summary.
+            - "jobSearchStrategies": 3-5 personalized strategies.
+
+            Resume:
+            ${resumeText}
+        `;
+
+        let offlineResponse;
+        try {
+            offlineResponse = await generateJsonContent(PRIMARY_MODEL, offlinePrompt, schema);
+        } catch (firstOfflineError: any) {
+            if (isQuotaError(firstOfflineError) && FALLBACK_MODEL !== PRIMARY_MODEL) {
+                offlineResponse = await generateJsonContent(FALLBACK_MODEL, offlinePrompt, schema);
+            } else {
+                throw firstOfflineError;
+            }
+        }
+
+        const parsedOfflineResponse = extractJson(offlineResponse.text || '{}');
+        return {
+            opportunities: parsedOfflineResponse.opportunities || [],
+            jobSearchStrategies: parsedOfflineResponse.jobSearchStrategies || [],
+            groundingChunks: undefined,
+            notice: quotaNotice,
+        };
+    };
+
     const prompt = `
         Based on the provided resume for the ${marketName} market, perform a comprehensive job search and provide strategic advice.
 
@@ -226,12 +306,46 @@ export const findOpportunities = async (resumeText: string, marketName: string, 
         **Resume:**
         ${resumeText}
     `;
-    
-    const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: { tools: [{ googleSearch: {} }] },
-    });
+
+    if (!OPPORTUNITY_USE_GOOGLE_SEARCH) {
+        return generateWithoutLiveSearch();
+    }
+
+    let response;
+    try {
+        response = await generateSearchJsonContent(PRIMARY_MODEL, prompt, schema);
+    } catch (firstError: any) {
+        if (isQuotaError(firstError) && FALLBACK_MODEL !== PRIMARY_MODEL) {
+            try {
+                response = await generateSearchJsonContent(FALLBACK_MODEL, prompt, schema);
+            } catch (fallbackError: any) {
+                if (isQuotaError(fallbackError)) {
+                    try {
+                        return await generateWithoutLiveSearch();
+                    } catch (offlineError: any) {
+                        if (isQuotaError(offlineError)) {
+                            updateApiStatus('degraded', quotaNotice);
+                            return quotaLimitedResult();
+                        }
+                        throw offlineError;
+                    }
+                }
+                throw fallbackError;
+            }
+        } else if (isQuotaError(firstError)) {
+            try {
+                return await generateWithoutLiveSearch();
+            } catch (offlineError: any) {
+                if (isQuotaError(offlineError)) {
+                    updateApiStatus('degraded', quotaNotice);
+                    return quotaLimitedResult();
+                }
+                throw offlineError;
+            }
+        } else {
+            throw firstError;
+        }
+    }
     
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     const parsedResponse = extractJson(response.text || '{}');

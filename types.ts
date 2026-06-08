@@ -35,6 +35,7 @@ export interface OpportunityResult {
     opportunities: Opportunity[];
     jobSearchStrategies: string[];
     groundingChunks: any[] | undefined;
+    notice?: string;
 }
 
 

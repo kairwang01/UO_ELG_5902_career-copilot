@@ -1,8 +1,5 @@
 import React from 'react';
-import type { Database } from '../lib/supabaseClient';
-
-type JobPosting = Database['public']['Tables']['job_postings']['Row'];
-type JobPostingWithCount = JobPosting & { applicant_count: number };
+import type { JobPostingWithCount } from '../lib/recruitingData';
 
 interface TopPerformingJobsWidgetProps {
     jobs: JobPostingWithCount[];

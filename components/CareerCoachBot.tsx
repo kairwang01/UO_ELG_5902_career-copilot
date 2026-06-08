@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import { GoogleGenAI, Chat } from '@google/genai';
 import Avatar from './Avatar';

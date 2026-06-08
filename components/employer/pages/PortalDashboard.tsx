@@ -1,12 +1,8 @@
 import React from 'react';
 import { Briefcase, Users, TrendingUp, BarChart2, Plus, User, CreditCard, Building2, ChevronRight } from 'lucide-react';
 import { PortalTopBar } from '../PortalTopBar';
-import type { Database } from '../../../lib/supabaseClient';
+import type { JobPostingWithCount } from '../../../lib/recruitingData';
 import type { PortalPage } from '../PortalSidebar';
-
-type JobPostingWithCount = Database['public']['Tables']['job_postings']['Row'] & {
-  applicant_count: number;
-};
 
 interface KpiData {
   activeJobs: number;

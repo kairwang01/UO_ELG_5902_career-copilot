@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabaseClient';
-import type { Database } from '../lib/supabaseClient';
+import type { AppSession as Session } from '../lib/data';
 import { generateJobDescription, analyzeSalary, checkInclusivity, formatJobDescription } from '../services/geminiService';
 import type { InclusivitySuggestion, UserProfile } from '../types';
+import { saveJobPosting, type JobPosting } from '../lib/recruitingData';
 import { renderFormattedText } from './tools/ToolUtils';
-
-type JobPosting = Database['public']['Tables']['job_postings']['Row'];
 
 interface JobPostFormProps {
     session: Session;
@@ -184,11 +181,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 salary_range: salaryRange,
             };
 
-            const { error } = isEditing
-                ? await supabase.from('job_postings').update({ ...jobData, updated_at: new Date().toISOString() }).eq('id', existingJob.id)
-                : await supabase.from('job_postings').insert({ ...jobData, employer_id: session.user.id, is_active: true });
-
-            if (error) throw error;
+            await saveJobPosting(session.user.id, jobData, isEditing ? existingJob.id : undefined);
 
             onPostCreated();
             onClose();
@@ -220,7 +213,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 <label htmlFor="key-responsibilities" className="block text-sm font-medium text-blue-900">AI Content Generation</label>
                 <textarea id="key-responsibilities" value={keyResponsibilities} onChange={e => setKeyResponsibilities(e.target.value)} rows={4} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="Enter 3-5 bullet points or a short paragraph of the main tasks for the AI to expand upon." />
                 <button type="button" onClick={handleGenerateDescription} disabled={aiLoading === 'description'} className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-400">
-                    {aiLoading === 'description' ? 'Generating...' : '✨ Generate from Key Points'}
+                    {aiLoading === 'description' ? 'Generating...' : 'Generate from Key Points'}
                 </button>
             </div>
 
@@ -257,7 +250,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 </div>
                 {salarySuggestion && (
                     <div className="mt-2 text-sm text-gray-600 bg-blue-50 p-2 rounded-md border border-blue-200">
-                        <p className="font-semibold">AI Suggestion:</p>
+                        <p className="font-semibold">Suggestion:</p>
                         <p><strong>Yearly:</strong> {salarySuggestion.yearly}</p>
                         <p><strong>Monthly:</strong> {salarySuggestion.monthly}</p>
                     </div>
