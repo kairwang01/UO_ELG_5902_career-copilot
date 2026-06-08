@@ -6,6 +6,7 @@ import BusinessSignInModal from './business/BusinessSignInModal';
 import BusinessSignUpModal from './business/BusinessSignUpModal';
 import BusinessForgotPasswordModal from './business/BusinessForgotPasswordModal';
 import { data } from '@/lib/data';
+import type { PortalPage } from './employer/EmployerPortal';
 
 interface BusinessPageProps {
   onPostJobClick: () => void;
@@ -15,6 +16,8 @@ interface BusinessPageProps {
   onSelectBusinessPlan: (planKey: string) => void;
   t: (key: string) => string;
   onBack: () => void;
+  // Optional: enter the hiring portal at a specific page
+  onEnterPortal?: (page: PortalPage) => void;
 }
 
 // Business plans matching the prototype design
@@ -87,6 +90,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   onSelectBusinessPlan,
   t,
   onBack,
+  onEnterPortal,
 }) => {
   const pricingRef = useRef<HTMLElement>(null);
   const [modal, setModal] = React.useState<ModalState>('none');
@@ -96,23 +100,33 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     pricingRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // If logged in as employer, "Post a Job" goes straight to employer dashboard
   const handlePostJob = () => {
-    if (session) {
-      // TODO Phase 2: deep-link to job-post form within the hiring portal
+    if (session && onEnterPortal) {
+      onEnterPortal('post-job');
+    } else if (session) {
       onBack();
     } else {
       setModal('signup');
     }
   };
 
-  // "Discover Talent" always navigates to employer dashboard
   const handleDiscoverTalent = () => {
-    if (session) {
-      // TODO Phase 2: deep-link to candidate search page
+    if (session && onEnterPortal) {
+      onEnterPortal('talent-pool');
+    } else if (session) {
       onBack();
     } else {
       setModal('signup');
+    }
+  };
+
+  const handleHiringPortal = () => {
+    if (session && onEnterPortal) {
+      onEnterPortal('dashboard');
+    } else if (session) {
+      onBack();
+    } else {
+      setModal('signin');
     }
   };
 
@@ -138,9 +152,8 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
 
             {/* Nav links */}
             <div className="hidden md:flex items-center gap-8">
-              {/* TODO Phase 2: deep-link to full hiring portal page */}
               <button
-                onClick={onBack}
+                onClick={handleHiringPortal}
                 className="text-gray-200 hover:text-white transition-colors"
               >
                 Hiring Portal

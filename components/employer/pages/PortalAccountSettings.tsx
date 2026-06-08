@@ -1,0 +1,40 @@
+import React from 'react';
+import type { Session } from '@supabase/supabase-js';
+import Account from '../../Account';
+import { PortalTopBar } from '../PortalTopBar';
+
+interface PortalAccountSettingsProps {
+  session: Session;
+  darkMode: boolean;
+  onSubscriptionChange: () => Promise<void>;
+  navigateToPricing: () => void;
+  t: (key: string) => string;
+}
+
+// Embeds the real Account component (password, profile photo, Web3, API keys, sign out).
+// onSetView is a no-op here since we handle navigation in the portal shell.
+export function PortalAccountSettings({
+  session,
+  darkMode,
+  onSubscriptionChange,
+  navigateToPricing,
+  t,
+}: PortalAccountSettingsProps) {
+  return (
+    <>
+      <PortalTopBar title="Account Settings" darkMode={darkMode} />
+      <div className="max-w-[1088px] mx-auto p-8">
+        <Account
+          key={session.user.id}
+          session={session}
+          // Account uses onSetView only to navigate to api_docs or back to home.
+          // In the portal context these are no-ops; the user stays in the portal.
+          onSetView={() => {}}
+          onSubscriptionChange={onSubscriptionChange}
+          navigateToPricing={navigateToPricing}
+          t={t}
+        />
+      </div>
+    </>
+  );
+}

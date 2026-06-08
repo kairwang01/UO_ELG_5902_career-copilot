@@ -38,6 +38,8 @@ import Dashboard from './components/dashboard/Dashboard';
 import Sidebar from './components/Sidebar';
 import BusinessPage from './components/BusinessPage';
 import EmployerDashboard from './components/EmployerDashboard';
+import { EmployerPortal } from './components/employer/EmployerPortal';
+import type { PortalPage } from './components/employer/EmployerPortal';
 import AgencyHub from './components/AgencyHub';
 import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';
@@ -65,6 +67,8 @@ const AppContent: React.FC = () => {
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  // Deep-link target page for the employer hiring portal
+  const [portalInitialPage, setPortalInitialPage] = useState<PortalPage>('dashboard');
 
   const { credits, setCredits, deductCredits } = useCredits();
   const { isAIMode, toggleAIMode } = useSettings();
@@ -559,14 +563,25 @@ const AppContent: React.FC = () => {
     if (view === 'auth') { return <Auth t={t} onClose={() => setView('home')} initialView={initialAuthView} mode={authMode} />; }
     if (view === 'account' && session) { return <Account key={session.user.id} session={session} onSetView={handleSetView} onSubscriptionChange={getProfile} navigateToPricing={navigateToPricing} t={t} />; }
     if (view === 'api_docs') { return <ApiDocsViewer onClose={() => setView('account')} />; }
-    if (view === 'business') { return <BusinessPage t={t} session={session} profile={profile} onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')} onSignInClick={() => handleSetView('auth', 'sign_in', 'business')} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} />; }
+    if (view === 'business') { return <BusinessPage t={t} session={session} profile={profile} onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')} onSignInClick={() => handleSetView('auth', 'sign_in', 'business')} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} />; }
     if (view === 'agency' && session && profile) { return <AgencyHub session={session} profile={profile} t={t} />; }
     if (isLoading) { return <LoadingSpinner market={market} />; }
     if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} />; }
     if (session && !showHomePageOverride) {
         if (!isProfileLoaded || !isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600 dark:text-gray-400">{t('dashboard_loading')}</p></div>; }
         if (profile?.role === 'employer') {
-            return <EmployerDashboard session={session} profile={profile} refreshProfile={getProfile} navigateToBusinessPricing={navigateToBusinessPricing} t={t} />;
+            // Full-screen portal — renders its own sidebar/layout outside the candidate shell
+            return (
+                <EmployerPortal
+                    session={session}
+                    profile={profile}
+                    refreshProfile={getProfile}
+                    navigateToBusinessPricing={navigateToBusinessPricing}
+                    onGoHome={() => handleSetView('business')}
+                    t={t}
+                    initialPage={portalInitialPage}
+                />
+            );
         }
         return renderDashboard();
     }
@@ -575,9 +590,8 @@ const AppContent: React.FC = () => {
   };
 
   const isUserLoggedIn = session && !showHomePageOverride && view !== 'business' && profile?.role === 'candidate';
-  // Employers get the same left-sidebar shell as candidates (QA E3 — consistent navigation).
-  const isEmployerShell = !!session && !showHomePageOverride && view === 'home' && profile?.role === 'employer';
-  const showAppShell = isUserLoggedIn || isEmployerShell;
+  // Employers get the hiring portal (EmployerPortal), not the candidate sidebar shell.
+  const showAppShell = isUserLoggedIn;
 
   return (
     <ToastProvider>
@@ -615,11 +629,9 @@ const AppContent: React.FC = () => {
                                 Candidates: the résumé upload lab is the home for the dashboard/resume
                                 views; other views render their own content (with empty states). */}
                             {profile?.role === 'employer' ? (
-                                dashboardView === 'account' ? (
-                                    <Account key={session!.user.id} session={session!} onSetView={handleSetView} onSubscriptionChange={getProfile} navigateToPricing={navigateToPricing} t={t} />
-                                ) : (
-                                    <EmployerDashboard session={session!} profile={profile} refreshProfile={getProfile} navigateToBusinessPricing={navigateToBusinessPricing} t={t} />
-                                )
+                                // Employer portal is full-screen; this shell branch is unreachable for employers
+                                // because isEmployerShell is false after we redirect. Left as fallback.
+                                <EmployerDashboard session={session!} profile={profile} refreshProfile={getProfile} navigateToBusinessPricing={navigateToBusinessPricing} t={t} />
                             ) : (isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                                 <div className="mt-4 animate-slide-in-up">
                                     <div className="text-center mb-10">
