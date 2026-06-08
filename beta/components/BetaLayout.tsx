@@ -21,7 +21,7 @@ export const BetaLayout: React.FC<BetaLayoutProps> = ({ children, showBanner = t
   }
 
   return (
-    <div className="beta-root min-h-screen flex flex-col">
+    <div className="beta-root min-h-screen flex flex-col overflow-x-hidden">
       {showBanner && (
         <div className="bg-[var(--beta-surface-muted)] border-b border-[var(--beta-border)] text-center py-1.5 text-xs text-[var(--beta-text-muted)]">
           {t('beta_banner')}

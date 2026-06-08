@@ -28,3 +28,6 @@ dist-ssr
 
 # Local project planning docs (not for GitHub)
 project-planning/
+
+# Beta screenshot QA artifacts (regenerate via npm run beta:qa)
+beta/qa-screenshots/*.png

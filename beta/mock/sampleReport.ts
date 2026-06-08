@@ -1,8 +1,9 @@
-export interface ResumeGap {
+export interface ResumeIssue {
   id: string;
-  label: string;
+  issue: string;
   severity: 'ready' | 'gap' | 'risk';
-  detail: string;
+  whyItMatters: string;
+  fix: string;
 }
 
 export interface SampleReport {
@@ -12,7 +13,7 @@ export interface SampleReport {
   roleFit: number;
   missingKeywords: string[];
   matchedKeywords: string[];
-  gaps: ResumeGap[];
+  issues: ResumeIssue[];
   bridgeRoles: string[];
   nextAction: string;
   rewriteSuggestion: string;
@@ -25,30 +26,34 @@ export const sampleReport: SampleReport = {
   roleFit: 68,
   missingKeywords: ['roadmap prioritization', 'stakeholder alignment', 'OKRs', 'user research synthesis'],
   matchedKeywords: ['cross-functional', 'Agile', 'SQL', 'A/B testing', 'Jira'],
-  gaps: [
+  issues: [
     {
       id: '1',
-      label: 'Product discovery evidence',
+      issue: 'Product discovery evidence missing',
       severity: 'gap',
-      detail: 'Resume lists features shipped but not how customer problems were validated.',
+      whyItMatters: 'PM recruiters scan for how you validated problems before building — feature lists alone read as engineering handoff.',
+      fix: 'Add one bullet: customer interviews conducted, insight gathered, and decision made.',
     },
     {
       id: '2',
-      label: 'Quantified business impact',
+      issue: 'Only one quantified outcome',
       severity: 'gap',
-      detail: 'Only one bullet includes a metric. PM screens typically expect 3+ outcomes with numbers.',
+      whyItMatters: 'PM screens expect 3+ metrics across impact, scope, and collaboration — sparse numbers signal junior framing.',
+      fix: 'Convert top 3 bullets to STAR with one metric each (%, $, time saved, users affected).',
     },
     {
       id: '3',
-      label: 'ATS formatting',
+      issue: 'ATS formatting passes',
       severity: 'ready',
-      detail: 'Single column, standard headings, no tables — parses cleanly in Greenhouse and Lever.',
+      whyItMatters: 'Single-column layout parses in Greenhouse and Lever — you will not be auto-rejected on format.',
+      fix: 'Keep structure; do not add tables, text boxes, or multi-column sections.',
     },
     {
       id: '4',
-      label: 'Title alignment',
+      issue: 'Title says Software Developer',
       severity: 'risk',
-      detail: 'Current title "Software Developer" undersells product work; recruiters may filter you out before review.',
+      whyItMatters: 'Keyword filters for "Product Manager" may exclude you before a human reads the resume.',
+      fix: 'Use "Software Developer · Product-focused" or lead with bridge title "Technical Product Owner".',
     },
   ],
   bridgeRoles: ['Technical Product Owner', 'Associate PM (B2B SaaS)'],

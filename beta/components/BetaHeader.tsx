@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BETA_ROUTES } from '../../config/beta';
 import { useBetaI18n } from '../hooks/useBetaI18n';
+import { BetaMobileNav } from './BetaMobileNav';
 
 export const BetaHeader: React.FC = () => {
   const { pathname } = useLocation();
@@ -9,9 +10,12 @@ export const BetaHeader: React.FC = () => {
   const { t } = useBetaI18n();
 
   return (
-    <header className="border-b border-[var(--beta-border)] bg-[var(--beta-surface)] sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        <Link to={BETA_ROUTES.home} className="text-lg font-semibold text-[var(--beta-text)]">
+    <header className="relative border-b border-[var(--beta-border)] bg-[var(--beta-surface)] sticky top-0 z-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
+        <Link
+          to={BETA_ROUTES.home}
+          className="text-base sm:text-lg font-semibold text-[var(--beta-text)] truncate shrink-0"
+        >
           Career CoPilot
         </Link>
         <nav className="hidden sm:flex items-center gap-6 text-sm">
@@ -34,28 +38,20 @@ export const BetaHeader: React.FC = () => {
             {t('beta_nav_pricing')}
           </Link>
         </nav>
-        <div className="flex items-center gap-3">
-          {isEmployer ? (
-            <Link
-              to={BETA_ROUTES.home}
-              className="text-sm text-[var(--beta-text-muted)] hover:text-[var(--beta-text)]"
-            >
-              {t('beta_nav_for_jobseekers')}
-            </Link>
-          ) : (
-            <Link
-              to={BETA_ROUTES.employers}
-              className="text-sm text-[var(--beta-text-muted)] hover:text-[var(--beta-text)]"
-            >
-              {t('beta_nav_for_employers')}
-            </Link>
-          )}
+        <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+          <Link
+            to={isEmployer ? BETA_ROUTES.home : BETA_ROUTES.employers}
+            className="hidden md:inline text-sm text-[var(--beta-text-muted)] hover:text-[var(--beta-text)] max-w-[7rem] truncate"
+          >
+            {isEmployer ? t('beta_nav_for_jobseekers') : t('beta_nav_for_employers')}
+          </Link>
           <Link
             to={BETA_ROUTES.portal}
-            className="text-sm font-medium text-[var(--beta-action)] hover:underline"
+            className="hidden sm:inline text-sm font-medium text-[var(--beta-action)] hover:underline whitespace-nowrap"
           >
             {t('beta_nav_sign_in')}
           </Link>
+          <BetaMobileNav />
         </div>
       </div>
     </header>

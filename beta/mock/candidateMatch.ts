@@ -1,3 +1,10 @@
+export interface RoleRequirement {
+  label: string;
+  required: boolean;
+  met: boolean;
+  evidence?: string;
+}
+
 export interface CandidateMatch {
   id: string;
   name: string;
@@ -9,7 +16,18 @@ export interface CandidateMatch {
   location: string;
   recommendedAction: 'shortlist' | 'review' | 'pass';
   matchReasons: string[];
+  roleRequirements: RoleRequirement[];
 }
+
+export const jobRoleTitle = 'Senior Frontend Engineer';
+
+export const roleRequirementsSummary: RoleRequirement[] = [
+  { label: 'React + TypeScript (3+ yrs)', required: true, met: true },
+  { label: 'Design systems at scale', required: true, met: true },
+  { label: 'Accessibility (WCAG AA)', required: true, met: true },
+  { label: 'GraphQL', required: false, met: false },
+  { label: 'Team lead experience', required: false, met: true },
+];
 
 export const candidateMatches: CandidateMatch[] = [
   {
@@ -27,6 +45,13 @@ export const candidateMatches: CandidateMatch[] = [
       'Resume shows cross-team adoption metrics',
       'GraphQL gap is trainable for this role',
     ],
+    roleRequirements: [
+      { label: 'React + TypeScript (3+ yrs)', required: true, met: true, evidence: '6 yrs React; led TS migration' },
+      { label: 'Design systems at scale', required: true, met: true, evidence: 'Built library for 4 teams' },
+      { label: 'Accessibility (WCAG AA)', required: true, met: true, evidence: 'Audit owner, 0 P1 a11y bugs at launch' },
+      { label: 'GraphQL', required: false, met: false },
+      { label: 'Team lead experience', required: false, met: true, evidence: 'Mentored 3 juniors' },
+    ],
   },
   {
     id: 'c2',
@@ -41,6 +66,13 @@ export const candidateMatches: CandidateMatch[] = [
     matchReasons: [
       'Strong data fundamentals',
       'Role is 60% frontend — gap may slow ramp',
+    ],
+    roleRequirements: [
+      { label: 'React + TypeScript (3+ yrs)', required: true, met: false },
+      { label: 'Design systems at scale', required: true, met: false },
+      { label: 'Accessibility (WCAG AA)', required: true, met: false },
+      { label: 'GraphQL', required: false, met: true, evidence: 'Built GraphQL API layer' },
+      { label: 'Team lead experience', required: false, met: false },
     ],
   },
 ];

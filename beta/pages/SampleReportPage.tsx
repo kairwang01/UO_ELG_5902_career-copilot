@@ -1,9 +1,9 @@
 import React from 'react';
 import { BetaLayout } from '../components/BetaLayout';
 import { ReportPreview } from '../components/ReportPreview';
+import { InterviewFeedbackPreview } from '../components/InterviewFeedbackPreview';
 import { BetaButton } from '../components/BetaButton';
 import { sampleReport } from '../mock/sampleReport';
-import { interviewFeedback } from '../mock/interviewFeedback';
 import { BETA_ROUTES } from '../../config/beta';
 import { useBetaI18n } from '../hooks/useBetaI18n';
 
@@ -15,31 +15,24 @@ export const SampleReportPage: React.FC = () => {
 
   return (
     <BetaLayout>
-      <section className="py-[var(--beta-section)]">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 mb-10">
-          <h1 className="text-3xl font-semibold">{t('beta_sample_title')}</h1>
-          <p className="mt-3 text-[var(--beta-text-muted)]">{intro}</p>
+      <section className="py-12 sm:py-[var(--beta-section)]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 mb-8 sm:mb-10">
+          <h1 className="text-2xl sm:text-3xl font-semibold">{t('beta_sample_title')}</h1>
+          <p className="mt-3 text-sm sm:text-base text-[var(--beta-text-muted)]">{intro}</p>
         </div>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 space-y-8">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 space-y-6 sm:space-y-8">
           <ReportPreview t={t} />
-          <div className="border border-[var(--beta-border)] rounded-[var(--beta-radius)] p-6">
+          <div className="border border-[var(--beta-border)] rounded-[var(--beta-radius)] p-4 sm:p-6">
             <p className="text-xs uppercase tracking-wide text-[var(--beta-text-muted)] mb-2">
               {t('beta_sample_rewrite')}
             </p>
             <p className="text-sm">{sampleReport.rewriteSuggestion}</p>
           </div>
-          <div className="border border-[var(--beta-border)] rounded-[var(--beta-radius)] p-6">
-            <p className="text-xs uppercase tracking-wide text-[var(--beta-text-muted)] mb-2">
-              {t('beta_sample_interview_preview')}
-            </p>
-            <p className="font-medium text-sm mb-2">{interviewFeedback.question}</p>
-            <p className="text-sm text-[var(--beta-text-muted)] mb-3">{interviewFeedback.starFeedback.missing}</p>
-            <p className="text-sm">
-              Clarity score: <strong>{interviewFeedback.clarityScore}</strong> · {interviewFeedback.nextDrill}
-            </p>
-          </div>
+          <InterviewFeedbackPreview t={t} />
           <div className="text-center pt-4">
-            <BetaButton href={BETA_ROUTES.mvpApp}>{t('beta_cta_upload_resume')}</BetaButton>
+            <BetaButton href={BETA_ROUTES.mvpApp} className="w-full sm:w-auto justify-center">
+              {t('beta_cta_upload_resume')}
+            </BetaButton>
           </div>
         </div>
       </section>

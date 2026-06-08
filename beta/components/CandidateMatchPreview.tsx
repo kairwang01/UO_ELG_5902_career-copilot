@@ -1,10 +1,12 @@
-import React from 'react';
-import { candidateMatches } from '../mock/candidateMatch';
+import React, { useState } from 'react';
+import { candidateMatches, jobRoleTitle } from '../mock/candidateMatch';
 import { ScoreBar } from './ScoreBar';
 
 interface CandidateMatchPreviewProps {
   t: (key: string) => string;
 }
+
+type ActionState = Record<string, 'idle' | 'shortlisted' | 'messaged'>;
 
 const initials = (name: string) =>
   name
@@ -13,104 +15,142 @@ const initials = (name: string) =>
     .join('')
     .slice(0, 2);
 
-export const CandidateMatchPreview: React.FC<CandidateMatchPreviewProps> = ({ t }) => (
-  <div className="rounded-[var(--beta-radius)] border border-[var(--beta-border)] bg-[var(--beta-surface)] overflow-hidden shadow-sm">
-    <div className="px-4 py-3 border-b border-[var(--beta-border)] bg-[var(--beta-surface-muted)] flex justify-between items-center">
-      <div>
-        <p className="text-sm font-medium">{t('beta_talent_pool_title')}</p>
-        <p className="text-xs text-[var(--beta-text-muted)]">{t('beta_talent_pool_subtitle')}</p>
-      </div>
-      <span className="text-xs px-2 py-1 rounded border border-[var(--beta-border)] bg-[var(--beta-surface)]">
-        {candidateMatches.length} {t('beta_talent_pool_matches')}
-      </span>
-    </div>
+export const CandidateMatchPreview: React.FC<CandidateMatchPreviewProps> = ({ t }) => {
+  const [actions, setActions] = useState<ActionState>({});
 
-    <div className="divide-y divide-[var(--beta-border)]">
-      {candidateMatches.map((c) => (
-        <div key={c.id} className="p-4 sm:p-5 hover:bg-[var(--beta-surface-muted)]/50 transition-colors">
-          <div className="flex gap-4">
-            <div className="w-10 h-10 rounded-full bg-[var(--beta-surface-muted)] border border-[var(--beta-border)] flex items-center justify-center text-sm font-semibold text-[var(--beta-action)] shrink-0">
-              {initials(c.name)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap justify-between gap-2 mb-2">
-                <div>
-                  <h4 className="font-semibold">{c.name}</h4>
-                  <p className="text-xs text-[var(--beta-text-muted)]">
-                    {c.location} · {c.availability}
-                  </p>
-                </div>
-                <div className="w-28">
-                  <ScoreBar label={t('beta_match_role_fit')} value={c.roleFit} tone="ready" />
-                </div>
-              </div>
+  const setAction = (id: string, state: 'shortlisted' | 'messaged') => {
+    setActions((prev) => ({ ...prev, [id]: state }));
+  };
 
-              <p className="text-sm text-[var(--beta-text-muted)] mb-3 border-l-2 border-[var(--beta-border)] pl-3">
-                {c.resumeEvidence}
-              </p>
-
-              <div className="grid sm:grid-cols-2 gap-3 mb-3">
-                <div className="text-xs">
-                  <p className="text-[var(--beta-ready)] font-medium mb-1">{t('beta_match_skills_matched')}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {c.skillsMatched.map((s) => (
-                      <span
-                        key={s}
-                        className="px-1.5 py-0.5 rounded bg-[var(--beta-ready-bg)] text-[var(--beta-ready)]"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="text-xs">
-                  <p className="text-[var(--beta-gap)] font-medium mb-1">{t('beta_match_skills_missing')}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {c.missingSkills.map((s) => (
-                      <span
-                        key={s}
-                        className="px-1.5 py-0.5 rounded bg-[var(--beta-gap-bg)] text-[var(--beta-gap)]"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <ul className="text-xs space-y-1 mb-4 text-[var(--beta-text-muted)]">
-                {c.matchReasons.map((reason) => (
-                  <li key={reason} className="flex gap-2">
-                    <span className="text-[var(--beta-ready)]">✓</span>
-                    <span>{reason}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className={`text-xs font-medium px-3 py-1.5 rounded-[var(--beta-radius)] ${
-                    c.recommendedAction === 'shortlist'
-                      ? 'bg-[var(--beta-action)] text-white'
-                      : 'border border-[var(--beta-border)] text-[var(--beta-text)]'
-                  }`}
-                >
-                  {c.recommendedAction === 'shortlist'
-                    ? t('beta_match_action_shortlist')
-                    : t('beta_match_action_review')}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs font-medium px-3 py-1.5 rounded-[var(--beta-radius)] border border-[var(--beta-border)] text-[var(--beta-text-muted)]"
-                >
-                  {t('beta_match_action_message')}
-                </button>
-              </div>
-            </div>
+  return (
+    <div className="rounded-[var(--beta-radius)] border border-[var(--beta-border)] bg-[var(--beta-surface)] overflow-hidden shadow-sm">
+      <div className="px-4 py-3 border-b border-[var(--beta-border)] bg-[var(--beta-surface-muted)]">
+        <div className="flex flex-wrap justify-between items-start gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{t('beta_talent_pool_title')}</p>
+            <p className="text-xs text-[var(--beta-text-muted)]">{t('beta_talent_pool_subtitle')}</p>
           </div>
+          <span className="text-xs px-2 py-1 rounded border border-[var(--beta-border)] bg-[var(--beta-surface)] shrink-0">
+            {candidateMatches.length} {t('beta_talent_pool_matches')}
+          </span>
         </div>
-      ))}
+        <p className="text-xs text-[var(--beta-text-muted)] mt-2 truncate">
+          {t('beta_match_role_label')}: <span className="font-medium text-[var(--beta-text)]">{jobRoleTitle}</span>
+        </p>
+      </div>
+
+      <div className="divide-y divide-[var(--beta-border)]">
+        {candidateMatches.map((c) => {
+          const state = actions[c.id] ?? 'idle';
+          return (
+            <div key={c.id} className="p-4 sm:p-5">
+              <div className="flex gap-3 sm:gap-4">
+                <div className="w-10 h-10 rounded-full bg-[var(--beta-surface-muted)] border border-[var(--beta-border)] flex items-center justify-center text-sm font-semibold text-[var(--beta-action)] shrink-0">
+                  {initials(c.name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold truncate">{c.name}</h4>
+                      <p className="text-xs text-[var(--beta-text-muted)] truncate">
+                        {c.location} · {c.availability}
+                      </p>
+                    </div>
+                    <div className="w-full sm:w-28 shrink-0">
+                      <ScoreBar label={t('beta_match_role_fit')} value={c.roleFit} tone="ready" />
+                    </div>
+                  </div>
+
+                  {state !== 'idle' && (
+                    <div
+                      className={`text-xs px-2 py-1 rounded mb-3 inline-block ${
+                        state === 'shortlisted'
+                          ? 'bg-[var(--beta-ready-bg)] text-[var(--beta-ready)]'
+                          : 'bg-[var(--beta-surface-muted)] text-[var(--beta-action)] border border-[var(--beta-border)]'
+                      }`}
+                    >
+                      {state === 'shortlisted' ? t('beta_match_status_shortlisted') : t('beta_match_status_messaged')}
+                    </div>
+                  )}
+
+                  <p className="text-sm text-[var(--beta-text-muted)] mb-3 border-l-2 border-[var(--beta-border)] pl-3">
+                    {c.resumeEvidence}
+                  </p>
+
+                  <div className="mb-4 overflow-x-auto">
+                    <p className="text-xs font-medium text-[var(--beta-text-muted)] mb-2">
+                      {t('beta_match_requirements_title')}
+                    </p>
+                    <table className="w-full text-xs min-w-[280px]">
+                      <thead>
+                        <tr className="text-[var(--beta-text-muted)] text-left">
+                          <th className="pb-1 font-medium">{t('beta_match_req_col')}</th>
+                          <th className="pb-1 font-medium w-16">{t('beta_match_req_status')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {c.roleRequirements.map((req) => (
+                          <tr key={req.label} className="border-t border-[var(--beta-border)]">
+                            <td className="py-1.5 pr-2">
+                              {req.label}
+                              {req.required && (
+                                <span className="text-[var(--beta-risk)] ml-1">*</span>
+                              )}
+                            </td>
+                            <td className="py-1.5">
+                              <span
+                                className={
+                                  req.met
+                                    ? 'text-[var(--beta-ready)] font-medium'
+                                    : 'text-[var(--beta-gap)]'
+                                }
+                              >
+                                {req.met ? t('beta_match_req_met') : t('beta_match_req_missing')}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <ul className="text-xs space-y-1 mb-4 text-[var(--beta-text-muted)]">
+                    {c.matchReasons.map((reason) => (
+                      <li key={reason} className="flex gap-2">
+                        <span className="text-[var(--beta-ready)] shrink-0">✓</span>
+                        <span>{reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={state === 'shortlisted'}
+                      onClick={() => setAction(c.id, 'shortlisted')}
+                      className={`text-xs font-medium px-3 py-2 min-h-[44px] rounded-[var(--beta-radius)] transition-colors ${
+                        state === 'shortlisted'
+                          ? 'bg-[var(--beta-ready-bg)] text-[var(--beta-ready)] border border-[var(--beta-ready)]/30'
+                          : 'bg-[var(--beta-action)] text-white'
+                      }`}
+                    >
+                      {state === 'shortlisted' ? t('beta_match_status_shortlisted') : t('beta_match_action_shortlist')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={state === 'messaged'}
+                      onClick={() => setAction(c.id, 'messaged')}
+                      className="text-xs font-medium px-3 py-2 min-h-[44px] rounded-[var(--beta-radius)] border border-[var(--beta-border)] text-[var(--beta-text)] disabled:opacity-60"
+                    >
+                      {state === 'messaged' ? t('beta_match_status_messaged') : t('beta_match_action_message')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
