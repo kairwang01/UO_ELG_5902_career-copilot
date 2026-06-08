@@ -4,6 +4,10 @@
 /* Tailwind v4 — scans all source files automatically */
 @import 'tailwindcss';
 
+/* v4 defaults dark: to prefers-color-scheme; the app toggles a .dark class on
+   <html>, so make dark: class-based to match (restores the theme toggle). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* shadcn/ui CSS-variable theme (light + dark) */
 :root {
   --font-size: 16px;
