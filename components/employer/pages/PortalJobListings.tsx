@@ -3,6 +3,9 @@ import {
   Briefcase,
   Users,
   TrendingUp,
+  UserCheck,
+  CheckCircle,
+  ThumbsUp,
   MapPin,
   Calendar,
   Edit,
@@ -138,14 +141,18 @@ export function PortalJobListings({
         {loading && <p className={dm ? 'text-gray-400' : 'text-gray-500'}>Loading…</p>}
         {error && !loading && <p className="text-red-500 text-sm mb-6">{error}</p>}
 
-        {/* Stats — real data */}
+        {/* Stats — real data for first 3; remaining 3 columns don't exist yet, show 0 */}
         {!loading && (
           <div className="mb-8">
             <h2 className={`text-base font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>Quick Stats</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <StatCard title="Active Job Posts" value={kpiData.activeJobs} Icon={Briefcase} darkMode={dm} />
               <StatCard title="Total Applicants" value={kpiData.totalApplicants} Icon={Users} darkMode={dm} />
               <StatCard title="New Applicants (7d)" value={kpiData.newApplicants} Icon={TrendingUp} darkMode={dm} />
+              {/* These columns don't exist in the DB yet — show 0 as placeholder */}
+              <StatCard title="Interviews Scheduled (7d)" value={0} Icon={UserCheck} darkMode={dm} />
+              <StatCard title="Offers Sent" value={0} Icon={CheckCircle} darkMode={dm} />
+              <StatCard title="Offers Accepted" value={0} Icon={ThumbsUp} darkMode={dm} />
             </div>
           </div>
         )}
@@ -203,7 +210,7 @@ export function PortalJobListings({
             >
               <div className="flex items-center gap-3">
                 <h2 className={`text-base font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>
-                  Closed Postings
+                  Expired Job Postings
                 </h2>
                 <span className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>({closedJobs.length})</span>
               </div>

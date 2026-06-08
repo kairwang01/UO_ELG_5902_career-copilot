@@ -63,7 +63,7 @@ export default function BusinessSignInModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+        <form onSubmit={handleSubmit} className="space-y-6 mt-6">
           <Input
             type="email"
             placeholder="Email"

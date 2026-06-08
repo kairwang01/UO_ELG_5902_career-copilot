@@ -56,6 +56,7 @@ interface Props {
 
 export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSignIn, onSignedUp }: Props) {
   const [selectedPlan, setSelectedPlan] = useState('starter');
+  const [orgName, setOrgName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -100,6 +101,7 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
         id: authData.id,
         subscription_status: statusForDb,
         full_name: '',
+        company_name: orgName || null,
         role: 'employer',
         updated_at: new Date().toISOString(),
       });
@@ -168,6 +170,13 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
             </div>
           </div>
 
+          <Input
+            type="text"
+            placeholder="Business / Organization Name"
+            value={orgName}
+            onChange={(e) => setOrgName(e.target.value)}
+            required
+          />
           <Input
             type="email"
             placeholder="Business Email"

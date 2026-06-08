@@ -107,7 +107,7 @@ export function PortalSidebar({
         </div>
       </div>
 
-      <div className="flex-1 px-4 space-y-1 overflow-y-auto">
+      <div className="flex-1 px-4 space-y-2 overflow-y-auto">
         <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>WORKSPACE</div>
 
         {navItem('dashboard', 'Dashboard', LayoutDashboard)}
@@ -116,7 +116,7 @@ export function PortalSidebar({
         {navItem('talent-pool', 'Discover Talent', Users)}
         {navItem('agency-hub', 'Agency Hub', Building2)}
 
-        <div className="pt-6 space-y-1">
+        <div className="pt-6 space-y-2">
           <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>SETTINGS</div>
           {navItem('company-profile', 'Organization Profile', User)}
           {navItem('account-settings', 'Account Settings', Settings)}
@@ -144,7 +144,15 @@ export function PortalSidebar({
       </div>
 
       {/* User footer */}
-      <div className={`p-4 border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+      <div className={`p-4 space-y-1 border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+        {/* Credits row */}
+        <div className="flex items-center gap-3 px-3 py-2">
+          <CreditCard className="w-5 h-5 text-[#1d4ed8]" />
+          <div>
+            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>CREDITS</div>
+            <div className={`font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>{profile?.credits ?? 0} CR</div>
+          </div>
+        </div>
         <div className="flex items-center gap-3 px-3 py-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${dm ? 'bg-gray-700' : 'bg-blue-100'}`}>
             {profile?.avatar_url ? (

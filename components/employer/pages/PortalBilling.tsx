@@ -2,11 +2,11 @@ import React from 'react';
 import { Check, CreditCard, Zap } from 'lucide-react';
 import type { UserProfile } from '../../../types';
 import { PortalTopBar } from '../PortalTopBar';
-import { BUSINESS_PLANS } from '../../../config';
 
 interface PortalBillingProps {
   profile: UserProfile;
   darkMode: boolean;
+  activeJobs: number;
   onSelectPlan: (planKey: string) => void;
   navigateToBusinessPricing: () => void;
   t: (key: string) => string;
@@ -18,6 +18,7 @@ const PLAN_DISPLAY = [
     name: 'Free',
     price: '$0',
     period: '/month',
+    jobLimit: 3,
     features: ['3 active job posts', '30-day job listing', 'Basic AI job creation', 'Standard applicant view'],
   },
   {
@@ -25,6 +26,7 @@ const PLAN_DISPLAY = [
     name: 'Starter',
     price: '$79',
     period: '/month',
+    jobLimit: 8,
     features: ['8 active job posts', '30-day job visibility', 'AI job description generator', 'Basic candidate matching'],
   },
   {
@@ -32,6 +34,7 @@ const PLAN_DISPLAY = [
     name: 'Growth',
     price: '$199',
     period: '/month',
+    jobLimit: 20,
     features: ['20 active job posts', '45-day job visibility', 'Advanced AI matching', 'Analytics & company branding'],
   },
   {
@@ -39,35 +42,42 @@ const PLAN_DISPLAY = [
     name: 'Pro / Enterprise',
     price: '$499',
     period: '/month',
+    jobLimit: 100,
     features: ['100 active job posts', '60-day premium visibility', 'Full AI + verified talent access', 'Priority support'],
   },
 ];
 
-export function PortalBilling({ profile, darkMode, onSelectPlan, navigateToBusinessPricing }: PortalBillingProps) {
+export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, navigateToBusinessPricing }: PortalBillingProps) {
   const dm = darkMode;
   const currentStatus = profile.subscription_status || 'free';
   const card = `rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`;
   const text = dm ? 'text-white' : 'text-gray-900';
   const muted = dm ? 'text-gray-400' : 'text-gray-500';
   const divider = dm ? 'border-gray-700' : 'border-gray-200';
-  const sectionLabel = `text-xs font-semibold uppercase tracking-widest mb-5 ${muted}`;
+  // match design: text-sm (not text-xs)
+  const sectionLabel = `text-sm font-semibold uppercase tracking-widest mb-5 ${muted}`;
 
-  // Map subscription_status to a display-friendly name
   const currentPlanKey = currentStatus.startsWith('pending_biz_')
     ? currentStatus.replace('pending_biz_', '')
     : currentStatus.startsWith('pending_')
     ? currentStatus.replace('pending_', '')
     : currentStatus;
 
-  const currentPlan = PLAN_DISPLAY.find((p) => p.key === currentPlanKey) ?? PLAN_DISPLAY[0];
+  const currentPlanIndex = PLAN_DISPLAY.findIndex((p) => p.key === currentPlanKey);
+  const currentPlan = PLAN_DISPLAY[currentPlanIndex] ?? PLAN_DISPLAY[0];
   const isActive = currentStatus !== 'free' && !currentStatus.startsWith('pending');
+
+  // Job Posts Used progress bar values
+  const planLimit = currentPlan.jobLimit;
+  const usedCount = Math.min(activeJobs, planLimit);
+  const usedPct = planLimit > 0 ? Math.round((usedCount / planLimit) * 100) : 0;
 
   return (
     <>
       <PortalTopBar title="Billing & Plan" darkMode={dm} />
       <div className="max-w-[1088px] mx-auto p-8 space-y-8">
 
-        {/* Current plan — real subscription_status from Firestore/Supabase profile */}
+        {/* Current plan */}
         <div className={card}>
           <p className={sectionLabel}>Current Plan</p>
           <div className="flex items-start justify-between flex-wrap gap-6">
@@ -107,14 +117,27 @@ export function PortalBilling({ profile, darkMode, onSelectPlan, navigateToBusin
               Manage Billing
             </button>
           </div>
+
+          {/* Job Posts Used progress bar */}
+          <div className={`mt-5 pt-5 border-t ${divider}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className={`text-sm font-medium ${text}`}>Job Posts Used</span>
+              <span className={`text-sm font-semibold ${text}`}>{usedCount} / {planLimit}</span>
+            </div>
+            <div className={`w-full h-2 rounded-full ${dm ? 'bg-gray-700' : 'bg-gray-200'}`}>
+              <div className="h-2 rounded-full bg-[#1d4ed8]" style={{ width: `${usedPct}%` }} />
+            </div>
+            <p className={`text-sm mt-2 ${muted}`}>{Math.max(0, planLimit - usedCount)} job post{planLimit - usedCount !== 1 ? 's' : ''} remaining this cycle</p>
+          </div>
         </div>
 
         {/* Available plans */}
         <div>
           <p className={sectionLabel}>Available Plans</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {PLAN_DISPLAY.map((plan) => {
+            {PLAN_DISPLAY.map((plan, idx) => {
               const isCurrent = plan.key === currentPlanKey;
+              const isUpgrade = idx > currentPlanIndex;
               return (
                 <div
                   key={plan.key}
@@ -143,12 +166,21 @@ export function PortalBilling({ profile, darkMode, onSelectPlan, navigateToBusin
                     <button disabled className="w-full py-2 rounded-lg text-sm font-semibold bg-[#1d4ed8] text-white cursor-default">
                       Current Plan
                     </button>
+                  ) : isUpgrade ? (
+                    <button
+                      onClick={() => onSelectPlan(plan.key)}
+                      className="w-full py-2 rounded-lg text-sm font-semibold bg-blue-50 text-[#1d4ed8] border border-[#1d4ed8] hover:bg-blue-100 transition-colors"
+                    >
+                      Upgrade
+                    </button>
                   ) : (
                     <button
                       onClick={() => onSelectPlan(plan.key)}
-                      className="w-full py-2 rounded-lg text-sm font-medium border border-[#1d4ed8] text-[#1d4ed8] hover:bg-[#1d4ed8] hover:text-white transition-colors"
+                      className={`w-full py-2 rounded-lg text-sm font-medium border transition-colors ${
+                        dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                      }`}
                     >
-                      {plan.key === 'free' ? 'Downgrade' : 'Upgrade'}
+                      Switch Plan
                     </button>
                   )}
                 </div>
@@ -157,11 +189,7 @@ export function PortalBilling({ profile, darkMode, onSelectPlan, navigateToBusin
           </div>
         </div>
 
-        {/*
-          TODO: Billing history — requires a Stripe webhook to persist invoice records
-          in Supabase/Firestore. No real data source exists yet. This is a placeholder
-          until a billing_events table is set up.
-        */}
+        {/* Billing history placeholder */}
         <div className={card}>
           <p className={sectionLabel}>Billing History</p>
           <p className={`text-sm ${muted}`}>

@@ -8,7 +8,7 @@ interface PortalTopBarProps {
 export function PortalTopBar({ title, darkMode = false }: PortalTopBarProps) {
   return (
     <div
-      className={`h-16 border-b flex items-center px-8 flex-shrink-0 ${
+      className={`h-[63px] border-b flex items-center justify-center px-8 flex-shrink-0 ${
         darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       }`}
     >

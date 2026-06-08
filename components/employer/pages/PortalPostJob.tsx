@@ -18,8 +18,7 @@ interface PortalPostJobProps {
 }
 
 /*
-  JobPostForm renders as a full-screen modal overlay (fixed inset-0).
-  We keep the portal's topbar visible underneath; the modal appears on top.
+  Renders JobPostForm embedded in the portal page flow (no modal overlay).
   onClose → onCancel (navigate back), onPostCreated → onSaved (refresh + navigate).
 */
 export function PortalPostJob({
@@ -41,6 +40,7 @@ export function PortalPostJob({
         onClose={onCancel}
         onPostCreated={onSaved}
         t={t}
+        embedded
       />
     </>
   );

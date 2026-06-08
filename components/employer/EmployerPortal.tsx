@@ -309,6 +309,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           <PortalBilling
             profile={profile}
             darkMode={darkMode}
+            activeJobs={kpiData.activeJobs}
             onSelectPlan={handleSelectPlan}
             navigateToBusinessPricing={navigateToBusinessPricing}
             t={t}

@@ -10,11 +10,13 @@ type JobPosting = Database['public']['Tables']['job_postings']['Row'];
 
 interface JobPostFormProps {
     session: Session;
-    profile: UserProfile; // Added profile prop
+    profile: UserProfile;
     onClose: () => void;
     onPostCreated: () => void;
     existingJob?: JobPosting | null;
     t: (key: string) => string;
+    /** When true, renders as an in-flow container rather than a fixed modal overlay. */
+    embedded?: boolean;
 }
 
 // Simple modal component for inclusivity results
@@ -56,7 +58,7 @@ const InclusivityModal: React.FC<{ suggestions: InclusivitySuggestion[]; onClose
 };
 
 
-const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, onPostCreated, existingJob, t }) => {
+const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, onPostCreated, existingJob, t, embedded = false }) => {
     // Main form state
     const [jobTitle, setJobTitle] = useState('');
     const [location, setLocation] = useState('');
@@ -198,6 +200,92 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         }
     };
 
+    // Shared form body — used in both embedded and modal modes
+    const formBody = (
+        <>
+            {error && <p className="text-red-600 bg-red-100 p-3 rounded-md text-sm">{error}</p>}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor="job-title" className="block text-sm font-medium text-gray-700">Job Title</label>
+                    <input type="text" id="job-title" value={jobTitle} onChange={e => setJobTitle(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                </div>
+                <div>
+                    <label htmlFor="location" className="block text-sm font-medium text-gray-700">Location</label>
+                    <input type="text" id="location" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g., Toronto, ON or Remote" required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                </div>
+            </div>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                <label htmlFor="key-responsibilities" className="block text-sm font-medium text-blue-900">AI Content Generation</label>
+                <textarea id="key-responsibilities" value={keyResponsibilities} onChange={e => setKeyResponsibilities(e.target.value)} rows={4} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="Enter 3-5 bullet points or a short paragraph of the main tasks for the AI to expand upon." />
+                <button type="button" onClick={handleGenerateDescription} disabled={aiLoading === 'description'} className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-400">
+                    {aiLoading === 'description' ? 'Generating...' : '✨ Generate from Key Points'}
+                </button>
+            </div>
+
+            <div>
+                <div className="border-b border-gray-200">
+                    <nav className="-mb-px flex space-x-4" aria-label="Tabs">
+                        <button type="button" onClick={() => setEditorView('edit')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${editorView === 'edit' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Write Description</button>
+                        <button type="button" onClick={() => setEditorView('preview')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${editorView === 'preview' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Preview</button>
+                    </nav>
+                </div>
+                <div className="mt-4">
+                    {editorView === 'edit' ? (
+                        <div className="animate-fade-in">
+                            <label htmlFor="job-description" className="sr-only">Job Description</label>
+                            <textarea id="job-description" value={jobDescription} onChange={e => setJobDescription(e.target.value)} rows={15} required className="block w-full border-gray-300 rounded-md shadow-sm" />
+                            <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                                <button type="button" onClick={handleFormatDescription} disabled={aiLoading === 'format' || !jobDescription} className="flex-1 text-sm py-2 px-4 border rounded-md hover:bg-gray-100 disabled:opacity-50">{aiLoading === 'format' ? 'Formatting...' : 'Format with AI'}</button>
+                                <button type="button" onClick={handleCheckInclusivity} disabled={aiLoading === 'inclusivity' || !jobDescription} className="flex-1 text-sm py-2 px-4 border rounded-md hover:bg-gray-100 disabled:opacity-50">{aiLoading === 'inclusivity' ? 'Checking...' : 'Check for Inclusivity'}</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="animate-fade-in p-4 border rounded-md bg-gray-50 min-h-[350px] max-h-[calc(100vh-450px)] overflow-y-auto text-sm">
+                            {jobDescription.trim() ? renderFormattedText(jobDescription) : <p className="text-gray-500 text-center">The preview will appear here.</p>}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div>
+                <label htmlFor="salary" className="block text-sm font-medium text-gray-700">Salary Range (Optional)</label>
+                <div className="mt-1 flex gap-2">
+                    <input type="text" id="salary" value={salaryRange} onChange={e => setSalaryRange(e.target.value)} placeholder="e.g., 80000 - 100000 CAD" className="block w-full border-gray-300 rounded-md shadow-sm" />
+                    <button type="button" onClick={handleAnalyzeSalary} disabled={aiLoading === 'salary'} className="flex-shrink-0 px-4 py-2 bg-gray-600 text-white font-semibold rounded-md shadow-sm hover:bg-gray-700 disabled:bg-gray-400">{aiLoading === 'salary' ? '...' : 'Analyze Rate'}</button>
+                </div>
+                {salarySuggestion && (
+                    <div className="mt-2 text-sm text-gray-600 bg-blue-50 p-2 rounded-md border border-blue-200">
+                        <p className="font-semibold">AI Suggestion:</p>
+                        <p><strong>Yearly:</strong> {salarySuggestion.yearly}</p>
+                        <p><strong>Monthly:</strong> {salarySuggestion.monthly}</p>
+                    </div>
+                )}
+            </div>
+        </>
+    );
+
+    if (embedded) {
+        // Render as a plain page section — no backdrop or fixed positioning
+        return (
+            <>
+                <div className="p-6">
+                    <form id="job-post-form" onSubmit={handleSubmit} className="space-y-6">
+                        {formBody}
+                    </form>
+                    <div className="flex justify-end items-center pt-4 border-t border-gray-200 mt-6 space-x-3">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50">Cancel</button>
+                        <button type="submit" form="job-post-form" disabled={loading} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-400">
+                            {loading ? (isEditing ? 'Saving...' : 'Posting...') : (isEditing ? 'Save Changes' : 'Post Job')}
+                        </button>
+                    </div>
+                </div>
+                {inclusivityResults && <InclusivityModal suggestions={inclusivityResults} onClose={() => setInclusivityResults(null)} />}
+            </>
+        );
+    }
+
     return (
         <>
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in" onClick={handleOverlayClick}>
@@ -209,87 +297,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                         </button>
                     </div>
                     <form id="job-post-form" onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-6">
-                        {error && <p className="text-red-600 bg-red-100 p-3 rounded-md text-sm">{error}</p>}
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="job-title" className="block text-sm font-medium text-gray-700">Job Title</label>
-                                <input type="text" id="job-title" value={jobTitle} onChange={e => setJobTitle(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                            </div>
-                            <div>
-                                <label htmlFor="location" className="block text-sm font-medium text-gray-700">Location</label>
-                                <input type="text" id="location" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g., Toronto, ON or Remote" required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                            </div>
-                        </div>
-
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
-                            <label htmlFor="key-responsibilities" className="block text-sm font-medium text-blue-900">AI Content Generation</label>
-                            <textarea id="key-responsibilities" value={keyResponsibilities} onChange={e => setKeyResponsibilities(e.target.value)} rows={4} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="Enter 3-5 bullet points or a short paragraph of the main tasks for the AI to expand upon." />
-                            <button type="button" onClick={handleGenerateDescription} disabled={aiLoading === 'description'} className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-400">
-                                {aiLoading === 'description' ? 'Generating...' : '✨ Generate from Key Points'}
-                            </button>
-                        </div>
-
-                        <div>
-                            <div className="border-b border-gray-200">
-                                <nav className="-mb-px flex space-x-4" aria-label="Tabs">
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditorView('edit')}
-                                        className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${editorView === 'edit' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                                    >
-                                        Write Description
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditorView('preview')}
-                                        className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${editorView === 'preview' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                                    >
-                                        Preview
-                                    </button>
-                                </nav>
-                            </div>
-
-                            <div className="mt-4">
-                                {editorView === 'edit' ? (
-                                    <div className="animate-fade-in">
-                                        <label htmlFor="job-description" className="sr-only">Job Description</label>
-                                        <textarea id="job-description" value={jobDescription} onChange={e => setJobDescription(e.target.value)} rows={15} required className="block w-full border-gray-300 rounded-md shadow-sm" />
-                                        <div className="mt-2 flex flex-col sm:flex-row gap-2">
-                                            <button type="button" onClick={handleFormatDescription} disabled={aiLoading === 'format' || !jobDescription} className="flex-1 text-sm py-2 px-4 border rounded-md hover:bg-gray-100 disabled:opacity-50">
-                                                {aiLoading === 'format' ? 'Formatting...' : 'Format with AI'}
-                                            </button>
-                                            <button type="button" onClick={handleCheckInclusivity} disabled={aiLoading === 'inclusivity' || !jobDescription} className="flex-1 text-sm py-2 px-4 border rounded-md hover:bg-gray-100 disabled:opacity-50">
-                                                {aiLoading === 'inclusivity' ? 'Checking...' : 'Check for Inclusivity'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="animate-fade-in p-4 border rounded-md bg-gray-50 min-h-[350px] max-h-[calc(100vh-450px)] overflow-y-auto text-sm">
-                                        {jobDescription.trim() ? renderFormattedText(jobDescription) : <p className="text-gray-500 text-center">The preview will appear here.</p>}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-
-                        <div>
-                            <label htmlFor="salary" className="block text-sm font-medium text-gray-700">Salary Range (Optional)</label>
-                            <div className="mt-1 flex gap-2">
-                                <input type="text" id="salary" value={salaryRange} onChange={e => setSalaryRange(e.target.value)} placeholder="e.g., 80000 - 100000 CAD" className="block w-full border-gray-300 rounded-md shadow-sm" />
-                                <button type="button" onClick={handleAnalyzeSalary} disabled={aiLoading === 'salary'} className="flex-shrink-0 px-4 py-2 bg-gray-600 text-white font-semibold rounded-md shadow-sm hover:bg-gray-700 disabled:bg-gray-400">
-                                    {aiLoading === 'salary' ? '...' : 'Analyze Rate'}
-                                </button>
-                            </div>
-                             {salarySuggestion && (
-                                <div className="mt-2 text-sm text-gray-600 bg-blue-50 p-2 rounded-md border border-blue-200">
-                                    <p className="font-semibold">AI Suggestion:</p>
-                                    <p><strong>Yearly:</strong> {salarySuggestion.yearly}</p>
-                                    <p><strong>Monthly:</strong> {salarySuggestion.monthly}</p>
-                                </div>
-                            )}
-                        </div>
-
+                        {formBody}
                     </form>
                     <div className="flex-shrink-0 flex justify-end items-center p-4 border-t bg-gray-50 rounded-b-xl space-x-3">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50">Cancel</button>

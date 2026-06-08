@@ -136,6 +136,22 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved }: Portal
 
               <div className="flex gap-4 pt-2">
                 <button
+                  type="button"
+                  onClick={() => {
+                    // Reset to the original profile values
+                    setCompanyName(profile.company_name || '');
+                    setWebsite(profile.company_website || '');
+                    setDescription(profile.company_description || '');
+                    setLogoUrl(profile.company_logo_url || null);
+                    setMessage(null);
+                  }}
+                  className={`flex-1 px-6 py-3 border rounded-lg transition-colors ${
+                    dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
                   type="submit"
                   disabled={saving}
                   className="flex-1 px-6 py-3 bg-[#1d4ed8] text-white rounded-lg hover:bg-[#1a45c9] transition-colors disabled:opacity-60 font-medium"

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Briefcase, Users, TrendingUp, BarChart2 } from 'lucide-react';
+import { Briefcase, Users, TrendingUp, BarChart2, Plus, User, CreditCard, Building2, ChevronRight } from 'lucide-react';
 import { PortalTopBar } from '../PortalTopBar';
 import type { Database } from '../../../lib/supabaseClient';
 import type { PortalPage } from '../PortalSidebar';
@@ -83,38 +83,156 @@ export function PortalDashboard({
           <KpiCard title="Active Job Posts" value={activeJobs.toString()} Icon={Briefcase} darkMode={dm} />
           <KpiCard title="Total Applicants" value={totalApplicants.toString()} Icon={Users} darkMode={dm} />
           <KpiCard title="New Applicants (7d)" value={newApplicants.toString()} Icon={TrendingUp} darkMode={dm} />
-          <KpiCard title="Avg Match Score" value={avgMatchScore > 0 ? `${avgMatchScore}%` : '—'} Icon={BarChart2} darkMode={dm} />
+          <div
+            className={`rounded-xl border p-5 flex items-center gap-4 ${
+              dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            }`}
+          >
+            <div className={`rounded-lg p-3 ${dm ? 'bg-gray-700' : 'bg-blue-50'}`}>
+              <BarChart2 className="w-6 h-6 text-[#1d4ed8]" />
+            </div>
+            <div>
+              <p className={`text-2xl font-bold ${dm ? 'text-white' : 'text-gray-900'}`}>
+                {avgMatchScore > 0 ? `${avgMatchScore}%` : '—'}
+              </p>
+              <p className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Avg Match Score</p>
+              {avgMatchScore === 0 && (
+                <p className={`text-xs mt-0.5 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>No scored applicants yet</p>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Quick actions */}
+        {/* Quick actions — 6-button grid matching design */}
         <div className={`rounded-xl border p-6 mb-8 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <h2 className={`text-base font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>Quick Actions</h2>
-          <div className="flex flex-wrap gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <button
               onClick={() => onNavigate('post-job')}
-              className="flex items-center gap-2 px-4 py-2 bg-[#1d4ed8] text-white rounded-lg hover:bg-[#1a45c9] text-sm font-medium transition-colors"
+              className="flex items-center gap-3 px-4 py-3 bg-[#1d4ed8] text-white rounded-lg hover:bg-[#1a45c9] text-sm font-medium transition-colors"
             >
-              <Briefcase className="w-4 h-4" />
-              Post a Job
-            </button>
-            <button
-              onClick={() => onNavigate('talent-pool')}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium transition-colors ${
-                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              Discover Talent
+              <Plus className="w-5 h-5" />
+              <span>Post a Job</span>
             </button>
             <button
               onClick={() => onNavigate('job-listings')}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
                 dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <BarChart2 className="w-4 h-4" />
-              View Listings
+              <Users className="w-5 h-5" />
+              <span>View Applicants</span>
             </button>
+            <button
+              onClick={() => onNavigate('talent-pool')}
+              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
+                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Users className="w-5 h-5" />
+              <span>Discover Talent</span>
+            </button>
+            <button
+              onClick={() => onNavigate('company-profile')}
+              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
+                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <User className="w-5 h-5" />
+              <span>Organization Profile</span>
+            </button>
+            <button
+              onClick={() => onNavigate('billing')}
+              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
+                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <CreditCard className="w-5 h-5" />
+              <span>Billing &amp; Plan</span>
+            </button>
+            <button
+              onClick={() => onNavigate('agency-hub')}
+              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
+                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Building2 className="w-5 h-5" />
+              <span>Agency Hub</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Job Overview + Action Required — lg:col-span-2 + 1 layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Job Overview — derived from live jobPostings */}
+          <div className={`lg:col-span-2 rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-lg font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>Job Overview</h2>
+            {jobPostings.length === 0 ? (
+              <p className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-500'}`}>No job postings yet.</p>
+            ) : (() => {
+              const active = jobPostings.filter((j) => j.is_active);
+              const topPerformer = [...active].sort((a, b) => b.applicant_count - a.applicant_count)[0];
+              const lowActivity = [...active].sort((a, b) => a.applicant_count - b.applicant_count)[0];
+              const expiringSoon = [...active].sort(
+                (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+              )[0];
+              const highlights = [
+                topPerformer && {
+                  category: 'Top performing job',
+                  jobTitle: topPerformer.title,
+                  metric: `${topPerformer.applicant_count} applicant${topPerformer.applicant_count !== 1 ? 's' : ''}`,
+                },
+                lowActivity && lowActivity.id !== topPerformer?.id && {
+                  category: 'Low activity job',
+                  jobTitle: lowActivity.title,
+                  metric: `${lowActivity.applicant_count} applicant${lowActivity.applicant_count !== 1 ? 's' : ''}`,
+                },
+                expiringSoon && {
+                  category: 'Oldest active posting',
+                  jobTitle: expiringSoon.title,
+                  metric: `Posted ${new Date(expiringSoon.created_at).toLocaleDateString()}`,
+                },
+              ].filter(Boolean) as { category: string; jobTitle: string; metric: string }[];
+              return (
+                <div className="space-y-4">
+                  {highlights.map((h, i) => (
+                    <div key={i} className={`border rounded-lg p-4 ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
+                      <div className={`text-xs font-medium mb-2 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{h.category}</div>
+                      <div className={`font-semibold mb-1 ${dm ? 'text-white' : 'text-gray-900'}`}>{h.jobTitle}</div>
+                      <div className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>{h.metric}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Action Required — static prompts wired to navigation */}
+          <div className={`rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-lg font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>Action Required</h2>
+            <div className="space-y-3">
+              {[
+                { message: 'Review new applicants', page: 'job-listings' as PortalPage, action: 'Review now' },
+                { message: 'Complete your company profile', page: 'company-profile' as PortalPage, action: 'Go to profile' },
+                { message: 'Check billing & plan', page: 'billing' as PortalPage, action: 'View plan' },
+              ].map(({ message, page, action }) => (
+                <div
+                  key={page}
+                  className={`flex items-center justify-between p-4 rounded-lg border ${
+                    dm ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-white'
+                  }`}
+                >
+                  <p className={`text-sm ${dm ? 'text-gray-200' : 'text-gray-900'}`}>{message}</p>
+                  <button
+                    onClick={() => onNavigate(page)}
+                    className="flex items-center gap-1 text-sm text-[#1d4ed8] font-medium ml-3 flex-shrink-0"
+                  >
+                    {action}
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
