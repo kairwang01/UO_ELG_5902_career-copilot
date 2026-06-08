@@ -2,162 +2,393 @@
 import React, { useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { UserProfile } from '../types';
+import BusinessSignInModal from './business/BusinessSignInModal';
+import BusinessSignUpModal from './business/BusinessSignUpModal';
+import BusinessForgotPasswordModal from './business/BusinessForgotPasswordModal';
+import { data } from '@/lib/data';
 
 interface BusinessPageProps {
-    onPostJobClick: () => void;
-    onSignInClick: () => void;
-    session: Session | null;
-    profile: UserProfile | null;
-    onSelectBusinessPlan: (planKey: string) => void;
-    t: (key: string) => string;
-    onBack: () => void;
+  onPostJobClick: () => void;
+  onSignInClick: () => void;
+  session: Session | null;
+  profile: UserProfile | null;
+  onSelectBusinessPlan: (planKey: string) => void;
+  t: (key: string) => string;
+  onBack: () => void;
 }
 
-const FeatureCard: React.FC<{ icon: React.ReactNode; title: string; description: string; }> = ({ icon, title, description }) => (
-    <div className="flex flex-col items-start p-6 bg-white dark:bg-slate-800 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-sm transition-all duration-300 hover:shadow-lg hover:border-blue-300/50 dark:hover:border-blue-500/50 hover:-translate-y-1">
-        <div className="flex-shrink-0 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 p-3 rounded-full mb-4">
-            {icon}
-        </div>
-        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
-        <p className="text-gray-600 dark:text-gray-400">{description}</p>
-    </div>
-);
+// Business plans matching the prototype design
+const businessPlans = [
+  {
+    id: 'free',
+    name: 'Free Plan',
+    price: '$0',
+    period: '/ month',
+    highlight: null,
+    featured: false,
+    features: [
+      '3 active job posts',
+      '30-day job listing',
+      'Basic AI job creation',
+      'Standard applicant view',
+    ],
+  },
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: '$79',
+    period: '/ month',
+    highlight: 'MOST POPULAR',
+    featured: true,
+    features: [
+      '8 active job posts',
+      '30-day job visibility',
+      'AI job description generator',
+      'Basic candidate matching',
+    ],
+  },
+  {
+    id: 'growth',
+    name: 'Growth',
+    price: '$199',
+    period: '/ month',
+    highlight: null,
+    featured: false,
+    features: [
+      '20 active job posts',
+      '45-day job visibility',
+      'Advanced AI matching',
+      'Analytics & company branding',
+    ],
+  },
+  {
+    id: 'pro',
+    name: 'Pro / Enterprise',
+    price: '$499',
+    period: '/ month',
+    highlight: null,
+    featured: false,
+    features: [
+      '100 active job posts',
+      '60-day premium visibility',
+      'Full AI + verified talent access',
+      'Priority support & insights',
+    ],
+  },
+];
 
-const PricingCard: React.FC<{ title: string; price: string; description: string; features: string[]; isFeatured?: boolean; onSelect: () => void; }> = ({ title, price, description, features, isFeatured = false, onSelect }) => (
-    <div className={`relative flex flex-col p-8 rounded-2xl border shadow-lg ${isFeatured ? 'bg-gray-900 dark:bg-slate-900 text-white border-blue-700 dark:border-blue-600' : 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-slate-700'}`}>
-        {isFeatured && <div className="absolute top-0 -translate-y-1/2 bg-gradient-to-r from-blue-600 to-indigo-700 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-white rounded-full shadow-md">Most Popular</div>}
-        <h3 className="text-xl font-bold">{title}</h3>
-        <p className={`mt-2 text-sm ${isFeatured ? 'text-gray-300' : 'text-gray-600 dark:text-gray-400'}`}>{description}</p>
-        <div className="mt-4 flex items-baseline">
-            <span className="text-5xl font-extrabold tracking-tight">{price}</span>
+type ModalState = 'none' | 'signin' | 'signup' | 'forgot';
+
+const BusinessPage: React.FC<BusinessPageProps> = ({
+  onPostJobClick,
+  onSignInClick,
+  session,
+  profile,
+  onSelectBusinessPlan,
+  t,
+  onBack,
+}) => {
+  const pricingRef = useRef<HTMLElement>(null);
+  const [modal, setModal] = React.useState<ModalState>('none');
+
+  const scrollToPricing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    pricingRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // If logged in as employer, "Post a Job" goes straight to employer dashboard
+  const handlePostJob = () => {
+    if (session) {
+      // TODO Phase 2: deep-link to job-post form within the hiring portal
+      onBack();
+    } else {
+      setModal('signup');
+    }
+  };
+
+  // "Discover Talent" always navigates to employer dashboard
+  const handleDiscoverTalent = () => {
+    if (session) {
+      // TODO Phase 2: deep-link to candidate search page
+      onBack();
+    } else {
+      setModal('signup');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Nav */}
+      <nav className="bg-blue-950 border-b border-blue-900">
+        <div className="max-w-[1088px] mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo — clicking returns to business homepage */}
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 focus:outline-none"
+              aria-label="Career CoPilot home"
+            >
+              <div className="w-8 h-8 bg-blue-400 rounded-md flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <span className="font-semibold text-xl text-white">Career CoPilot</span>
+            </button>
+
+            {/* Nav links */}
+            <div className="hidden md:flex items-center gap-8">
+              {/* TODO Phase 2: deep-link to full hiring portal page */}
+              <button
+                onClick={onBack}
+                className="text-gray-200 hover:text-white transition-colors"
+              >
+                Hiring Portal
+              </button>
+              <button
+                onClick={handlePostJob}
+                className="text-gray-200 hover:text-white transition-colors"
+              >
+                Post a Job
+              </button>
+              <a
+                href="#pricing"
+                onClick={scrollToPricing}
+                className="text-gray-200 hover:text-white transition-colors"
+              >
+                Pricing
+              </a>
+            </div>
+
+            {/* Auth buttons */}
+            <div className="flex items-center gap-4">
+              {session ? (
+                <>
+                  <span className="text-gray-300 text-sm">
+                    {profile?.full_name || session.user.email}
+                  </span>
+                  <button
+                    onClick={() => data.auth.signOut()}
+                    className="text-gray-200 hover:text-white transition-colors text-sm"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setModal('signin')}
+                    className="text-gray-200 hover:text-white transition-colors"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => setModal('signup')}
+                    className="bg-[#1D4ED8] text-white px-6 py-2 rounded-md hover:bg-[#1e40af] transition-colors"
+                  >
+                    Get Started
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
-        <ul role="list" className="mt-8 space-y-4 text-sm leading-6">
-            {features.map((feature, index) => (
-                <li key={index} className="flex gap-x-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 flex-none ${isFeatured ? 'text-blue-400' : 'text-blue-600 dark:text-blue-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    <span>{feature}</span>
-                </li>
+      </nav>
+
+      {/* Hero */}
+      <main className="max-w-[1088px] mx-auto px-6 py-16 md:py-24">
+        <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6 text-gray-900">
+          Connect with{' '}
+          <span className="text-[#1D4ED8]">Top Talent</span>, Faster.
+        </h1>
+        <p className="text-lg mb-8 leading-relaxed max-w-3xl text-gray-600">
+          Post your job on Career CoPilot and reach a curated pool of ambitious
+          professionals actively improving their careers with our AI tools.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <button
+            onClick={handlePostJob}
+            className="bg-[#1D4ED8] text-white px-8 py-3 rounded-md hover:bg-[#1e40af] transition-colors font-medium"
+          >
+            Post a Job
+          </button>
+          <button
+            onClick={handleDiscoverTalent}
+            className="border border-gray-300 text-gray-700 px-8 py-3 rounded-md hover:border-gray-400 transition-colors font-medium"
+          >
+            Discover Talent
+          </button>
+        </div>
+      </main>
+
+      {/* Features — "Why Post With Us?" */}
+      <section className="py-16">
+        <div className="max-w-[1088px] mx-auto px-6">
+          <h2 className="text-center text-3xl font-bold mb-4 text-gray-900">
+            Why Post With Us?
+          </h2>
+          <p className="text-center mb-12 max-w-2xl mx-auto text-gray-600">
+            Access a unique pool of candidates who are serious about their professional growth
+          </p>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              {
+                title: 'AI-Matched Candidates',
+                desc: 'Our platform analyzes candidate resumes against your job description, highlighting top matches and saving you time.',
+                icon: (
+                  <svg className="w-6 h-6 text-[#1D4ED8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                ),
+              },
+              {
+                title: 'Engaged Talent Pool',
+                desc: 'Reach candidates who are proactively working on their career development, not just passively browsing.',
+                icon: (
+                  <svg className="w-6 h-6 text-[#1D4ED8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                ),
+              },
+              {
+                title: 'Simplified Posting',
+                desc: 'A straightforward job posting process gets your role in front of the right people in minutes.',
+                icon: (
+                  <svg className="w-6 h-6 text-[#1D4ED8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                ),
+              },
+              {
+                title: 'Diverse Reach',
+                desc: 'Connect with a global community, including recent graduates, career switchers, and new immigrants.',
+                icon: (
+                  <svg className="w-6 h-6 text-[#1D4ED8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ),
+              },
+            ].map((feature) => (
+              <div key={feature.title} className="rounded-xl p-6 shadow-sm bg-white">
+                <div className="w-12 h-12 rounded-md flex items-center justify-center mb-4 bg-blue-100">
+                  {feature.icon}
+                </div>
+                <h3 className="text-lg font-semibold mb-2 text-gray-900">{feature.title}</h3>
+                <p className="text-sm text-gray-600">{feature.desc}</p>
+              </div>
             ))}
-        </ul>
-        <button onClick={onSelect} className={`mt-10 block w-full text-center rounded-lg px-6 py-3 text-sm font-semibold leading-6 shadow-sm transition-all duration-300 ${isFeatured ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-white dark:bg-slate-700 text-blue-600 dark:text-white ring-1 ring-inset ring-blue-200 dark:ring-slate-600 hover:ring-blue-300 dark:hover:bg-slate-600'}`}>
-            Get Started
-        </button>
-    </div>
-);
-
-
-const BusinessPage: React.FC<BusinessPageProps> = ({ onPostJobClick: onSelectPlan, onSignInClick, session, onSelectBusinessPlan, t, onBack }) => {
-    
-    const pricingSectionRef = useRef<HTMLDivElement>(null);
-
-    const handleGetStarted = (planKey: string) => {
-        if (session) {
-            onSelectBusinessPlan(planKey);
-        } else {
-            onSelectPlan();
-        }
-    };
-    
-    return (
-        <div className="animate-fade-in relative">
-            {session && onBack && (
-                <button 
-                    onClick={onBack} 
-                    className="absolute top-4 left-4 z-10 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 transition-colors bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 shadow-sm"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                    Back to Dashboard
-                </button>
-            )}
-
-            {/* Hero Section */}
-            <section className="py-20 md:py-32 bg-gray-50 dark:bg-slate-900/50 rounded-lg">
-                <div className="max-w-4xl mx-auto text-center">
-                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tighter text-gray-900 dark:text-gray-100">
-                        {t('business_hero_title_part1')} <span className="text-blue-700 dark:text-blue-500">{t('business_hero_title_part2')}</span>, {t('business_hero_title_part3')}.
-                    </h1>
-                    <p className="mt-6 text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                        {t('business_hero_subtitle')}
-                    </p>
-                    <div className="mt-8">
-                         {!session ? (
-                            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                                <button onClick={onSelectPlan} className="bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-blue-800 transition-all duration-300 ease-in-out transform hover:-translate-y-1">
-                                    {t('business_hero_get_started_button')}
-                                </button>
-                                <button onClick={onSignInClick} className="bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 font-bold py-3 px-8 rounded-lg shadow-md border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700 hover:border-gray-300 dark:hover:border-slate-600 transition-all duration-300">
-                                    {t('business_hero_signin_button')}
-                                </button>
-                            </div>
-                        ) : (
-                            <button onClick={() => pricingSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} className="bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-blue-800 transition-all duration-300 ease-in-out transform hover:-translate-y-1">
-                                {t('business_hero_view_pricing_button')}
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </section>
-
-            {/* Features Section */}
-            <section className="py-16 md:py-24">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">{t('business_features_title')}</h2>
-                        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">{t('business_features_subtitle')}</p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                        <FeatureCard 
-                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>}
-                            title={t('business_feature_1_title')}
-                            description={t('business_feature_1_desc')}
-                        />
-                         <FeatureCard 
-                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
-                            title={t('business_feature_2_title')}
-                            description={t('business_feature_2_desc')}
-                        />
-                        <FeatureCard 
-                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h10a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.705 11a7 7 0 00-5.452-2.322M10 21h4m-2 0v-4" /></svg>}
-                            title={t('business_feature_3_title')}
-                            description={t('business_feature_3_desc')}
-                        />
-                        <FeatureCard 
-                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9V3m-9 9h18" /></svg>}
-                            title={t('business_feature_4_title')}
-                            description={t('business_feature_4_desc')}
-                        />
-                    </div>
-                </div>
-            </section>
-            
-            {/* Pricing Section */}
-            <section ref={pricingSectionRef} id="business-pricing-section" className="py-16 md:py-24 bg-gray-50 dark:bg-slate-900/50">
-                <div className="max-w-4xl mx-auto px-4 sm:px-6">
-                     <div className="text-center mb-12">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">{t('business_pricing_title')}</h2>
-                        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">{t('business_pricing_subtitle')}</p>
-                    </div>
-                    <div className="isolate mx-auto grid max-w-md grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-2">
-                        <PricingCard 
-                            title={t('plan_single_post_name')}
-                            price="$299"
-                            description={t('business_plan_1_desc')}
-                            features={[t('plan_single_post_feature_1'), t('plan_single_post_feature_2'), t('plan_single_post_feature_3')]}
-                            onSelect={() => handleGetStarted('single_post')}
-                        />
-                         <PricingCard 
-                            title={t('plan_job_pack_name')}
-                            price="$999"
-                            description={t('business_plan_2_desc')}
-                            features={[t('plan_job_pack_feature_1'), t('plan_job_pack_feature_2'), t('plan_job_pack_feature_3'), t('plan_job_pack_feature_4')]}
-                            isFeatured={true}
-                            onSelect={() => handleGetStarted('job_pack')}
-                        />
-                    </div>
-                </div>
-            </section>
+          </div>
         </div>
-    );
+      </section>
+
+      {/* Pricing */}
+      <section
+        id="pricing"
+        ref={pricingRef}
+        className="py-20 bg-gray-50"
+      >
+        <div className="max-w-[1088px] mx-auto px-6">
+          <h2 className="text-center text-4xl font-bold mb-4 text-gray-900">
+            Simple &amp; Transparent Pricing
+          </h2>
+          <p className="text-center mb-14 max-w-2xl mx-auto text-gray-500">
+            Choose a plan that fits your hiring needs. No hidden fees.
+          </p>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+            {businessPlans.map((plan) => (
+              <div
+                key={plan.id}
+                className={`relative rounded-2xl p-7 flex flex-col ${
+                  plan.featured
+                    ? 'bg-[#0F172A] text-white shadow-2xl ring-2 ring-[#1D4ED8]'
+                    : 'bg-white text-gray-900 shadow-sm'
+                }`}
+              >
+                {plan.highlight && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <span className="bg-[#1D4ED8] text-white text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wide whitespace-nowrap">
+                      Most Popular
+                    </span>
+                  </div>
+                )}
+
+                <p className={`font-semibold mb-3 ${plan.featured ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {plan.name}
+                </p>
+
+                <div className="flex items-end gap-1 mb-1">
+                  <span className={`text-5xl font-bold leading-none ${plan.featured ? 'text-white' : 'text-gray-900'}`}>
+                    {plan.price}
+                  </span>
+                  <span className={`mb-1 ${plan.featured ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {plan.period}
+                  </span>
+                </div>
+
+                <div className={`h-px my-5 ${plan.featured ? 'bg-gray-700' : 'bg-gray-100'}`} />
+
+                <ul className="flex flex-col gap-3 flex-1 mb-8">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5">
+                      <svg
+                        className={`w-5 h-5 mt-0.5 flex-shrink-0 ${plan.featured ? 'text-[#60A5FA]' : 'text-[#1D4ED8]'}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className={`text-sm ${plan.featured ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {feature}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={() => {
+                    if (session) {
+                      // TODO Phase 2: map plan IDs to real Stripe/Firestore plan keys
+                      onSelectBusinessPlan(plan.id === 'starter' ? 'single_post' : 'job_pack');
+                    } else {
+                      setModal('signup');
+                    }
+                  }}
+                  className={`w-full py-2.5 rounded-lg font-medium transition-colors ${
+                    plan.featured
+                      ? 'bg-[#1D4ED8] text-white hover:bg-[#1e40af]'
+                      : 'border border-[#1D4ED8] text-[#1D4ED8] hover:bg-[#1D4ED8] hover:text-white'
+                  }`}
+                >
+                  Get Started
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Auth modals — wired to real Firebase auth via lib/data */}
+      <BusinessSignInModal
+        isOpen={modal === 'signin'}
+        onOpenChange={(open) => setModal(open ? 'signin' : 'none')}
+        onSwitchToSignUp={() => setModal('signup')}
+        onSwitchToForgotPassword={() => setModal('forgot')}
+      />
+      <BusinessSignUpModal
+        isOpen={modal === 'signup'}
+        onOpenChange={(open) => setModal(open ? 'signup' : 'none')}
+        onSwitchToSignIn={() => setModal('signin')}
+      />
+      <BusinessForgotPasswordModal
+        isOpen={modal === 'forgot'}
+        onOpenChange={(open) => setModal(open ? 'forgot' : 'none')}
+        onSwitchToSignIn={() => setModal('signin')}
+      />
+    </div>
+  );
 };
 
 export default BusinessPage;
