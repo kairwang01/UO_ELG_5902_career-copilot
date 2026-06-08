@@ -1,16 +1,20 @@
 /**
- * Provisional Firestore schema constants for the credit system.
+ * Firestore schema constants.
  *
  * ALL Firestore field names and collection paths live here.
- * When Xiaoyi delivers the real schema, only this file changes —
+ * If the schema ever changes, only this file needs updating —
  * deductCredits.ts and every handler stay untouched.
  *
- * Provisional shape (agreed 2026-05-29, update when Xiaoyi confirms):
+ * users/{uid} shape:
+ *   credits:             number   — current balance (M9 transaction target)
+ *   role:                string   — "candidate" | "employer" | "agency"
+ *   subscription_status: string   — "free" | "pro" | ...
+ *   full_name:           string | null
+ *   avatar_url:          string | null
+ *   created_at:          string   — ISO timestamp
+ *   updated_at:          string   — ISO timestamp
  *
- *   users/{uid}
- *     credits:            number   — current balance (the M9 transaction target)
- *     role:               string   — "candidate" | "employer" | "agency"
- *     subscriptionStatus: string   — "free" | "pro" | ...
+ * Field names use snake_case to match the frontend UserProfile type (types.ts).
  */
 
 /** Top-level collection for user documents. */
@@ -20,7 +24,11 @@ export const USERS_COLLECTION = "users";
 export const USER_FIELDS = {
   credits: "credits",
   role: "role",
-  subscriptionStatus: "subscriptionStatus",
+  subscriptionStatus: "subscription_status",
+  fullName: "full_name",
+  avatarUrl: "avatar_url",
+  createdAt: "created_at",
+  updatedAt: "updated_at",
 } as const;
 
 /**

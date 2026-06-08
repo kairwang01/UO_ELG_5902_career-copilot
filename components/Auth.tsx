@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { data } from '@/lib/data';
 import { ALL_PLANS, BUSINESS_PLANS } from '@/config';
 import type { Plan } from '@/types';
 import { X } from 'lucide-react';
@@ -74,7 +74,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setLoading(true);
     setError(null);
     setMessage(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await data.auth.signInWithPassword(email, password);
     if (error) setError(error.message);
     setLoading(false);
   };
@@ -96,13 +96,10 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         ? `pending_biz_${selectedPlan}`
         : selectedPlan === 'free' ? 'free' : `pending_${selectedPlan}`;
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    const { data: authData, error: authError } = await data.auth.signUp(email, password);
 
     if (authError) {
-      if (authError.message.includes('User already registered')) {
+      if (authError.message.includes('email-already-in-use') || authError.message.includes('already registered')) {
         setError(t('auth_error_user_exists'));
         setAuthView('sign_in');
       } else {
@@ -112,24 +109,24 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
       return;
     }
 
-    if (authData.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: authData.user.id,
-          subscription_status: statusForDb,
-          full_name: '', // User can update this later in account settings.
-          role: mode === 'business' ? 'employer' : 'candidate',
-          updated_at: new Date().toISOString()
-        });
+    if (authData) {
+      // onUserCreated trigger auto-creates users/{uid} with 100 credits.
+      // We upsert additional profile fields (role, subscription_status) on top.
+      const { error: profileError } = await data.profiles.upsert({
+        id: authData.id,
+        subscription_status: statusForDb,
+        full_name: '',
+        role: mode === 'business' ? 'employer' : 'candidate',
+        updated_at: new Date().toISOString(),
+      });
 
       if (profileError) {
-        setError(`Account created, but we failed to set up your profile. Please contact support. Error: ${profileError.message}`);
+        setError(`Account created, but we failed to set up your profile. Error: ${profileError.message}`);
       } else {
-        setMessage(t('auth_message_confirm_email'));
+        setMessage('Account created successfully! You are now signed in.');
       }
     } else {
-        setError('User account was not created successfully. Please try again.');
+      setError('User account was not created successfully. Please try again.');
     }
 
     setLoading(false);
@@ -140,7 +137,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setLoading(true);
     setError(null);
     setMessage(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const { error } = await data.auth.resetPassword(email);
     if (error) setError(error.message);
     else setMessage(t('auth_message_reset_link_sent'));
     setLoading(false);
@@ -153,7 +150,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
 
     setLoading(true);
     setError(null);
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    await data.auth.signInWithGoogle();
     // The browser will redirect, so setLoading(false) may not be reached.
   }
 

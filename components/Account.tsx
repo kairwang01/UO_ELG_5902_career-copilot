@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { data } from '@/lib/data';
 import type { Session } from '@supabase/supabase-js';
 import Avatar from './Avatar';
 import { STRIPE_CUSTOMER_PORTAL_LINK, ALL_PLANS, PLAN_HIERARCHY } from '../config';
@@ -161,26 +161,22 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
       setLoading(true);
       const { user } = session;
 
-      let { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const { data: profileData, error } = await data.profiles.get(user.id);
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
+      if (error && !error.message.includes('not found')) {
+        throw new Error(error.message);
       }
 
-      if (data) {
-        setFullName(data.full_name || '');
-        setAvatarUrl(data.avatar_url || '');
-        setSubscriptionStatus(data.subscription_status);
-        setWalletAddress(data.wallet_address || null);
-        setNftMinted(data.nft_minted || false);
-        setNftStaked(data.nft_staked || false);
-        setNftEarnings(data.nft_earnings || 0);
-        setTokenId(data.nft_token_id);
-        setResumeText(data.resume_text || null);
+      if (profileData) {
+        setFullName(profileData.full_name || '');
+        setAvatarUrl(profileData.avatar_url || '');
+        setSubscriptionStatus(profileData.subscription_status);
+        setWalletAddress(profileData.wallet_address || null);
+        setNftMinted(profileData.nft_minted || false);
+        setNftStaked(profileData.nft_staked || false);
+        setNftEarnings(profileData.nft_earnings || 0);
+        setTokenId(profileData.nft_token_id);
+        setResumeText(profileData.resume_text || null);
       }
     } catch (error: any) {
         console.error("Error getting profile:", error);
@@ -208,8 +204,8 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
         updated_at: new Date().toISOString(),
       };
 
-      let { error } = await supabase.from('profiles').upsert(updates);
-      if (error) throw error;
+      const { error } = await data.profiles.upsert(updates);
+      if (error) throw new Error(error.message);
       setMessage({type: 'success', text: t('account_profile_updated_success')});
     } catch (error: any) {
       console.error("Error updating profile:", error);
@@ -234,7 +230,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
     }
     
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await data.auth.updatePassword(password);
     if (error) {
         setMessage({type: 'error', text: error.message});
     } else {
@@ -263,10 +259,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
     try {
       setLoading(true);
       const { user } = session;
-      const { error } = await supabase
-        .from('profiles')
-        .update({ wallet_address: address })
-        .eq('id', user.id);
+      const { error } = await data.profiles.update(user.id, { wallet_address: address });
 
       if (error) {
         console.error("Supabase error details:", error);

@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // users/{uid}
+    // - A signed-in user may read their own document.
+    // - A user may update non-sensitive profile fields (name, avatar, company info, etc.)
+    //   but NEVER credits or subscription_status — those are server-only writes.
+    match /users/{uid} {
+
+      // Only the owner can read their own profile.
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Creating a new profile document is allowed (e.g. on sign-up).
+      allow create: if request.auth != null && request.auth.uid == uid;
+
+      // Updating: owner may change profile fields but NOT credits or subscription_status.
+      // Those are server-only via Cloud Functions (admin SDK bypasses these rules).
+      allow update: if request.auth != null
+                    && request.auth.uid == uid
+                    && !request.resource.data.diff(resource.data).affectedKeys()
+                        .hasAny(["credits", "subscription_status"]);
+    }
+
+    // All other collections are denied by default.
+  }
+}

@@ -7,6 +7,7 @@ import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
 import { supabase } from './lib/supabaseClient';
 import type { Json } from './lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
+import { data } from './lib/data';
 import { useLocalization } from './hooks/useLocalization';
 import { FileText } from 'lucide-react';
 import { ToastProvider } from './components/Toast';
@@ -127,10 +128,7 @@ const AppContent: React.FC = () => {
       const handler = setTimeout(async () => {
         if (!session.user) return;
         try {
-          const { error } = await supabase
-            .from('profiles')
-            .update({ resume_text: resumeText })
-            .eq('id', session.user.id);
+          const { error } = await data.profiles.update(session.user.id, { resume_text: resumeText });
           if (error) {
             console.error('Failed to auto-save resume text:', error.message);
           }
@@ -151,73 +149,29 @@ const AppContent: React.FC = () => {
       if (!session?.user) return;
       const user = session.user;
 
-      let { data, error, status } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const { data: profileData, error } = await data.profiles.get(user.id);
 
-      if (error && status !== 406) {
-        throw error;
+      if (error && !error.message.includes('not found') && !error.message.includes('not-found')) {
+        // Real Firestore error (e.g. permission-denied) — surface it.
+        throw new Error(error.message);
       }
-      
-      if (data) {
-        setProfile(data);
-        setResumeText(data.resume_text || '');
-        
-        let userCredits = data.credits || 0;
-        // Specifically assign 5000 credits to abhishek.ip@gmail.com
-        if (user.email === 'abhishek.ip@gmail.com' && userCredits < 5000) {
-          userCredits = 5000;
-          supabase.from('profiles').update({ credits: userCredits }).eq('id', user.id).then(({ error }) => {
-             if (error) console.error('Failed to update specific user credits:', error);
-          });
-        }
-        
-        setCredits(userCredits);
+
+      if (profileData) {
+        setProfile(profileData);
+        setResumeText(profileData.resume_text || '');
+        setCredits(profileData.credits || 0);
       } else {
-        console.log("No profile found for user, creating one.");
-
-        const pendingPlan = sessionStorage.getItem('pending_plan');
-        const pendingMode = sessionStorage.getItem('pending_mode');
-        
-        let subscriptionStatus = 'free';
-        let role: 'candidate' | 'employer' | 'agency' = 'candidate';
-        const initialCredits = user.email === 'abhishek.ip@gmail.com' ? 5000 : PLAN_CREDITS.free;
-
-        if (pendingPlan && pendingMode) {
-            subscriptionStatus = pendingMode === 'business'
-                ? `pending_biz_${pendingPlan}`
-                : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`;
-            role = pendingMode === 'business' ? 'employer' : 'candidate';
-            
-            sessionStorage.removeItem('pending_plan');
-            sessionStorage.removeItem('pending_mode');
-        }
-
-        const { data: newProfile, error: upsertError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            full_name: user.user_metadata?.full_name || '',
-            avatar_url: user.user_metadata?.avatar_url || '',
-            subscription_status: subscriptionStatus,
-            resume_text: '',
-            role: role,
-            credits: initialCredits,
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (upsertError) {
-          throw upsertError;
-        }
-
-        if (newProfile) {
-           setProfile(newProfile);
-           setResumeText('');
-           setCredits(initialCredits);
+        // Profile not found — onUserCreated trigger may still be in flight.
+        // Retry after 1.5s before giving up.
+        console.log("Profile not found, retrying in 1.5s...");
+        await new Promise(r => setTimeout(r, 1500));
+        const { data: retryData } = await data.profiles.get(user.id);
+        if (retryData) {
+          setProfile(retryData);
+          setResumeText(retryData.resume_text || '');
+          setCredits(retryData.credits || 0);
+        } else {
+          console.warn("Profile still not found after retry — user may need to refresh.");
         }
       }
     } catch (error) {
@@ -314,12 +268,12 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    data.auth.getSession().then((session) => {
       currentUserIdRef.current = session?.user?.id ?? null;
       setSession(session);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { unsubscribe } = data.auth.onAuthStateChange((_event, session) => {
       const newUserId = session?.user?.id ?? null;
       const userChanged = newUserId !== currentUserIdRef.current;
       currentUserIdRef.current = newUserId;
@@ -352,7 +306,7 @@ const AppContent: React.FC = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, [setCredits]);
 
   useEffect(() => {
@@ -646,7 +600,7 @@ const AppContent: React.FC = () => {
                     onToggleAIMode={toggleAIMode}
                     activeTool={activeTool}
                     onToolSelect={setActiveTool}
-                    onLogout={() => supabase.auth.signOut()}
+                    onLogout={() => data.auth.signOut()}
                     t={t}
                 />
                 <div className="flex-1 flex flex-col h-screen overflow-hidden">
