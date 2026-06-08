@@ -48,7 +48,6 @@ import { SiteLayout } from './marketing/components/SiteLayout';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
-const EmployerDashboard = React.lazy(() => import('./components/EmployerDashboard'));
 const EmployerPortal = React.lazy(() =>
   import('./components/employer/EmployerPortal').then((module) => ({
     default: module.EmployerPortal,
@@ -58,6 +57,7 @@ const AgencyHub = React.lazy(() => import('./components/AgencyHub'));
 
 interface AppContentProps {
   siteShell?: boolean;
+  entry?: 'workspace' | 'portal';
 }
 
 const buildLocalProfile = (
@@ -87,7 +87,7 @@ const buildLocalProfile = (
   ...patch,
 });
 
-const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
+const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'workspace' }) => {
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -106,12 +106,13 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
   const [isUpdatingResume, setIsUpdatingResume] = useState(false);
   const [showHomePageOverride, setShowHomePageOverride] = useState(false);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
-  const [dashboardView, setDashboardView] = useState<'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials' | 'business'>('dashboard');
+  const [dashboardView, setDashboardView] = useState<'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials'>('dashboard');
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   // Deep-link target page for the employer hiring portal
   const [portalInitialPage, setPortalInitialPage] = useState<PortalPage>('dashboard');
+  const roleStateKeyRef = useRef<string | null>(null);
 
   const { credits, setCredits, deductCredits } = useCredits();
   const { isAIMode, toggleAIMode } = useSettings();
@@ -120,6 +121,10 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
 
   const { t, isLoaded: isLangLoaded, currentLang, changeLanguage } = useLocalization();
   const { setApiStatus, setLastError } = useApiStatus();
+  const isPortalEntry = entry === 'portal';
+  const isCandidate = profile?.role === 'candidate';
+  const isEmployer = profile?.role === 'employer';
+  const isKnownWorkspaceRole = isCandidate || isEmployer || profile?.role === 'agency';
 
   useEffect(() => {
     setApiStatusUpdater((status, errorMsg) => {
@@ -206,7 +211,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
       const applyProfile = async (p: UserProfile | null) => {
         if (!p) return;
         setProfile(p);
-        setResumeText(p.resume_text || '');
+        setResumeText(p.role === 'candidate' ? p.resume_text || '' : '');
 
         let userCredits = p.credits || 0;
         if (user.email === 'abhishek.ip@gmail.com' && userCredits < 5000) {
@@ -438,12 +443,28 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
   }, [setCredits]);
 
   useEffect(() => {
-    if (session) {
-        if (isProfileLoaded) {
-            setIsUpdatingResume(!resumeText);
-        }
+    if (session && isProfileLoaded && isCandidate) {
+        setIsUpdatingResume(!resumeText);
+    } else if (session && isProfileLoaded && !isCandidate) {
+        setIsUpdatingResume(false);
     }
-  }, [session, isProfileLoaded, resumeText]);
+  }, [session, isProfileLoaded, resumeText, isCandidate]);
+
+  useEffect(() => {
+    const roleKey = `${session?.user?.id ?? 'signed-out'}:${profile?.role ?? 'no-role'}`;
+    if (roleStateKeyRef.current === roleKey) return;
+    roleStateKeyRef.current = roleKey;
+
+    setDashboardView('dashboard');
+    setActiveTool(null);
+    setAnalysisResult(null);
+    setResumeImages(null);
+    setIsUpdatingResume(false);
+
+    if (profile?.role === 'candidate') {
+      setPortalInitialPage('dashboard');
+    }
+  }, [session?.user?.id, profile?.role]);
 
 
   useEffect(() => {
@@ -481,7 +502,13 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
     }, 100);
   };
   
-  const navigateToBusinessPricing = () => { setView('business'); };
+  const navigateToBusinessPricing = () => {
+    if (siteShell) {
+      navigate('/pricing');
+      return;
+    }
+    setView('business');
+  };
   const navigateToAccount = () => { setShowHomePageOverride(false); setView('account'); };
 
   const handleSetView = (view: 'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs', authView: 'sign_in' | 'sign_up' | 'forgot_password' = 'sign_in', mode: 'candidate' | 'business' = 'candidate') => {
@@ -605,11 +632,34 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
     </>
   );
 
+  const renderPortalEntry = () => (
+    <React.Suspense fallback={<LoadingSpinner market={market} />}>
+      <BusinessPage
+        t={t}
+        session={session}
+        profile={profile}
+        onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')}
+        onSignInClick={() => handleSetView('auth', 'sign_in', 'business')}
+        onSelectBusinessPlan={handleBusinessPlanSelection}
+        onBack={() => navigate('/employers')}
+        onEnterPortal={(page) => {
+          setPortalInitialPage(page);
+          if (isEmployer) {
+            handleSetView('home');
+          } else {
+            handleSetView('auth', 'sign_in', 'business');
+          }
+        }}
+        refreshProfile={getProfile}
+      />
+    </React.Suspense>
+  );
+
   const renderWorkspaceBody = () => (
     <section className="py-10 sm:py-14">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <ApiStatusBanner />
-        {renderContent()}
+        {isPortalEntry ? renderPortalEntry() : renderContent()}
       </div>
     </section>
   );
@@ -797,6 +847,119 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
     </div>
   );
 
+  const renderEmployerShell = () => {
+    if (!session || !profile || !isEmployer) return null;
+
+    return (
+      <React.Suspense fallback={<LoadingSpinner market={market} />}>
+        <EmployerPortal
+          session={session}
+          profile={profile}
+          refreshProfile={getProfile}
+          navigateToBusinessPricing={navigateToBusinessPricing}
+          onGoHome={() => handleSetView('business')}
+          t={t}
+          initialPage={portalInitialPage}
+          isAIMode={isAIMode}
+          onToggleAIMode={toggleAIMode}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          currentLang={currentLang}
+          onLanguageChange={changeLanguage}
+        />
+      </React.Suspense>
+    );
+  };
+
+  const renderRoleFallback = () => (
+    <div className="max-w-xl mx-auto my-16 rounded-[var(--site-radius)] border border-[var(--site-border)] bg-[var(--site-surface)] p-6 text-center">
+      <h2 className="text-xl font-semibold text-[var(--site-text)]">We could not open the right workspace</h2>
+      <p className="mt-2 text-sm text-[var(--site-text-muted)]">
+        Your account role is missing or unsupported. Please sign out and sign in again, or contact support if this continues.
+      </p>
+      <div className="mt-5 flex flex-col sm:flex-row justify-center gap-3">
+        <button
+          type="button"
+          onClick={() => data.auth.signOut()}
+          className="rounded-[var(--site-radius)] bg-[var(--site-action)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)]"
+        >
+          Sign out
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="rounded-[var(--site-radius)] border border-[var(--site-border)] px-4 py-2 text-sm font-semibold text-[var(--site-text)] hover:bg-[var(--site-surface-muted)]"
+        >
+          Back to home
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderCandidateShell = () => {
+    if (!session || !profile || !isCandidate) return renderRoleFallback();
+
+    return (
+      <>
+        <Sidebar
+          activeView={dashboardView}
+          onViewChange={(v) => {
+            setDashboardView(v);
+            setIsUpdatingResume(false);
+          }}
+          profile={profile}
+          credits={credits}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          isAIMode={isAIMode}
+          onToggleAIMode={toggleAIMode}
+          activeTool={activeTool}
+          onToolSelect={setActiveTool}
+          onLogout={() => data.auth.signOut()}
+          t={t}
+          currentLang={currentLang}
+          onLanguageChange={changeLanguage}
+        />
+        <div className="flex-1 flex flex-col h-screen overflow-hidden">
+          <header
+            className={
+              siteShell
+                ? 'h-16 bg-[var(--site-surface)] border-b border-[var(--site-border)] flex items-center justify-between px-8 shrink-0'
+                : 'h-16 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 shrink-0'
+            }
+          >
+            <ApiStatusBanner />
+            <div className="flex items-center gap-4 ml-auto text-gray-400">
+              <div className="text-xs font-bold uppercase tracking-widest">{dashboardView}</div>
+            </div>
+          </header>
+          <main
+            className={
+              siteShell
+                ? 'flex-1 overflow-y-auto bg-[var(--site-surface-muted)] p-6 md:p-10'
+                : 'flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-6 md:p-10'
+            }
+          >
+            <div className="max-w-6xl mx-auto">
+              {(isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
+                <div className="mt-4 animate-slide-in-up">
+                  <div className="text-center mb-10">
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Resume Laboratory</h2>
+                    <p className="text-gray-600 dark:text-gray-400">{resumeText ? t('dashboard_update_prompt') : t('dashboard_new_user_prompt')}</p>
+                  </div>
+                  <div id="upload-section" ref={uploadSectionRef} className="scroll-mt-20">
+                    <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} variant={uploadVariant} />
+                  </div>
+                  {resumeText && (<div className="text-center mt-6"><button onClick={() => setIsUpdatingResume(false)} className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-semibold bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 px-6 py-2 rounded-lg transition-colors">{t('dashboard_cancel_update')}</button></div>)}
+                </div>
+              ) : renderContent()}
+            </div>
+          </main>
+        </div>
+      </>
+    );
+  };
+
   const renderContent = () => {
     if (view === 'auth') { return <Auth t={t} onClose={() => setView('home')} initialView={initialAuthView} mode={authMode} />; }
     if (view === 'account' && session) { return <Account key={session.user.id} session={session} onSetView={handleSetView} onSubscriptionChange={getProfile} navigateToPricing={navigateToPricing} t={t} />; }
@@ -819,41 +982,22 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
     if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} />; }
     if (session && !showHomePageOverride) {
         if (!isProfileLoaded || !isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600 dark:text-gray-400">{t('dashboard_loading')}</p></div>; }
-        if (profile?.role === 'employer') {
-            // Full-screen portal — renders its own sidebar/layout outside the candidate shell
-            return (
-                <React.Suspense fallback={<LoadingSpinner market={market} />}>
-                    <EmployerPortal
-                        session={session}
-                        profile={profile}
-                        refreshProfile={getProfile}
-                        navigateToBusinessPricing={navigateToBusinessPricing}
-                        onGoHome={() => handleSetView('business')}
-                        t={t}
-                        initialPage={portalInitialPage}
-                        isAIMode={isAIMode}
-                        onToggleAIMode={toggleAIMode}
-                        theme={theme}
-                        onToggleTheme={toggleTheme}
-                        currentLang={currentLang}
-                        onLanguageChange={changeLanguage}
-                    />
-                </React.Suspense>
-            );
-        }
+        if (!isCandidate) return renderRoleFallback();
         return renderDashboard();
     }
     if (!isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600">Loading...</p></div>; }
     return renderAppEntry();
   };
 
-  const isUserLoggedIn = session && !showHomePageOverride && view !== 'business' && profile?.role === 'candidate';
-  // Employers get the hiring portal (EmployerPortal), not the candidate sidebar shell.
-  const showAppShell = isUserLoggedIn;
+  const isWorkspaceSessionLoading = Boolean(session && (!isProfileLoaded || !isLangLoaded));
+  const canShowWorkspaceShell = Boolean(session && !showHomePageOverride && view !== 'business' && isProfileLoaded && isLangLoaded);
+  const showCandidateShell = canShowWorkspaceShell && isCandidate && !isPortalEntry;
+  const showEmployerShell = canShowWorkspaceShell && isEmployer;
+  const showUnsupportedRole = canShowWorkspaceShell && !isKnownWorkspaceRole;
 
   const rootClass = siteShell
-    ? `beta-root min-h-screen w-full ${showAppShell ? 'flex' : 'block'}`
-    : `min-h-screen w-full font-sans bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200 ${showAppShell ? 'flex' : 'block'}`;
+    ? `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`
+    : `min-h-screen w-full font-sans bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200 ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
   return (
     <ToastProvider>
@@ -862,72 +1006,18 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
         {isDevModeOpen && session && <DevModeModal session={session} profile={profile} onClose={() => setIsDevModeOpen(false)} onSetPlan={handleSetPlanForDev} />}
         <CreditModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} onConfirm={() => { setIsCreditModalOpen(false); performAnalysis(); }} onNavigateToPricing={navigateToPricing} cost={analysisCost} currentCredits={credits} />
         
-        {showAppShell ? (
-            <>
-                <Sidebar
-                    activeView={dashboardView}
-                    onViewChange={(v) => { if (v === 'business') { navigateToBusinessPricing(); return; } setDashboardView(v); setIsUpdatingResume(false); }}
-                    profile={profile}
-                    credits={credits}
-                    theme={theme}
-                    onToggleTheme={toggleTheme}
-                    isAIMode={isAIMode}
-                    onToggleAIMode={toggleAIMode}
-                    activeTool={activeTool}
-                    onToolSelect={setActiveTool}
-                    onLogout={() => data.auth.signOut()}
-                    t={t}
-                    currentLang={currentLang}
-                    onLanguageChange={changeLanguage}
-                />
-                <div className="flex-1 flex flex-col h-screen overflow-hidden">
-                    <header
-                      className={
-                        siteShell
-                          ? 'h-16 bg-[var(--site-surface)] border-b border-[var(--site-border)] flex items-center justify-between px-8 shrink-0'
-                          : 'h-16 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 shrink-0'
-                      }
-                    >
-                        <ApiStatusBanner />
-                        <div className="flex items-center gap-4 ml-auto text-gray-400">
-                             <div className="text-xs font-bold uppercase tracking-widest">{dashboardView}</div>
-                        </div>
-                    </header>
-                    <main
-                      className={
-                        siteShell
-                          ? 'flex-1 overflow-y-auto bg-[var(--site-surface-muted)] p-6 md:p-10'
-                          : 'flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-6 md:p-10'
-                      }
-                    >
-                        <div className="max-w-6xl mx-auto">
-                            {/* Employers get their dashboard / account settings in this same shell.
-                                Candidates: the résumé upload lab is the home for the dashboard/resume
-                                views; other views render their own content (with empty states). */}
-                            {profile?.role === 'employer' ? (
-                                // Employer portal is full-screen; this shell branch is unreachable for employers
-                                // because isEmployerShell is false after we redirect. Left as fallback.
-                                <React.Suspense fallback={<LoadingSpinner market={market} />}>
-                                    <EmployerDashboard session={session!} profile={profile} refreshProfile={getProfile} navigateToBusinessPricing={navigateToBusinessPricing} t={t} />
-                                </React.Suspense>
-                            ) : (isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
-                                <div className="mt-4 animate-slide-in-up">
-                                    <div className="text-center mb-10">
-                                        <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Resume Laboratory</h2>
-                                        <p className="text-gray-600 dark:text-gray-400">{resumeText ? t('dashboard_update_prompt') : t('dashboard_new_user_prompt')}</p>
-                                    </div>
-                                    <div id="upload-section" ref={uploadSectionRef} className="scroll-mt-20">
-                                        <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} variant={uploadVariant} />
-                                    </div>
-                                    {resumeText && (<div className="text-center mt-6"><button onClick={() => setIsUpdatingResume(false)} className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-semibold bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 px-6 py-2 rounded-lg transition-colors">{t('dashboard_cancel_update')}</button></div>)}
-                                </div>
-                            ) : renderContent()}
-                        </div>
-                    </main>
-                </div>
-            </>
+        {isWorkspaceSessionLoading ? (
+            <div className="flex min-h-screen w-full items-center justify-center">
+              <LoadingSpinner market={market} />
+            </div>
+        ) : showEmployerShell ? (
+            renderEmployerShell()
+        ) : showCandidateShell ? (
+            renderCandidateShell()
+        ) : showUnsupportedRole ? (
+            renderRoleFallback()
         ) : siteShell ? (
-            <SiteLayout showBanner={false} pageId="workspace" marketingShell={false}>
+            <SiteLayout showBanner={false} pageId={isPortalEntry ? 'portal' : 'workspace'} marketingShell={false}>
               {renderWorkspaceBody()}
             </SiteLayout>
         ) : (
@@ -952,13 +1042,14 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false }) => {
 
 interface AppWrapperProps {
   siteShell?: boolean;
+  entry?: 'workspace' | 'portal';
 }
 
-const AppWrapper: React.FC<AppWrapperProps> = ({ siteShell }) => (
+const AppWrapper: React.FC<AppWrapperProps> = ({ siteShell, entry }) => (
     <ApiStatusProvider>
         <CreditsProvider>
             <SettingsProvider>
-                <AppContent siteShell={siteShell} />
+                <AppContent siteShell={siteShell} entry={entry} />
             </SettingsProvider>
         </CreditsProvider>
     </ApiStatusProvider>

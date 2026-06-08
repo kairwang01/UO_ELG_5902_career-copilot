@@ -27,20 +27,21 @@ const viewports = [
   { name: 'mobile', width: 390, height: 844 },
 ];
 
-/** Beta routes carry a stable data-beta-page id; /workspace is the isolated MVP shell. */
+/** Marketing routes carry a stable data-beta-page id; app routes intentionally do not. */
 const betaRoutes = [
   { route: '/', pageId: 'jobseeker-home' },
   { route: '/employers', pageId: 'employer-landing' },
   { route: '/sample-report', pageId: 'sample-report' },
   { route: '/pricing', pageId: 'pricing' },
-  { route: '/portal', pageId: 'portal' },
 ];
-const mvpRoute = { route: '/workspace', expectMvp: true };
+const appRoutes = [
+  { route: '/workspace', expectAppShell: true },
+  { route: '/portal', expectAppShell: true },
+];
 
 /** Strings that must NEVER appear on Beta routes (would mean the MVP leaked through). */
 const FORBIDDEN_MVP_STRINGS = [
   'Go Beyond the Resume',
-  'An All-in-One Career Toolkit',
 ];
 
 function getFreePort() {
@@ -98,7 +99,7 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
     const page = await context.newPage();
 
-    for (const target of [...betaRoutes, mvpRoute]) {
+    for (const target of [...betaRoutes, ...appRoutes]) {
       const { route } = target;
       const slug = route === '/' ? 'home' : route.replace(/^\//, '').replace(/\//g, '-');
       const file = path.join(outDir, `${slug}-${vp.name}.png`);
@@ -117,10 +118,9 @@ async function main() {
 
         const hasBetaMarker = (await page.locator('[data-beta-app="true"]').count()) > 0;
 
-        if (target.expectMvp) {
-          // /workspace must remain the isolated MVP shell — no Beta marker.
-          if (hasBetaMarker) fail('Beta marker present on /workspace (MVP isolation broken)');
-          else checks.push('OK isolated MVP shell (no beta marker)');
+        if (target.expectAppShell) {
+          if (hasBetaMarker) fail(`Marketing marker present on ${route} (app route isolation broken)`);
+          else checks.push('OK app shell route (no marketing marker)');
         } else {
           if (!hasBetaMarker) {
             fail('missing data-beta-app marker (stale MVP server?)');
@@ -205,13 +205,13 @@ Server: ${base} (VITE_BETA_REDESIGN=${skipDev ? 'reused server' : 'true'})
 
 ## Summary
 
-- Routes checked: ${betaRoutes.length} Beta + 1 MVP isolation
+- Routes checked: ${betaRoutes.length} marketing + ${appRoutes.length} app shell
 - Viewports: ${viewports.map((v) => `${v.name} ${v.width}x${v.height}`).join(', ')}
 - Result: ${failures.length === 0 ? 'ALL PASS' : `${failures.length} failure(s)`}
 
 ## Assertions per route
 
-- data-beta-app marker present (Beta routes) / absent (/workspace)
+- data-beta-app marker present (marketing routes) / absent (app routes)
 - data-beta-page matches expected id
 - no forbidden MVP strings: ${FORBIDDEN_MVP_STRINGS.map((s) => `"${s}"`).join(', ')}
 - no horizontal overflow

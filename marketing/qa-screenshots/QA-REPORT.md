@@ -1,19 +1,19 @@
 # Beta Screenshot QA
 
-Generated: 2026-06-08T13:37:40.240Z
-Server: http://localhost:50917 (VITE_BETA_REDESIGN=true)
+Generated: 2026-06-08T16:18:59.049Z
+Server: http://localhost:55179 (VITE_BETA_REDESIGN=true)
 
 ## Summary
 
-- Routes checked: 5 Beta + 1 MVP isolation
+- Routes checked: 4 marketing + 2 app shell
 - Viewports: desktop 1280x800, mobile 390x844
 - Result: ALL PASS
 
 ## Assertions per route
 
-- data-beta-app marker present (Beta routes) / absent (/app)
+- data-beta-app marker present (marketing routes) / absent (app routes)
 - data-beta-page matches expected id
-- no forbidden MVP strings: "Go Beyond the Resume", "An All-in-One Career Toolkit", "Success Stories from Professionals"
+- no forbidden MVP strings: "Go Beyond the Resume"
 - no horizontal overflow
 
 ## Results
@@ -38,13 +38,12 @@ Server: http://localhost:50917 (VITE_BETA_REDESIGN=true)
 - OK no forbidden MVP strings
 - OK no horizontal overflow
 
-### `/portal` @ desktop — PASS
-- OK data-beta-page=portal
-- OK no forbidden MVP strings
+### `/workspace` @ desktop — PASS
+- OK app shell route (no marketing marker)
 - OK no horizontal overflow
 
-### `/app` @ desktop — PASS
-- OK isolated MVP shell (no beta marker)
+### `/portal` @ desktop — PASS
+- OK app shell route (no marketing marker)
 - OK no horizontal overflow
 
 ### `/` @ mobile — PASS
@@ -67,19 +66,18 @@ Server: http://localhost:50917 (VITE_BETA_REDESIGN=true)
 - OK no forbidden MVP strings
 - OK no horizontal overflow
 
-### `/portal` @ mobile — PASS
-- OK data-beta-page=portal
-- OK no forbidden MVP strings
+### `/workspace` @ mobile — PASS
+- OK app shell route (no marketing marker)
 - OK no horizontal overflow
 
-### `/app` @ mobile — PASS
-- OK isolated MVP shell (no beta marker)
+### `/portal` @ mobile — PASS
+- OK app shell route (no marketing marker)
 - OK no horizontal overflow
 
 ## Locale smoke (zh)
 
 - OK zh hero copy rendered
-- OK no raw beta_ keys in zh render
+- OK no raw site_ keys in zh render
 
 ## Failures
 

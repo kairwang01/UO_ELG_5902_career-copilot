@@ -5,7 +5,6 @@ import { JobseekerHomePage } from './pages/JobseekerHomePage';
 import { EmployerLandingPage } from './pages/EmployerLandingPage';
 import { SampleReportPage } from './pages/SampleReportPage';
 import { PricingPage } from './pages/PricingPage';
-import { PortalBridgePage } from './pages/PortalBridgePage';
 
 const MvpApp = React.lazy(() => import('../CareerApp'));
 
@@ -16,8 +15,7 @@ const MvpFallback = () => (
 );
 
 /**
- * Beta marketing routes at top-level paths.
- * MVP app lazy-loaded under /workspace/* so Beta pages do not pull the full MVP bundle upfront.
+ * Marketing routes stay lightweight; authenticated workspaces lazy-load the app shell.
  */
 export const SiteRouter: React.FC = () => (
   <Routes>
@@ -34,6 +32,13 @@ export const SiteRouter: React.FC = () => (
     <Route path={SITE_ROUTES.employers} element={<EmployerLandingPage />} />
     <Route path={SITE_ROUTES.sampleReport} element={<SampleReportPage />} />
     <Route path={SITE_ROUTES.pricing} element={<PricingPage />} />
-    <Route path={SITE_ROUTES.portal} element={<PortalBridgePage />} />
+    <Route
+      path={`${SITE_ROUTES.portal}/*`}
+      element={
+        <Suspense fallback={<MvpFallback />}>
+          <MvpApp siteShell entry="portal" />
+        </Suspense>
+      }
+    />
   </Routes>
 );

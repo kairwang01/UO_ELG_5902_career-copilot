@@ -24,7 +24,7 @@ import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import { useToast } from './Toast';
 import LanguageSwitcher from './LanguageSwitcher';
 
-type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials' | 'business';
+type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
 
 interface SidebarProps {
   activeView: SidebarView;
@@ -62,22 +62,15 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(true);
   const { addToast } = useToast();
 
-  const isEmployer = profile?.role === 'employer';
-
-  const workspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = isEmployer
-    ? [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'business', label: 'Plans & Pricing', icon: CreditCard },
-      ]
-    : [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'resume', label: 'Resume', icon: FileText },
-        { id: 'jobs', label: 'Jobs', icon: Briefcase },
-        { id: 'interview', label: 'Interview', icon: MessageSquare },
-        { id: 'plan', label: 'Plan', icon: CalendarCheck },
-        { id: 'portfolio', label: 'Showcase', icon: Globe },
-        { id: 'credentials', label: 'Identity & Wallet', icon: ShieldCheck },
-      ];
+  const workspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'resume', label: 'Resume', icon: FileText },
+    { id: 'jobs', label: 'Jobs', icon: Briefcase },
+    { id: 'interview', label: 'Interview', icon: MessageSquare },
+    { id: 'plan', label: 'Plan', icon: CalendarCheck },
+    { id: 'portfolio', label: 'Showcase', icon: Globe },
+    { id: 'credentials', label: 'Identity & Wallet', icon: ShieldCheck },
+  ];
 
   // Turn a raw subscription_status (e.g. "pending_essentials") into a readable label.
   const formatPlanStatus = (status?: string | null): string => {
@@ -132,8 +125,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             })}
         </div>
 
-        {/* AI Toolkit Section — candidates only */}
-        {!isEmployer && (
+        {/* AI Toolkit Section */}
         <div className="space-y-1">
             <div className="flex items-center justify-between px-4 mb-2">
                 <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Assisted Tools</h3>
@@ -180,7 +172,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             )}
         </div>
-        )}
 
         {/* Support & Settings */}
         <div className="space-y-1">

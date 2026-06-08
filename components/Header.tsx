@@ -97,6 +97,8 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
     const menuRef = useRef<HTMLDivElement>(null);
     const mobileMenuRef = useRef<HTMLDivElement>(null);
     const { isAIMode, toggleAIMode } = useSettings();
+    const isCandidate = profile?.role === 'candidate';
+    const isEmployer = profile?.role === 'employer';
     
     const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, targetId: string) => {
         e.preventDefault();
@@ -167,7 +169,7 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                     aria-haspopup="true"
                                     aria-expanded={isMenuOpen}
                                 >
-                                    {profile.role === 'candidate' ? (
+                                    {isCandidate ? (
                                         <Web3StatusIndicator profile={profile} t={t} />
                                     ) : (
                                         <TalentVaultAccess profile={profile} onSetView={() => onSetView('business')} t={t} />
@@ -185,6 +187,7 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                             <p className="text-sm text-gray-900 dark:text-gray-100 font-semibold truncate">{profile.full_name || session.user.email}</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{profile.role}</p>
                                         </div>
+                                        {isCandidate && (
                                          <div className="px-4 py-3 border-t border-gray-100 dark:border-slate-600">
                                             <div className="flex justify-between items-center">
                                                  <div>
@@ -198,7 +201,8 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                                 </button>
                                             </div>
                                         </div>
-                                        {profile.role === 'candidate' && profile.wallet_address && (
+                                        )}
+                                        {isCandidate && profile.wallet_address && (
                                             <div className="px-4 py-3 border-t border-gray-100 dark:border-slate-600">
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">{t('header_vault_earnings')}</p>
                                                 <p className="text-lg font-bold text-green-600 dark:text-green-500">
@@ -207,30 +211,35 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                             </div>
                                         )}
                                         <div className="py-1 border-t border-gray-100 dark:border-slate-600" role="none">
-                                            {/* Employers have no side nav, so the menu is their only way back to the dashboard or plans. */}
-                                            {profile.role === 'employer' && (
+                                            {isEmployer ? (
                                                 <>
                                                     <button onClick={() => { onSetView('home'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600 font-medium" role="menuitem">
-                                                        Dashboard
+                                                        Hiring Dashboard
                                                     </button>
                                                     <button onClick={() => { onSetView('business'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">
-                                                        Plans &amp; Pricing
+                                                        Billing &amp; Plan
+                                                    </button>
+                                                    <button onClick={() => { onSetView('account'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">
+                                                        Account Settings
                                                     </button>
                                                 </>
+                                            ) : (
+                                                <>
+                                                    <div className="px-4 py-2 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-600">
+                                                        <span className="text-sm text-gray-700 dark:text-gray-200 font-medium">AI Features</span>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); toggleAIMode(); }}
+                                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isAIMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
+                                                        >
+                                                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition ${isAIMode ? 'translate-x-5' : 'translate-x-1'}`} />
+                                                        </button>
+                                                    </div>
+                                                    <button onClick={() => { onSetView('agency'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600 font-medium" role="menuitem">
+                                                        Agency Portal
+                                                    </button>
+                                                    <button onClick={() => { onSetView('account'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">Account Settings</button>
+                                                </>
                                             )}
-                                            <div className="px-4 py-2 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-slate-600">
-                                                <span className="text-sm text-gray-700 dark:text-gray-200 font-medium">AI Features</span>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); toggleAIMode(); }}
-                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isAIMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
-                                                >
-                                                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition ${isAIMode ? 'translate-x-5' : 'translate-x-1'}`} />
-                                                </button>
-                                            </div>
-                                            <button onClick={() => { onSetView('agency'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600 font-medium" role="menuitem">
-                                                Agency Portal
-                                            </button>
-                                            <button onClick={() => { onSetView('account'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">Account Settings</button>
                                             <button onClick={async () => { setIsMenuOpen(false); await data.auth.signOut('local'); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">
                                                 Sign out
                                             </button>
