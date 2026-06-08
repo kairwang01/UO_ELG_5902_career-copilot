@@ -6,7 +6,7 @@ interface CaseSnapshotsProps {
 }
 
 export const CaseSnapshots: React.FC<CaseSnapshotsProps> = ({ t }) => (
-  <section className="py-[var(--beta-section)] bg-[var(--beta-surface-muted)]">
+  <section id="cases-section" className="py-[var(--beta-section)] bg-[var(--beta-surface-muted)]">
     <div className="max-w-6xl mx-auto px-4 sm:px-6">
       <h2 className="text-2xl font-semibold mb-2">{t('beta_cases_title')}</h2>
       <p className="text-[var(--beta-text-muted)] mb-8 max-w-2xl">{t('beta_cases_subtitle')}</p>

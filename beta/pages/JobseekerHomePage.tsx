@@ -5,6 +5,8 @@ import { ReportPreview } from '../components/ReportPreview';
 import { CareerPathPreview } from '../components/CareerPathPreview';
 import { InterviewFeedbackPreview } from '../components/InterviewFeedbackPreview';
 import { CaseSnapshots } from '../components/CaseSnapshots';
+import { UserVoices } from '../components/UserVoices';
+import { BetaFaq } from '../components/BetaFaq';
 import { WorkflowSteps } from '../components/WorkflowSteps';
 import { BETA_ROUTES } from '../../config/beta';
 import { useBetaI18n } from '../hooks/useBetaI18n';
@@ -72,6 +74,10 @@ export const JobseekerHomePage: React.FC = () => {
       </section>
 
       <CaseSnapshots t={t} />
+
+      <UserVoices t={t} />
+
+      <BetaFaq t={t} />
 
       <section className="py-12 sm:py-[var(--beta-section)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">

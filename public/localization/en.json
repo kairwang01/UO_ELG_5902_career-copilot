@@ -782,5 +782,22 @@
   "beta_plan_emp_team_desc": "High volume",
   "beta_plan_emp_team_f1": "Unlimited posts",
   "beta_plan_emp_team_f2": "Dedicated support",
-  "beta_plan_emp_team_f3": "API access"
+  "beta_plan_emp_team_f3": "API access",
+  "beta_voices_title": "What users work on with Career CoPilot",
+  "beta_voices_subtitle": "Scenario-based feedback from beta workflows — specific outcomes, not generic star ratings.",
+  "beta_voice_img_newcomer_alt": "Job seeker reviewing a localized resume",
+  "beta_voice_img_switcher_alt": "Career switcher comparing role-fit reports",
+  "beta_voice_img_employer_alt": "Hiring team reviewing candidate match evidence",
+  "beta_voice_role_newcomer": "Newcomer · Canada",
+  "beta_voice_quote_newcomer": "The localizer flagged title formats my old resume used that Canadian ATS parsers skip. One revision cycle moved readiness from 58 to 81.",
+  "beta_voice_highlight_newcomer": "Resume Localizer · ATS readiness 58 → 81",
+  "beta_voice_role_switcher": "Career switcher · Developer → PM",
+  "beta_voice_quote_switcher": "Career Path showed a bridge role I could reach in six months. I fixed four keyword gaps before applying to associate PM roles.",
+  "beta_voice_highlight_switcher": "Career Path · first PM screen after 3 tailored applications",
+  "beta_voice_role_employer": "Hiring lead · SaaS",
+  "beta_voice_quote_employer": "We stopped screening from resume volume alone. Match reasons and evidence cut our shortlist from 80 to 12 before anyone booked a screen.",
+  "beta_voice_highlight_employer": "Employer match · 80 → 12 evidence-backed shortlist",
+  "beta_app_entry_title": "Upload your resume to start",
+  "beta_app_entry_subtitle": "Get your Resume Readiness Report with ATS issues, keyword gaps, and a clear next action.",
+  "beta_app_entry_back": "← Back to home"
 }

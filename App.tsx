@@ -44,6 +44,7 @@ import AgencyHub from './components/AgencyHub';
 import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';
 import ApiDocsViewer from './components/ApiDocsViewer';
+import { BETA_REDESIGN_ENABLED } from './config/beta';
 
 const AppContent: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -433,6 +434,23 @@ const AppContent: React.FC = () => {
     handleReset();
   };
 
+  const renderAppEntry = () => (
+    <>
+      <div className="text-center mb-10 max-w-2xl mx-auto">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-3">
+          {t('beta_app_entry_title')}
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">{t('beta_app_entry_subtitle')}</p>
+        <a href="/" className="inline-block mt-4 text-sm font-medium text-blue-700 dark:text-blue-400 hover:underline">
+          {t('beta_app_entry_back')}
+        </a>
+      </div>
+      <div id="upload-section" ref={uploadSectionRef} className="scroll-mt-20">
+        <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} />
+      </div>
+    </>
+  );
+
   const renderHomePage = () => (
     <>
       <Hero onUploadClick={handleScrollToUpload} t={t} />
@@ -590,6 +608,7 @@ const AppContent: React.FC = () => {
         return renderDashboard();
     }
     if (!isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600">Loading...</p></div>; }
+    if (BETA_REDESIGN_ENABLED) return renderAppEntry();
     return renderHomePage();
   };
 
@@ -659,7 +678,13 @@ const AppContent: React.FC = () => {
                 <ApiStatusBanner />
                 <Header session={session} profile={profile} onSetView={handleSetView} navigateToPricing={navigateToPricing} t={t} changeLanguage={changeLanguage} currentLang={currentLang} theme={theme} toggleTheme={toggleTheme} view={view} credits={credits} />
                 <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{renderContent()}</main>
-                <Footer onOpenDevMode={handleOpenDevMode} t={t} changeLanguage={changeLanguage} currentLang={currentLang} />
+                {BETA_REDESIGN_ENABLED ? (
+                  <div className="border-t border-gray-200 dark:border-slate-700 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <a href="/" className="hover:text-gray-800 dark:hover:text-gray-200">{t('beta_app_entry_back')}</a>
+                  </div>
+                ) : (
+                  <Footer onOpenDevMode={handleOpenDevMode} t={t} changeLanguage={changeLanguage} currentLang={currentLang} />
+                )}
             </div>
         )}
 

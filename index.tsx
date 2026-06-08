@@ -5,9 +5,8 @@ import './index.css';
 import App from './App';
 import { BETA_REDESIGN_ENABLED } from './config/beta';
 
-const RootApp = BETA_REDESIGN_ENABLED
-  ? React.lazy(() => import('./beta/BetaApp'))
-  : App;
+const BetaApp = React.lazy(() => import('./beta/BetaApp'));
+const RootApp = BETA_REDESIGN_ENABLED ? BetaApp : App;
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

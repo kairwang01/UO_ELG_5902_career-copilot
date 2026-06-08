@@ -782,5 +782,22 @@
   "beta_plan_emp_team_desc": "大批量招聘",
   "beta_plan_emp_team_f1": "无限职位",
   "beta_plan_emp_team_f2": "专属支持",
-  "beta_plan_emp_team_f3": "API 接入"
+  "beta_plan_emp_team_f3": "API 接入",
+  "beta_voices_title": "用户用 Career CoPilot 解决什么问题",
+  "beta_voices_subtitle": "来自 Beta 工作流的具体场景反馈——不是泛化的五星评价。",
+  "beta_voice_img_newcomer_alt": "求职者审阅本地化后的简历",
+  "beta_voice_img_switcher_alt": "转行者对比岗位匹配报告",
+  "beta_voice_img_employer_alt": "招聘团队审阅候选人匹配证据",
+  "beta_voice_role_newcomer": "新移民 · 加拿大",
+  "beta_voice_quote_newcomer": "本地化工具标出了我旧简历里加拿大 ATS 会跳过的职位标题格式。一轮修订就把就绪度从 58 提到 81。",
+  "beta_voice_highlight_newcomer": "简历本地化 · ATS 就绪度 58 → 81",
+  "beta_voice_role_switcher": "转行者 · 开发 → 产品经理",
+  "beta_voice_quote_switcher": "职业路径规划器给出了六个月内可达的过渡岗位。投递助理 PM 前我先补了四个关键词缺口。",
+  "beta_voice_highlight_switcher": "职业路径 · 3 份定制投递后首次 PM 初筛",
+  "beta_voice_role_employer": "招聘负责人 · SaaS",
+  "beta_voice_quote_employer": "我们不再只靠简历数量筛选。匹配原因和证据把短名单从 80 份压到 12 份，再安排面试。",
+  "beta_voice_highlight_employer": "雇主匹配 · 80 → 12 份证据驱动短名单",
+  "beta_app_entry_title": "上传简历开始分析",
+  "beta_app_entry_subtitle": "获取简历就绪报告：ATS 问题、关键词缺口与明确的下一步行动。",
+  "beta_app_entry_back": "← 返回首页"
 }

@@ -7,8 +7,8 @@ import { BetaRouter } from './BetaRouter';
 import { BetaI18nProvider } from './contexts/BetaI18nContext';
 
 /**
- * Beta redesign shell — enabled via VITE_BETA_REDESIGN=true.
- * MVP production uses App.tsx directly when flag is off.
+ * Marketing shell at /. Production app tools lazy-load at /app.
+ * Set VITE_BETA_REDESIGN=false to restore the legacy MVP homepage.
  */
 const BetaApp: React.FC = () => (
   <ApiStatusProvider>

@@ -1,10 +1,9 @@
 /**
- * Beta redesign feature flag.
- * MVP (June 17): leave unset or false — production uses state-based App.tsx only.
- * Beta preview: VITE_BETA_REDESIGN=true
+ * Beta marketing shell is the default site entry.
+ * Set VITE_BETA_REDESIGN=false to roll back to the legacy MVP homepage at /.
  */
 export const BETA_REDESIGN_ENABLED =
-  import.meta.env.VITE_BETA_REDESIGN === 'true';
+  import.meta.env.VITE_BETA_REDESIGN !== 'false';
 
 export const BETA_ROUTES = {
   home: '/',

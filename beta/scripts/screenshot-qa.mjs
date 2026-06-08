@@ -2,7 +2,7 @@
  * Beta redesign screenshot QA — desktop + mobile viewports.
  *
  * Hardened so a stale MVP dev server cannot produce false-green results:
- *  - Reserves a free port and starts Vite with VITE_BETA_REDESIGN=true + --strictPort.
+ *  - Reserves a free port and starts Vite with --strictPort (Beta is default; opt out with VITE_BETA_REDESIGN=false).
  *  - Fails if a Beta route does not render the Beta app marker (data-beta-app).
  *  - Fails if a Beta route exposes the expected data-beta-page id.
  *  - Fails if forbidden MVP marketing strings leak into Beta routes.
@@ -81,7 +81,7 @@ async function main() {
     base = `http://localhost:${port}`;
     dev = spawn('npm', ['run', 'dev', '--', '--port', String(port), '--strictPort'], {
       cwd: projectRoot,
-      env: { ...process.env, VITE_BETA_REDESIGN: 'true' },
+      env: { ...process.env },
       stdio: 'pipe',
     });
     dev.stderr?.on('data', (d) => process.stderr.write(`[vite] ${d}`));

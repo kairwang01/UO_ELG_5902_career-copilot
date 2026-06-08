@@ -1,7 +1,7 @@
 # Beta Screenshot QA
 
-Generated: 2026-06-08T13:29:25.536Z
-Server: http://localhost:50174 (VITE_BETA_REDESIGN=true)
+Generated: 2026-06-08T13:37:40.240Z
+Server: http://localhost:50917 (VITE_BETA_REDESIGN=true)
 
 ## Summary
 
