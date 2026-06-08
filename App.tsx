@@ -126,9 +126,9 @@ const AppContent: React.FC = () => {
   }, [profile, currentLang, changeLanguage]);
 
 
-  // Debounced effect to save resume text to the database
+  // Debounced effect to save resume text to the database (candidates only — employers have no resume)
   useEffect(() => {
-    if (session && isProfileLoaded) {
+    if (session && isProfileLoaded && profile?.role === 'candidate') {
       const handler = setTimeout(async () => {
         if (!session.user) return;
         try {
@@ -145,7 +145,7 @@ const AppContent: React.FC = () => {
         clearTimeout(handler);
       };
     }
-  }, [resumeText, session, isProfileLoaded]);
+  }, [resumeText, session, isProfileLoaded, profile?.role]);
 
 
   const getProfile = useCallback(async () => {

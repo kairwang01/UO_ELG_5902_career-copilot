@@ -22,7 +22,7 @@ const PLAN_DISPLAY = [
     features: ['3 active job posts', '30-day job listing', 'Basic AI job creation', 'Standard applicant view'],
   },
   {
-    key: 'single_post',
+    key: 'starter',
     name: 'Starter',
     price: '$79',
     period: '/month',
@@ -30,7 +30,7 @@ const PLAN_DISPLAY = [
     features: ['8 active job posts', '30-day job visibility', 'AI job description generator', 'Basic candidate matching'],
   },
   {
-    key: 'job_pack',
+    key: 'growth',
     name: 'Growth',
     price: '$199',
     period: '/month',
