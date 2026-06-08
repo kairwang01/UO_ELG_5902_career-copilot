@@ -1,7 +1,7 @@
 # Beta Screenshot QA
 
-Generated: 2026-06-08T13:21:31.839Z
-Server: http://localhost:49278 (VITE_BETA_REDESIGN=true)
+Generated: 2026-06-08T13:24:48.495Z
+Server: http://localhost:49684 (VITE_BETA_REDESIGN=true)
 
 ## Summary
 
@@ -75,6 +75,11 @@ Server: http://localhost:49278 (VITE_BETA_REDESIGN=true)
 ### `/app` @ mobile — PASS
 - OK isolated MVP shell (no beta marker)
 - OK no horizontal overflow
+
+## Locale smoke (zh)
+
+- OK zh hero copy rendered
+- OK no raw beta_ keys in zh render
 
 ## Failures
 

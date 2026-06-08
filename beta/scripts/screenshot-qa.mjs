@@ -161,6 +161,38 @@ async function main() {
     await context.close();
   }
 
+  // Locale smoke test: switch to zh, confirm translated copy renders and no raw beta_ keys leak.
+  const localeChecks = [];
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    await page.goto(`${base}/`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.evaluate(() => localStorage.setItem('preferred_language', 'zh'));
+    await page.goto(`${base}/`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.waitForTimeout(800);
+    const bodyText = await page.evaluate(() => document.body.innerText);
+
+    if (bodyText.includes('上传简历')) localeChecks.push('OK zh hero copy rendered');
+    else {
+      localeChecks.push('FAIL zh hero copy missing');
+      failures.push('locale zh: expected translated hero copy not found');
+    }
+
+    const rawKeyLeak = /\bbeta_[a-z0-9_]+\b/.test(bodyText);
+    if (rawKeyLeak) {
+      localeChecks.push('FAIL raw beta_ key leaked in zh render');
+      failures.push('locale zh: raw beta_* key visible (missing translation)');
+    } else {
+      localeChecks.push('OK no raw beta_ keys in zh render');
+    }
+    await ctx.close();
+  } catch (err) {
+    localeChecks.push(`FAIL ${err.message}`);
+    failures.push(`locale zh: ${err.message}`);
+  }
+  console.log(`\nLocale smoke (zh):`);
+  localeChecks.forEach((c) => console.log(`    ${c}`));
+
   await browser.close();
   if (dev) dev.kill('SIGTERM');
 
@@ -188,6 +220,10 @@ Server: ${base} (VITE_BETA_REDESIGN=${skipDev ? 'reused server' : 'true'})
 ## Results
 
 ${lines.join('\n\n')}
+
+## Locale smoke (zh)
+
+${localeChecks.map((c) => `- ${c}`).join('\n')}
 
 ${failures.length ? `## Failures\n\n${failures.map((f) => `- ${f}`).join('\n')}` : '## Failures\n\nNone.'}
 `;

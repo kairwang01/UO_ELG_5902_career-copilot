@@ -17,17 +17,17 @@ export const ToolPanelChrome: React.FC<ToolPanelChromeProps> = ({
   <div
     className={`rounded-[var(--beta-radius)] border border-[var(--beta-border)] bg-[var(--beta-surface)] overflow-hidden shadow-sm ${className}`}
   >
-    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--beta-border)] bg-[var(--beta-surface-muted)]">
+    <div className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-[var(--beta-border)] bg-[var(--beta-surface-muted)]">
       <span className="w-2.5 h-2.5 rounded-full bg-[#FCA5A5]" />
       <span className="w-2.5 h-2.5 rounded-full bg-[#FCD34D]" />
       <span className="w-2.5 h-2.5 rounded-full bg-[#86EFAC]" />
-      <div className="ml-3 min-w-0">
+      <div className="ml-2 sm:ml-3 min-w-0">
         <p className="text-xs font-medium text-[var(--beta-text)] truncate">{title}</p>
         {subtitle && (
           <p className="text-[10px] text-[var(--beta-text-muted)] truncate">{subtitle}</p>
         )}
       </div>
     </div>
-    <div className="p-4 sm:p-5">{children}</div>
+    <div className="p-3.5 sm:p-5">{children}</div>
   </div>
 );
