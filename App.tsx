@@ -232,18 +232,16 @@ const AppContent: React.FC = () => {
   }, [session]);
 
   const handleBusinessPlanSelection = async (planKey: string) => {
-      if (!session) return;
-      try {
-          const { error } = await supabase
-              .from('profiles')
-              .update({ subscription_status: `pending_biz_${planKey}` })
-              .eq('id', session.user.id);
-          if (error) throw error;
-          await getProfile();
-      } catch (error) {
-          console.error("Error setting business plan:", (error as Error).message);
-          alert(`Failed to set plan: ${(error as Error).message}`);
-      }
+    if (!session) return;
+    // Free tier is immediate; paid tiers stay pending until checkout.
+    const status = planKey === 'free' ? 'free' : `pending_biz_${planKey}`;
+    const { error } = await data.profiles.update(session.user.id, { subscription_status: status });
+    if (error) {
+      console.error('Error setting business plan:', error.message);
+      alert(`Failed to set plan: ${error.message}`);
+      return;
+    }
+    await getProfile();
   };
   
   const handleOpenDevMode = () => {
@@ -563,7 +561,7 @@ const AppContent: React.FC = () => {
     if (view === 'auth') { return <Auth t={t} onClose={() => setView('home')} initialView={initialAuthView} mode={authMode} />; }
     if (view === 'account' && session) { return <Account key={session.user.id} session={session} onSetView={handleSetView} onSubscriptionChange={getProfile} navigateToPricing={navigateToPricing} t={t} />; }
     if (view === 'api_docs') { return <ApiDocsViewer onClose={() => setView('account')} />; }
-    if (view === 'business') { return <BusinessPage t={t} session={session} profile={profile} onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')} onSignInClick={() => handleSetView('auth', 'sign_in', 'business')} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} />; }
+    if (view === 'business') { return <BusinessPage t={t} session={session} profile={profile} onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')} onSignInClick={() => handleSetView('auth', 'sign_in', 'business')} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} refreshProfile={getProfile} />; }
     if (view === 'agency' && session && profile) { return <AgencyHub session={session} profile={profile} t={t} />; }
     if (isLoading) { return <LoadingSpinner market={market} />; }
     if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} />; }
@@ -580,6 +578,10 @@ const AppContent: React.FC = () => {
                     onGoHome={() => handleSetView('business')}
                     t={t}
                     initialPage={portalInitialPage}
+                    isAIMode={isAIMode}
+                    onToggleAIMode={toggleAIMode}
+                    theme={theme}
+                    onToggleTheme={toggleTheme}
                 />
             );
         }

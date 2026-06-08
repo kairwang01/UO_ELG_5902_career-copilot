@@ -25,21 +25,30 @@ const INITIAL_CREDITS = 100;
 
 export const onUserCreatedFunction = functions.auth.user().onCreate(async (user) => {
   const now = new Date().toISOString();
-
-  const userDoc = {
-    [USER_FIELDS.credits]: INITIAL_CREDITS,
-    [USER_FIELDS.role]: "candidate",
-    [USER_FIELDS.subscriptionStatus]: "free",
-    [USER_FIELDS.fullName]: user.displayName ?? null,
-    [USER_FIELDS.avatarUrl]: user.photoURL ?? null,
-    [USER_FIELDS.createdAt]: now,
-    [USER_FIELDS.updatedAt]: now,
-  };
+  const ref = db.collection(USERS_COLLECTION).doc(user.uid);
 
   try {
-    // merge: true — if Auth.tsx has already written role/subscription_status,
-    // those fields are preserved. credits is always set by the trigger.
-    await db.collection(USERS_COLLECTION).doc(user.uid).set(userDoc, { merge: true });
+    const snap = await ref.get();
+    if (!snap.exists) {
+      await ref.set({
+        [USER_FIELDS.credits]: INITIAL_CREDITS,
+        [USER_FIELDS.role]: "candidate",
+        [USER_FIELDS.subscriptionStatus]: "free",
+        [USER_FIELDS.fullName]: user.displayName ?? null,
+        [USER_FIELDS.avatarUrl]: user.photoURL ?? null,
+        [USER_FIELDS.createdAt]: now,
+        [USER_FIELDS.updatedAt]: now,
+      });
+    } else {
+      // Client (e.g. business signup) may have already set role:'employer'.
+      // Never clobber role/subscription_status — only guarantee credits exist.
+      const existing = snap.data() || {};
+      const patch: Record<string, unknown> = { [USER_FIELDS.updatedAt]: now };
+      if (existing[USER_FIELDS.credits] == null) patch[USER_FIELDS.credits] = INITIAL_CREDITS;
+      if (existing[USER_FIELDS.role] == null) patch[USER_FIELDS.role] = "candidate";
+      if (existing[USER_FIELDS.subscriptionStatus] == null) patch[USER_FIELDS.subscriptionStatus] = "free";
+      await ref.set(patch, { merge: true });
+    }
     console.log(`onUserCreated: provisioned users/${user.uid} with ${INITIAL_CREDITS} credits`);
   } catch (err) {
     console.error(`onUserCreated: failed to provision users/${user.uid}`, err);

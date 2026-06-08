@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   LayoutDashboard,
   Briefcase,
@@ -31,6 +31,8 @@ interface PortalSidebarProps {
   profile: UserProfile | null;
   darkMode: boolean;
   onToggleDark: () => void;
+  isAIMode: boolean;
+  onToggleAIMode: () => void;
 }
 
 export function PortalSidebar({
@@ -40,8 +42,9 @@ export function PortalSidebar({
   profile,
   darkMode,
   onToggleDark,
+  isAIMode,
+  onToggleAIMode,
 }: PortalSidebarProps) {
-  const [aiMode, setAiMode] = useState(true);
 
   const dm = darkMode;
   const navItem = (page: PortalPage, label: string, Icon: React.ElementType) => (
@@ -127,7 +130,7 @@ export function PortalSidebar({
               <Sparkles className={`w-5 h-5 ${dm ? 'text-gray-400' : 'text-gray-600'}`} />
               <span className={`text-sm ${dm ? 'text-gray-300' : 'text-gray-700'}`}>AI Mode</span>
             </div>
-            {toggle(aiMode, () => setAiMode(!aiMode))}
+            {toggle(isAIMode, onToggleAIMode)}
           </div>
 
           <div className="flex items-center justify-between px-3 py-2">

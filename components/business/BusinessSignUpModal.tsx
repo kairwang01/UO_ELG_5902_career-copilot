@@ -51,9 +51,10 @@ interface Props {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSwitchToSignIn: () => void;
+  onSignedUp?: () => Promise<void> | void;
 }
 
-export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSignIn }: Props) {
+export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSignIn, onSignedUp }: Props) {
   const [selectedPlan, setSelectedPlan] = useState('starter');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -106,6 +107,7 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
       if (profileError) {
         setError(`Account created but profile setup failed: ${profileError.message}`);
       } else {
+        await onSignedUp?.();
         setMessage('Account created! You are now signed in.');
       }
     }

@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import type { UserProfile } from '../../types';
 import type { Database } from '../../lib/supabaseClient';
 import { supabase } from '../../lib/supabaseClient';
+import { data } from '../../lib/data';
 import ApplicantFunnel from '../ApplicantFunnel';
 import { PortalSidebar, type PortalPage } from './PortalSidebar';
 import { PortalTopBar } from './PortalTopBar';
@@ -32,6 +33,10 @@ interface EmployerPortalProps {
   onGoHome: () => void;
   t: (key: string) => string;
   initialPage?: PortalPage;
+  isAIMode: boolean;
+  onToggleAIMode: () => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
 export const EmployerPortal: React.FC<EmployerPortalProps> = ({
@@ -42,9 +47,13 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   onGoHome,
   t,
   initialPage = 'dashboard',
+  isAIMode,
+  onToggleAIMode,
+  theme,
+  onToggleTheme,
 }) => {
   const [currentPage, setCurrentPage] = useState<PortalPage>(initialPage);
-  const [darkMode, setDarkMode] = useState(false);
+  const darkMode = theme === 'dark';
 
   const [jobPostings, setJobPostings] = useState<JobPostingWithCount[]>([]);
   const [kpiData, setKpiData] = useState<KpiData>({ activeJobs: 0, totalApplicants: 0, newApplicants: 0, avgMatchScore: 0 });
@@ -158,15 +167,11 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   };
 
   const handleSelectPlan = async (planKey: string) => {
-    try {
-      await supabase
-        .from('profiles')
-        .update({ subscription_status: `pending_biz_${planKey}` })
-        .eq('id', session.user.id);
-      await refreshProfile();
-    } catch (err) {
-      console.error('Failed to update plan:', err);
-    }
+    const { error } = await data.profiles.update(session.user.id, {
+      subscription_status: `pending_biz_${planKey}`,
+    });
+    if (error) { console.error('Failed to update plan:', error.message); return; }
+    await refreshProfile();
   };
 
   const getPageTitle = () => {
@@ -193,7 +198,9 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           onGoHome={onGoHome}
           profile={profile}
           darkMode={darkMode}
-          onToggleDark={() => setDarkMode(!darkMode)}
+          onToggleDark={onToggleTheme}
+          isAIMode={isAIMode}
+          onToggleAIMode={onToggleAIMode}
         />
         <main className="flex-1 overflow-y-auto">
           <PortalTopBar title={`Applicants — ${jobForFunnel.title}`} darkMode={darkMode} />
@@ -217,7 +224,9 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         onGoHome={onGoHome}
         profile={profile}
         darkMode={darkMode}
-        onToggleDark={() => setDarkMode(!darkMode)}
+        onToggleDark={onToggleTheme}
+        isAIMode={isAIMode}
+        onToggleAIMode={onToggleAIMode}
       />
 
       <main className="flex-1 overflow-y-auto">

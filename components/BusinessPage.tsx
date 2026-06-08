@@ -18,6 +18,7 @@ interface BusinessPageProps {
   onBack: () => void;
   // Optional: enter the hiring portal at a specific page
   onEnterPortal?: (page: PortalPage) => void;
+  refreshProfile?: () => Promise<void>;
 }
 
 // Business plans matching the prototype design
@@ -91,6 +92,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   t,
   onBack,
   onEnterPortal,
+  refreshProfile,
 }) => {
   const pricingRef = useRef<HTMLElement>(null);
   const [modal, setModal] = React.useState<ModalState>('none');
@@ -136,9 +138,9 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
       <nav className="bg-blue-950 border-b border-blue-900">
         <div className="max-w-[1088px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            {/* Logo — clicking returns to business homepage */}
+            {/* Logo — scroll to top; this IS the business homepage */}
             <button
-              onClick={onBack}
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
               className="flex items-center gap-2 focus:outline-none"
               aria-label="Career CoPilot home"
             >
@@ -363,8 +365,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                 <button
                   onClick={() => {
                     if (session) {
-                      // TODO Phase 2: map plan IDs to real Stripe/Firestore plan keys
-                      onSelectBusinessPlan(plan.id === 'starter' ? 'single_post' : 'job_pack');
+                      onSelectBusinessPlan(plan.id);
                     } else {
                       setModal('signup');
                     }
@@ -394,6 +395,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         isOpen={modal === 'signup'}
         onOpenChange={(open) => setModal(open ? 'signup' : 'none')}
         onSwitchToSignIn={() => setModal('signin')}
+        onSignedUp={refreshProfile}
       />
       <BusinessForgotPasswordModal
         isOpen={modal === 'forgot'}
