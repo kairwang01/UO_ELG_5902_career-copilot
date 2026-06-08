@@ -104,7 +104,7 @@ const Footer: React.FC<FooterProps> = ({ onOpenDevMode, t, changeLanguage, curre
               className="bg-gray-800 border border-gray-700 text-gray-200 rounded-md py-1.5 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                <option key={lang.code} value={lang.code}>{lang.name}</option>
               ))}
             </select>
           </div>

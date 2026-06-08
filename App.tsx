@@ -582,6 +582,8 @@ const AppContent: React.FC = () => {
                     onToggleAIMode={toggleAIMode}
                     theme={theme}
                     onToggleTheme={toggleTheme}
+                    currentLang={currentLang}
+                    onLanguageChange={changeLanguage}
                 />
             );
         }
@@ -617,6 +619,8 @@ const AppContent: React.FC = () => {
                     onToolSelect={setActiveTool}
                     onLogout={() => data.auth.signOut()}
                     t={t}
+                    currentLang={currentLang}
+                    onLanguageChange={changeLanguage}
                 />
                 <div className="flex-1 flex flex-col h-screen overflow-hidden">
                     <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 shrink-0">

@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { UserProfile } from '../../types';
+import LanguageSwitcher from '../LanguageSwitcher';
 
 export type PortalPage =
   | 'dashboard'
@@ -33,6 +34,8 @@ interface PortalSidebarProps {
   onToggleDark: () => void;
   isAIMode: boolean;
   onToggleAIMode: () => void;
+  currentLang: string;
+  onLanguageChange: (lang: string) => void;
 }
 
 export function PortalSidebar({
@@ -44,6 +47,8 @@ export function PortalSidebar({
   onToggleDark,
   isAIMode,
   onToggleAIMode,
+  currentLang,
+  onLanguageChange,
 }: PortalSidebarProps) {
 
   const dm = darkMode;
@@ -140,6 +145,9 @@ export function PortalSidebar({
             </div>
             {toggle(dm, onToggleDark)}
           </div>
+
+          {/* Language switcher — lets users change language after sign-in */}
+          <LanguageSwitcher onLanguageChange={onLanguageChange} currentLang={currentLang} />
         </div>
       </div>
 

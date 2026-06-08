@@ -1,11 +1,11 @@
 
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Wrench, 
-  FileText, 
-  Globe, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Wrench,
+  FileText,
+  Globe,
+  Settings,
   CreditCard,
   ChevronRight,
   LogOut,
@@ -21,6 +21,7 @@ import {
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import { useToast } from './Toast';
+import LanguageSwitcher from './LanguageSwitcher';
 
 interface SidebarProps {
   activeView: 'dashboard' | 'toolkit' | 'resume' | 'portfolio' | 'account' | 'credentials' | 'business';
@@ -35,21 +36,25 @@ interface SidebarProps {
   activeTool: string | null;
   onToolSelect: (tool: string | null) => void;
   t: (key: string) => string;
+  currentLang: string;
+  onLanguageChange: (lang: string) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  activeView, 
-  onViewChange, 
-  profile, 
-  credits, 
-  theme, 
-  onToggleTheme, 
+const Sidebar: React.FC<SidebarProps> = ({
+  activeView,
+  onViewChange,
+  profile,
+  credits,
+  theme,
+  onToggleTheme,
   onLogout,
   isAIMode,
   onToggleAIMode,
   activeTool,
   onToolSelect,
-  t 
+  t,
+  currentLang,
+  onLanguageChange,
 }) => {
   const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(true);
   const { addToast } = useToast();
@@ -211,6 +216,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </p>
              </div>
         </div>
+
+        {/* Language switcher — lets users change language after sign-in */}
+        <LanguageSwitcher onLanguageChange={onLanguageChange} currentLang={currentLang} />
       </nav>
 
       {/* Credits & Footer */}

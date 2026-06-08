@@ -1,12 +1,12 @@
 import React from 'react';
 
 export const SUPPORTED_LANGUAGES = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'zh', name: '中文', flag: '🇨🇳' },
-    { code: 'ja', name: '日本語', flag: '🇯🇵' },
-    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-    { code: 'fr', name: 'Français', flag: '🇫🇷' },
-    { code: 'vi', name: 'Tiếng Việt', flag: '🇻🇳' },
+    { code: 'en', name: 'English' },
+    { code: 'zh', name: '中文' },
+    { code: 'ja', name: '日本語' },
+    { code: 'de', name: 'Deutsch' },
+    { code: 'fr', name: 'Français' },
+    { code: 'vi', name: 'Tiếng Việt' },
 ];
 
 interface LanguageSwitcherProps {
@@ -37,7 +37,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ onLanguageChange, c
             >
                 {SUPPORTED_LANGUAGES.map(lang => (
                     <option key={lang.code} value={lang.code}>
-                        {lang.flag} {lang.name}
+                        {lang.name}
                     </option>
                 ))}
             </select>

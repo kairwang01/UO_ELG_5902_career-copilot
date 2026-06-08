@@ -37,6 +37,8 @@ interface EmployerPortalProps {
   onToggleAIMode: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  currentLang: string;
+  onLanguageChange: (lang: string) => void;
 }
 
 export const EmployerPortal: React.FC<EmployerPortalProps> = ({
@@ -51,6 +53,8 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   onToggleAIMode,
   theme,
   onToggleTheme,
+  currentLang,
+  onLanguageChange,
 }) => {
   const [currentPage, setCurrentPage] = useState<PortalPage>(initialPage);
   const darkMode = theme === 'dark';
@@ -201,6 +205,8 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           onToggleDark={onToggleTheme}
           isAIMode={isAIMode}
           onToggleAIMode={onToggleAIMode}
+          currentLang={currentLang}
+          onLanguageChange={onLanguageChange}
         />
         <main className="flex-1 overflow-y-auto">
           <PortalTopBar title={`Applicants — ${jobForFunnel.title}`} darkMode={darkMode} />
@@ -227,6 +233,8 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         onToggleDark={onToggleTheme}
         isAIMode={isAIMode}
         onToggleAIMode={onToggleAIMode}
+        currentLang={currentLang}
+        onLanguageChange={onLanguageChange}
       />
 
       <main className="flex-1 overflow-y-auto">
