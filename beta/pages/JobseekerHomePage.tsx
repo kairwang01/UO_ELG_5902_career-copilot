@@ -33,11 +33,11 @@ export const JobseekerHomePage: React.FC = () => {
               {t('beta_js_hero_subtitle')}
             </p>
             <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row flex-wrap gap-3">
-              <BetaButton to={BETA_ROUTES.sampleReport} className="w-full sm:w-auto justify-center">
-                {t('beta_cta_sample_report')}
+              <BetaButton href={BETA_ROUTES.mvpApp} className="w-full sm:w-auto justify-center">
+                {t('beta_cta_analyze_resume')}
               </BetaButton>
-              <BetaButton variant="secondary" href={BETA_ROUTES.mvpApp} className="w-full sm:w-auto justify-center">
-                {t('beta_cta_upload_resume')}
+              <BetaButton variant="secondary" to={BETA_ROUTES.sampleReport} className="w-full sm:w-auto justify-center">
+                {t('beta_cta_sample_report')}
               </BetaButton>
             </div>
           </div>

@@ -10,14 +10,8 @@ interface BetaI18nValue {
 
 const BetaI18nContext = createContext<BetaI18nValue | null>(null);
 
-/**
- * Single localization state shared across all Beta components.
- *
- * Reuses the main app's `useLocalization` pipeline and the same
- * `preferred_language` localStorage key as `LanguageSwitcher`, so switching
- * language in the Beta header propagates to every Beta page (header, footer,
- * previews) instead of each component holding its own copy.
- */
+// One localization state for all Beta pages, so the header switcher updates
+// everything. Reuses the app's useLocalization and the same preferred_language key.
 export const BetaI18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const stored =
     (typeof localStorage !== 'undefined' && localStorage.getItem('preferred_language')) || undefined;
