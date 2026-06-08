@@ -15,24 +15,26 @@ interface PlanGridProps {
 
 const PlanGrid: React.FC<PlanGridProps> = ({ plans, ctaHref, t }) => (
   <div
-    className={`grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch ${
+    className={`grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-5 items-stretch ${
       plans.length > 2 ? 'lg:grid-cols-4' : ''
     }`}
   >
     {plans.map((plan) => (
       <SiteCard
         key={plan.id}
-        className={`flex flex-col ${
-          plan.recommended ? 'border-2 border-[var(--site-action)] lg:-mt-2 lg:mb-2' : ''
+        className={`relative flex flex-col p-6 sm:p-7 transition-colors ${
+          plan.recommended
+            ? 'border-[var(--site-action)] bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] ring-1 ring-[var(--site-action)]'
+            : 'hover:border-slate-300'
         }`}
       >
         {plan.recommended && (
-          <p className="text-xs font-semibold tracking-wide uppercase text-[var(--site-action)] mb-3">
+          <p className="mb-4 w-fit rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase text-[var(--site-action)]">
             {t('site_pricing_recommended')}
           </p>
         )}
-        <h3 className="font-semibold text-lg text-[var(--site-text)]">{t(planKey(plan.id, 'name'))}</h3>
-        <p className="text-4xl font-bold tracking-tight mt-3 text-[var(--site-text)]">
+        <h3 className="font-bold text-xl tracking-tight text-[var(--site-text)]">{t(planKey(plan.id, 'name'))}</h3>
+        <p className="text-4xl sm:text-5xl font-bold tracking-[-0.045em] mt-4 text-[var(--site-text)]">
           {t(planKey(plan.id, 'price'))}
           {!plan.isCustomPrice && (
             <span className="ml-1 text-sm font-medium text-[var(--site-text-muted)]">
@@ -43,15 +45,16 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, ctaHref, t }) => (
         <p className="text-sm font-medium text-[var(--site-text-muted)] mt-2 mb-5">
           {t(planKey(plan.id, 'desc'))}
         </p>
-        <ul className="text-sm space-y-2 flex-1 text-[var(--site-text-muted)]">
+        <div className="my-1 h-px bg-[var(--site-border)]" />
+        <ul className="mt-5 text-sm space-y-3 flex-1 text-[var(--site-text-muted)]">
           {Array.from({ length: plan.featureCount }, (_, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="text-[var(--site-ready)]">✓</span>
+            <li key={i} className="flex gap-2.5">
+              <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--site-ready-bg)] text-[10px] font-bold text-[var(--site-ready)]">✓</span>
               <span>{t(planKey(plan.id, `f${i + 1}` as `f${number}`))}</span>
             </li>
           ))}
         </ul>
-        <SiteButton variant={plan.recommended ? 'primary' : 'secondary'} href={ctaHref} className="mt-6 w-full">
+        <SiteButton variant={plan.recommended ? 'primary' : 'secondary'} href={ctaHref} className="mt-7 w-full py-3 font-semibold">
           {t('site_pricing_get_started')}
         </SiteButton>
       </SiteCard>
@@ -67,51 +70,53 @@ export const PricingPage: React.FC = () => {
 
   return (
     <SiteLayout pageId="pricing">
-      <section className="py-12 sm:py-[var(--site-section)]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-center mb-4">{t('site_pricing_title')}</h1>
-          <p className="text-center text-[var(--site-text-muted)] mb-8 max-w-xl mx-auto text-sm sm:text-base">
-            {audience === 'jobseeker' ? t('site_pricing_js_desc') : t('site_pricing_emp_desc')}
-          </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-2 mb-10 sm:mb-12">
-            <button
-              type="button"
-              onClick={() => setAudience('jobseeker')}
-              className={`px-4 py-2.5 min-h-[44px] rounded-[var(--site-radius)] text-sm font-medium ${
-                audience === 'jobseeker'
-                  ? 'bg-[var(--site-action)] text-white'
-                  : 'border border-[var(--site-border)] text-[var(--site-text-muted)]'
-              }`}
-            >
-              {t('site_pricing_jobseekers')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setAudience('employer')}
-              className={`px-4 py-2.5 min-h-[44px] rounded-[var(--site-radius)] text-sm font-medium ${
-                audience === 'employer'
-                  ? 'bg-[var(--site-action)] text-white'
-                  : 'border border-[var(--site-border)] text-[var(--site-text-muted)]'
-              }`}
-            >
-              {t('site_pricing_employers')}
-            </button>
+      <section className="relative overflow-hidden bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_55%,#f8fafc_100%)] py-14 sm:py-20">
+        <div className="pointer-events-none absolute left-1/2 top-0 h-72 w-[44rem] -translate-x-1/2 rounded-full bg-blue-100/55 blur-3xl" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--site-action)]">
+              Pricing
+            </p>
+            <h1 className="mt-4 text-[clamp(2.25rem,5vw,4.5rem)] font-bold leading-[1] tracking-[-0.055em] text-[var(--site-text)]">
+              {t('site_pricing_title')}
+            </h1>
+            <p className="mt-5 text-base sm:text-lg leading-8 text-[var(--site-text-muted)]">
+              {audience === 'jobseeker' ? t('site_pricing_js_desc') : t('site_pricing_emp_desc')}
+            </p>
           </div>
+
+          <div className="mx-auto mt-8 mb-10 sm:mb-12 flex w-full max-w-md rounded-full border border-[var(--site-border)] bg-white p-1 shadow-sm">
+            {(['jobseeker', 'employer'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setAudience(option)}
+                className={`min-h-[42px] flex-1 rounded-full px-4 text-sm font-semibold transition-colors ${
+                  audience === option
+                    ? 'bg-[var(--site-text)] text-white'
+                    : 'text-[var(--site-text-muted)] hover:text-[var(--site-text)]'
+                }`}
+              >
+                {option === 'jobseeker' ? t('site_pricing_jobseekers') : t('site_pricing_employers')}
+              </button>
+            ))}
+          </div>
+
           <PlanGrid plans={plans} ctaHref={ctaHref} t={t} />
 
           {audience === 'jobseeker' ? (
-            <section className="mt-16">
+            <section className="mt-16 rounded-[calc(var(--site-radius)*2)] border border-[var(--site-border)] bg-white p-6 sm:p-8">
               <div className="text-center mb-8">
-                <h2 className="text-xl sm:text-2xl font-semibold">{t('site_pricing_topup_title')}</h2>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-[-0.035em]">{t('site_pricing_topup_title')}</h2>
                 <p className="mt-2 text-sm sm:text-base text-[var(--site-text-muted)]">
                   {t('site_pricing_topup_desc')}
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
                 {CREDIT_PACKS.map((pack) => (
-                  <SiteCard key={pack.key} className="text-center">
+                  <SiteCard key={pack.key} className="text-center bg-[var(--site-surface-muted)]">
                     <h3 className="font-semibold">{pack.name}</h3>
-                    <p className="mt-3 text-4xl font-bold text-[var(--site-text)]">{pack.credits.toLocaleString()}</p>
+                    <p className="mt-3 text-4xl font-bold tracking-[-0.04em] text-[var(--site-text)]">{pack.credits.toLocaleString()}</p>
                     <p className="text-sm text-[var(--site-text-muted)]">{t('site_pricing_credits_label')}</p>
                     <p className="mt-5 text-lg font-semibold">{pack.price}</p>
                     <p className="text-xs text-[var(--site-text-muted)]">{pack.priceDescription}</p>
@@ -123,9 +128,9 @@ export const PricingPage: React.FC = () => {
               </div>
             </section>
           ) : (
-            <section className="mt-16">
+            <section className="mt-16 rounded-[calc(var(--site-radius)*2)] border border-[var(--site-border)] bg-white p-6 sm:p-8">
               <div className="text-center mb-8">
-                <h2 className="text-xl sm:text-2xl font-semibold">{t('site_pricing_job_posts_title')}</h2>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-[-0.035em]">{t('site_pricing_job_posts_title')}</h2>
                 <p className="mt-2 text-sm sm:text-base text-[var(--site-text-muted)]">
                   {t('site_pricing_job_posts_desc')}
                 </p>

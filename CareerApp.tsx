@@ -138,6 +138,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);
   const pricingSectionRef = useRef<HTMLDivElement>(null);
+  const authQueryHandledRef = useRef(false);
   // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
   const currentUserIdRef = useRef<string | null>(null);
   
@@ -160,6 +161,20 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };
+
+  useEffect(() => {
+    if (entry !== 'workspace' || authQueryHandledRef.current || session) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const auth = params.get('auth');
+    if (auth !== 'signin' && auth !== 'signup' && auth !== 'forgot') return;
+
+    authQueryHandledRef.current = true;
+    setAuthMode('candidate');
+    setInitialAuthView(auth === 'signup' ? 'sign_up' : auth === 'forgot' ? 'forgot_password' : 'sign_in');
+    setView('auth');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, [entry, session]);
 
   // Effect to determine and set the UI language based on user preferences or browser settings
   useEffect(() => {
@@ -638,8 +653,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
         t={t}
         session={session}
         profile={profile}
-        onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')}
-        onSignInClick={() => handleSetView('auth', 'sign_in', 'business')}
         onSelectBusinessPlan={handleBusinessPlanSelection}
         onBack={() => navigate('/employers')}
         onEnterPortal={(page) => {
@@ -967,7 +980,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     if (view === 'business') {
         return (
             <React.Suspense fallback={<LoadingSpinner market={market} />}>
-                <BusinessPage t={t} session={session} profile={profile} onPostJobClick={() => handleSetView('auth', 'sign_up', 'business')} onSignInClick={() => handleSetView('auth', 'sign_in', 'business')} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} refreshProfile={getProfile} />
+                <BusinessPage t={t} session={session} profile={profile} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} refreshProfile={getProfile} />
             </React.Suspense>
         );
     }

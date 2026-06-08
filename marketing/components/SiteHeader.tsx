@@ -7,59 +7,66 @@ import { SiteLanguageSwitcher } from './SiteLanguageSwitcher';
 
 export const SiteHeader: React.FC = () => {
   const { pathname } = useLocation();
-  const isEmployer = pathname.startsWith(SITE_ROUTES.employers);
+  const isEmployerSurface = pathname.startsWith(SITE_ROUTES.employers) || pathname.startsWith(SITE_ROUTES.portal);
   const { t } = useMarketingI18n();
+  const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
+  const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
+  const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : SITE_ROUTES.workspace;
 
   return (
-    <header className="relative border-b border-[var(--site-border)] bg-[var(--site-surface)] sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
+    <header className="sticky top-0 z-50 border-b border-[var(--site-border)] bg-[var(--site-surface)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--site-surface)]/85">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-[72px] flex items-center justify-between gap-4">
         <Link
           to={SITE_ROUTES.home}
-          className="text-base sm:text-lg font-semibold text-[var(--site-text)] truncate shrink-0"
+          className="text-base sm:text-lg font-semibold text-[var(--site-text)] tracking-tight truncate shrink-0"
         >
           Career CoPilot
         </Link>
-        <nav className="hidden sm:flex items-center gap-6 text-sm">
-          {!isEmployer && (
-            <>
-              <a href="#workflow" className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-                {t('site_nav_how_it_works')}
-              </a>
-              <Link to={SITE_ROUTES.sampleReport} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-                {t('site_nav_sample_report')}
-              </Link>
-            </>
+
+        <nav className="hidden lg:flex items-center gap-7 text-sm font-medium">
+          <a href={workflowHref} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+            {isEmployerSurface ? t('site_nav_hiring_workflow') : t('site_nav_how_it_works')}
+          </a>
+          {!isEmployerSurface && (
+            <Link to={SITE_ROUTES.sampleReport} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+              {t('site_nav_sample_report')}
+            </Link>
           )}
-          {isEmployer && (
-            <a href="#workflow" className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-              {t('site_nav_hiring_workflow')}
-            </a>
+          {isEmployerSurface && (
+            <Link to={`${SITE_ROUTES.portal}?start=post-job`} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+              {t('site_cta_post_job')}
+            </Link>
           )}
           <Link to={SITE_ROUTES.pricing} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
             {t('site_nav_pricing')}
           </Link>
-        </nav>
-        <div className="flex items-center gap-1 sm:gap-3 shrink-0">
           <Link
-            to={isEmployer ? SITE_ROUTES.home : SITE_ROUTES.employers}
-            className="hidden md:inline text-sm text-[var(--site-text-muted)] hover:text-[var(--site-text)] max-w-[7rem] truncate"
+            to={SITE_ROUTES.employers}
+            className={
+              isEmployerSurface
+                ? 'text-[var(--site-text)]'
+                : 'text-[var(--site-text-muted)] hover:text-[var(--site-text)]'
+            }
           >
-            {isEmployer ? t('site_nav_for_jobseekers') : t('site_nav_for_employers')}
+            {t('site_nav_for_employers')}
           </Link>
-          <div className="hidden sm:block">
+        </nav>
+
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="hidden md:block">
             <SiteLanguageSwitcher />
           </div>
           <Link
-            to={SITE_ROUTES.portal}
-            className="hidden lg:inline text-sm text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
+            to={signInHref}
+            className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
           >
             {t('site_nav_sign_in')}
           </Link>
           <Link
-            to={isEmployer ? SITE_ROUTES.portal : SITE_ROUTES.workspace}
-            className="hidden sm:inline-flex min-h-[38px] items-center justify-center rounded-[var(--site-radius)] bg-[var(--site-action)] px-3 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)] whitespace-nowrap"
+            to={primaryCtaHref}
+            className="hidden sm:inline-flex min-h-[40px] items-center justify-center rounded-[var(--site-radius)] bg-[var(--site-action)] px-4 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)] whitespace-nowrap"
           >
-            {isEmployer ? t('site_cta_post_job') : t('site_cta_analyze_resume')}
+            {isEmployerSurface ? t('business_hero_get_started_button') : t('site_cta_analyze_resume')}
           </Link>
           <SiteMobileNav />
         </div>

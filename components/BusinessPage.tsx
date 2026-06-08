@@ -5,12 +5,9 @@ import type { UserProfile } from '../types';
 import BusinessSignInModal from './business/BusinessSignInModal';
 import BusinessSignUpModal from './business/BusinessSignUpModal';
 import BusinessForgotPasswordModal from './business/BusinessForgotPasswordModal';
-import { data } from '@/lib/data';
 import type { PortalPage } from './employer/EmployerPortal';
 
 interface BusinessPageProps {
-  onPostJobClick: () => void;
-  onSignInClick: () => void;
   session: Session | null;
   profile: UserProfile | null;
   onSelectBusinessPlan: (planKey: string) => void;
@@ -84,8 +81,6 @@ const businessPlans = [
 type ModalState = 'none' | 'signin' | 'signup' | 'forgot';
 
 const BusinessPage: React.FC<BusinessPageProps> = ({
-  onPostJobClick,
-  onSignInClick,
   session,
   profile,
   onSelectBusinessPlan,
@@ -95,12 +90,8 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   refreshProfile,
 }) => {
   const pricingRef = useRef<HTMLElement>(null);
+  const handledQueryRef = useRef(false);
   const [modal, setModal] = React.useState<ModalState>('none');
-
-  const scrollToPricing = (e: React.MouseEvent) => {
-    e.preventDefault();
-    pricingRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   const handlePostJob = () => {
     if (session && onEnterPortal) {
@@ -122,94 +113,31 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     }
   };
 
-  const handleHiringPortal = () => {
-    if (session && onEnterPortal) {
-      onEnterPortal('dashboard');
-    } else if (session) {
-      onBack();
-    } else {
-      setModal('signin');
+  React.useEffect(() => {
+    if (handledQueryRef.current) return;
+    handledQueryRef.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const auth = params.get('auth');
+    const start = params.get('start');
+
+    if (auth === 'signin') setModal('signin');
+    if (auth === 'signup') setModal('signup');
+    if (start === 'post-job') {
+      if (session && onEnterPortal) {
+        onEnterPortal('post-job');
+      } else {
+        setModal('signup');
+      }
     }
-  };
+
+    if (auth || start) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [session, onEnterPortal]);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Nav */}
-      <nav className="bg-blue-950 border-b border-blue-900">
-        <div className="max-w-[1088px] mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo — scroll to top; this IS the business homepage */}
-            <button
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="flex items-center gap-2 focus:outline-none"
-              aria-label="Career CoPilot home"
-            >
-              <div className="w-8 h-8 bg-blue-400 rounded-md flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <span className="font-semibold text-xl text-white">Career CoPilot</span>
-            </button>
-
-            {/* Nav links */}
-            <div className="hidden md:flex items-center gap-8">
-              <button
-                onClick={handleHiringPortal}
-                className="text-gray-200 hover:text-white transition-colors"
-              >
-                Hiring Portal
-              </button>
-              <button
-                onClick={handlePostJob}
-                className="text-gray-200 hover:text-white transition-colors"
-              >
-                Post a Job
-              </button>
-              <a
-                href="#pricing"
-                onClick={scrollToPricing}
-                className="text-gray-200 hover:text-white transition-colors"
-              >
-                Pricing
-              </a>
-            </div>
-
-            {/* Auth buttons */}
-            <div className="flex items-center gap-4">
-              {session ? (
-                <>
-                  <span className="text-gray-300 text-sm">
-                    {profile?.full_name || session.user.email}
-                  </span>
-                  <button
-                    onClick={() => data.auth.signOut()}
-                    className="text-gray-200 hover:text-white transition-colors text-sm"
-                  >
-                    Sign Out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setModal('signin')}
-                    className="text-gray-200 hover:text-white transition-colors"
-                  >
-                    Sign In
-                  </button>
-                  <button
-                    onClick={() => setModal('signup')}
-                    className="bg-[#1D4ED8] text-white px-6 py-2 rounded-md hover:bg-[#1e40af] transition-colors"
-                  >
-                    Get Started
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {/* Hero */}
       <main className="max-w-[1088px] mx-auto px-6 py-16 md:py-24">
         <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6 text-gray-900">
