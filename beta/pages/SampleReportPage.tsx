@@ -14,7 +14,7 @@ export const SampleReportPage: React.FC = () => {
     .replace('{role}', sampleReport.targetRole);
 
   return (
-    <BetaLayout>
+    <BetaLayout pageId="sample-report">
       <section className="py-12 sm:py-[var(--beta-section)]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 mb-8 sm:mb-10">
           <h1 className="text-2xl sm:text-3xl font-semibold">{t('beta_sample_title')}</h1>

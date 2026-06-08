@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { BETA_ROUTES } from '../../config/beta';
 import { useBetaI18n } from '../hooks/useBetaI18n';
 import { BetaMobileNav } from './BetaMobileNav';
+import { BetaLanguageSwitcher } from './BetaLanguageSwitcher';
 
 export const BetaHeader: React.FC = () => {
   const { pathname } = useLocation();
@@ -45,6 +46,9 @@ export const BetaHeader: React.FC = () => {
           >
             {isEmployer ? t('beta_nav_for_jobseekers') : t('beta_nav_for_employers')}
           </Link>
+          <div className="hidden sm:block">
+            <BetaLanguageSwitcher />
+          </div>
           <Link
             to={BETA_ROUTES.portal}
             className="hidden sm:inline text-sm font-medium text-[var(--beta-action)] hover:underline whitespace-nowrap"

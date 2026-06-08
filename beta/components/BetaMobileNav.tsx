@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BETA_ROUTES } from '../../config/beta';
 import { useBetaI18n } from '../hooks/useBetaI18n';
+import { BetaLanguageSwitcher } from './BetaLanguageSwitcher';
 
 export const BetaMobileNav: React.FC = () => {
   const [open, setOpen] = useState(false);
@@ -64,6 +65,9 @@ export const BetaMobileNav: React.FC = () => {
           >
             {t('beta_nav_sign_in')}
           </Link>
+          <div className="py-3">
+            <BetaLanguageSwitcher variant="mobile" />
+          </div>
         </nav>
       )}
     </div>

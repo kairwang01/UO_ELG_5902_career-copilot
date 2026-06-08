@@ -22,7 +22,7 @@ export const JobseekerHomePage: React.FC = () => {
   const { t } = useBetaI18n();
 
   return (
-    <BetaLayout>
+    <BetaLayout pageId="jobseeker-home">
       <section className="py-12 sm:py-[var(--beta-section)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-8 lg:gap-12 items-start">
           <div className="min-w-0">

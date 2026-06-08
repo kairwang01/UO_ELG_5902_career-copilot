@@ -12,7 +12,7 @@ export const PricingPage: React.FC = () => {
   const plans = audience === 'jobseeker' ? jobseekerPlans : employerPlans;
 
   return (
-    <BetaLayout>
+    <BetaLayout pageId="pricing">
       <section className="py-12 sm:py-[var(--beta-section)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <h1 className="text-2xl sm:text-3xl font-semibold text-center mb-4">{t('beta_pricing_title')}</h1>

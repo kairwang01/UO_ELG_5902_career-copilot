@@ -8,7 +8,7 @@ export const PortalBridgePage: React.FC = () => {
   const { t } = useBetaI18n();
 
   return (
-    <BetaLayout showBanner={false}>
+    <BetaLayout showBanner={false} pageId="portal">
       <section className="py-[var(--beta-section)]">
         <div className="max-w-lg mx-auto px-4 sm:px-6 text-center">
           <h1 className="text-2xl font-semibold mb-4">{t('beta_portal_title')}</h1>

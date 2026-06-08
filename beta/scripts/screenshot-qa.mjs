@@ -1,24 +1,61 @@
 /**
  * Beta redesign screenshot QA — desktop + mobile viewports.
- * Usage: VITE_BETA_REDESIGN=true npm run dev  (separate terminal)
- *        node beta/scripts/screenshot-qa.mjs
+ *
+ * Hardened so a stale MVP dev server cannot produce false-green results:
+ *  - Reserves a free port and starts Vite with VITE_BETA_REDESIGN=true + --strictPort.
+ *  - Fails if a Beta route does not render the Beta app marker (data-beta-app).
+ *  - Fails if a Beta route exposes the expected data-beta-page id.
+ *  - Fails if forbidden MVP marketing strings leak into Beta routes.
+ *  - Confirms /app stays the isolated MVP shell (no Beta marker).
+ *
+ * Usage:
+ *   npm run beta:qa                 # starts its own Beta server on a free port
+ *   QA_SKIP_DEV=1 QA_BASE_URL=...   # reuse an already-running Beta server
  */
-import { mkdir } from 'fs/promises';
+import { mkdir, writeFile } from 'fs/promises';
 import { spawn } from 'child_process';
+import net from 'net';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.join(__dirname, '../..');
 const outDir = path.join(__dirname, '../qa-screenshots');
-const base = process.env.QA_BASE_URL || 'http://localhost:3000';
 
-const routes = ['/', '/employers', '/sample-report', '/pricing', '/portal', '/app'];
 const viewports = [
   { name: 'desktop', width: 1280, height: 800 },
   { name: 'mobile', width: 390, height: 844 },
 ];
 
-async function waitForServer(url, attempts = 30) {
+/** Beta routes carry a stable data-beta-page id; /app is the isolated MVP shell. */
+const betaRoutes = [
+  { route: '/', pageId: 'jobseeker-home' },
+  { route: '/employers', pageId: 'employer-landing' },
+  { route: '/sample-report', pageId: 'sample-report' },
+  { route: '/pricing', pageId: 'pricing' },
+  { route: '/portal', pageId: 'portal' },
+];
+const mvpRoute = { route: '/app', expectMvp: true };
+
+/** Strings that must NEVER appear on Beta routes (would mean the MVP leaked through). */
+const FORBIDDEN_MVP_STRINGS = [
+  'Go Beyond the Resume',
+  'An All-in-One Career Toolkit',
+  'Success Stories from Professionals',
+];
+
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+async function waitForServer(url, attempts = 40) {
   for (let i = 0; i < attempts; i++) {
     try {
       const res = await fetch(url);
@@ -26,67 +63,142 @@ async function waitForServer(url, attempts = 30) {
     } catch {
       /* retry */
     }
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 500));
   }
   throw new Error(`Server not ready at ${url}`);
 }
 
 async function main() {
+  const skipDev = process.env.QA_SKIP_DEV === '1';
   let dev = null;
-  const needStart = process.env.QA_SKIP_DEV !== '1';
+  let base;
 
-  if (needStart) {
-    dev = spawn('npm', ['run', 'dev'], {
-      cwd: path.join(__dirname, '../..'),
+  if (skipDev) {
+    base = process.env.QA_BASE_URL || 'http://localhost:3000';
+    await waitForServer(base);
+  } else {
+    const port = Number(process.env.QA_PORT) || (await getFreePort());
+    base = `http://localhost:${port}`;
+    dev = spawn('npm', ['run', 'dev', '--', '--port', String(port), '--strictPort'], {
+      cwd: projectRoot,
       env: { ...process.env, VITE_BETA_REDESIGN: 'true' },
       stdio: 'pipe',
     });
-    await waitForServer(base);
-  } else {
+    dev.stderr?.on('data', (d) => process.stderr.write(`[vite] ${d}`));
     await waitForServer(base);
   }
 
   const { chromium } = await import('playwright');
   await mkdir(outDir, { recursive: true });
-
   const browser = await chromium.launch();
-  const issues = [];
+
+  const results = [];
+  const failures = [];
 
   for (const vp of viewports) {
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
     const page = await context.newPage();
 
-    for (const route of routes) {
+    for (const target of [...betaRoutes, mvpRoute]) {
+      const { route } = target;
       const slug = route === '/' ? 'home' : route.replace(/^\//, '').replace(/\//g, '-');
       const file = path.join(outDir, `${slug}-${vp.name}.png`);
+      const checks = [];
+      let ok = true;
+
+      const fail = (msg) => {
+        ok = false;
+        failures.push(`${route} @ ${vp.name}: ${msg}`);
+        checks.push(`FAIL ${msg}`);
+      };
+
       try {
         await page.goto(`${base}${route}`, { waitUntil: 'networkidle', timeout: 60000 });
         await page.waitForTimeout(500);
+
+        const hasBetaMarker = (await page.locator('[data-beta-app="true"]').count()) > 0;
+
+        if (target.expectMvp) {
+          // /app must remain the isolated MVP shell — no Beta marker.
+          if (hasBetaMarker) fail('Beta marker present on /app (MVP isolation broken)');
+          else checks.push('OK isolated MVP shell (no beta marker)');
+        } else {
+          if (!hasBetaMarker) {
+            fail('missing data-beta-app marker (stale MVP server?)');
+          } else {
+            const pageId = await page.locator('[data-beta-app="true"]').first().getAttribute('data-beta-page');
+            if (pageId !== target.pageId) fail(`data-beta-page="${pageId}" != "${target.pageId}"`);
+            else checks.push(`OK data-beta-page=${pageId}`);
+          }
+
+          const bodyText = await page.evaluate(() => document.body.innerText);
+          for (const forbidden of FORBIDDEN_MVP_STRINGS) {
+            if (bodyText.includes(forbidden)) fail(`forbidden MVP string present: "${forbidden}"`);
+          }
+          if (ok) checks.push('OK no forbidden MVP strings');
+        }
+
         const overflow = await page.evaluate(() => ({
           sw: document.documentElement.scrollWidth,
           cw: document.documentElement.clientWidth,
         }));
         if (overflow.sw > overflow.cw + 2) {
-          issues.push(`${route} @ ${vp.name}: horizontal overflow (${overflow.sw}px > ${overflow.cw}px)`);
+          fail(`horizontal overflow (${overflow.sw}px > ${overflow.cw}px)`);
+        } else {
+          checks.push('OK no horizontal overflow');
         }
+
         await page.screenshot({ path: file, fullPage: true });
-        console.log(`✓ ${file}`);
       } catch (err) {
-        issues.push(`${route} @ ${vp.name}: ${err.message}`);
-        console.error(`✗ ${route} ${vp.name}`, err.message);
+        fail(err.message);
       }
+
+      results.push({ route, viewport: vp.name, ok, checks });
+      console.log(`${ok ? '✓' : '✗'} ${route} @ ${vp.name}`);
+      checks.forEach((c) => console.log(`    ${c}`));
     }
+
     await context.close();
   }
 
   await browser.close();
   if (dev) dev.kill('SIGTERM');
 
-  const reportPath = path.join(outDir, 'QA-REPORT.md');
-  const report = `# Beta Screenshot QA\n\nGenerated: ${new Date().toISOString()}\n\n## Routes\n${routes.map((r) => `- \`${r}\``).join('\n')}\n\n## Viewports\n${viewports.map((v) => `- ${v.name} ${v.width}×${v.height}`).join('\n')}\n\n## Issues\n${issues.length ? issues.map((i) => `- ${i}`).join('\n') : '- None detected (overflow check only)'}\n`;
-  await import('fs/promises').then((fs) => fs.writeFile(reportPath, report));
-  console.log(`\nReport: ${reportPath}`);
-  if (issues.length) process.exitCode = 1;
+  const lines = results.map(
+    (r) => `### \`${r.route}\` @ ${r.viewport} — ${r.ok ? 'PASS' : 'FAIL'}\n${r.checks.map((c) => `- ${c}`).join('\n')}`,
+  );
+  const report = `# Beta Screenshot QA
+
+Generated: ${new Date().toISOString()}
+Server: ${base} (VITE_BETA_REDESIGN=${skipDev ? 'reused server' : 'true'})
+
+## Summary
+
+- Routes checked: ${betaRoutes.length} Beta + 1 MVP isolation
+- Viewports: ${viewports.map((v) => `${v.name} ${v.width}x${v.height}`).join(', ')}
+- Result: ${failures.length === 0 ? 'ALL PASS' : `${failures.length} failure(s)`}
+
+## Assertions per route
+
+- data-beta-app marker present (Beta routes) / absent (/app)
+- data-beta-page matches expected id
+- no forbidden MVP strings: ${FORBIDDEN_MVP_STRINGS.map((s) => `"${s}"`).join(', ')}
+- no horizontal overflow
+
+## Results
+
+${lines.join('\n\n')}
+
+${failures.length ? `## Failures\n\n${failures.map((f) => `- ${f}`).join('\n')}` : '## Failures\n\nNone.'}
+`;
+
+  await writeFile(path.join(outDir, 'QA-REPORT.md'), report);
+  console.log(`\nReport: ${path.join(outDir, 'QA-REPORT.md')}`);
+
+  if (failures.length) {
+    console.error(`\n${failures.length} QA failure(s).`);
+    process.exitCode = 1;
+  }
 }
 
 main().catch((e) => {
