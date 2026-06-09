@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Adopted from firebase-migration. Verified against the only two client upload
+// paths in the app: components/Avatar.tsx -> avatars/{uid}/...
+// and components/CompanyLogo.tsx -> company-logos/{uid}/...
+// Server-generated assets (e.g. headshots) are written via the Admin SDK, which
+// bypasses these rules. All other paths are denied by default.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // avatars/{userId}/{fileName}
+    // Owner uploads/replaces their own avatar; any signed-in user may read
+    // (needed to display profile photos).
+    match /avatars/{userId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && request.resource.size < 5 * 1024 * 1024   // max 5 MB
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // company-logos/{userId}/{fileName}
+    // Same rules as avatars — employer uploads their own logo.
+    match /company-logos/{userId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Everything else denied by default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

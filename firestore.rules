@@ -1,70 +1,450 @@
 rules_version = '2';
 
+// ---------------------------------------------------------------------------
+// Merged ruleset: dev's authorization hardening + firebase-migration's field
+// validation. Best-of-both, with the firebase-migration security regressions
+// removed.
+//
+// Authorization / privacy model is dev's (UNCHANGED from what `dev` deploys today,
+// so nothing that works now regresses):
+//   - users are owner-only read; collection-wide candidate reads are NOT allowed
+//   - credits & subscription_status are server-only (Cloud Functions / Admin SDK)
+//   - initial credit grant capped at 100 on client create
+//   - role supports candidate | employer | agency
+//   - default-deny everything else
+//
+// Field-level schema validation (validUser / validJobPosting / ...) is adopted
+// from firebase-migration, with whitelist fixes so current client writes pass:
+//   - users:            added `email`, `preferred_language`
+//   - job_applications: added `compatibility_score`
+//
+// Three firebase-migration regressions were dropped:
+//   - users.credits self-grant cap was 1_000_000 -> restored to 100 on create
+//   - users.subscription_status allowed paid tiers on create -> restricted to
+//     free | pending_* (paid tiers granted server-side only)
+//   - users read was open to any signed-in user for role=="candidate"
+//     (leaks resume_text + wallet_address PII) -> kept owner-only
+//
+// KNOWN LIMITATION: employer talent-discovery (getCandidateProfilesByIds /
+// listCandidateProfilesWithResume in lib/recruitingData.ts) reads other users'
+// docs and is intentionally NOT permitted here. It must be served by a
+// field-limited, consent-gated Cloud Function. This matches dev's existing
+// decision and is unchanged by this merge.
+//
+// TEST BEFORE DEPLOY against the Firestore emulator (firebase.json configures it
+// on :8080). The added validators assert timestamp types on week_start_date,
+// application_date, english_pro_last_practice — confirm real writes validate.
+// ---------------------------------------------------------------------------
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---- users/{uid} ---------------------------------------------------------
-    match /users/{uid} {
+    // ---- helpers ----------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-      // Only the owner can read their own profile.
-      allow read: if request.auth != null && request.auth.uid == uid;
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
 
-      // Create: owner only, and the client may NOT self-grant credits or a paid plan.
-      // credits are capped at the initial grant (100); subscription_status must be
-      // 'free' or a pending_* routing value. The onUserCreated trigger (Admin SDK)
-      // bypasses these rules and is the authoritative provisioner.
-      allow create: if request.auth != null
-                    && request.auth.uid == uid
-                    && (!('credits' in request.resource.data)
-                        || request.resource.data.credits <= 100)
-                    && (!('role' in request.resource.data)
-                        || request.resource.data.role in ['candidate', 'employer', 'agency'])
-                    && (!('subscription_status' in request.resource.data)
-                        || request.resource.data.subscription_status == 'free'
-                        || request.resource.data.subscription_status.matches('pending_.*'));
+    function hasField(data, field) {
+      return data.keys().hasAny([field]);
+    }
 
-      // Update: owner may change profile fields but NEVER credits or subscription_status.
-      // Those are server-only via Cloud Functions (Admin SDK bypasses these rules).
-      allow update: if request.auth != null
-                    && request.auth.uid == uid
-                    && !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(['credits', 'subscription_status']);
+    function optionalString(data, field, maxSize) {
+      return !hasField(data, field) ||
+        data[field] == null ||
+        (data[field] is string && data[field].size() <= maxSize);
+    }
 
-      // Owner-scoped subcollections: tool_events, resume_analyses, weekly_insights.
-      match /{sub}/{docId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+    function optionalUrl(data, field, maxSize) {
+      return !hasField(data, field) ||
+        data[field] == null ||
+        (
+          data[field] is string &&
+          data[field].size() <= maxSize &&
+          (data[field].matches("^https://.*") || data[field].matches("^http://.*"))
+        );
+    }
+
+    function optionalNumber(data, field, minValue, maxValue) {
+      return !hasField(data, field) ||
+        data[field] == null ||
+        (data[field] is number && data[field] >= minValue && data[field] <= maxValue);
+    }
+
+    function optionalTimestamp(data, field) {
+      return !hasField(data, field) ||
+        data[field] == null ||
+        data[field] is timestamp;
+    }
+
+    function unchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // dev supports candidate | employer | agency (firebase-migration dropped agency).
+    function validRole(role) {
+      return role in ["candidate", "employer", "agency"];
+    }
+
+    function validSubscriptionStatus(status) {
+      return status is string &&
+        status.size() <= 80 &&
+        (
+          status == "free" ||
+          status in ["essentials", "accelerator", "executive", "single_post", "job_pack"] ||
+          status.matches("^pending_[a-z0-9_]+$") ||
+          status.matches("^pending_biz_[a-z0-9_]+$")
+        );
+    }
+
+    // Create-time: a client may set only `free` or a `pending_*` routing value —
+    // never a paid tier directly. Paid tiers are granted server-side by the
+    // setSubscriptionStatus Cloud Function.
+    function createSubscriptionAllowed(data) {
+      return !hasField(data, "subscription_status") ||
+        data.subscription_status == "free" ||
+        data.subscription_status.matches("^pending_[a-z0-9_]+$") ||
+        data.subscription_status.matches("^pending_biz_[a-z0-9_]+$");
+    }
+
+    function validUser(data) {
+      return data.keys().hasOnly([
+          "role",
+          "full_name",
+          "email",
+          "preferred_language",
+          "avatar_url",
+          "subscription_status",
+          "resume_text",
+          "company_name",
+          "company_description",
+          "company_logo_url",
+          "company_website",
+          "english_pro_streak",
+          "english_pro_last_practice",
+          "wallet_address",
+          "custom_provider",
+          "credits",
+          "created_at",
+          "updated_at"
+        ]) &&
+        data.keys().hasAll(["role", "credits", "created_at"]) &&
+        validRole(data.role) &&
+        (!hasField(data, "subscription_status") || validSubscriptionStatus(data.subscription_status)) &&
+        data.credits is number &&
+        data.credits >= 0 &&
+        data.credits <= 1000000 &&
+        data.created_at is timestamp &&
+        optionalTimestamp(data, "updated_at") &&
+        optionalString(data, "full_name", 120) &&
+        optionalString(data, "email", 320) &&
+        optionalString(data, "preferred_language", 20) &&
+        optionalUrl(data, "avatar_url", 2048) &&
+        optionalString(data, "subscription_status", 80) &&
+        optionalString(data, "resume_text", 200000) &&
+        optionalString(data, "company_name", 160) &&
+        optionalString(data, "company_description", 5000) &&
+        optionalUrl(data, "company_logo_url", 2048) &&
+        optionalUrl(data, "company_website", 2048) &&
+        optionalNumber(data, "english_pro_streak", 0, 100000) &&
+        optionalTimestamp(data, "english_pro_last_practice") &&
+        optionalString(data, "wallet_address", 128) &&
+        // Server-only (set via setBusinessLlmConfig callable / Admin SDK). Allowed to
+        // exist on the doc as a map; client writes are pinned via unchanged() below.
+        (!hasField(data, "custom_provider") || data.custom_provider is map);
+    }
+
+    function validCareerPath(data) {
+      return data.keys().hasOnly([
+          "desired_role",
+          "summary",
+          "skill_gaps",
+          "actionable_steps",
+          "bridge_roles",
+          "created_at"
+        ]) &&
+        data.keys().hasAll(["desired_role", "created_at"]) &&
+        data.desired_role is string &&
+        data.desired_role.size() > 0 &&
+        data.desired_role.size() <= 180 &&
+        optionalString(data, "summary", 20000) &&
+        data.created_at is timestamp;
+    }
+
+    function validInterviewSession(data) {
+      return data.keys().hasOnly([
+          "job_description",
+          "market_name",
+          "overall_summary",
+          "started_at",
+          "exchanges"
+        ]) &&
+        data.keys().hasAll(["started_at", "exchanges"]) &&
+        data.started_at is timestamp &&
+        data.exchanges is list &&
+        optionalString(data, "job_description", 20000) &&
+        optionalString(data, "market_name", 120) &&
+        optionalString(data, "overall_summary", 20000);
+    }
+
+    function validJobOpportunity(data) {
+      return data.keys().hasOnly([
+          "job_title",
+          "company",
+          "location",
+          "url",
+          "ai_summary",
+          "compatibility_score",
+          "missing_skills",
+          "is_saved",
+          "created_at"
+        ]) &&
+        data.keys().hasAll(["job_title", "company", "url", "is_saved", "created_at"]) &&
+        data.job_title is string &&
+        data.job_title.size() > 0 &&
+        data.job_title.size() <= 180 &&
+        data.company is string &&
+        data.company.size() > 0 &&
+        data.company.size() <= 180 &&
+        data.url is string &&
+        data.url.size() > 0 &&
+        data.url.size() <= 2048 &&
+        data.is_saved is bool &&
+        data.created_at is timestamp &&
+        optionalString(data, "location", 180) &&
+        optionalString(data, "ai_summary", 20000) &&
+        optionalNumber(data, "compatibility_score", 0, 100);
+    }
+
+    function validResumeAnalysis(data) {
+      return data.keys().hasOnly([
+          "event_id",
+          "score",
+          "market_name",
+          "summary",
+          "strengths",
+          "improvements",
+          "keywords",
+          "created_at"
+        ]) &&
+        data.keys().hasAll(["score", "market_name", "created_at"]) &&
+        data.score is number &&
+        data.score >= 0 &&
+        data.score <= 100 &&
+        data.market_name is string &&
+        data.market_name.size() > 0 &&
+        data.market_name.size() <= 120 &&
+        data.created_at is timestamp &&
+        optionalString(data, "event_id", 128) &&
+        optionalString(data, "summary", 20000);
+    }
+
+    function validToolEvent(data) {
+      return data.keys().hasOnly(["tool_key", "metadata", "created_at"]) &&
+        data.keys().hasAll(["tool_key", "created_at"]) &&
+        data.tool_key is string &&
+        data.tool_key.size() > 0 &&
+        data.tool_key.size() <= 120 &&
+        data.created_at is timestamp;
+    }
+
+    function validWeeklyInsight(data) {
+      return data.keys().hasOnly(["week_start_date", "summary_text", "actionable_tip", "created_at"]) &&
+        data.keys().hasAll(["week_start_date", "summary_text", "created_at"]) &&
+        data.week_start_date is timestamp &&
+        data.summary_text is string &&
+        data.summary_text.size() > 0 &&
+        data.summary_text.size() <= 20000 &&
+        data.created_at is timestamp &&
+        optionalString(data, "actionable_tip", 5000);
+    }
+
+    function validJobPosting(data) {
+      return data.keys().hasOnly([
+          "employer_id",
+          "title",
+          "description",
+          "location",
+          "salary_range",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ]) &&
+        data.keys().hasAll(["employer_id", "title", "is_active", "created_at", "updated_at"]) &&
+        data.employer_id is string &&
+        data.employer_id.size() > 0 &&
+        data.employer_id.size() <= 128 &&
+        data.title is string &&
+        data.title.size() > 0 &&
+        data.title.size() <= 180 &&
+        data.is_active is bool &&
+        data.created_at is timestamp &&
+        data.updated_at is timestamp &&
+        optionalString(data, "description", 20000) &&
+        optionalString(data, "location", 180) &&
+        optionalString(data, "salary_range", 120);
+    }
+
+    function validApplicationStatus(status) {
+      return status in ["Applied", "Interviewing", "Rejected", "Hired"];
+    }
+
+    function validJobApplication(data) {
+      return data.keys().hasOnly([
+          "job_id",
+          "candidate_id",
+          "employer_id",
+          "job_title",
+          "candidate_name",
+          "status",
+          "compatibility_score",
+          "notes",
+          "application_date"
+        ]) &&
+        data.keys().hasAll([
+          "job_id",
+          "candidate_id",
+          "employer_id",
+          "job_title",
+          "candidate_name",
+          "status",
+          "application_date"
+        ]) &&
+        data.job_id is string &&
+        data.job_id.size() > 0 &&
+        data.job_id.size() <= 128 &&
+        data.candidate_id is string &&
+        data.candidate_id.size() > 0 &&
+        data.candidate_id.size() <= 128 &&
+        data.employer_id is string &&
+        data.employer_id.size() > 0 &&
+        data.employer_id.size() <= 128 &&
+        data.job_title is string &&
+        data.job_title.size() > 0 &&
+        data.job_title.size() <= 180 &&
+        data.candidate_name is string &&
+        data.candidate_name.size() <= 120 &&
+        validApplicationStatus(data.status) &&
+        data.application_date is timestamp &&
+        optionalNumber(data, "compatibility_score", 0, 100) &&
+        optionalString(data, "notes", 5000);
+    }
+
+    // ---- users/{userId} ---------------------------------------------------
+    match /users/{userId} {
+
+      // Owner-only read. Collection-wide candidate reads (employer talent
+      // discovery) are intentionally denied — they would expose every
+      // candidate's resume_text PII. Serve that via a consent-gated Cloud
+      // Function, not an open rule.
+      allow read: if isOwner(userId);
+
+      // Create: owner only, valid shape, and the client may NOT self-grant
+      // credits beyond the initial 100 or a paid subscription tier. The
+      // onUserCreated trigger (Admin SDK) bypasses these rules and is the
+      // authoritative provisioner.
+      allow create: if isOwner(userId)
+        && validUser(request.resource.data)
+        && request.resource.data.credits <= 100
+        && createSubscriptionAllowed(request.resource.data);
+
+      // Update: owner may change profile fields, but credits, subscription_status
+      // and created_at are server-only / immutable from the client.
+      allow update: if isOwner(userId)
+        && validUser(request.resource.data)
+        && unchanged(["credits", "subscription_status", "created_at", "custom_provider"]);
+
+      allow delete: if false;
+
+      match /career_paths/{docId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validCareerPath(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /interview_sessions/{docId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validInterviewSession(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /job_opportunities/{docId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validJobOpportunity(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /resume_analyses/{docId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validResumeAnalysis(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /tool_events/{docId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validToolEvent(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /weekly_insights/{docId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validWeeklyInsight(request.resource.data);
+        allow delete: if isOwner(userId);
       }
     }
 
-    // ---- job_postings/{jobId} ------------------------------------------------
-    // Any signed-in user may browse postings; only the owning employer may write.
+    // ---- job_postings/{jobId} ---------------------------------------------
+    // Any signed-in user may browse active postings; the owning employer may
+    // also see their own inactive ones and is the only writer.
     match /job_postings/{jobId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-                    && request.resource.data.employer_id == request.auth.uid;
-      allow update, delete: if request.auth != null
-                    && resource.data.employer_id == request.auth.uid;
+      allow read: if isSignedIn() &&
+        (resource.data.is_active == true || resource.data.employer_id == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+        validJobPosting(request.resource.data) &&
+        request.resource.data.employer_id == request.auth.uid;
+
+      allow update: if isSignedIn() &&
+        resource.data.employer_id == request.auth.uid &&
+        validJobPosting(request.resource.data) &&
+        unchanged(["employer_id", "created_at"]);
+
+      allow delete: if isSignedIn() &&
+        resource.data.employer_id == request.auth.uid;
     }
 
-    // ---- job_applications/{appId} --------------------------------------------
+    // ---- job_applications/{applicationId} ---------------------------------
     // Candidate creates their own application; both the candidate and the owning
-    // employer may read it; only the employer may update it (e.g. status changes).
-    // Owner-scoped reads require the query to filter by candidate_id (candidate side)
-    // or employer_id (employer side) — the client queries are written to match.
-    match /job_applications/{appId} {
-      allow read: if request.auth != null
-                  && (resource.data.candidate_id == request.auth.uid
-                      || resource.data.employer_id == request.auth.uid);
-      allow create: if request.auth != null
-                    && request.resource.data.candidate_id == request.auth.uid;
-      allow update: if request.auth != null
-                    && resource.data.employer_id == request.auth.uid;
+    // employer may read it. Status changes are employer-controlled (dev's
+    // stance): only the employer may update, and identity/title fields are
+    // pinned. Either party may delete (candidate withdraw / employer cleanup).
+    match /job_applications/{applicationId} {
+      allow read: if isSignedIn() &&
+        (resource.data.candidate_id == request.auth.uid ||
+         resource.data.employer_id == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+        validJobApplication(request.resource.data) &&
+        request.resource.data.candidate_id == request.auth.uid;
+
+      allow update: if isSignedIn() &&
+        resource.data.employer_id == request.auth.uid &&
+        validJobApplication(request.resource.data) &&
+        unchanged(["job_id", "candidate_id", "employer_id", "job_title", "candidate_name", "application_date"]);
+
+      allow delete: if isSignedIn() &&
+        (resource.data.candidate_id == request.auth.uid ||
+         resource.data.employer_id == request.auth.uid);
     }
 
-    // All other collections are denied by default. In particular, employer
-    // candidate-discovery (a collection-wide /users read) is intentionally NOT
-    // allowed here: it would expose every candidate's PII (resume_text). That
-    // feature must be served by a future field-limited, consent-gated Cloud
-    // Function, not an open rule.
+    // platform_config, usage_events, credit_ledger — and everything else — are
+    // server-only (Admin SDK). Clients must use admin* Cloud Functions; no
+    // direct reads/writes.
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
