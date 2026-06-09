@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { Chat } from '@google/genai';
-import { startInterviewChat, saveInterviewExchange } from '../services/geminiService';
+import { generateInterviewQuestions, evaluateInterviewAnswer, type InterviewQuestion, type InterviewEvaluation } from '../services/aiClient';
 import type { AppSession as Session } from '../lib/data';
 
 interface InterviewSimulatorProps {
@@ -24,15 +23,22 @@ const isSpeechSupported = !!SpeechRecognition;
 const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, onClose, t, session }) => {
     const [stage, setStage] = useState<'setup' | 'interviewing' | 'finished'>('setup');
     const [jobDescription, setJobDescription] = useState('');
-    const [chat, setChat] = useState<Chat | null>(null);
+    const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
-    const [interviewSessionId, setInterviewSessionId] = useState<number | null>(null);
     const recognitionRef = useRef<any>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
+
+    const formatEvaluation = (e: InterviewEvaluation): string => {
+        const strengths = e.strengths?.length ? `\n\n✅ Strengths:\n• ${e.strengths.join('\n• ')}` : '';
+        const improvements = e.improvements?.length ? `\n\n🔧 To improve:\n• ${e.improvements.join('\n• ')}` : '';
+        const model = e.modelAnswer ? `\n\n💡 Model answer:\n${e.modelAnswer}` : '';
+        return `Score: ${e.score}/100${strengths}${improvements}${model}`;
+    };
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -76,17 +82,18 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         }
         setIsLoading(true);
         setError(null);
-        
-        try {
-            const { chat: chatSession, sessionId } = await startInterviewChat(resumeText, jobDescription, market, session);
-            setChat(chatSession);
-            setInterviewSessionId(sessionId);
-            
-            const firstResponse = await chatSession.sendMessage({ message: "Start the interview." });
-            const responseText = firstResponse.text.trim();
-            const parsed = JSON.parse(responseText);
 
-            setMessages([{ role: 'system', content: t('tool_mock_interview_system_start') }, { role: 'model_question', content: parsed.next_question }]);
+        try {
+            const generated = await generateInterviewQuestions(resumeText, jobDescription, market);
+            if (!generated.length) {
+                throw new Error("No interview questions were generated. Please try again.");
+            }
+            setQuestions(generated);
+            setCurrentIndex(0);
+            setMessages([
+                { role: 'system', content: t('tool_mock_interview_system_start') },
+                { role: 'model_question', content: generated[0].question },
+            ]);
             setStage('interviewing');
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to start interview session.");
@@ -106,32 +113,22 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         setIsLoading(true);
 
         try {
-            if (!chat) throw new Error("Chat session not initialized.");
-            
-            const lastQuestion = [...messages].reverse().find(m => m.role === 'model_question')?.content;
+            const currentQuestion = questions[currentIndex]?.question;
+            if (!currentQuestion) throw new Error("Interview session not initialized.");
 
-            const response = await chat.sendMessage({ message: currentInput });
-            const responseText = response.text.trim();
-            const parsed = JSON.parse(responseText);
-            
-            if (interviewSessionId && lastQuestion) {
-                await saveInterviewExchange({
-                    sessionId: interviewSessionId,
-                    question: lastQuestion,
-                    answer: currentInput,
-                    feedback: parsed.feedback || "N/A"
-                });
-            }
+            const evaluation = await evaluateInterviewAnswer(currentQuestion, currentInput, jobDescription);
 
-            const newMessages: Message[] = [];
-            if(parsed.feedback) newMessages.push({ role: 'model_feedback', content: parsed.feedback });
-            if(parsed.next_question) newMessages.push({ role: 'model_question', content: parsed.next_question });
-            
-            if(parsed.summary) {
-                newMessages.push({ role: 'system', content: parsed.summary });
+            const newMessages: Message[] = [{ role: 'model_feedback', content: formatEvaluation(evaluation) }];
+
+            const nextIndex = currentIndex + 1;
+            if (nextIndex >= questions.length) {
+                newMessages.push({ role: 'system', content: 'Interview complete — review the feedback above. Great work!' });
                 setStage('finished');
+            } else {
+                newMessages.push({ role: 'model_question', content: questions[nextIndex].question });
+                setCurrentIndex(nextIndex);
             }
-            
+
             setMessages(prev => [...prev, ...newMessages]);
 
         } catch (err) {
@@ -162,7 +159,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             case 'model_question':
                 return <div key={index} className="flex justify-start mb-4"><div className="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-lg py-2 px-4 max-w-lg">{msg.content}</div></div>;
             case 'model_feedback':
-                return <div key={index} className="my-2 p-3 bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-yellow-400 text-yellow-800 dark:text-yellow-200 rounded-r-lg text-sm max-w-lg">{msg.content}</div>;
+                return <div key={index} className="my-2 p-3 bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-yellow-400 text-yellow-800 dark:text-yellow-200 rounded-r-lg text-sm max-w-lg whitespace-pre-line">{msg.content}</div>;
             case 'system':
                 return <div key={index} className="text-center my-4 text-sm text-gray-500 dark:text-gray-400 italic">{msg.content}</div>;
         }

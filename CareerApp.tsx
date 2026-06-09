@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
-import { analyzeResume, setApiStatusUpdater } from './services/geminiService';
+import { analyzeResume, setApiStatusUpdater } from './services/aiClient';
 import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
 import { httpsCallable } from 'firebase/functions';
 import { firebaseFunctions } from './lib/firebaseClient';

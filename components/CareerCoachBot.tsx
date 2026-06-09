@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
-import { GoogleGenAI, Chat } from '@google/genai';
+import { careerCoach } from '../services/aiClient';
 import Avatar from './Avatar';
 
 interface CareerCoachBotProps {
@@ -105,7 +105,6 @@ const renderFormattedMessage = (text: string) => {
 
 
 const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, session, profile, resumeText, t }) => {
-    const [chat, setChat] = useState<Chat | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -113,25 +112,9 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
 
     useEffect(() => {
         if (isOpen) {
-            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
-            
-            let systemInstruction = "You are 'Alex', an empathetic and encouraging AI career coach. Your tone is warm, friendly, and professional yet conversational. Avoid being overly robotic. Use natural language, ask clarifying questions, and use markdown for formatting like **bolding** key terms. Start by asking the user if they are a job seeker or an employer to tailor your advice.";
-            
-            if (profile?.role === 'candidate') {
-                systemInstruction = `You are 'Alex', an empathetic and expert AI career coach for a job seeker. Your tone is warm, friendly, and professional yet conversational. Use natural language, ask clarifying questions to understand their situation better, and offer encouragement. Avoid being overly robotic. Use markdown for formatting like **bolding** key terms, and use lists where appropriate. Here is the user's resume for context if they ask questions related to it:\n\n${resumeText}`;
-            } else if (profile?.role === 'employer') {
-                systemInstruction = `You are 'Alex', a professional and insightful AI HR assistant for an employer. Your tone is helpful, collaborative, and professional yet conversational. Use natural language and avoid overly formal or robotic phrasing. Use markdown for formatting like **bolding** key terms, and use lists where appropriate. Here is the employer's company profile for context: Name: ${profile.company_name || 'N/A'}, Website: ${profile.company_website || 'N/A'}, Description: ${profile.company_description || 'N/A'}`;
-            }
-
-            const chatSession = ai.chats.create({
-                model: 'gemini-flash-latest',
-                config: { systemInstruction }
-            });
-
-            setChat(chatSession);
             setMessages([{ role: 'model', content: "Hi there! I'm Alex, your AI-powered career coach. Whether you're looking for resume feedback, interview practice, or career advice, I'm here to help. What's on your mind today?" }]);
         }
-    }, [isOpen, profile, resumeText]);
+    }, [isOpen]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -145,27 +128,24 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!userInput.trim() || isLoading || !chat) return;
+        if (!userInput.trim() || isLoading) return;
 
         const userMessage: Message = { role: 'user', content: userInput };
-        setMessages(prev => [...prev, userMessage]);
+        const history = [...messages, userMessage];
+        setMessages(history);
         setUserInput('');
         setIsLoading(true);
 
         try {
-            const responseStream = await chat.sendMessageStream({ message: userInput });
-            
-            let currentResponse = '';
-            setMessages(prev => [...prev, { role: 'model', content: '' }]);
-
-            for await (const chunk of responseStream) {
-                currentResponse += chunk.text;
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    newMessages[newMessages.length - 1] = { role: 'model', content: currentResponse };
-                    return newMessages;
-                });
-            }
+            const reply = await careerCoach({
+                messages: history,
+                role: profile?.role === 'employer' ? 'employer' : profile?.role === 'candidate' ? 'candidate' : null,
+                resumeText,
+                companyName: profile?.company_name,
+                companyWebsite: profile?.company_website,
+                companyDescription: profile?.company_description,
+            });
+            setMessages(prev => [...prev, { role: 'model', content: reply }]);
         } catch (error) {
             console.error("Error sending message:", error);
             setMessages(prev => [...prev, { role: 'model', content: "Sorry, I encountered an error. Please try again." }]);

@@ -29,5 +29,8 @@ dist-ssr
 # Local project planning docs (not for GitHub)
 project-planning/
 
+# Local design reference dump (not part of the app build)
+design/
+
 # Beta screenshot QA artifacts (regenerate via npm run beta:qa)
 beta/qa-screenshots/*.png

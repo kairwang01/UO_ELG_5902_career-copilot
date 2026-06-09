@@ -23,6 +23,7 @@ import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import { useToast } from './Toast';
 import LanguageSwitcher from './LanguageSwitcher';
+import ModelSelector from './ModelSelector';
 
 type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
 
@@ -211,6 +212,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <p className="text-[9px] text-gray-500 dark:text-slate-500">
                     {isAIMode ? "Assisted tools are enabled" : "Assisted tools are restricted"}
                 </p>
+                {/* Model picker — only renders for paid+ users (server-gated). */}
+                <ModelSelector className="mt-3" />
              </div>
         </div>
 
