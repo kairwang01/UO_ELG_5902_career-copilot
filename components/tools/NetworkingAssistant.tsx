@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Users } from 'lucide-react';
 import { generateNetworkingStrategy } from '../../services/aiClient';
 import type { NetworkingStrategyResult } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -90,7 +91,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
   );
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Mapping your network" steps={["Analyzing your background…","Identifying the right contacts…","Drafting outreach messages…"]} onCancel={cancel} icon="🤝" accent="sky" />;
+    if (loading) return <StagedLoader title="Mapping your network" steps={["Analyzing your background…","Identifying the right contacts…","Drafting outreach messages…"]} onCancel={cancel} icon={<Users />} accent="sky" />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

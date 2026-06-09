@@ -1,6 +1,7 @@
 
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
 import { analyzeResume, setApiStatusUpdater } from './services/aiClient';
@@ -1006,7 +1007,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     if (isLoading) {
       return (
         <StagedLoader
-          icon="📊"
+          icon={<BarChart3 />}
           accent="blue"
           title="Analyzing your resume"
           steps={[

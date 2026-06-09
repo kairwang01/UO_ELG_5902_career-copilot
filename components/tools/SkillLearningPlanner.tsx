@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { GraduationCap } from 'lucide-react';
 import { generateLearningPlan } from '../../services/aiClient';
 import type { LearningPlanResult } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -48,7 +49,7 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
   );
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Designing your learning plan" icon="📚" accent="violet" steps={["Reviewing your resume…","Mapping the skill path…","Curating projects & milestones…"]} onCancel={cancel} />;
+    if (loading) return <StagedLoader title="Designing your learning plan" icon={<GraduationCap />} accent="violet" steps={["Reviewing your resume…","Mapping the skill path…","Curating projects & milestones…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
     return (

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Globe } from 'lucide-react';
 import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -835,7 +836,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const renderInput = () => {
     if (loading) return (
       <StagedLoader
-        icon="🌐"
+        icon={<Globe />}
         accent="pink"
         title="Building your website"
         steps={[
