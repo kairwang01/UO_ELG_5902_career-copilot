@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Languages } from 'lucide-react';
 import { data, type AppSession as Session } from '../../lib/data';
 import { analyzeEnglishProficiency, analyzeSpokenEnglish, analyzeEnglishReading, evaluateReadingComprehension, analyzeEnglishListening, generateReadingPracticePassage, generateSpeakingTopics, generateVocabularyFlashcards } from '../../services/aiClient';
 import type { EnglishProResult, SpokenEnglishAnalysisResult, EnglishReadingAnalysisResult, ReadingEvaluation, EnglishListeningAnalysisResult, ReadingPracticePassage, VocabularyFlashcard, UserProfile, VocabularyItem, ComprehensionQuestion } from '../../types';
@@ -445,7 +446,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             {error && <div className="text-red-600 bg-red-100 p-3 rounded-md text-sm mb-4">{error}</div>}
             {loading ? (
                 <StagedLoader
-                    icon="🗣️"
+                    icon={<Languages />}
                     accent="purple"
                     title="Analyzing your English"
                     steps={[

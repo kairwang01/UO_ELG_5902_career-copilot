@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { PenLine } from 'lucide-react';
 import { generateCoverLetter } from '../../services/aiClient';
 import type { CoverLetter } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -124,7 +125,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
         ]}
         intervalMs={1800}
         onCancel={cancel}
-        icon="📝"
+        icon={<PenLine />}
         accent="lime"
       />
     );

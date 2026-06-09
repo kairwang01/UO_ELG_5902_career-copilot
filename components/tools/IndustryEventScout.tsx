@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CalendarDays } from 'lucide-react';
 import { findIndustryEvents } from '../../services/aiClient';
 import type { EventScoutResult } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -63,7 +64,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
   );
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Finding events" steps={["Understanding your field…","Searching for events…","Curating the best matches…"]} onCancel={cancel} icon="📅" accent="amber" />;
+    if (loading) return <StagedLoader title="Finding events" steps={["Understanding your field…","Searching for events…","Curating the best matches…"]} onCancel={cancel} icon={<CalendarDays />} accent="amber" />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

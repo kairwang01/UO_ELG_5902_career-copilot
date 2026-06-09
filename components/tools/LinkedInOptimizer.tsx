@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link2 } from 'lucide-react';
 import { optimizeLinkedInProfile, optimizeLinkedInProfileFromText } from '../../services/aiClient';
 import type { LinkedInOptimization } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -131,7 +132,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
   );
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Optimizing your profile" steps={["Reading your profile…","Identifying improvements…","Rewriting headline & summary…"]} onCancel={cancel} icon="🔗" accent="cyan" />;
+    if (loading) return <StagedLoader title="Optimizing your profile" steps={["Reading your profile…","Identifying improvements…","Rewriting headline & summary…"]} onCancel={cancel} icon={<Link2 />} accent="cyan" />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

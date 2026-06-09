@@ -1,6 +1,7 @@
 
 
 import React, { useState } from 'react';
+import { Award } from 'lucide-react';
 import { generateAgilePracticeTest } from '../../services/aiClient';
 import type { AgilePracticeTestResult } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -153,7 +154,7 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
     );
   };
 
-  if (loading) return <StagedLoader title="Preparing your test" steps={["Setting up your exam…","Generating practice questions…","Adding tips & explanations…"]} onCancel={cancel} icon="🏅" accent="orange" />;
+  if (loading) return <StagedLoader title="Preparing your test" steps={["Setting up your exam…","Generating practice questions…","Adding tips & explanations…"]} onCancel={cancel} icon={<Award />} accent="orange" />;
   if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
 
   switch (testStage) {
