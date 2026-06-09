@@ -11,6 +11,7 @@ import {
   Target,
 } from 'lucide-react';
 import ResumePreview from '../ResumePreview';
+import CareerGoalsPanel from '../CareerGoalsPanel';
 import { sampleReport } from '../../marketing/mock/sampleReport';
 import { interviewFeedback } from '../../marketing/mock/interviewFeedback';
 import { careerPathPlan } from '../../marketing/mock/careerPath';
@@ -310,7 +311,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   );
 };
 
-export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, onUploadResume, onOpenTool }) => {
+export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool }) => {
   const [sort, setSort] = useState<'priority' | 'score'>('priority');
   const hasResume = resumeText.trim().length > 0;
   const sortedJobs = useMemo(
@@ -320,6 +321,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, onUploa
 
   return (
     <div className="space-y-6">
+      <CareerGoalsPanel t={t} />
       <PageHeader
         label="Job match"
         title="Matches ranked by evidence, not just keywords"
