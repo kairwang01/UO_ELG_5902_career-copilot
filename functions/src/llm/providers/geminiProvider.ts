@@ -107,6 +107,9 @@ export class GeminiProvider implements LLMProvider {
       config.responseMimeType = "application/json";
       config.responseSchema = req.responseSchema;
     }
+    if (req.useGoogleSearch) {
+      config.tools = [{ googleSearch: {} }];
+    }
     if (req.temperature !== undefined) {
       config.temperature = req.temperature;
     }
@@ -123,11 +126,15 @@ export class GeminiProvider implements LLMProvider {
 
     const text = response.text;
     const raw = req.responseSchema ? extractJson(text) : undefined;
+    const groundingChunks = req.useGoogleSearch
+      ? response.candidates?.[0]?.groundingMetadata?.groundingChunks
+      : undefined;
 
     return {
       text,
       raw,
       model: this.model,
+      groundingChunks,
       usage: {
         inputTokens: response.usageMetadata?.promptTokenCount,
         outputTokens: response.usageMetadata?.candidatesTokenCount,

@@ -44,6 +44,11 @@ export interface LLMRequest {
   responseSchema?: object;
   /** Sampling temperature (0 = deterministic, 1 = creative). Default: provider-specific. */
   temperature?: number;
+  /**
+   * When true, the provider enables live web search grounding (Gemini googleSearch
+   * tool) and populates LLMResult.groundingChunks with the cited sources.
+   */
+  useGoogleSearch?: boolean;
 }
 
 /** Output from any LLM provider call. */
@@ -57,6 +62,11 @@ export interface LLMResult {
   raw?: unknown;
   /** Name of the model that answered (e.g. "gemini-3-pro-preview"). */
   model: string;
+  /**
+   * Web-search grounding sources, populated when LLMRequest.useGoogleSearch was set.
+   * Shape mirrors Gemini's groundingMetadata.groundingChunks.
+   */
+  groundingChunks?: unknown;
   /** Token usage for cost tracking (optional — not all providers expose this). */
   usage?: {
     inputTokens?: number;
