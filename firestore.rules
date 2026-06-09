@@ -417,18 +417,23 @@ service cloud.firestore {
     }
 
     // ---- job_applications/{applicationId} ---------------------------------
-    // Candidate creates their own application; both the candidate and the owning
-    // employer may read it. Status changes are employer-controlled (dev's
-    // stance): only the employer may update, and identity/title fields are
-    // pinned. Either party may delete (candidate withdraw / employer cleanup).
+    // Both the candidate and the owning employer may read. Status changes are
+    // employer-controlled: only the employer may update, and identity/title
+    // fields are pinned. Either party may delete (candidate withdraw / employer
+    // cleanup).
+    //
+    // CREATE is client-forbidden: all writes go through the createJobApplication
+    // Cloud Function (Admin SDK), which reads employer_id/job_title from the
+    // authoritative job_postings doc so the client cannot forge them, and
+    // rejects duplicate applications atomically.
     match /job_applications/{applicationId} {
       allow read: if isSignedIn() &&
         (resource.data.candidate_id == request.auth.uid ||
          resource.data.employer_id == request.auth.uid);
 
-      allow create: if isSignedIn() &&
-        validJobApplication(request.resource.data) &&
-        request.resource.data.candidate_id == request.auth.uid;
+      // Server-only — the createJobApplication Cloud Function (Admin SDK)
+      // bypasses these rules. Direct client creates are rejected.
+      allow create: if false;
 
       allow update: if isSignedIn() &&
         resource.data.employer_id == request.auth.uid &&
