@@ -38,6 +38,7 @@ import {
   ResumeReadinessPage,
 } from './components/dashboard/CandidateWorkspacePages';
 import Sidebar from './components/Sidebar';
+import MyApplications from './components/MyApplications';
 import AccountMenu from './components/AccountMenu';
 import type { PortalPage } from './components/employer/EmployerPortal';
 import CareerCoachBot from './components/CareerCoachBot';
@@ -106,7 +107,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const [isUpdatingResume, setIsUpdatingResume] = useState(false);
   const [showHomePageOverride, setShowHomePageOverride] = useState(false);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
-  const [dashboardView, setDashboardView] = useState<'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials'>('dashboard');
+  const [dashboardView, setDashboardView] = useState<'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials'>('dashboard');
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -817,6 +818,19 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
                 onViewChange={setDashboardView}
               />
             </div>
+        )}
+
+        {dashboardView === 'applications' && (
+          <div id="applications-panel">
+            <MyApplications
+              session={session}
+              t={t}
+              onFindSimilar={() => {
+                setActiveTool('opportunity-finder');
+                setDashboardView('toolkit');
+              }}
+            />
+          </div>
         )}
 
         {dashboardView === 'interview' && (

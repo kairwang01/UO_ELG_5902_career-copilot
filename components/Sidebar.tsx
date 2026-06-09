@@ -13,7 +13,8 @@ import {
   Zap,
   ChevronDown,
   ShieldCheck,
-  Briefcase
+  Briefcase,
+  ClipboardList
 } from 'lucide-react';
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
@@ -21,7 +22,7 @@ import { useToast } from './Toast';
 import LanguageSwitcher from './LanguageSwitcher';
 import ModelSelector from './ModelSelector';
 
-type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
+type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
 
 interface SidebarProps {
   activeView: SidebarView;
@@ -62,6 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'resume', label: 'Resume', icon: FileText },
     { id: 'jobs', label: 'Jobs', icon: Briefcase },
+    { id: 'applications', label: 'Applications', icon: ClipboardList },
     { id: 'interview', label: 'Interview', icon: MessageSquare },
     { id: 'plan', label: 'Plan', icon: CalendarCheck },
     { id: 'portfolio', label: 'Showcase', icon: Globe },
