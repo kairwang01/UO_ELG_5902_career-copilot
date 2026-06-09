@@ -34,3 +34,7 @@ design/
 
 # Beta screenshot QA artifacts (regenerate via npm run beta:qa)
 beta/qa-screenshots/*.png
+
+# Local tooling / scratch (not part of the app)
+.claude/
+.workbuddy/

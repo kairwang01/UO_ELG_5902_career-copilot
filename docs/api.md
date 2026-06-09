@@ -19,7 +19,7 @@ Replace `YOUR_API_KEY` with the key you generated in your account settings.
 
 All requests are `POST` requests made to a single endpoint:
 
-`https://tchwdtylvdijcqfcuenf.supabase.co/functions/v1/api`
+`https://<region>-<your-project-id>.cloudfunctions.net/api`
 
 The body of your `POST` request must be a JSON object containing two properties:
 - `endpoint`: The name of the API method you want to call.
@@ -72,7 +72,7 @@ Analyzes a resume text for ATS compliance, keywords, and overall quality for a s
 
 **Example Request (`curl`)**
 ```bash
-curl -X POST 'https://tchwdtylvdijcqfcuenf.supabase.co/functions/v1/api' \
+curl -X POST 'https://<region>-<your-project-id>.cloudfunctions.net/api' \
 -H 'Authorization: Bearer YOUR_API_KEY' \
 -H 'Content-Type: application/json' \
 -d '{
