@@ -150,6 +150,7 @@ export interface MaskedLlmConfig {
   gemini_api_key_masked: string;
   kairllm_api_key_masked: string;
   gemini_model: string;
+  gemini_fallback_model: string;
   kairllm_base_url: string;
   deepseek_api_key_masked: string;
   deepseek_base_url: string;
@@ -166,6 +167,7 @@ export async function getLlmConfigMasked(): Promise<MaskedLlmConfig> {
     gemini_api_key_masked: maskSecret(doc.gemini_api_key || process.env.GEMINI_API_KEY),
     kairllm_api_key_masked: maskSecret(doc.kairllm_api_key || process.env.KAIRLLM_API_KEY),
     gemini_model: getGeminiModel(),
+    gemini_fallback_model: getGeminiFallbackModel() ?? "",
     kairllm_base_url: getKairllmBaseUrl(),
     deepseek_api_key_masked: maskSecret(doc.deepseek_api_key || process.env.DEEPSEEK_API_KEY),
     deepseek_base_url: getDeepseekBaseUrl(),

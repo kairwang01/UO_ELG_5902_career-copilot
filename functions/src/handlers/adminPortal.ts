@@ -112,6 +112,7 @@ export const adminGetLlmConfigFunction = onCall({ invoker: "public" }, async (re
 interface UpdateLlmRequest {
   gemini_api_key?: string;
   gemini_model?: string;
+  gemini_fallback_model?: string;
   kairllm_api_key?: string;
   kairllm_base_url?: string;
   deepseek_api_key?: string;
@@ -127,6 +128,8 @@ export const adminUpdateLlmConfigFunction = onCall({ invoker: "public" }, async 
   const existing = (await ref.get()).data() as LlmConfigDoc | undefined;
   const patch: LlmConfigDoc = {
     gemini_model: data.gemini_model?.trim() || existing?.gemini_model,
+    gemini_fallback_model:
+      data.gemini_fallback_model?.trim() || existing?.gemini_fallback_model,
     kairllm_base_url: data.kairllm_base_url?.trim() || existing?.kairllm_base_url,
     deepseek_base_url: data.deepseek_base_url?.trim() || existing?.deepseek_base_url,
     updated_at: new Date().toISOString(),
@@ -144,6 +147,7 @@ export const adminUpdateLlmConfigFunction = onCall({ invoker: "public" }, async 
     action: "update_llm_config",
     details: {
       gemini_model: patch.gemini_model ?? null,
+      gemini_fallback_model: patch.gemini_fallback_model ?? null,
       kairllm_base_url: patch.kairllm_base_url ?? null,
       deepseek_base_url: patch.deepseek_base_url ?? null,
       // NEVER log raw keys — only whether they were rotated.
