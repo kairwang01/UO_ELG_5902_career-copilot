@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Lightbulb } from 'lucide-react';
 import { getShuffledHiringTips } from './hiringTips';
 
 /** Named accent palettes — each tool passes one for a visually distinct loader. */
@@ -180,7 +181,10 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
         {/* Centre — tool glyph if provided, else a pulsing dot */}
         <div className="absolute inset-0 flex items-center justify-center">
           {icon ? (
-            <span className={`text-3xl leading-none select-none ${a.icon} sl-progress-pulse`} aria-hidden="true">
+            <span
+              className={`inline-flex items-center justify-center ${a.icon} sl-progress-pulse [&>svg]:w-8 [&>svg]:h-8`}
+              aria-hidden="true"
+            >
               {icon}
             </span>
           ) : (
@@ -242,13 +246,19 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
 
       {/* Rotating "Did you know?" hiring tip */}
       {showTips && currentTip && (
-        <div className="max-w-md px-6 min-h-[2.5rem] flex items-start justify-center">
+        <div className="max-w-md px-6 min-h-[2.5rem] flex items-center justify-center gap-2">
+          <Lightbulb
+            className={`w-4 h-4 flex-shrink-0 text-amber-500 dark:text-amber-400 transition-opacity duration-300 ${
+              tipVisible ? 'opacity-100' : 'opacity-0'
+            }`}
+            aria-hidden="true"
+          />
           <p
             className={`text-sm text-center transition-opacity duration-300 ${
               tipVisible ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <span className="font-semibold text-gray-600 dark:text-gray-300">💡 Did you know?</span>{' '}
+            <span className="font-semibold text-gray-600 dark:text-gray-300">Did you know?</span>{' '}
             <span className="text-gray-500 dark:text-gray-400">{currentTip}</span>
           </p>
         </div>
