@@ -254,8 +254,34 @@ export const adminGetUserReportFunction = onCall({ invoker: "public" }, async (r
     byTool[tool] = (byTool[tool] ?? 0) + 1;
   });
 
+  // Email + auth metadata live in Firebase Auth, not the Firestore user doc — fetch
+  // them so the admin sees the real address even when the doc has no email field.
+  let authInfo: {
+    email: string | null;
+    email_verified: boolean;
+    disabled: boolean;
+    display_name: string | null;
+    auth_created_at: string | null;
+    last_sign_in: string | null;
+  } | null = null;
+  try {
+    const authUser = await admin.auth().getUser(uid);
+    authInfo = {
+      email: authUser.email ?? null,
+      email_verified: authUser.emailVerified,
+      disabled: authUser.disabled,
+      display_name: authUser.displayName ?? null,
+      auth_created_at: authUser.metadata.creationTime ?? null,
+      last_sign_in: authUser.metadata.lastSignInTime ?? null,
+    };
+  } catch {
+    // User exists in Firestore but not in Auth (edge case) — leave authInfo null.
+  }
+
+  const docData = userSnap.data() ?? {};
   return {
-    profile: { uid, ...userSnap.data() },
+    profile: { uid, ...docData, email: authInfo?.email ?? docData.email ?? null },
+    auth: authInfo,
     week_runs: usageSnap.size,
     week_by_tool: byTool,
     usage_events: usageSnap.docs.map((doc) => ({
