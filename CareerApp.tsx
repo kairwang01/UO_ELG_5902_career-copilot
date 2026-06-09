@@ -541,6 +541,16 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const navigateToAccount = () => { setShowHomePageOverride(false); setView('account'); };
 
   const handleSetView = (view: 'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs', authView: 'sign_in' | 'sign_up' | 'forgot_password' = 'sign_in', mode: 'candidate' | 'business' = 'candidate') => {
+    // A signed-in user has no use for the auth modal: opening it just flashes and is
+    // instantly closed again by the "session exists" effect, which reads as a frozen,
+    // unresponsive click (e.g. a logged-in candidate pressing "Enter Portal" on the
+    // employer page). Skip the dead modal; send a non-employer who wants the business
+    // side to the upgrade flow instead (selecting a business plan promotes them to
+    // employer), and otherwise just no-op.
+    if (view === 'auth' && session) {
+      if (mode === 'business' && !isEmployer) { navigateToBusinessPricing(); }
+      return;
+    }
     if (view !== 'home') { setShowHomePageOverride(false); }
     else { setDashboardView('dashboard'); setShowHomePageOverride(false); }
     if (view === 'auth') { setInitialAuthView(authView); setAuthMode(mode); }
