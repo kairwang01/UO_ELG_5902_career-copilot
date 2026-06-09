@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search } from 'lucide-react';
+import { Info, Search } from 'lucide-react';
 import { findOpportunities } from '../../services/aiClient';
 import type { OpportunityResult, Opportunity } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -124,7 +124,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     </div>
   );
 
-  const { opportunities, jobSearchStrategies, groundingChunks } = result;
+  const { opportunities, jobSearchStrategies, groundingChunks, notice } = result;
   
   const companyOptions = ['all', ...Array.from(new Set(opportunities.map(o => o.company)))];
   const locationOptions = ['all', ...Array.from(new Set(opportunities.map(o => o.location)))];
@@ -147,6 +147,13 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   return (
     <div className="space-y-4">
       <h4 className="text-lg font-bold">{t('tool_opportunity_finder_results_title')}</h4>
+
+      {notice && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>{notice}</p>
+        </div>
+      )}
       
       {jobSearchStrategies && jobSearchStrategies.length > 0 && (
         <div className="p-4 mb-6 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg">
