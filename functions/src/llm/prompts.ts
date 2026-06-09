@@ -254,6 +254,19 @@ export const PROMPT_TEMPLATES: Record<string, string> = {
         {{resumeText}}
       `,
 
+  findOpportunitiesOffline: `
+        Based on the provided resume for the {{marketName}} market, suggest realistic job targets and job search strategies.
+        Do not claim these are live job postings. Do not invent application URLs; use "#" for each URL.
+
+        **Output Format:**
+        Return a single JSON object with two keys:
+        - "opportunities": Up to 8 suggested target roles (jobTitle, company, location, url, summary).
+        - "jobSearchStrategies": 3-5 personalized strategies.
+
+        **Resume:**
+        {{resumeText}}
+      `,
+
   optimizeLinkedInProfile: `Optimize LinkedIn profile for {{marketName}} based on resume: {{resumeText}}`,
 
   optimizeLinkedInProfileFromText: `Optimize LinkedIn. Profile: {{profileText}}\nResume: {{resumeText}}\nCustom: {{customPrompt}}`,

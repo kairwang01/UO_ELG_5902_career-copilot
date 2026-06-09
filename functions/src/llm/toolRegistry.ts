@@ -20,6 +20,7 @@
 import { Type } from "@google/genai";
 import { LLMRequest } from "./LLMProvider";
 import { buildPrompt } from "./prompts";
+import { getOpportunityUseGoogleSearch } from "../config/env";
 
 export interface ToolSpec {
   /** Key into TOOL_CREDIT_COSTS, or null for a free helper/sub-step. */
@@ -49,6 +50,28 @@ const LINKEDIN_SCHEMA = {
     },
   },
   required: ["headline", "summary", "experienceSuggestions"],
+};
+
+const OPPORTUNITY_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    opportunities: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          jobTitle: { type: Type.STRING },
+          company: { type: Type.STRING },
+          location: { type: Type.STRING },
+          url: { type: Type.STRING },
+          summary: { type: Type.STRING },
+        },
+        required: ["jobTitle", "company", "location", "url", "summary"],
+      },
+    },
+    jobSearchStrategies: { type: Type.ARRAY, items: { type: Type.STRING } },
+  },
+  required: ["opportunities", "jobSearchStrategies"],
 };
 
 export const TOOL_REGISTRY: Record<string, ToolSpec> = {
@@ -108,34 +131,20 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
 
   findOpportunities: {
     creditKey: "opportunity-finder",
-    build: (p) => ({
-      prompt: buildPrompt("findOpportunities", {
-        marketName: p.marketName,
-        resumeText: p.resumeText,
-      }),
-      useGoogleSearch: true,
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          opportunities: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                jobTitle: { type: Type.STRING },
-                company: { type: Type.STRING },
-                location: { type: Type.STRING },
-                url: { type: Type.STRING },
-                summary: { type: Type.STRING },
-              },
-              required: ["jobTitle", "company", "location", "url", "summary"],
-            },
-          },
-          jobSearchStrategies: { type: Type.ARRAY, items: { type: Type.STRING } },
-        },
-        required: ["opportunities", "jobSearchStrategies"],
-      },
-    }),
+    build: (p) => {
+      const useGoogleSearch = getOpportunityUseGoogleSearch();
+      return {
+        prompt: buildPrompt(
+          useGoogleSearch ? "findOpportunities" : "findOpportunitiesOffline",
+          {
+            marketName: p.marketName,
+            resumeText: p.resumeText,
+          }
+        ),
+        useGoogleSearch,
+        responseSchema: OPPORTUNITY_SCHEMA,
+      };
+    },
   },
 
   optimizeLinkedInProfile: {
