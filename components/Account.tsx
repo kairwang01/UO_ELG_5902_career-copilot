@@ -9,6 +9,7 @@ import Avatar from './Avatar';
 import { STRIPE_CUSTOMER_PORTAL_LINK, ALL_PLANS, PLAN_HIERARCHY } from '../config';
 import { ethers } from 'ethers';
 import ApiKeyManager from './ApiKeyManager';
+import ModelSelector from './ModelSelector';
 
 // A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
 const TALENT_NFT_CONTRACT_ADDRESS = '0x2A3b1A43842238321a22542a035921A362358189';
@@ -483,6 +484,11 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
             <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">API Access</h2>
             <ApiKeyManager session={session} onViewDocs={() => onSetView('api_docs')} />
         </div>
+
+        {/* AI Model — self-hides on free tier; paid users pick a premium model,
+            business users configure their own bring-your-own LLM endpoint here. */}
+        <ModelSelector className="mt-10 max-w-md" t={t} />
+
 
         {/* Web3 Identity Section */}
         <div className="space-y-6 mt-10">

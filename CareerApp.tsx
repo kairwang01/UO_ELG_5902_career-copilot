@@ -139,6 +139,8 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const uploadSectionRef = useRef<HTMLDivElement>(null);
   const pricingSectionRef = useRef<HTMLDivElement>(null);
   const authQueryHandledRef = useRef(false);
+  // True after Firebase fires its first onAuthStateChanged (persisted session known).
+  const [authHydrated, setAuthHydrated] = useState(false);
   // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
   const currentUserIdRef = useRef<string | null>(null);
   
@@ -163,7 +165,10 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   };
 
   useEffect(() => {
-    if (entry !== 'workspace' || authQueryHandledRef.current || session) return;
+    // Wait for Firebase to restore a persisted session before honouring ?auth=signin.
+    // Otherwise a returning user briefly sees session=null, the modal opens, and they
+    // must submit credentials again even though they are already signed in.
+    if (entry !== 'workspace' || !authHydrated || authQueryHandledRef.current || session) return;
 
     const params = new URLSearchParams(window.location.search);
     const auth = params.get('auth');
@@ -174,7 +179,14 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     setInitialAuthView(auth === 'signup' ? 'sign_up' : auth === 'forgot' ? 'forgot_password' : 'sign_in');
     setView('auth');
     window.history.replaceState({}, document.title, window.location.pathname);
-  }, [entry, session]);
+  }, [entry, session, authHydrated]);
+
+  // Close the auth modal as soon as a session exists (login success or async restore).
+  useEffect(() => {
+    if (session?.user && view === 'auth') {
+      setView('home');
+    }
+  }, [session, view]);
 
   // Effect to determine and set the UI language based on user preferences or browser settings
   useEffect(() => {
@@ -422,6 +434,8 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     });
 
     const { unsubscribe } = data.auth.onAuthStateChange((_event, session) => {
+      setAuthHydrated(true);
+
       const newUserId = session?.user?.id ?? null;
       const userChanged = newUserId !== currentUserIdRef.current;
       currentUserIdRef.current = newUserId;

@@ -7,4 +7,5 @@ export const SITE_ROUTES = {
   portal: '/portal',
   /** Resume analysis and signed-in candidate tools (avoid `/app` — conflicts with App.tsx on macOS). */
   workspace: '/workspace',
+  admin: '/admin',
 } as const;

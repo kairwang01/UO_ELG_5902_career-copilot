@@ -7,6 +7,7 @@ import { SampleReportPage } from './pages/SampleReportPage';
 import { PricingPage } from './pages/PricingPage';
 
 const MvpApp = React.lazy(() => import('../CareerApp'));
+const AdminPortal = React.lazy(() => import('../components/admin/AdminPortal'));
 
 const MvpFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
@@ -32,6 +33,14 @@ export const SiteRouter: React.FC = () => (
     <Route path={SITE_ROUTES.employers} element={<EmployerLandingPage />} />
     <Route path={SITE_ROUTES.sampleReport} element={<SampleReportPage />} />
     <Route path={SITE_ROUTES.pricing} element={<PricingPage />} />
+    <Route
+      path={SITE_ROUTES.admin}
+      element={
+        <Suspense fallback={<MvpFallback />}>
+          <AdminPortal />
+        </Suspense>
+      }
+    />
     <Route
       path={`${SITE_ROUTES.portal}/*`}
       element={

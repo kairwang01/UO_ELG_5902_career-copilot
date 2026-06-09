@@ -34,13 +34,69 @@ export const setApiStatusUpdater = (updater: (status: ApiStatus, error?: string)
   updateApiStatus = updater;
 };
 
+/** Turns Firebase callable errors into user-readable text (avoids bare "INTERNAL"). */
+export function formatCallableError(err: unknown): string {
+  const e = err as { code?: string; message?: string; details?: unknown };
+  const code = e?.code ?? '';
+  const message = e?.message ?? '';
+  const lower = message.toLowerCase();
+  const detailsStr = JSON.stringify(e?.details ?? '').toLowerCase();
+
+  const isQuota =
+    code === 'functions/resource-exhausted' ||
+    lower.includes('resource_exhausted') ||
+    lower.includes('quota') ||
+    detailsStr.includes('quota') ||
+    detailsStr.includes('resource_exhausted');
+
+  if (isQuota) {
+    return 'Gemini API quota exceeded. Wait about 30 seconds and try again, or ask the project admin to check API key billing in Google AI Studio.';
+  }
+  if (code === 'functions/unauthenticated') {
+    return 'Please sign in to use AI features.';
+  }
+  if (code === 'functions/permission-denied' || lower.includes('not authenticated')) {
+    return 'AI service access denied. Ask the project owner to grant Cloud Run invoker on new functions.';
+  }
+  if (code === 'functions/not-found') {
+    return message || 'User profile not found. Sign out and sign back in.';
+  }
+  if (code === 'functions/internal' && (lower === 'internal' || message === 'INTERNAL')) {
+    return 'AI request failed on the server. This is often a Gemini quota or API-key issue — wait 30s and retry, or check billing on the key in Google AI Studio.';
+  }
+  return message || 'An error occurred while calling the AI service.';
+}
+
 function reportStatusFromError(err: any): void {
   const code = err?.code ?? '';
-  const message = (err?.message ?? '').toLowerCase();
-  if (code === 'functions/resource-exhausted' || message.includes('resource_exhausted') || message.includes('quota')) {
-    updateApiStatus('degraded', 'The AI is experiencing high demand. Some features may be temporarily limited.');
-  } else if (code === 'functions/unavailable' || message.includes('network') || message.includes('internal')) {
+  const message = err?.message ?? '';
+  const lower = message.toLowerCase();
+  const friendly = formatCallableError(err);
+
+  if (code === 'functions/resource-exhausted' || lower.includes('resource_exhausted') || lower.includes('quota')) {
+    updateApiStatus('degraded', friendly);
+  } else if (code === 'functions/unauthenticated') {
+    updateApiStatus('offline', friendly);
+  } else if (code === 'functions/permission-denied' || lower.includes('not authenticated')) {
+    updateApiStatus('offline', friendly);
+  } else if (code === 'functions/not-found') {
+    updateApiStatus('offline', friendly);
+  } else if (code === 'functions/internal') {
+    updateApiStatus('degraded', friendly);
+  } else if (code === 'functions/unavailable' || lower.includes('network') || lower.includes('failed to fetch')) {
     updateApiStatus('offline', 'Network connection issue. Please check your internet connection.');
+  }
+}
+
+/** Surfaces callable failures to the status banner and rethrows for local UI error text. */
+async function callDedicated<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    const result = await fn();
+    updateApiStatus('online');
+    return result;
+  } catch (err) {
+    reportStatusFromError(err);
+    throw new Error(formatCallableError(err));
   }
 }
 
@@ -82,9 +138,11 @@ export const analyzeResume = async (
   resumeImages: ResumeImage[] | null,
   marketName: string,
 ): Promise<AnalysisResult & { extractedText?: string }> => {
-  const fn = httpsCallable<any, AnalysisResult & { extractedText?: string }>(firebaseFunctions, 'analyzeResume');
-  const res = await fn({ resumeText, resumeImages: resumeImages ?? undefined, marketName, model: currentModelId });
-  return res.data;
+  return callDedicated(async () => {
+    const fn = httpsCallable<any, AnalysisResult & { extractedText?: string }>(firebaseFunctions, 'analyzeResume');
+    const res = await fn({ resumeText, resumeImages: resumeImages ?? undefined, marketName, model: currentModelId });
+    return res.data;
+  });
 };
 
 // Model selection — paid+ users can pick a model; the choice is gated server-side
@@ -102,44 +160,78 @@ export const setAiModel = (id: string | undefined): void => {
   } catch { /* localStorage may be unavailable */ }
 };
 
-export interface ModelOption { id: string; label: string; minTier: 'free' | 'paid' | 'premium' }
+export interface ModelOption { id: string; label: string; minTier: 'free' | 'paid' | 'business' | 'premium' }
+
+/** Shape returned by the listModels callable. */
+export interface ListModelsResult {
+  tier: 'free' | 'paid' | 'business' | string;
+  defaultModelId: string;
+  models: ModelOption[];
+  isBusiness?: boolean;
+}
+
+const DEFAULT_MODEL_OPTIONS: ModelOption[] = [
+  { id: 'gemini', label: 'Gemini (default)', minTier: 'free' },
+];
 
 /** Returns the models the current user is allowed to select, plus the default. */
-export const listModels = async (): Promise<{ tier: string; defaultModelId: string; models: ModelOption[] }> => {
-  const fn = httpsCallable<Record<string, never>, { tier: string; defaultModelId: string; models: ModelOption[] }>(firebaseFunctions, 'listModels');
+export const listModels = async (): Promise<ListModelsResult> => {
+  try {
+    const fn = httpsCallable<Record<string, never>, ListModelsResult>(firebaseFunctions, 'listModels');
+    const res = await fn({});
+    return res.data;
+  } catch {
+    // listModels is a new callable whose Cloud Run invoker may not be set yet.
+    return { tier: 'free', defaultModelId: 'gemini', models: DEFAULT_MODEL_OPTIONS, isBusiness: false };
+  }
+};
+
+// ---- Business custom LLM config --------------------------------------------
+
+export interface SetBusinessLlmConfigPayload {
+  base_url: string;
+  api_key: string;
+  model: string;
+}
+
+export type BusinessLlmConfigResult =
+  | { configured: false }
+  | { configured: true; base_url: string; model: string; api_key_masked: string };
+
+/** Saves the business-tier custom LLM endpoint. Throws for non-business users or bad input. */
+export const setBusinessLlmConfig = async (payload: SetBusinessLlmConfigPayload): Promise<{ success: true }> => {
+  const fn = httpsCallable<SetBusinessLlmConfigPayload, { success: true }>(firebaseFunctions, 'setBusinessLlmConfig');
+  const res = await fn(payload);
+  return res.data;
+};
+
+/** Retrieves the saved business-tier custom LLM config (api_key_masked only — raw key is never returned). */
+export const getBusinessLlmConfig = async (): Promise<BusinessLlmConfigResult> => {
+  const fn = httpsCallable<Record<string, never>, BusinessLlmConfigResult>(firebaseFunctions, 'getBusinessLlmConfig');
   const res = await fn({});
   return res.data;
 };
 
-interface AiProxyResult { data: any; text: string; groundingChunks?: any }
-
-const aiProxy = httpsCallable<{ tool: string; payload: Record<string, unknown>; model?: string }, AiProxyResult>(
-  firebaseFunctions,
-  'aiProxy',
-);
-
-/** Calls aiProxy for a registry tool and returns the parsed result. */
+/**
+ * Calls the legacy per-tool callable on production (e.g. findOpportunities).
+ * The consolidated aiProxy callable lacks Cloud Run invoker IAM for this deployer;
+ * the 40 existing tool functions already have invoker access from the original deploy.
+ */
 async function callTool<T>(tool: string, payload: Record<string, unknown>): Promise<T> {
   try {
-    const res = await aiProxy({ tool, payload, model: currentModelId });
+    const fn = httpsCallable<Record<string, unknown>, T>(firebaseFunctions, tool);
+    const res = await fn({ ...payload, model: currentModelId });
     updateApiStatus('online');
-    return res.data.data as T;
+    return res.data;
   } catch (err) {
     reportStatusFromError(err);
-    throw err;
+    throw new Error(formatCallableError(err));
   }
 }
 
-/** Same as callTool but folds the web-search grounding sources into the result. */
+/** Same as callTool — legacy callables return groundingChunks inline when present. */
 async function callToolWithGrounding<T>(tool: string, payload: Record<string, unknown>): Promise<T> {
-  try {
-    const res = await aiProxy({ tool, payload, model: currentModelId });
-    updateApiStatus('online');
-    return { ...(res.data.data as object), groundingChunks: res.data.groundingChunks } as T;
-  } catch (err) {
-    reportStatusFromError(err);
-    throw err;
-  }
+  return callTool<T>(tool, payload);
 }
 
 // ---- Resume / cover letter / career path (dedicated callables) -------------
@@ -267,7 +359,8 @@ export const generateCandidatePrepKit = (resumeText: string, jobDescription: str
 
 // ---- Image generation & URL extraction (dedicated callables) ---------------
 export const generateProfessionalHeadshot = async (imageBase64: string): Promise<string[]> => {
-  const fn = httpsCallable<any, { images: string[] }>(firebaseFunctions, 'generateHeadshot');
+  // Legacy production name is generateProfessionalHeadshot (IAM already set).
+  const fn = httpsCallable<any, { images: string[] }>(firebaseFunctions, 'generateProfessionalHeadshot');
   const res = await fn({ imageBase64 });
   return res.data.images;
 };

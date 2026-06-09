@@ -97,7 +97,11 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setError(null);
     setMessage(null);
     const { error } = await data.auth.signInWithPassword(email, password);
-    if (error) setError(getAuthErrorMessage(error.message));
+    if (error) {
+      setError(getAuthErrorMessage(error.message));
+    } else {
+      onClose();
+    }
     setLoading(false);
   };
   

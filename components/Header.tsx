@@ -8,6 +8,8 @@ import type { UserProfile } from '../types';
 import LanguageSwitcher from './LanguageSwitcher';
 import ThemeToggle from './ThemeToggle';
 import { useSettings } from '../contexts/SettingsContext';
+import { adminCheckAccess } from '../services/adminClient';
+import { SITE_ROUTES } from '../config/site';
 
 interface HeaderProps {
     session: Session | null;
@@ -94,11 +96,26 @@ const TalentVaultAccess: React.FC<{ profile: UserProfile; onSetView: (view: 'bus
 const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateToPricing, t, changeLanguage, currentLang, theme, toggleTheme, view, credits }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const mobileMenuRef = useRef<HTMLDivElement>(null);
     const { isAIMode, toggleAIMode } = useSettings();
     const isCandidate = profile?.role === 'candidate';
     const isEmployer = profile?.role === 'employer';
+    const isBusinessUser =
+        isEmployer ||
+        profile?.subscription_status === 'single_post' ||
+        profile?.subscription_status === 'job_pack';
+
+    useEffect(() => {
+        if (!session) {
+            setIsAdmin(false);
+            return;
+        }
+        adminCheckAccess()
+            .then((res) => setIsAdmin(res.admin))
+            .catch(() => setIsAdmin(false));
+    }, [session]);
     
     const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, targetId: string) => {
         e.preventDefault();
@@ -161,6 +178,34 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                     {/* Right side of header */}
                     <div className="flex items-center space-x-2 sm:space-x-4">
                         <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+                        {session && profile && (
+                            <div className="flex items-center space-x-2">
+                                {isAdmin && (
+                                    <a
+                                        href={SITE_ROUTES.admin}
+                                        className="hidden sm:inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-800/60 transition-colors"
+                                    >
+                                        Admin Portal
+                                    </a>
+                                )}
+                                {isBusinessUser && (
+                                    <a
+                                        href={SITE_ROUTES.portal}
+                                        className="hidden sm:inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-800/60 transition-colors"
+                                    >
+                                        Business Portal
+                                    </a>
+                                )}
+                                {!isBusinessUser && isCandidate && (
+                                    <a
+                                        href={SITE_ROUTES.employers}
+                                        className="hidden sm:inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                                    >
+                                        Hire with Career CoPilot →
+                                    </a>
+                                )}
+                            </div>
+                        )}
                         {session && profile ? (
                             <div className="relative" ref={menuRef}>
                                 <button
@@ -239,6 +284,33 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                                     </button>
                                                     <button onClick={() => { onSetView('account'); setIsMenuOpen(false); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">Account Settings</button>
                                                 </>
+                                            )}
+                                            {isAdmin && (
+                                                <a
+                                                    href={SITE_ROUTES.admin}
+                                                    className="w-full text-left text-indigo-700 dark:text-indigo-300 block px-4 py-2 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-semibold"
+                                                    role="menuitem"
+                                                >
+                                                    Admin Portal
+                                                </a>
+                                            )}
+                                            {isBusinessUser && (
+                                                <a
+                                                    href={SITE_ROUTES.portal}
+                                                    className="w-full text-left text-blue-700 dark:text-blue-400 block px-4 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 font-semibold"
+                                                    role="menuitem"
+                                                >
+                                                    Business Portal
+                                                </a>
+                                            )}
+                                            {!isBusinessUser && isCandidate && (
+                                                <a
+                                                    href={SITE_ROUTES.employers}
+                                                    className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600"
+                                                    role="menuitem"
+                                                >
+                                                    Hire with Career CoPilot →
+                                                </a>
                                             )}
                                             <button onClick={async () => { setIsMenuOpen(false); await data.auth.signOut('local'); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">
                                                 Sign out
