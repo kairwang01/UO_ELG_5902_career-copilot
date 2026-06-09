@@ -1,7 +1,7 @@
 
 import React from 'react';
 import type { AppSession as Session } from '../lib/data';
-import type { UserProfile } from '../../types';
+import type { UserProfile } from '../types';
 import AgileCoach from './tools/AgileCoach';
 import CareerPathPlanner from './tools/CareerPathPlanner';
 import CoverLetterGenerator from './tools/CoverLetterGenerator';

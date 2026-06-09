@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { calculateCompatibility } from '../services/geminiService';
+import { calculateCompatibility } from '../services/aiClient';
 import type { UserProfile } from '../types';
 import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { generateSalaryNegotiationStrategy } from '../../services/geminiService';
+import { generateSalaryNegotiationStrategy } from '../../services/aiClient';
 import type { SalaryNegotiationResult } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { optimizeLinkedInProfile, optimizeLinkedInProfileFromText } from '../../services/geminiService';
+import { optimizeLinkedInProfile, optimizeLinkedInProfileFromText } from '../../services/aiClient';
 import type { LinkedInOptimization } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 

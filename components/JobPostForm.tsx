@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { AppSession as Session } from '../lib/data';
-import { generateJobDescription, analyzeSalary, checkInclusivity, formatJobDescription } from '../services/geminiService';
+import { generateJobDescription, analyzeSalary, checkInclusivity, formatJobDescription } from '../services/aiClient';
 import type { InclusivitySuggestion, UserProfile } from '../types';
 import { saveJobPosting, type JobPosting } from '../lib/recruitingData';
 import { renderFormattedText } from './tools/ToolUtils';

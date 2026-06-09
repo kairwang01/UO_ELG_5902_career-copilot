@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import type { ResumeImage } from '../types';
 import { SUPPORTED_MARKETS } from '../config';
-import { extractTextFromUrl } from '../services/geminiService';
+import { extractTextFromUrl } from '../services/aiClient';
 import { parseFile } from '../services/fileHelpers';
 import ResumePreview from './ResumePreview';
 import { useSettings } from '../contexts/SettingsContext';

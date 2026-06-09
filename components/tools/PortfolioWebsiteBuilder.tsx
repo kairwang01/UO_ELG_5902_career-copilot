@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/geminiService';
+import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -562,16 +562,18 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       if (isAIMode) {
           extractedContent = await generatePortfolioWebsite(resumeText);
       } else {
+          // tagline/bio flow through buildHtml's `branding` arg and projects through its
+          // `projects` arg, so they are intentionally omitted from the typed PortfolioContent here.
           extractedContent = {
               fullName: profile?.full_name || 'Your Name',
               firstName: profile?.full_name?.split(' ')[0] || 'Your',
               lastName: profile?.full_name?.split(' ').slice(1).join(' ') || 'Name',
-              tagline: details.tagline,
-              bio: details.bio,
               contactEmail: profile?.email || 'contact@example.com',
+              contactPhone: '',
+              contactLocation: '',
+              socials: {},
               skills: [{ category: 'General Skills', description: 'Various professional skills', icon: 'fas fa-star' }],
               experience: [],
-              projects: projects.map(p => ({ title: p.title, description: p.description, url: p.url }))
           };
       }
       

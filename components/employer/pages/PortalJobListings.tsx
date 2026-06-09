@@ -74,7 +74,7 @@ export function PortalJobListings({
       ? 'bg-teal-50 text-teal-800 border-teal-200'
       : 'bg-gray-100 text-gray-700 border-gray-300';
 
-  const JobRow = ({ job }: { job: JobPostingWithCount }) => (
+  const JobRow: React.FC<{ job: JobPostingWithCount }> = ({ job }) => (
     <div
       className={`rounded-xl border p-5 hover:shadow-md transition-shadow ${
         dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'

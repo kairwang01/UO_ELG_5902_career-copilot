@@ -272,22 +272,15 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
       const { error } = await data.profiles.update(user.id, { wallet_address: address });
 
       if (error) {
-        console.error("Supabase error details:", error);
+        console.error("Error updating wallet:", error);
         throw error;
       }
-      
+
       setWalletAddress(address);
       setMessage({ type: 'success', text: `Wallet ${address ? 'connected' : 'disconnected'} successfully!` });
     } catch (error: any) {
       console.error("Error updating wallet:", error);
-      if (error.code === 'PGRST204' && error.message.includes('wallet_address')) {
-        setMessage({
-            type: 'error',
-            text: "Database Schema Error: Could not find 'wallet_address' column. Please ensure the column exists in your 'profiles' table and try reloading the schema in your Supabase project settings if the issue persists."
-        });
-      } else {
-        setMessage({ type: 'error', text: `Failed to update wallet: ${error.message}` });
-      }
+      setMessage({ type: 'error', text: `Failed to update wallet: ${error?.message ?? 'Unknown error'}` });
     } finally {
       setLoading(false);
     }

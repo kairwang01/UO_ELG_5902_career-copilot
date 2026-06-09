@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { generateNetworkingStrategy } from '../../services/geminiService';
+import { generateNetworkingStrategy } from '../../services/aiClient';
 import type { NetworkingStrategyResult } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 

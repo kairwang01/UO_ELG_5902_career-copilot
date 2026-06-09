@@ -27,7 +27,7 @@ import type { UserProfile } from '../../types';
 import Chart from './Chart';
 import { firestoreDb } from '../../lib/firebaseClient';
 import type { AppSession as Session } from '../../lib/data';
-import { generateWeeklySummary } from '../../services/geminiService';
+import { generateWeeklySummary } from '../../services/aiClient';
 import { useSettings } from '../../contexts/SettingsContext';
 
 type DashboardDestination = 'resume' | 'jobs' | 'interview' | 'plan';

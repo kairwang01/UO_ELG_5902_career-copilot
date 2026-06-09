@@ -97,7 +97,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
       // KPI details
       try {
         const jobIds = jobsWithCounts.map((j) => j.id);
-        const allApps = await listApplicationsForJobs(jobIds);
+        const allApps = await listApplicationsForJobs(jobIds, session.user.id);
 
         const activeJobs = jobsWithCounts.filter((j) => j.is_active).length;
         const totalApplicants = allApps.length || 0;

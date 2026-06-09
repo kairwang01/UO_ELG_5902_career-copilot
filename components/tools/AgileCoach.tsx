@@ -1,7 +1,7 @@
 
 
 import React, { useState } from 'react';
-import { generateAgilePracticeTest } from '../../services/geminiService';
+import { generateAgilePracticeTest } from '../../services/aiClient';
 import type { AgilePracticeTestResult } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 

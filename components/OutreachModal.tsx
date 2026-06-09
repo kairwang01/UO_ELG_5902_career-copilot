@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { generateOutreachEmail } from '../services/geminiService';
+import { generateOutreachEmail } from '../services/aiClient';
 import type { ProfessionalEmailResult, UserProfile } from '../types';
 import LoadingSpinner from './LoadingSpinner';
 import { DEFAULT_MARKET } from '../config';

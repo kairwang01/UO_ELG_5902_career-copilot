@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { findIndustryEvents } from '../../services/geminiService';
+import { findIndustryEvents } from '../../services/aiClient';
 import type { EventScoutResult } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 

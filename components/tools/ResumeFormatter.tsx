@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { convertResumeFormat } from '../../services/geminiService';
+import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 import { DownloadButtons, renderFormattedText } from './ToolUtils';

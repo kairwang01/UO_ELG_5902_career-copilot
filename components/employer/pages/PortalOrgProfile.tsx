@@ -82,7 +82,7 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved }: Portal
             </div>
 
             <div className="space-y-6">
-              {/* Logo — reuses CompanyLogo which handles Supabase Storage upload */}
+              {/* Logo — reuses CompanyLogo which handles Firebase Storage upload */}
               <div>
                 <label className={label}>Organization Logo</label>
                 <CompanyLogo url={logoUrl} size={96} onUpload={(url) => setLogoUrl(url)} />

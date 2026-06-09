@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { generateCoverLetter } from '../../services/geminiService';
+import { generateCoverLetter } from '../../services/aiClient';
 import type { CoverLetter } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 import { DownloadButtons } from './ToolUtils';

@@ -54,7 +54,7 @@ const EmployerDashboard: React.FC<EmployerDashboardProps> = ({ session, profile,
             
             try {
                 const jobIds = jobsWithCounts.map(j => j.id);
-                const allApplications = await listApplicationsForJobs(jobIds);
+                const allApplications = await listApplicationsForJobs(jobIds, session.user.id);
 
                 const totalApplicants = allApplications.length || 0;
                 const activeJobs = jobsWithCounts.filter(job => job.is_active).length;

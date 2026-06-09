@@ -1,7 +1,7 @@
 
 
 import React, { useState } from 'react';
-import { generateProfessionalEmail } from '../../services/geminiService';
+import { generateProfessionalEmail } from '../../services/aiClient';
 import type { ProfessionalEmailResult } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 import { DownloadButtons } from './ToolUtils';

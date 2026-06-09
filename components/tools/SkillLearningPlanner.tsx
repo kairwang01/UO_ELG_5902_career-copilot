@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { generateLearningPlan } from '../../services/geminiService';
+import { generateLearningPlan } from '../../services/aiClient';
 import type { LearningPlanResult } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 

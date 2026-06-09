@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { generateCareerPath, generateSkillBridgeProject } from '../../services/geminiService';
+import { generateCareerPath, generateSkillBridgeProject } from '../../services/aiClient';
 import type { CareerPathResult, SkillBridgeProject } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 import { DownloadButtons } from './ToolUtils';

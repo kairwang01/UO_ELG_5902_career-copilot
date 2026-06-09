@@ -6,7 +6,7 @@ import ToolRunner from './ToolRunner';
 import InterviewSimulator from './InterviewSimulator';
 import { TOOL_ACCESS, hasAccess, ALL_PLANS, PLAN_HIERARCHY } from '../config';
 import type { AppSession as Session } from '../lib/data';
-import { applyResumeImprovements } from '../services/geminiService';
+import { applyResumeImprovements } from '../services/aiClient';
 import { renderFormattedText } from './tools/ToolUtils';
 import ResumePreview from './ResumePreview';
 import { useSettings } from '../contexts/SettingsContext';

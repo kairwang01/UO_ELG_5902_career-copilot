@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { analyzeCandidateMatch } from '../services/geminiService';
+import { analyzeCandidateMatch } from '../services/aiClient';
 import type { UserProfile, CandidateMatchAnalysis } from '../types';
 import FunnelChart from './FunnelChart';
 import {
@@ -34,7 +34,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
             setLoading(true);
             setError(null);
 
-            const applications = await listJobApplications(job.id);
+            const applications = await listJobApplications(job.id, job.employer_id);
 
             if (applications.length === 0) {
                 setApplicants([]);

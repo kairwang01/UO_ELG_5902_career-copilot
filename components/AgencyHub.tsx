@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile, BulkAnalysisItem, CandidatePrepKit } from '../types';
-import { analyzeResume, anonymizeResume, calculateCompatibility, generateClientPitchEmail, generateCandidatePrepKit, extractTextFromUrl } from '../services/geminiService';
+import { analyzeResume, anonymizeResume, calculateCompatibility, generateClientPitchEmail, generateCandidatePrepKit, extractTextFromUrl } from '../services/aiClient';
 import { parseFile } from '../services/fileHelpers';
 import { SUPPORTED_MARKETS, DEFAULT_MARKET } from '../config';
 import { DownloadButtons } from './tools/ToolUtils';

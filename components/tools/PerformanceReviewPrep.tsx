@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { generatePerformanceReviewPrep } from '../../services/geminiService';
+import { generatePerformanceReviewPrep } from '../../services/aiClient';
 import type { PerformanceReviewResult } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 

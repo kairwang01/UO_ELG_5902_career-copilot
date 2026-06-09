@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { findOpportunities } from '../../services/geminiService';
+import { findOpportunities } from '../../services/aiClient';
 import type { OpportunityResult, Opportunity } from '../../types';
 import LoadingSpinner from '../LoadingSpinner';
 import type { AppSession as Session } from '../../lib/data';
