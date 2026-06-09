@@ -18,18 +18,10 @@ import { GoogleGenAI } from "@google/genai";
 import { LLMProvider, LLMRequest, LLMResult } from "../LLMProvider";
 import { getGeminiApiKey, getGeminiModel } from "../../config/env";
 
-/**
- * Default model — read from the GEMINI_MODEL environment variable.
- * Never hardcoded; change functions/.env to switch models without touching code.
- *
- * Examples:
- *   GEMINI_MODEL=gemini-2.0-flash        → free tier (local dev default)
- *   GEMINI_MODEL=gemini-3-pro-preview    → paid tier (production / paid testing)
- *
- * Phase B: router.ts will pass the model per-task (free → paid cascade),
- * so DEFAULT_MODEL will only be used as the fallback for direct provider calls.
- */
-const DEFAULT_MODEL = getGeminiModel();
+// The default model is resolved at CONSTRUCTION time (getGeminiModel(), in the
+// constructor below), never at module-load time — otherwise it would capture a
+// cold cache and ignore the model configured via the Admin Portal
+// (platform_config/llm). Change it from the Admin Portal or functions/.env.
 
 /**
  * Extracts a JSON value from a string that may be wrapped in a markdown
@@ -76,9 +68,11 @@ export class GeminiProvider implements LLMProvider {
   private readonly ai: GoogleGenAI;
   private readonly model: string;
 
-  constructor(model: string = DEFAULT_MODEL) {
+  constructor(model?: string) {
     this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    this.model = model;
+    // Read the admin-configured model at construction time (cache is warm by now,
+    // because resolveProvider() calls ensurePlatformCaches() before building us).
+    this.model = model || getGeminiModel();
   }
 
   async generate(req: LLMRequest): Promise<LLMResult> {

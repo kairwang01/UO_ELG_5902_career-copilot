@@ -19,6 +19,7 @@
 
 import { Type } from "@google/genai";
 import { LLMRequest } from "./LLMProvider";
+import { buildPrompt } from "./prompts";
 
 export interface ToolSpec {
   /** Key into TOOL_CREDIT_COSTS, or null for a free helper/sub-step. */
@@ -54,10 +55,12 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   applyResumeImprovements: {
     creditKey: null,
     build: (p) => ({
-      prompt:
-        `Rewrite this resume applying these improvements:\n` +
-        (p.improvements ?? []).map((imp: any) => `- ${imp.area}: ${imp.suggestion}`).join("\n") +
-        `\n\nResume:\n${p.resumeText}`,
+      prompt: buildPrompt("applyResumeImprovements", {
+        improvementsBlock: (p.improvements ?? [])
+          .map((imp: any) => `- ${imp.area}: ${imp.suggestion}`)
+          .join("\n"),
+        resumeText: p.resumeText,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: { updatedResumeText: { type: Type.STRING } },
@@ -69,21 +72,13 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   convertResumeFormat: {
     creditKey: "resume-formatter",
     build: (p) => ({
-      prompt: `
-        You are an expert career consultant specializing in international resume standards. Your task is to localize the following resume for the **${p.marketName}** job market.
-
-        **Key Instructions:**
-        1.  **Formatting & Structure:** Reformat the entire resume to strictly adhere to the professional standards, common layout, and ATS (Applicant Tracking System) best practices of **${p.marketName}**. This includes section order, date formats, and contact information conventions.
-        2.  **Language & Tone:** Adapt the language, tone, and phrasing to be culturally appropriate and professional for **${p.marketName}**. If the target market's primary language is not English (e.g., Japan, Germany, France), translate the resume content accurately and professionally into the primary language of that country.
-        3.  **Content Optimization:** Do not add or remove core experiences, but you may subtly rephrase bullet points to better align with the professional communication style of the target market.
-
-        ${p.coverLetterText ? `**Cover Letter:** If a cover letter is provided below, incorporate it seamlessly into the final document, either before or after the resume as is standard in ${p.marketName}.\n\nCover Letter:\n${p.coverLetterText}` : ""}
-
-        **Original Resume:**
-        ${p.resumeText}
-
-        Produce only the final, localized document text.
-      `,
+      prompt: buildPrompt("convertResumeFormat", {
+        marketName: p.marketName,
+        coverLetterBlock: p.coverLetterText
+          ? `**Cover Letter:** If a cover letter is provided below, incorporate it seamlessly into the final document, either before or after the resume as is standard in ${p.marketName}.\n\nCover Letter:\n${p.coverLetterText}`
+          : "",
+        resumeText: p.resumeText,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: { formattedText: { type: Type.STRING } },
@@ -95,14 +90,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   calculateCompatibility: {
     creditKey: null,
     build: (p) => ({
-      prompt: `
-        Analyze the resume against the job description.
-        Extract the Candidate's Name (use "Candidate" if not found).
-        Provide a compatibility score (0-100) and a brief summary.
-
-        Resume: ${p.resumeText}
-        Job Description: ${p.jobDescription}
-      `,
+      prompt: buildPrompt("calculateCompatibility", {
+        resumeText: p.resumeText,
+        jobDescription: p.jobDescription,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -118,21 +109,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   findOpportunities: {
     creditKey: "opportunity-finder",
     build: (p) => ({
-      prompt: `
-        Based on the provided resume for the ${p.marketName} market, perform a comprehensive job search and provide strategic advice.
-
-        **Tasks:**
-        1.  **Find Job Postings:** Search all popular internet sources (like LinkedIn, Indeed, company career pages) for relevant job postings published within the **last 2 weeks**. Find up to 15 roles.
-        2.  **Provide Job Search Strategies:** Based on the resume and the current job market in ${p.marketName}, provide 3-5 actionable and personalized strategies for the user to improve their job search success.
-
-        **Output Format:**
-        Return a single JSON object with two keys:
-        - "opportunities": An array of job posting objects (jobTitle, company, location, url, summary).
-        - "jobSearchStrategies": An array of strings.
-
-        **Resume:**
-        ${p.resumeText}
-      `,
+      prompt: buildPrompt("findOpportunities", {
+        marketName: p.marketName,
+        resumeText: p.resumeText,
+      }),
       useGoogleSearch: true,
       responseSchema: {
         type: Type.OBJECT,
@@ -161,7 +141,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   optimizeLinkedInProfile: {
     creditKey: "linkedin-optimizer",
     build: (p) => ({
-      prompt: `Optimize LinkedIn profile for ${p.marketName} based on resume: ${p.resumeText}`,
+      prompt: buildPrompt("optimizeLinkedInProfile", {
+        marketName: p.marketName,
+        resumeText: p.resumeText,
+      }),
       responseSchema: LINKEDIN_SCHEMA,
     }),
   },
@@ -169,7 +152,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   optimizeLinkedInProfileFromText: {
     creditKey: "linkedin-optimizer",
     build: (p) => ({
-      prompt: `Optimize LinkedIn. Profile: ${p.profileText}\nResume: ${p.resumeText}\nCustom: ${p.customPrompt ?? ""}`,
+      prompt: buildPrompt("optimizeLinkedInProfileFromText", {
+        profileText: p.profileText,
+        resumeText: p.resumeText,
+        customPrompt: p.customPrompt ?? "",
+      }),
       responseSchema: LINKEDIN_SCHEMA,
     }),
   },
@@ -177,7 +164,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateSkillBridgeProject: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Project to learn ${p.skill} for ${p.desiredRole}. Resume: ${p.resumeText}`,
+      prompt: buildPrompt("generateSkillBridgeProject", {
+        skill: p.skill,
+        desiredRole: p.desiredRole,
+        resumeText: p.resumeText,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -195,7 +186,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateAgilePracticeTest: {
     creditKey: "agile-coach",
     build: (p) => ({
-      prompt: `Practice test for ${p.agileCertification} for ${p.agileRole}.`,
+      prompt: buildPrompt("generateAgilePracticeTest", {
+        agileCertification: p.agileCertification,
+        agileRole: p.agileRole,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -222,24 +216,14 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateSalaryNegotiationStrategy: {
     creditKey: "salary-negotiation",
     build: (p) => ({
-      prompt: `
-        You are an expert salary negotiation coach. Analyze the user's situation and provide a comprehensive, data-driven negotiation strategy.
-        - User's Job Title: ${p.jobTitle}
-        - Company: ${p.company}
-        - Location: ${p.location}
-        - Current Offer (Base Salary): ${p.currentOffer} ${p.currency}
-        - User's Resume Context: ${p.resumeText}
-
-        Perform the following tasks using Google Search for the most up-to-date market data:
-        1.  **Market Analysis:** Research the typical salary range for this role, company, and location. Provide a concise summary.
-        2.  **Recommended Range:** Suggest a realistic target base salary range (min-max) for the user to counter-offer with. Explain your reasoning.
-        3.  **Key Strengths:** Based on the user's resume and the job title, identify 3-5 key strengths they should leverage during negotiation.
-        4.  **Negotiation Strategy:** Provide a clear, step-by-step negotiation strategy (3-5 steps).
-        5.  **Counter-Offer Email Draft:** Write a professional, concise email draft for the user to send as a counter-offer.
-        6.  **Objection Handlers:** Provide advice on how to handle 2-3 common objections.
-
-        Return the result as a single JSON object.
-      `,
+      prompt: buildPrompt("generateSalaryNegotiationStrategy", {
+        jobTitle: p.jobTitle,
+        company: p.company,
+        location: p.location,
+        currentOffer: p.currentOffer,
+        currency: p.currency,
+        resumeText: p.resumeText,
+      }),
       useGoogleSearch: true,
       // No responseSchema: googleSearch + free-text JSON, mirroring the old client.
     }),
@@ -248,7 +232,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   analyzeEnglishProficiency: {
     creditKey: "english-pro",
     build: (p) => ({
-      prompt: `Analyze English email: ${p.emailText}. Native: ${p.nativeLanguage}. Target: ${p.targetIeltsBand}`,
+      prompt: buildPrompt("analyzeEnglishProficiency", {
+        emailText: p.emailText,
+        nativeLanguage: p.nativeLanguage,
+        targetIeltsBand: p.targetIeltsBand,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -278,7 +266,9 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateSpeakingTopics: {
     creditKey: null,
     build: (p) => ({
-      prompt: `5 IELTS speaking topics for band ${p.targetIeltsBand}`,
+      prompt: buildPrompt("generateSpeakingTopics", {
+        targetIeltsBand: p.targetIeltsBand,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: { topics: { type: Type.ARRAY, items: { type: Type.STRING } } },
@@ -290,7 +280,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   analyzeSpokenEnglish: {
     creditKey: "english-pro",
     build: (p) => ({
-      prompt: `Analyze spoken English: ${p.transcript}. Duration: ${p.durationSeconds}s. Target: ${p.targetIeltsBand}`,
+      prompt: buildPrompt("analyzeSpokenEnglish", {
+        transcript: p.transcript,
+        durationSeconds: p.durationSeconds,
+        targetIeltsBand: p.targetIeltsBand,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -312,7 +306,9 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateReadingPracticePassage: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Reading passage for IELTS band ${p.targetIeltsBand}`,
+      prompt: buildPrompt("generateReadingPracticePassage", {
+        targetIeltsBand: p.targetIeltsBand,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -330,7 +326,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   analyzeEnglishReading: {
     creditKey: "english-pro",
     build: (p) => ({
-      prompt: `Analyze reading text: ${p.textToAnalyze}. Target: ${p.targetIeltsBand}`,
+      prompt: buildPrompt("analyzeEnglishReading", {
+        textToAnalyze: p.textToAnalyze,
+        targetIeltsBand: p.targetIeltsBand,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -355,7 +354,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   evaluateReadingComprehension: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Evaluate reading answers. Text: ${p.originalText}. Q&A: ${JSON.stringify(p.questionsAndAnswers)}. User: ${JSON.stringify(p.userAnswers)}`,
+      prompt: buildPrompt("evaluateReadingComprehension", {
+        originalText: p.originalText,
+        questionsAndAnswers: JSON.stringify(p.questionsAndAnswers),
+        userAnswers: JSON.stringify(p.userAnswers),
+      }),
       responseSchema: {
         type: Type.ARRAY,
         items: {
@@ -370,7 +373,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   analyzeEnglishListening: {
     creditKey: "english-pro",
     build: (p) => ({
-      prompt: `Analyze listening. Original: ${p.originalText}. User: ${p.userTranscription}. Target: ${p.targetIeltsBand}`,
+      prompt: buildPrompt("analyzeEnglishListening", {
+        originalText: p.originalText,
+        userTranscription: p.userTranscription,
+        targetIeltsBand: p.targetIeltsBand,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -387,7 +394,9 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateVocabularyFlashcards: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Vocab flashcards for IELTS band ${p.targetIeltsBand}`,
+      prompt: buildPrompt("generateVocabularyFlashcards", {
+        targetIeltsBand: p.targetIeltsBand,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -411,7 +420,15 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateProfessionalEmail: {
     creditKey: "email-crafter",
     build: (p) => ({
-      prompt: `Write email. Scenario: ${p.scenario}. Details: ${JSON.stringify(p.details)}. Market: ${p.marketName}. Tone: ${p.tone}. Style: ${p.style}. Confidence: ${p.confidence}. Resume: ${p.resumeText}`,
+      prompt: buildPrompt("generateProfessionalEmail", {
+        scenario: p.scenario,
+        details: JSON.stringify(p.details),
+        marketName: p.marketName,
+        tone: p.tone,
+        style: p.style,
+        confidence: p.confidence,
+        resumeText: p.resumeText,
+      }),
       responseSchema: EMAIL_SCHEMA,
     }),
   },
@@ -419,7 +436,12 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateOutreachEmail: {
     creditKey: "email-crafter",
     build: (p) => ({
-      prompt: `Write outreach email. Candidate: ${p.candidateResumeText}. Job: ${p.jobDescription}. Employer: ${JSON.stringify(p.employerProfile)}. Market: ${p.marketName}`,
+      prompt: buildPrompt("generateOutreachEmail", {
+        candidateResumeText: p.candidateResumeText,
+        jobDescription: p.jobDescription,
+        employerProfile: JSON.stringify(p.employerProfile),
+        marketName: p.marketName,
+      }),
       responseSchema: EMAIL_SCHEMA,
     }),
   },
@@ -427,7 +449,9 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generatePortfolioWebsite: {
     creditKey: "website-builder",
     build: (p) => ({
-      prompt: `Generate portfolio content from resume: ${p.resumeText}`,
+      prompt: buildPrompt("generatePortfolioWebsite", {
+        resumeText: p.resumeText,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -464,7 +488,9 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateWeeklySummary: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Weekly summary for data: ${JSON.stringify(p.data)}`,
+      prompt: buildPrompt("generateWeeklySummary", {
+        data: JSON.stringify(p.data),
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: { summary: { type: Type.STRING } },
@@ -476,7 +502,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateJobDescription: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Job description for ${p.jobTitle} at ${p.companyName}. Responsibilities: ${p.keyResponsibilities}`,
+      prompt: buildPrompt("generateJobDescription", {
+        jobTitle: p.jobTitle,
+        companyName: p.companyName,
+        keyResponsibilities: p.keyResponsibilities,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: { jobDescription: { type: Type.STRING } },
@@ -488,7 +518,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   analyzeSalary: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Salary estimate for ${p.jobTitle} in ${p.location}.`,
+      prompt: buildPrompt("analyzeSalary", {
+        jobTitle: p.jobTitle,
+        location: p.location,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: { yearlySalary: { type: Type.STRING }, monthlySalary: { type: Type.STRING } },
@@ -500,7 +533,9 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   checkInclusivity: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Inclusivity check for: ${p.jobDescription}`,
+      prompt: buildPrompt("checkInclusivity", {
+        jobDescription: p.jobDescription,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -520,7 +555,9 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   formatJobDescription: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Format job description: ${p.jobDescription}`,
+      prompt: buildPrompt("formatJobDescription", {
+        jobDescription: p.jobDescription,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -536,7 +573,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   analyzeCandidateMatch: {
     creditKey: null,
     build: (p) => ({
-      prompt: `Match resume to job. Resume: ${p.resumeText}. Job: ${p.jobDescription}`,
+      prompt: buildPrompt("analyzeCandidateMatch", {
+        resumeText: p.resumeText,
+        jobDescription: p.jobDescription,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -554,7 +594,13 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateNetworkingStrategy: {
     creditKey: "networking-assistant",
     build: (p) => ({
-      prompt: `Networking strategy. Resume: ${p.resumeText}. Target: ${p.targetCompany}, ${p.targetRole}, ${p.targetLocation}. Market: ${p.marketName}`,
+      prompt: buildPrompt("generateNetworkingStrategy", {
+        resumeText: p.resumeText,
+        targetCompany: p.targetCompany,
+        targetRole: p.targetRole,
+        targetLocation: p.targetLocation,
+        marketName: p.marketName,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -575,7 +621,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generatePerformanceReviewPrep: {
     creditKey: "performance-review-prep",
     build: (p) => ({
-      prompt: `Performance review prep. Title: ${p.jobTitle}. Accomplishments: ${p.userAccomplishments}. Resume: ${p.resumeText}`,
+      prompt: buildPrompt("generatePerformanceReviewPrep", {
+        jobTitle: p.jobTitle,
+        userAccomplishments: p.userAccomplishments,
+        resumeText: p.resumeText,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -598,7 +648,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateLearningPlan: {
     creditKey: "skill-learning-plan",
     build: (p) => ({
-      prompt: `Learning plan for ${p.skillToLearn}. Resume: ${p.resumeText}`,
+      prompt: buildPrompt("generateLearningPlan", {
+        skillToLearn: p.skillToLearn,
+        resumeText: p.resumeText,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -626,7 +679,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   findIndustryEvents: {
     creditKey: "industry-event-scout",
     build: (p) => ({
-      prompt: `Find relevant industry events (conferences, meetups, job fairs) for someone interested in '${p.fieldOfInterest}' in or near '${p.location}'. Also include relevant online/virtual events. For each event, provide the event name, date, location, a brief summary, the event type, and a URL. Return JSON with an "events" array.`,
+      prompt: buildPrompt("findIndustryEvents", {
+        fieldOfInterest: p.fieldOfInterest,
+        location: p.location,
+      }),
       useGoogleSearch: true,
       responseSchema: {
         type: Type.OBJECT,
@@ -653,16 +709,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   anonymizeResume: {
     creditKey: null,
     build: (p) => ({
-      prompt: `
-        You are an expert recruitment consultant working for "${p.agencyName || "Top Recruitment Agency"}".
-        Create a "Blind Resume" from the text.
-        1. Remove all PII (Name, Email, Phone, Address, Links). Replace Name with "Candidate".
-        2. Format cleanly.
-        3. Add header "Represented by: ${p.agencyName || "Agency"}".
-        Output JSON with key "anonymizedText".
-
-        Resume: ${p.resumeText}
-      `,
+      prompt: buildPrompt("anonymizeResume", {
+        agencyName: p.agencyName || "Top Recruitment Agency",
+        agencyNameOrDefault: p.agencyName || "Agency",
+        resumeText: p.resumeText,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: { anonymizedText: { type: Type.STRING } },
@@ -674,14 +725,13 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateClientPitchEmail: {
     creditKey: null,
     build: (p) => ({
-      prompt: `
-        Write a recruiter pitch email for candidate ${p.candidateName}.
-        Resume: ${p.candidateResumeText}
-        Context: ${p.jobDescription ? `Job Description:\n${p.jobDescription}` : "Pitch based on resume experience."}
-
-        Include: Compelling Subject, Hook, 3 Bullet points of "Why", Call to Action.
-        Output JSON with "subject" and "body".
-      `,
+      prompt: buildPrompt("generateClientPitchEmail", {
+        candidateName: p.candidateName,
+        candidateResumeText: p.candidateResumeText,
+        jobDescriptionBlock: p.jobDescription
+          ? `Job Description:\n${p.jobDescription}`
+          : "Pitch based on resume experience.",
+      }),
       responseSchema: EMAIL_SCHEMA,
     }),
   },
@@ -689,14 +739,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   generateCandidatePrepKit: {
     creditKey: null,
     build: (p) => ({
-      prompt: `
-        Create interview prep kit.
-        Resume: ${p.resumeText}
-        Job: ${p.jobDescription}
-
-        Identify: 3 Weak Spots, 3 Key Projects to Highlight, 5 Predicted Questions.
-        Output JSON with keys: "weakSpots", "keyProjects", "predictedQuestions".
-      `,
+      prompt: buildPrompt("generateCandidatePrepKit", {
+        resumeText: p.resumeText,
+        jobDescription: p.jobDescription,
+      }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {

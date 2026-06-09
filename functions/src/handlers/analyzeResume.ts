@@ -20,9 +20,10 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
 import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
+import { buildPrompt } from "../llm/prompts";
+import { ensurePlatformCaches } from "../config/env";
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -87,7 +88,7 @@ const ANALYSIS_SCHEMA = {
 // ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
-export const analyzeResumeFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
+export const analyzeResumeFunction = onCall(async (request) => {
   // Step 1: Verify authentication
   // requireAuth throws HttpsError("unauthenticated") if the caller is not signed in.
   const uid = requireAuth(request);
@@ -113,20 +114,22 @@ export const analyzeResumeFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_
   // If the user has insufficient credits, this throws and the LLM is never called.
   await deductCredits(uid, TOOL_CREDIT_COSTS["resume-analysis"], "resume-analysis");
 
-  // Step 4: Build the prompt
-  const basePrompt = `Analyze this resume for the ${data.marketName} market. Provide a score (0-100), summary, strengths, improvements (area + suggestion), and keywords.`;
+  // Warm the cache so an admin prompt override applies even on a cold instance.
+  await ensurePlatformCaches();
 
+  // Step 4: Build the prompt
   let prompt: string;
   let parts: Array<{ inlineData: { mimeType: string; data: string } }> | undefined;
 
   if (hasImages) {
     // Multimodal: Gemini transcribes the images and analyzes
-    prompt = `${basePrompt} Transcribe and analyze the resume from the provided images.`;
+    prompt = buildPrompt("handler_resume_analysis_image", { marketName: data.marketName });
     parts = data.resumeImages!.map((img) => ({
       inlineData: { mimeType: img.mimeType, data: img.data },
     }));
   } else {
-    // Text-only path
+    // Text-only path: instruction template rendered, then resume appended exactly as before
+    const basePrompt = buildPrompt("handler_resume_analysis", { marketName: data.marketName });
     prompt = `${basePrompt}\n\nResume:\n${data.resumeText}`;
   }
 
@@ -145,6 +148,7 @@ export const analyzeResumeFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_
   } catch (err) {
     // Model call failed after charging — refund so the user isn't billed for nothing.
     await refundCredits(uid, TOOL_CREDIT_COSTS["resume-analysis"]);
-    throw err;
+    const message = err instanceof Error ? err.message : "Resume analysis failed.";
+    throw new HttpsError("internal", message);
   }
 });

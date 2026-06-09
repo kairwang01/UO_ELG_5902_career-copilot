@@ -18,7 +18,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
+import { ensurePlatformCaches } from "../config/env";
 import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
@@ -53,7 +53,7 @@ function tryParseJson(str: string): unknown {
   }
 }
 
-export const aiProxyFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
+export const aiProxyFunction = onCall({ invoker: "public" }, async (request) => {
   const uid = requireAuth(request);
 
   const { tool, payload, model } = (request.data ?? {}) as AiProxyRequest;
@@ -78,6 +78,9 @@ export const aiProxyFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KE
   }
 
   try {
+    // Warm the platform-config cache so admin prompt overrides apply on this call
+    // (spec.build reads getPromptOverride, which is otherwise cold on a fresh instance).
+    await ensurePlatformCaches();
     const llmRequest = spec.build(payload ?? {});
     const provider = await resolveProvider(uid, model);
     const result = await provider.generate(llmRequest);

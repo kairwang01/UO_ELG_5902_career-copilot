@@ -13,9 +13,10 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
 import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
+import { buildPrompt } from "../llm/prompts";
+import { ensurePlatformCaches } from "../config/env";
 
 // ---------------------------------------------------------------------------
 // Request / Response types  (mirror types.ts in repo root)
@@ -121,7 +122,7 @@ const CAREER_PATH_SCHEMA = {
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const generateCareerPathFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
+export const generateCareerPathFunction = onCall(async (request) => {
   const uid = requireAuth(request);
 
   const data = request.data as GenerateCareerPathRequest;
@@ -138,12 +139,14 @@ export const generateCareerPathFunction = onCall({ secrets: [GEMINI_API_KEY, KAI
 
   await deductCredits(uid, TOOL_CREDIT_COSTS["career-path"], "career-path");
 
-  const prompt =
-    `You are a career counsellor specialising in the ${data.marketName} job market. ` +
-    `Create a detailed, realistic career roadmap for the candidate to transition into the role of "${data.desiredRole}". ` +
-    `Identify skill gaps, provide a phased roadmap with actionable steps and resources, ` +
-    `suggest bridge roles if a direct transition is unrealistic, and give an honest summary.\n\n` +
-    `Resume:\n${data.resumeText}`;
+  // Warm the cache so an admin prompt override applies even on a cold instance.
+  await ensurePlatformCaches();
+
+  const prompt = buildPrompt("handler_career_path", {
+    marketName: data.marketName,
+    desiredRole: data.desiredRole,
+    resumeText: data.resumeText,
+  });
 
   const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
   try {

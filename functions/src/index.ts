@@ -14,7 +14,7 @@
 import { setGlobalOptions } from "firebase-functions/v2/options";
 
 // Region must match the frontend Functions client (lib/firebaseClient.ts → us-central1).
-// Secrets are declared per-handler (onCall({ secrets: [...] })), not globally.
+// API keys are plain env vars from functions/.env (test-phase; no Secret Manager bindings).
 setGlobalOptions({
   region: "us-central1",
   memory: "512MiB",
@@ -33,3 +33,25 @@ export { generateCoverLetterFunction  as generateCoverLetter   } from "./handler
 export { generateCareerPathFunction   as generateCareerPath    } from "./handlers/generateCareerPath";
 export { setSubscriptionStatusFunction as setSubscriptionStatus } from "./handlers/setSubscriptionStatus";
 export { onUserCreatedFunction        as onUserCreated         } from "./handlers/onUserCreated";
+export { adminGetDashboardFunction    as adminGetDashboard     } from "./handlers/adminPortal";
+export { adminGetLlmConfigFunction   as adminGetLlmConfig     } from "./handlers/adminPortal";
+export { adminUpdateLlmConfigFunction as adminUpdateLlmConfig } from "./handlers/adminPortal";
+export { adminGetQuotasFunction      as adminGetQuotas        } from "./handlers/adminPortal";
+export { adminUpdateQuotasFunction   as adminUpdateQuotas     } from "./handlers/adminPortal";
+export { adminListUsersFunction      as adminListUsers        } from "./handlers/adminPortal";
+export { adminGetUserReportFunction  as adminGetUserReport    } from "./handlers/adminPortal";
+export { adminAdjustCreditsFunction  as adminAdjustCredits    } from "./handlers/adminPortal";
+export { adminSetSubscriptionFunction as adminSetSubscription } from "./handlers/adminPortal";
+export { adminSetAdminFunction       as adminSetAdmin         } from "./handlers/adminPortal";
+export { adminListAdminsFunction     as adminListAdmins       } from "./handlers/adminPortal";
+export { adminCheckAccessFunction    as adminCheckAccess      } from "./handlers/adminPortal";
+export { adminGetAuditLogFunction    as adminGetAuditLog      } from "./handlers/adminPortal";
+export { setBusinessLlmConfigFunction as setBusinessLlmConfig } from "./handlers/businessLlm";
+export { getBusinessLlmConfigFunction as getBusinessLlmConfig } from "./handlers/businessLlm";
+export { adminListModelsFunction       as adminListModels      } from "./handlers/adminModels";
+export { adminUpsertModelFunction      as adminUpsertModel     } from "./handlers/adminModels";
+export { adminDeleteModelFunction      as adminDeleteModel     } from "./handlers/adminModels";
+export { adminGetPromptsFunction       as adminGetPrompts      } from "./handlers/adminPrompts";
+export { adminUpdatePromptFunction     as adminUpdatePrompt    } from "./handlers/adminPrompts";
+export { adminResetPromptFunction      as adminResetPrompt     } from "./handlers/adminPrompts";
+export { adminTestModelFunction        as adminTestModel       } from "./handlers/adminTestModel";

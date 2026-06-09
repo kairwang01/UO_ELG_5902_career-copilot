@@ -13,7 +13,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { GoogleGenAI } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
-import { GEMINI_API_KEY, getGeminiApiKey } from "../config/env";
+import { ensurePlatformCaches, getGeminiApiKey } from "../config/env";
 
 interface GenerateHeadshotRequest {
   imageBase64: string;
@@ -22,7 +22,7 @@ interface GenerateHeadshotRequest {
 // ~6MB of base64 (≈4.5MB raw) upper bound to keep request size / cost sane.
 const MAX_IMAGE_BASE64_LEN = 8_000_000;
 
-export const generateHeadshotFunction = onCall({ secrets: [GEMINI_API_KEY] }, async (request) => {
+export const generateHeadshotFunction = onCall({ invoker: "public" }, async (request) => {
   requireAuth(request);
 
   const { imageBase64 } = (request.data ?? {}) as GenerateHeadshotRequest;
@@ -33,6 +33,9 @@ export const generateHeadshotFunction = onCall({ secrets: [GEMINI_API_KEY] }, as
     throw new HttpsError("invalid-argument", "Image is too large.");
   }
 
+  // Warm the platform-config cache so the key getter reads the admin-configured
+  // Firestore value (this handler reads the key directly, not via resolveProvider).
+  await ensurePlatformCaches();
   const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-image",

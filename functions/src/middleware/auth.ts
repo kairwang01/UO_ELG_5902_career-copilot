@@ -13,7 +13,13 @@
  * will be added here in Phase B if needed.
  */
 
+import * as admin from "firebase-admin";
 import { CallableRequest, HttpsError } from "firebase-functions/v2/https";
+import { PLATFORM_CONFIG_COLLECTION, PLATFORM_DOCS } from "../admin/schema";
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 /**
  * Asserts that the callable request was made by an authenticated user.
@@ -31,4 +37,36 @@ export function requireAuth(request: CallableRequest): string {
     );
   }
   return request.auth.uid;
+}
+
+/** Returns true if uid has admin custom claim or is listed in platform_config/access. */
+export async function isAdminUid(uid: string, token?: Record<string, unknown>): Promise<boolean> {
+  if (token?.admin === true) return true;
+
+  const envAdmins = (process.env.ADMIN_UIDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (envAdmins.includes(uid)) return true;
+
+  const snap = await admin
+    .firestore()
+    .collection(PLATFORM_CONFIG_COLLECTION)
+    .doc(PLATFORM_DOCS.access)
+    .get();
+  const listed: string[] = snap.data()?.admin_uids ?? [];
+  return listed.includes(uid);
+}
+
+/**
+ * Asserts the caller is an authenticated admin.
+ * Grant access via: custom claim admin:true, ADMIN_UIDS env, or platform_config/access.
+ */
+export async function requireAdmin(request: CallableRequest): Promise<string> {
+  const uid = requireAuth(request);
+  const ok = await isAdminUid(uid, request.auth?.token as Record<string, unknown> | undefined);
+  if (!ok) {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+  return uid;
 }

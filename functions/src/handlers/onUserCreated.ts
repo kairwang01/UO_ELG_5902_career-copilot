@@ -47,6 +47,10 @@ export const onUserCreatedFunction = functions.auth.user().onCreate(async (user)
       if (existing[USER_FIELDS.credits] == null) patch[USER_FIELDS.credits] = INITIAL_CREDITS;
       if (existing[USER_FIELDS.role] == null) patch[USER_FIELDS.role] = "candidate";
       if (existing[USER_FIELDS.subscriptionStatus] == null) patch[USER_FIELDS.subscriptionStatus] = "free";
+      // Backfill created_at if a client profile upsert created the doc first without it.
+      // Firestore orderBy('created_at') silently drops field-less docs, which would
+      // make such users invisible in the admin user list.
+      if (existing[USER_FIELDS.createdAt] == null) patch[USER_FIELDS.createdAt] = now;
       await ref.set(patch, { merge: true });
     }
     console.log(`onUserCreated: provisioned users/${user.uid} with ${INITIAL_CREDITS} credits`);

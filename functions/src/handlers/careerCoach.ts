@@ -17,7 +17,8 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
+import { buildPrompt } from "../llm/prompts";
+import { ensurePlatformCaches } from "../config/env";
 
 interface CoachMessage {
   role: "user" | "model";
@@ -35,12 +36,7 @@ interface CareerCoachRequest {
   model?: string;
 }
 
-const BASE_INSTRUCTION =
-  "You are 'Alex', an empathetic and encouraging AI career coach. Your tone is warm, " +
-  "friendly, and professional yet conversational. Avoid being overly robotic. Use natural " +
-  "language, ask clarifying questions, and use markdown for formatting like **bolding** key terms.";
-
-export const careerCoachFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
+export const careerCoachFunction = onCall({ invoker: "public" }, async (request) => {
   const uid = requireAuth(request);
 
   const data = (request.data ?? {}) as CareerCoachRequest;
@@ -48,19 +44,22 @@ export const careerCoachFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_AP
     throw new HttpsError("invalid-argument", "messages is required.");
   }
 
-  let systemInstruction = BASE_INSTRUCTION;
+  // Warm the cache so an admin prompt override applies even on a cold instance.
+  await ensurePlatformCaches();
+
+  let systemInstruction: string;
   if (data.role === "candidate") {
-    systemInstruction =
-      "You are 'Alex', an empathetic and expert AI career coach for a job seeker. Your tone is warm, " +
-      "friendly, and professional yet conversational. Ask clarifying questions, offer encouragement, and " +
-      "use markdown (**bolding**, lists) where appropriate. Here is the user's resume for context if they " +
-      `ask questions related to it:\n\n${data.resumeText ?? ""}`;
+    systemInstruction = buildPrompt("handler_career_coach_candidate", {
+      resumeText: data.resumeText ?? "",
+    });
   } else if (data.role === "employer") {
-    systemInstruction =
-      "You are 'Alex', a professional and insightful AI HR assistant for an employer. Your tone is helpful, " +
-      "collaborative, and professional yet conversational. Use markdown (**bolding**, lists) where appropriate. " +
-      `Here is the employer's company profile for context: Name: ${data.companyName || "N/A"}, ` +
-      `Website: ${data.companyWebsite || "N/A"}, Description: ${data.companyDescription || "N/A"}`;
+    systemInstruction = buildPrompt("handler_career_coach_employer", {
+      companyName: data.companyName || "N/A",
+      companyWebsite: data.companyWebsite || "N/A",
+      companyDescription: data.companyDescription || "N/A",
+    });
+  } else {
+    systemInstruction = buildPrompt("handler_career_coach_base", {});
   }
 
   // Keep the last 20 turns to bound prompt size.

@@ -13,9 +13,10 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
 import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
+import { buildPrompt } from "../llm/prompts";
+import { ensurePlatformCaches } from "../config/env";
 
 interface GenerateCoverLetterRequest {
   resumeText: string;
@@ -35,7 +36,7 @@ const COVER_LETTER_SCHEMA = {
   required: ["letter"],
 };
 
-export const generateCoverLetterFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
+export const generateCoverLetterFunction = onCall(async (request) => {
   const uid = requireAuth(request);
 
   const data = request.data as GenerateCoverLetterRequest;
@@ -52,11 +53,14 @@ export const generateCoverLetterFunction = onCall({ secrets: [GEMINI_API_KEY, KA
 
   await deductCredits(uid, TOOL_CREDIT_COSTS["cover-letter"], "cover-letter");
 
-  const prompt =
-    `Write a professional cover letter tailored for the ${data.marketName} job market. ` +
-    `Match the candidate's experience to the job requirements. ` +
-    `Keep it concise (3–4 paragraphs), confident, and specific.\n\n` +
-    `Resume:\n${data.resumeText}\n\nJob Description:\n${data.jobDescription}`;
+  // Warm the cache so an admin prompt override applies even on a cold instance.
+  await ensurePlatformCaches();
+
+  const prompt = buildPrompt("handler_cover_letter", {
+    marketName: data.marketName,
+    resumeText: data.resumeText,
+    jobDescription: data.jobDescription,
+  });
 
   const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
   try {

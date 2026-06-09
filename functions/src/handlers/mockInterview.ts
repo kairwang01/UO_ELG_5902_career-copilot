@@ -27,9 +27,10 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
 import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
+import { buildPrompt } from "../llm/prompts";
+import { ensurePlatformCaches } from "../config/env";
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -103,7 +104,7 @@ const EVALUATE_SCHEMA = {
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const mockInterviewFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
+export const mockInterviewFunction = onCall(async (request) => {
   const uid = requireAuth(request);
   const data = request.data as MockInterviewRequest;
   const modelId = (request.data as { model?: string })?.model;
@@ -133,16 +134,19 @@ export const mockInterviewFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_
     }
   }
 
+  // Warm the cache so an admin prompt override applies even on a cold instance.
+  await ensurePlatformCaches();
+
   if (data.mode === "generate") {
     // Charge ONCE per interview session — at question generation, not per answer
     // evaluation (evaluate turns within the same session are free).
     await deductCredits(uid, TOOL_CREDIT_COSTS["mock-interview"], "mock-interview");
 
-    const prompt =
-      `You are an experienced ${data.marketName ?? "Canadian"} hiring manager. ` +
-      `Generate 8 interview questions for this candidate — mix of behavioural, technical, ` +
-      `situational, and culture-fit questions. Tailor them to the job and the candidate's background.\n\n` +
-      `Resume:\n${data.resumeText}\n\nJob Description:\n${data.jobDescription}`;
+    const prompt = buildPrompt("handler_mock_interview_generate", {
+      marketName: data.marketName ?? "Canadian",
+      resumeText: data.resumeText,
+      jobDescription: data.jobDescription,
+    });
 
     const provider = await resolveProvider(uid, modelId);
     try {
@@ -159,13 +163,12 @@ export const mockInterviewFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_
 
   } else {
     // evaluate mode (required fields already validated above, before charging)
-    const prompt =
-      `You are an expert interview coach. Evaluate the candidate's answer to the interview question below.\n\n` +
-      `Question: ${data.question}\n\n` +
-      `Candidate's Answer: ${data.answer}\n\n` +
-      (data.jobDescription ? `Job Context:\n${data.jobDescription}\n\n` : "") +
-      `Score the answer 0–100, identify specific strengths and areas to improve, ` +
-      `and provide a model answer that would score highly.`;
+    const jobContextBlock = data.jobDescription ? `Job Context:\n${data.jobDescription}\n\n` : "";
+    const prompt = buildPrompt("handler_mock_interview_eval", {
+      question: data.question,
+      answer: data.answer,
+      jobContextBlock,
+    });
 
     const provider = await resolveProvider(uid, modelId);
     const result = await provider.generate({

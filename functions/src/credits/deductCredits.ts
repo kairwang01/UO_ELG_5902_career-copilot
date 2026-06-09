@@ -20,6 +20,8 @@
 
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
+import { ensurePlatformCaches } from "../config/env";
+import { checkQuotasOrThrow, logCreditLedger, logUsageEvent } from "../admin/usageLog";
 import { USERS_COLLECTION, USER_FIELDS } from "./schema";
 
 // Initialise the Admin SDK once (idempotent — safe to call multiple times).
@@ -62,9 +64,13 @@ export async function deductCredits(
     );
   }
 
+  await ensurePlatformCaches();
+  await checkQuotasOrThrow(uid, cost, tool);
+
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
 
   let attempt = 0;
+  let balanceAfter = 0;
 
   while (attempt < MAX_RETRIES) {
     try {
@@ -89,10 +95,18 @@ export async function deductCredits(
           );
         }
 
-        tx.update(userRef, { [USER_FIELDS.credits]: current - cost });
+        balanceAfter = current - cost;
+        tx.update(userRef, { [USER_FIELDS.credits]: balanceAfter });
       });
 
-      // Transaction committed — deduction succeeded.
+      await logUsageEvent(uid, tool, cost, "deducted");
+      await logCreditLedger({
+        uid,
+        amount: -cost,
+        balance_after: balanceAfter,
+        reason: "tool_deduction",
+        tool,
+      });
       return;
     } catch (err) {
       // Re-throw our own HttpsErrors immediately — no retry needed.
@@ -130,11 +144,20 @@ export async function refundCredits(uid: string, amount: number): Promise<void> 
 
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
   try {
+    let balanceAfter = 0;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(userRef);
       if (!snap.exists) return;
       const current: number = snap.get(USER_FIELDS.credits) ?? 0;
-      tx.update(userRef, { [USER_FIELDS.credits]: current + amount });
+      balanceAfter = current + amount;
+      tx.update(userRef, { [USER_FIELDS.credits]: balanceAfter });
+    });
+    await logUsageEvent(uid, "refund", amount, "refunded");
+    await logCreditLedger({
+      uid,
+      amount,
+      balance_after: balanceAfter,
+      reason: "tool_refund",
     });
   } catch (err) {
     console.error("refundCredits failed", { uid, amount, err });

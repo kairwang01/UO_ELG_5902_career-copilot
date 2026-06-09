@@ -15,7 +15,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
+import { buildPrompt } from "../llm/prompts";
 
 interface ExtractTextRequest {
   url: string;
@@ -55,7 +55,7 @@ function assertSafeUrl(raw: string): URL {
   return u;
 }
 
-export const extractTextFromUrlFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
+export const extractTextFromUrlFunction = onCall({ invoker: "public" }, async (request) => {
   const uid = requireAuth(request);
 
   const { url, model } = (request.data ?? {}) as ExtractTextRequest;
@@ -78,9 +78,7 @@ export const extractTextFromUrlFunction = onCall({ secrets: [GEMINI_API_KEY, KAI
 
   const provider = await resolveProvider(uid, model);
   const result = await provider.generate({
-    prompt:
-      `Extract the main professional profile or resume text from the following HTML. ` +
-      `Ignore navigation, ads, and scripts.\nHTML Content: ${html}`,
+    prompt: buildPrompt("handler_extract_url", { html }),
     responseSchema: {
       type: Type.OBJECT,
       properties: { extractedText: { type: Type.STRING } },
