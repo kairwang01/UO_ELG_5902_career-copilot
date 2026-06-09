@@ -199,22 +199,41 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                         </div>
                     </>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-gradient-to-br from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
-                        <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-3xl flex items-center justify-center mb-6 text-blue-600 dark:text-blue-400">
-                            <Wrench className="h-10 w-10" />
-                        </div>
-                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 tracking-tight">Professional AI Toolkit</h2>
-                        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto leading-relaxed mb-8">
-                            Select a professional tool from the sidebar to start optimizing your career path. Each tool is specifically designed to handle different aspects of your job search.
-                        </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl w-full text-left">
-                            <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
-                                <h4 className="font-bold text-gray-900 dark:text-white mb-1">Context Aware</h4>
-                                <p className="text-xs text-gray-500 dark:text-slate-500">Every tool analyzes your specific resume and experience to provide custom results.</p>
+                    <div className="flex-1 overflow-y-auto p-6 md:p-10 bg-gradient-to-br from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
+                        <div className="max-w-5xl mx-auto">
+                            <div className="text-center mb-8">
+                                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-4 mx-auto text-blue-600 dark:text-blue-400">
+                                    <Wrench className="h-8 w-8" />
+                                </div>
+                                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2 tracking-tight">Professional AI Toolkit</h2>
+                                <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
+                                    Pick a tool to get started — each one tailors its results to your resume and target market.
+                                </p>
                             </div>
-                            <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
-                                <h4 className="font-bold text-gray-900 dark:text-white mb-1">Expert Precision</h4>
-                                <p className="text-xs text-gray-500 dark:text-slate-500">Powered by advanced career-focused AI models for professional-grade output.</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {ALL_TOOLS_CONFIG.map((tool) => {
+                                    const titleKey = `tool_${tool.key.replace(/-/g, '_')}_title`;
+                                    const descKey = `tool_${tool.key.replace(/-/g, '_')}_desc`;
+                                    const desc = t(descKey);
+                                    return (
+                                        <button
+                                            key={tool.key}
+                                            type="button"
+                                            onClick={() => setActiveTool(tool.key)}
+                                            className="group text-left p-5 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                        >
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                                                    {React.cloneElement(tool.icon, { className: 'h-5 w-5' })}
+                                                </div>
+                                                <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-snug">{t(titleKey)}</h3>
+                                            </div>
+                                            {desc && desc !== descKey && (
+                                                <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed line-clamp-2">{desc}</p>
+                                            )}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
