@@ -16,3 +16,4 @@ export { mockInterviewFunction        as mockInterview        } from "./handlers
 export { generateCoverLetterFunction  as generateCoverLetter  } from "./handlers/generateCoverLetter";
 export { generateCareerPathFunction   as generateCareerPath   } from "./handlers/generateCareerPath";
 export { onUserCreatedFunction        as onUserCreated        } from "./handlers/onUserCreated";
+export { setSubscriptionStatusFunction as setSubscriptionStatus } from "./handlers/setSubscriptionStatus";

@@ -39,6 +39,28 @@ const PlanSelectorCard: React.FC<{ plan: Plan & { key: string }; isSelected: boo
 };
 
 
+const getAuthErrorMessage = (message: string): string => {
+  if (message.includes('invalid-credential') || message.includes('wrong-password') || message.includes('user-not-found')) {
+    return 'Incorrect email or password. Please try again.';
+  }
+  if (message.includes('email-already-in-use') || message.includes('already registered')) {
+    return 'An account with this email already exists. Please sign in instead.';
+  }
+  if (message.includes('weak-password')) {
+    return 'Password is too weak. Please use at least 6 characters.';
+  }
+  if (message.includes('invalid-email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (message.includes('too-many-requests')) {
+    return 'Too many failed attempts. Please wait a few minutes and try again.';
+  }
+  if (message.includes('network-request-failed')) {
+    return 'Network error. Please check your connection and try again.';
+  }
+  return 'Something went wrong. Please try again.';
+};
+
 const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }) => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -75,7 +97,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setError(null);
     setMessage(null);
     const { error } = await data.auth.signInWithPassword(email, password);
-    if (error) setError(error.message);
+    if (error) setError(getAuthErrorMessage(error.message));
     setLoading(false);
   };
   
@@ -103,7 +125,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         setError(t('auth_error_user_exists'));
         setAuthView('sign_in');
       } else {
-        setError(authError.message);
+        setError(getAuthErrorMessage(authError.message));
       }
       setLoading(false);
       return;
@@ -138,7 +160,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setError(null);
     setMessage(null);
     const { error } = await data.auth.resetPassword(email);
-    if (error) setError(error.message);
+    if (error) setError(getAuthErrorMessage(error.message));
     else setMessage(t('auth_message_reset_link_sent'));
     setLoading(false);
   }
