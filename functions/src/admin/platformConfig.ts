@@ -77,6 +77,10 @@ export function getGeminiFallbackModel(): string | undefined {
   return model?.trim() || undefined;
 }
 
+export function getOpportunityUseGoogleSearch(): boolean {
+  return process.env.OPPORTUNITY_USE_GOOGLE_SEARCH !== "false";
+}
+
 export function getKairllmBaseUrl(): string {
   const url = llmCache?.kairllm_base_url || process.env.KAIRLLM_BASE_URL || "https://ai.gogosling.ca/v1";
   return url.replace(/\/$/, "");
