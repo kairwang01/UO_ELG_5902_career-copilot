@@ -32,14 +32,33 @@ export const USER_FIELDS = {
 } as const;
 
 /**
- * Per-tool credit costs — ported from the frontend config/credits.ts.
- * Keep in sync with TOOL_CREDIT_COSTS on the frontend until Phase B is wired end-to-end.
+ * Per-tool credit costs.
+ *
+ * CANONICAL SOURCE: the frontend `config/credits.ts` TOOL_CREDIT_COSTS table.
+ * This is a deliberate mirror — the two TypeScript projects (Vite app vs Firebase
+ * Functions) build separately and a repo-root shared module is NOT bundled into the
+ * deployed function, so the table is duplicated here on purpose. If a price changes,
+ * update BOTH `config/credits.ts` (canonical) and this file together.
+ *
+ * Values reconciled to the frontend numbers on 2026-06-08 (prior server values had
+ * drifted: mock-interview 20→150, career-path 15→100, cover-letter 10→20,
+ * opportunity-finder 10→50, english-pro 5→15).
  */
 export const TOOL_CREDIT_COSTS: Record<string, number> = {
   "resume-analysis": 10,
-  "mock-interview": 20,
-  "cover-letter": 10,
-  "career-path": 15,
-  "opportunity-finder": 10,
-  "english-pro": 5,
+  "resume-formatter": 20,
+  "opportunity-finder": 50,
+  "linkedin-optimizer": 20,
+  "cover-letter": 20,
+  "mock-interview": 150,
+  "career-path": 100,
+  "agile-coach": 25,
+  "salary-negotiation": 75,
+  "english-pro": 15,
+  "email-crafter": 5,
+  "website-builder": 250,
+  "networking-assistant": 40,
+  "performance-review-prep": 40,
+  "skill-learning-plan": 50,
+  "industry-event-scout": 50,
 } as const;

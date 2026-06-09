@@ -5,7 +5,6 @@ interface CreditsContextType {
   credits: number;
   setCredits: (credits: number) => void;
   deductCredits: (amount: number, session: Session | null) => Promise<boolean>;
-  addCredits: (amount: number, session: Session | null) => Promise<boolean>;
 }
 
 const CreditsContext = createContext<CreditsContextType | undefined>(undefined);
@@ -39,18 +38,8 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
     return true;
   }, [credits]);
 
-  const addCredits = useCallback(async (amount: number, session: Session | null) => {
-    if (!session) {
-      console.error('Add credits failed: No session provided.');
-      return false;
-    }
-
-    setCredits((credits || 0) + amount);
-    return true;
-  }, [credits]);
-
   return (
-    <CreditsContext.Provider value={{ credits, setCredits, deductCredits, addCredits }}>
+    <CreditsContext.Provider value={{ credits, setCredits, deductCredits }}>
       {children}
     </CreditsContext.Provider>
   );

@@ -53,6 +53,15 @@ export async function deductCredits(
   cost: number,
   tool: string
 ): Promise<void> {
+  // Guard against an unknown/missing tool cost (e.g. TOOL_CREDIT_COSTS["typo"] === undefined).
+  // Without this, `current - undefined` writes NaN to the balance and corrupts the account.
+  if (typeof cost !== "number" || !Number.isFinite(cost) || cost <= 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      `Invalid credit cost for ${tool}. This is a configuration error.`
+    );
+  }
+
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
 
   let attempt = 0;
@@ -107,5 +116,27 @@ export async function deductCredits(
       // Brief back-off before retry (exponential: 50ms, 100ms, 200ms …)
       await new Promise((r) => setTimeout(r, 50 * Math.pow(2, attempt - 1)));
     }
+  }
+}
+
+/**
+ * Refunds `amount` credits to `users/{uid}` — used to reverse a deduction when the
+ * downstream LLM call fails AFTER credits were already taken. Best-effort and
+ * non-throwing: a failed refund is logged, never surfaced (the caller is already
+ * handling the original error).
+ */
+export async function refundCredits(uid: string, amount: number): Promise<void> {
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) return;
+
+  const userRef = db.collection(USERS_COLLECTION).doc(uid);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(userRef);
+      if (!snap.exists) return;
+      const current: number = snap.get(USER_FIELDS.credits) ?? 0;
+      tx.update(userRef, { [USER_FIELDS.credits]: current + amount });
+    });
+  } catch (err) {
+    console.error("refundCredits failed", { uid, amount, err });
   }
 }

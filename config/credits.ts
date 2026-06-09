@@ -4,6 +4,9 @@ const STRIPE_CREDIT_PACK_100_LINK = 'https://buy.stripe.com/test_...';
 const STRIPE_CREDIT_PACK_500_LINK = 'https://buy.stripe.com/test_...';
 const STRIPE_CREDIT_PACK_1000_LINK = 'https://buy.stripe.com/test_...';
 
+// CANONICAL per-tool credit prices. The server mirrors these in
+// functions/src/credits/schema.ts (separate build, not a shared import) — when a
+// price changes here, update that file too.
 export const TOOL_CREDIT_COSTS = {
     'resume-analysis': 10,
     'resume-formatter': 20,
