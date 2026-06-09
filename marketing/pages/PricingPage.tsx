@@ -7,6 +7,23 @@ import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { employerAddOnPlans, employerPlans, jobseekerPlans, planKey, type BetaPlanConfig } from '../config/pricingPlans';
 import { CREDIT_PACKS } from '../../config/credits';
 
+/**
+ * Literal copy for LLM/model access — intentionally not i18n keys so every
+ * locale gets readable English text instead of raw key fallbacks.
+ */
+const PLAN_LLM_COPY: Record<string, string> = {
+  js_free:       'Standard AI model · 25 runs/day',
+  js_essentials: 'Premium models',
+  js_accelerator:'Premium models',
+  js_executive:  'Premium models',
+  emp_free:      'Standard AI model',
+  emp_starter:   'Bring your own LLM API (custom endpoint)',
+  emp_growth:    'Bring your own LLM API (custom endpoint)',
+  emp_team:      'Bring your own LLM API (custom endpoint)',
+  emp_single_post: 'AI-powered candidate matching',
+  emp_job_pack:    'AI-powered candidate matching',
+};
+
 interface PlanGridProps {
   plans: BetaPlanConfig[];
   ctaHref: string;
@@ -53,6 +70,12 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, ctaHref, t }) => (
               <span>{t(planKey(plan.id, `f${i + 1}` as `f${number}`))}</span>
             </li>
           ))}
+          {PLAN_LLM_COPY[plan.id] && (
+            <li className="flex gap-2.5">
+              <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold text-blue-500">✦</span>
+              <span className="text-[var(--site-text-muted)]">{PLAN_LLM_COPY[plan.id]}</span>
+            </li>
+          )}
         </ul>
         <SiteButton variant={plan.recommended ? 'primary' : 'secondary'} href={ctaHref} className="mt-7 w-full py-3 font-semibold">
           {t('site_pricing_get_started')}
@@ -103,6 +126,12 @@ export const PricingPage: React.FC = () => {
           </div>
 
           <PlanGrid plans={plans} ctaHref={ctaHref} t={t} />
+
+          <p className="mt-5 text-center text-xs text-[var(--site-text-muted)]">
+            {audience === 'jobseeker'
+              ? 'Free plan includes our standard AI model · Paid plans unlock premium models and remove the daily run cap'
+              : 'Business plans support a custom LLM endpoint — connect your own OpenAI-compatible API key'}
+          </p>
 
           {audience === 'jobseeker' ? (
             <section className="mt-16 rounded-[calc(var(--site-radius)*2)] border border-[var(--site-border)] bg-white p-6 sm:p-8">
