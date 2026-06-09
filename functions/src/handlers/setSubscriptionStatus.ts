@@ -81,7 +81,7 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
   await userRef.set(
     {
       [USER_FIELDS.subscriptionStatus]: plan,
-      [USER_FIELDS.updatedAt]: new Date().toISOString(),
+      [USER_FIELDS.updatedAt]: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   );

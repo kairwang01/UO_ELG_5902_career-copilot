@@ -24,7 +24,7 @@ const db = admin.firestore();
 const INITIAL_CREDITS = 100;
 
 export const onUserCreatedFunction = functions.auth.user().onCreate(async (user) => {
-  const now = new Date().toISOString();
+  const now = admin.firestore.FieldValue.serverTimestamp();
   const ref = db.collection(USERS_COLLECTION).doc(user.uid);
 
   try {
