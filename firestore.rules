@@ -3,26 +3,68 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // users/{uid}
-    // - A signed-in user may read their own document.
-    // - A user may update non-sensitive profile fields (name, avatar, company info, etc.)
-    //   but NEVER credits or subscription_status — those are server-only writes.
+    // ---- users/{uid} ---------------------------------------------------------
     match /users/{uid} {
 
       // Only the owner can read their own profile.
       allow read: if request.auth != null && request.auth.uid == uid;
 
-      // Creating a new profile document is allowed (e.g. on sign-up).
-      allow create: if request.auth != null && request.auth.uid == uid;
+      // Create: owner only, and the client may NOT self-grant credits or a paid plan.
+      // credits are capped at the initial grant (100); subscription_status must be
+      // 'free' or a pending_* routing value. The onUserCreated trigger (Admin SDK)
+      // bypasses these rules and is the authoritative provisioner.
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && (!('credits' in request.resource.data)
+                        || request.resource.data.credits <= 100)
+                    && (!('role' in request.resource.data)
+                        || request.resource.data.role in ['candidate', 'employer', 'agency'])
+                    && (!('subscription_status' in request.resource.data)
+                        || request.resource.data.subscription_status == 'free'
+                        || request.resource.data.subscription_status.matches('pending_.*'));
 
-      // Updating: owner may change profile fields but NOT credits or subscription_status.
-      // Those are server-only via Cloud Functions (admin SDK bypasses these rules).
+      // Update: owner may change profile fields but NEVER credits or subscription_status.
+      // Those are server-only via Cloud Functions (Admin SDK bypasses these rules).
       allow update: if request.auth != null
                     && request.auth.uid == uid
                     && !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(["credits", "subscription_status"]);
+                        .hasAny(['credits', 'subscription_status']);
+
+      // Owner-scoped subcollections: tool_events, resume_analyses, weekly_insights.
+      match /{sub}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
 
-    // All other collections are denied by default.
+    // ---- job_postings/{jobId} ------------------------------------------------
+    // Any signed-in user may browse postings; only the owning employer may write.
+    match /job_postings/{jobId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.employer_id == request.auth.uid;
+      allow update, delete: if request.auth != null
+                    && resource.data.employer_id == request.auth.uid;
+    }
+
+    // ---- job_applications/{appId} --------------------------------------------
+    // Candidate creates their own application; both the candidate and the owning
+    // employer may read it; only the employer may update it (e.g. status changes).
+    // Owner-scoped reads require the query to filter by candidate_id (candidate side)
+    // or employer_id (employer side) — the client queries are written to match.
+    match /job_applications/{appId} {
+      allow read: if request.auth != null
+                  && (resource.data.candidate_id == request.auth.uid
+                      || resource.data.employer_id == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.candidate_id == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.employer_id == request.auth.uid;
+    }
+
+    // All other collections are denied by default. In particular, employer
+    // candidate-discovery (a collection-wide /users read) is intentionally NOT
+    // allowed here: it would expose every candidate's PII (resume_text). That
+    // feature must be served by a future field-limited, consent-gated Cloud
+    // Function, not an open rule.
   }
 }

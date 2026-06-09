@@ -15,17 +15,33 @@
  *   STRIPE_WEBHOOK_SECRET — Stripe webhook verification (Phase C — not yet wired)
  */
 
+import { defineSecret } from "firebase-functions/params";
+
 /**
- * Returns the Gemini API key from the environment.
- * @throws Error if GEMINI_API_KEY is not set.
+ * GEMINI_API_KEY as a Gen-2 secret. Handlers that reach the LLM must declare this
+ * in their onCall({ secrets: [GEMINI_API_KEY] }, ...) options so the runtime binds
+ * it from Secret Manager. Provision once before deploy:
+ *   firebase functions:secrets:set GEMINI_API_KEY
+ */
+export const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+
+/**
+ * Returns the Gemini API key.
+ *
+ * Order of resolution:
+ *   1. process.env.GEMINI_API_KEY — set by the emulator from functions/.env (local dev),
+ *      and also populated by the runtime when the secret is bound.
+ *   2. GEMINI_API_KEY.value() — the bound Secret Manager value (production).
+ *
+ * @throws Error if neither source has a value.
  */
 export function getGeminiApiKey(): string {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY || GEMINI_API_KEY.value();
   if (!key) {
     throw new Error(
       "GEMINI_API_KEY is not set. " +
         "For local dev: add it to functions/.env. " +
-        "For production: store it in Firebase Secret Manager."
+        "For production: run `firebase functions:secrets:set GEMINI_API_KEY`."
     );
   }
   return key;
@@ -43,4 +59,32 @@ export function getGeminiApiKey(): string {
  */
 export function getGeminiModel(): string {
   return process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+}
+
+/**
+ * KAIRLLM — an OpenAI-compatible multi-provider gateway (the "auto" model picks
+ * the best backing model). Used as a selectable provider for paid+ users; the key
+ * stays server-side (functions/.env locally, Secret Manager in prod).
+ *   firebase functions:secrets:set KAIRLLM_API_KEY
+ */
+export const KAIRLLM_API_KEY = defineSecret("KAIRLLM_API_KEY");
+
+/** Base URL for the KAIRLLM OpenAI-compatible API (no trailing slash). */
+export function getKairllmBaseUrl(): string {
+  return (process.env.KAIRLLM_BASE_URL ?? "https://ai.gogosling.ca/v1").replace(/\/$/, "");
+}
+
+/**
+ * Returns the KAIRLLM API key (process.env from functions/.env locally, or the
+ * bound Secret Manager value in prod). Throws if neither is set.
+ */
+export function getKairllmApiKey(): string {
+  const key = process.env.KAIRLLM_API_KEY || KAIRLLM_API_KEY.value();
+  if (!key) {
+    throw new Error(
+      "KAIRLLM_API_KEY is not set. Local dev: add it to functions/.env. " +
+        "Production: run `firebase functions:secrets:set KAIRLLM_API_KEY`."
+    );
+  }
+  return key;
 }
