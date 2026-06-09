@@ -6,6 +6,7 @@ import AgencyHub from '../AgencyHub';
 import ApplicantFunnel from '../ApplicantFunnel';
 import { PortalSidebar, type PortalPage } from './PortalSidebar';
 import { PortalTopBar } from './PortalTopBar';
+import { PortalAccountMenuProvider } from './PortalAccountMenuContext';
 import { PortalDashboard } from './pages/PortalDashboard';
 import { PortalJobListings } from './pages/PortalJobListings';
 import { PortalPostJob } from './pages/PortalPostJob';
@@ -33,6 +34,7 @@ interface EmployerPortalProps {
   refreshProfile: () => Promise<void>;
   navigateToBusinessPricing: () => void;
   onGoHome: () => void;
+  onSignOut: () => void;
   t: (key: string) => string;
   initialPage?: PortalPage;
   isAIMode: boolean;
@@ -49,6 +51,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   refreshProfile,
   navigateToBusinessPricing,
   onGoHome,
+  onSignOut,
   t,
   initialPage = 'dashboard',
   isAIMode,
@@ -180,12 +183,54 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     }
   };
 
+  // Shared props for the AccountMenu rendered in every PortalTopBar
+  const accountMenuProps = {
+    profile,
+    email: session.user.email ?? '',
+    theme,
+    onToggleTheme,
+    onAccount: () => navigate('account-settings'),
+    onSignOut,
+    t,
+  };
+
   // Applicant funnel takes over the whole main area
   if (jobForFunnel) {
     return (
+      <PortalAccountMenuProvider value={accountMenuProps}>
+        <div className={`flex h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+          <PortalSidebar
+            currentPage={prevPage}
+            onNavigate={navigate}
+            onGoHome={onGoHome}
+            profile={profile}
+            darkMode={darkMode}
+            onToggleDark={onToggleTheme}
+            isAIMode={isAIMode}
+            onToggleAIMode={onToggleAIMode}
+            currentLang={currentLang}
+            onLanguageChange={onLanguageChange}
+          />
+          <main className="flex-1 overflow-y-auto">
+            <PortalTopBar title={`Applicants — ${jobForFunnel.title}`} darkMode={darkMode} />
+            <div className="max-w-[1088px] mx-auto p-8">
+              <ApplicantFunnel
+                job={jobForFunnel}
+                onBack={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
+                t={t}
+              />
+            </div>
+          </main>
+        </div>
+      </PortalAccountMenuProvider>
+    );
+  }
+
+  return (
+    <PortalAccountMenuProvider value={accountMenuProps}>
       <div className={`flex h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
         <PortalSidebar
-          currentPage={prevPage}
+          currentPage={currentPage}
           onNavigate={navigate}
           onGoHome={onGoHome}
           profile={profile}
@@ -196,123 +241,96 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           currentLang={currentLang}
           onLanguageChange={onLanguageChange}
         />
+
         <main className="flex-1 overflow-y-auto">
-          <PortalTopBar title={`Applicants — ${jobForFunnel.title}`} darkMode={darkMode} />
-          <div className="max-w-[1088px] mx-auto p-8">
-            <ApplicantFunnel
-              job={jobForFunnel}
-              onBack={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
+          {currentPage === 'dashboard' && (
+            <PortalDashboard
+              jobPostings={jobPostings}
+              kpiData={kpiData}
+              loading={loading}
+              error={error}
+              darkMode={darkMode}
+              onNavigate={navigate}
+              companyName={profile.company_name || ''}
+            />
+          )}
+
+          {currentPage === 'post-job' && (
+            <PortalPostJob
+              session={session}
+              profile={profile}
+              darkMode={darkMode}
+              existingJob={jobToEdit}
+              onSaved={handlePostJobSaved}
+              onCancel={handlePostJobCancel}
               t={t}
             />
-          </div>
+          )}
+
+          {currentPage === 'job-listings' && (
+            <PortalJobListings
+              jobPostings={jobPostings}
+              kpiData={kpiData}
+              loading={loading}
+              error={error}
+              darkMode={darkMode}
+              onEditJob={handleEditJob}
+              onViewApplicants={handleViewApplicants}
+              onNavigate={navigate}
+            />
+          )}
+
+          {currentPage === 'talent-pool' && (
+            <PortalTalentPool
+              profile={profile}
+              darkMode={darkMode}
+              navigateToBusinessPricing={navigateToBusinessPricing}
+              t={t}
+            />
+          )}
+
+          {currentPage === 'agency-hub' && (
+            <>
+              <PortalTopBar title="Agency Hub" darkMode={darkMode} />
+              <div className={`max-w-[1088px] mx-auto p-8 ${darkMode ? 'text-white' : ''}`}>
+                <AgencyHub session={session} profile={profile} t={t} />
+              </div>
+            </>
+          )}
+
+          {currentPage === 'company-profile' && (
+            <PortalOrgProfile
+              session={session}
+              profile={profile}
+              darkMode={darkMode}
+              onSaved={refreshProfile}
+              t={t}
+            />
+          )}
+
+          {currentPage === 'account-settings' && (
+            <PortalAccountSettings
+              session={session}
+              darkMode={darkMode}
+              onSubscriptionChange={refreshProfile}
+              navigateToPricing={navigateToBusinessPricing}
+              t={t}
+            />
+          )}
+
+          {currentPage === 'billing' && (
+            <PortalBilling
+              profile={profile}
+              darkMode={darkMode}
+              activeJobs={kpiData.activeJobs}
+              onSelectPlan={handleSelectPlan}
+              navigateToBusinessPricing={navigateToBusinessPricing}
+              t={t}
+            />
+          )}
         </main>
       </div>
-    );
-  }
-
-  return (
-    <div className={`flex h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      <PortalSidebar
-        currentPage={currentPage}
-        onNavigate={navigate}
-        onGoHome={onGoHome}
-        profile={profile}
-        darkMode={darkMode}
-        onToggleDark={onToggleTheme}
-        isAIMode={isAIMode}
-        onToggleAIMode={onToggleAIMode}
-        currentLang={currentLang}
-        onLanguageChange={onLanguageChange}
-      />
-
-      <main className="flex-1 overflow-y-auto">
-        {currentPage === 'dashboard' && (
-          <PortalDashboard
-            jobPostings={jobPostings}
-            kpiData={kpiData}
-            loading={loading}
-            error={error}
-            darkMode={darkMode}
-            onNavigate={navigate}
-            companyName={profile.company_name || ''}
-          />
-        )}
-
-        {currentPage === 'post-job' && (
-          <PortalPostJob
-            session={session}
-            profile={profile}
-            darkMode={darkMode}
-            existingJob={jobToEdit}
-            onSaved={handlePostJobSaved}
-            onCancel={handlePostJobCancel}
-            t={t}
-          />
-        )}
-
-        {currentPage === 'job-listings' && (
-          <PortalJobListings
-            jobPostings={jobPostings}
-            kpiData={kpiData}
-            loading={loading}
-            error={error}
-            darkMode={darkMode}
-            onEditJob={handleEditJob}
-            onViewApplicants={handleViewApplicants}
-            onNavigate={navigate}
-          />
-        )}
-
-        {currentPage === 'talent-pool' && (
-          <PortalTalentPool
-            profile={profile}
-            darkMode={darkMode}
-            navigateToBusinessPricing={navigateToBusinessPricing}
-            t={t}
-          />
-        )}
-
-        {currentPage === 'agency-hub' && (
-          <>
-            <PortalTopBar title="Agency Hub" darkMode={darkMode} />
-            <div className={`max-w-[1088px] mx-auto p-8 ${darkMode ? 'text-white' : ''}`}>
-              <AgencyHub session={session} profile={profile} t={t} />
-            </div>
-          </>
-        )}
-
-        {currentPage === 'company-profile' && (
-          <PortalOrgProfile
-            session={session}
-            profile={profile}
-            darkMode={darkMode}
-            onSaved={refreshProfile}
-            t={t}
-          />
-        )}
-
-        {currentPage === 'account-settings' && (
-          <PortalAccountSettings
-            session={session}
-            darkMode={darkMode}
-            onSubscriptionChange={refreshProfile}
-            navigateToPricing={navigateToBusinessPricing}
-            t={t}
-          />
-        )}
-
-        {currentPage === 'billing' && (
-          <PortalBilling
-            profile={profile}
-            darkMode={darkMode}
-            activeJobs={kpiData.activeJobs}
-            onSelectPlan={handleSelectPlan}
-            navigateToBusinessPricing={navigateToBusinessPricing}
-            t={t}
-          />
-        )}
-      </main>
-    </div>
+    </PortalAccountMenuProvider>
   );
 };
 

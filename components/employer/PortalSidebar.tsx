@@ -8,7 +8,6 @@ import {
   User,
   CreditCard,
   ChevronRight,
-  Moon,
   Settings,
   Sparkles,
 } from 'lucide-react';
@@ -44,7 +43,6 @@ export function PortalSidebar({
   onGoHome,
   profile,
   darkMode,
-  onToggleDark,
   isAIMode,
   onToggleAIMode,
   currentLang,
@@ -136,14 +134,6 @@ export function PortalSidebar({
               <span className={`text-sm ${dm ? 'text-gray-300' : 'text-gray-700'}`}>AI Mode</span>
             </div>
             {toggle(isAIMode, onToggleAIMode)}
-          </div>
-
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Moon className={`w-5 h-5 ${dm ? 'text-gray-400' : 'text-gray-600'}`} />
-              <span className={`text-sm ${dm ? 'text-gray-300' : 'text-gray-700'}`}>Dark Mode</span>
-            </div>
-            {toggle(dm, onToggleDark)}
           </div>
 
           {/* Language switcher — lets users change language after sign-in */}

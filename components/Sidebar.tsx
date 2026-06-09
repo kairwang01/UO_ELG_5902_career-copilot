@@ -5,13 +5,9 @@ import {
   Wrench,
   FileText,
   Globe,
-  Settings,
   CreditCard,
   CalendarCheck,
   ChevronRight,
-  LogOut,
-  Moon,
-  Sun,
   User as UserIcon,
   MessageSquare,
   Zap,
@@ -49,9 +45,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   onViewChange,
   profile,
   credits,
-  theme,
-  onToggleTheme,
-  onLogout,
   isAIMode,
   onToggleAIMode,
   activeTool,
@@ -191,26 +184,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
         </div>
 
-        {/* Support & Settings */}
-        <div className="space-y-1">
-            <h3 className="px-4 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-2">Settings</h3>
-            <button
-                onClick={() => {
-                    onViewChange('account');
-                    onToolSelect(null);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
-                activeView === 'account'
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50'
-                    : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800/50 hover:text-gray-900 dark:hover:text-slate-100'
-                }`}
-            >
-                <Settings className={`h-4.5 w-4.5 transition-transform group-hover:scale-110 ${activeView === 'account' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`} />
-                <span className="flex-1 text-left">Account Settings</span>
-                {activeView === 'account' && <ChevronRight className="h-3.5 w-3.5 opacity-50" />}
-            </button>
-        </div>
-
         {/* AI Mode Toggle in Sidebar */}
         <div className="pt-2">
              <div className="px-4 py-3 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800/50">
@@ -252,24 +225,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
         </div>
 
-        <div className="flex flex-col gap-0.5">
-            <button 
-                onClick={onToggleTheme}
-                className="flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs text-gray-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-colors"
-            >
-                {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-                <span>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
-            </button>
-            <button 
-                onClick={onLogout}
-                className="flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-                <LogOut className="h-3.5 w-3.5" />
-                <span>Sign Out</span>
-            </button>
-        </div>
-
-        <div className="mt-3 pt-3 flex items-center gap-3 border-t border-gray-200/50 dark:border-slate-800/50">
+        <div className="mt-1 pt-3 flex items-center gap-3 border-t border-gray-200/50 dark:border-slate-800/50">
             {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt="Profile" className="h-7 w-7 rounded-lg object-cover" />
             ) : (

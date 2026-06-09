@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { generateCoverLetter } from '../../services/aiClient';
 import type { CoverLetter } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
 import { DownloadButtons } from './ToolUtils';
 import { useApiStatus } from '../../contexts/ApiStatusContext';
 
@@ -111,7 +111,18 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner market={market} />;
+    if (loading) return (
+      <StagedLoader
+        title="Writing your cover letter"
+        steps={[
+          'Reading your resume…',
+          'Understanding the job description…',
+          `Tailoring for the ${market} market…`,
+          'Drafting & polishing…',
+        ]}
+        intervalMs={1800}
+      />
+    );
     if (error && apiStatus === 'online') return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return apiStatus !== 'online' ? renderFallback() : renderInput();
 

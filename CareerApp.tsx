@@ -19,16 +19,12 @@ import CreditModal from './components/modals/CreditModal';
 import { INITIAL_USER_CREDITS, TOOL_CREDIT_COSTS } from './config/credits';
 
 import Header from './components/Header';
-import Hero from './components/Hero';
-import Features from './components/Features';
-import Audience from './components/Audience';
-import FAQ from './components/FAQ';
 import CookieConsent from './components/CookieConsent';
 import UploadSection from './components/UploadSection';
 import EmptyState from './components/EmptyState';
 import AnalysisDisplay from './components/AnalysisDisplay';
 import LoadingSpinner from './components/LoadingSpinner';
-import Pricing from './components/Pricing';
+import StagedLoader from './components/StagedLoader';
 import Auth from './components/Auth';
 import Account from './components/Account';
 import DevModeModal from './components/DevModeModal';
@@ -40,6 +36,7 @@ import {
   ResumeReadinessPage,
 } from './components/dashboard/CandidateWorkspacePages';
 import Sidebar from './components/Sidebar';
+import AccountMenu from './components/AccountMenu';
 import type { PortalPage } from './components/employer/EmployerPortal';
 import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';
@@ -137,7 +134,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
 
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);
-  const pricingSectionRef = useRef<HTMLDivElement>(null);
   const authQueryHandledRef = useRef(false);
   // True after Firebase fires its first onAuthStateChanged (persisted session known).
   const [authHydrated, setAuthHydrated] = useState(false);
@@ -519,16 +515,10 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   }, [profile, handleSubscriptionRedirect]);
 
   const navigateToPricing = () => {
+    // The app only ever mounts inside the marketing shell (SiteRouter), so pricing
+    // lives on its own route — no in-page scroll target anymore.
     setAnalysisResult(null);
-    if (siteShell) {
-      navigate('/pricing');
-      return;
-    }
-    setView('home');
-    setShowHomePageOverride(true);
-    setTimeout(() => {
-        pricingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    navigate('/pricing');
   };
   
   const navigateToBusinessPricing = () => {
@@ -699,20 +689,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
         {isPortalEntry ? renderPortalEntry() : renderContent()}
       </div>
     </section>
-  );
-
-  const renderHomePage = () => (
-    <>
-      <Hero onUploadClick={handleScrollToUpload} t={t} />
-      <div id="upload-section" ref={uploadSectionRef} className="my-16 md:my-24 scroll-mt-20">
-        <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} />
-      </div>
-      <div id="features-section" className="scroll-mt-20"><Features t={t} /></div>
-      <div id="verified-talent-section" className="scroll-mt-20"><VerifiedTalentSection t={t} /></div>
-      <div id="pricing-section" ref={pricingSectionRef} className="scroll-mt-20"><Pricing t={t} session={session} profile={profile} setView={handleSetView} navigateToAccount={navigateToAccount} /></div>
-      <div id="audience-section" className="scroll-mt-20"><Audience t={t} /></div>
-      <div id="faq-section" className="scroll-mt-20"><FAQ t={t} /></div>
-    </>
   );
 
   const openWorkspaceTool = (tool: string) => {
@@ -895,6 +871,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
           refreshProfile={getProfile}
           navigateToBusinessPricing={navigateToBusinessPricing}
           onGoHome={() => handleSetView('business')}
+          onSignOut={() => data.auth.signOut()}
           t={t}
           initialPage={portalInitialPage}
           isAIMode={isAIMode}
@@ -966,8 +943,19 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
             }
           >
             <ApiStatusBanner />
-            <div className="flex items-center gap-4 ml-auto text-gray-400">
-              <div className="text-xs font-bold uppercase tracking-widest">{dashboardView}</div>
+            <div className="flex items-center gap-3 ml-auto">
+              <span className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 hidden sm:block">
+                {dashboardView}
+              </span>
+              <AccountMenu
+                profile={profile}
+                email={session.user.email ?? ''}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                onAccount={() => setDashboardView('account' as typeof dashboardView)}
+                onSignOut={() => data.auth.signOut()}
+                t={t}
+              />
             </div>
           </header>
           <main
@@ -1015,7 +1003,20 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
             </React.Suspense>
         );
     }
-    if (isLoading) { return <LoadingSpinner market={market} />; }
+    if (isLoading) {
+      return (
+        <StagedLoader
+          title="Analyzing your resume"
+          steps={[
+            'Submitting…',
+            'Reading your experience…',
+            `Analyzing against the ${market} market…`,
+            'Scoring & writing feedback…',
+          ]}
+          intervalMs={2200}
+        />
+      );
+    }
     if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} />; }
     if (session && !showHomePageOverride) {
         if (!isProfileLoaded || !isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600 dark:text-gray-400">{t('dashboard_loading')}</p></div>; }
