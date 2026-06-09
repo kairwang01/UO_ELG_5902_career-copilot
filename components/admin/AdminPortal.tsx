@@ -1841,6 +1841,38 @@ const AdminPortal: React.FC = () => {
                   <p className="mt-1 font-mono text-[11px] text-gray-500 break-all">{selectedUid}</p>
                 </div>
 
+                {/* Identity / profile fields (email comes from Firebase Auth) */}
+                {(() => {
+                  const p = ((userReport as { profile?: Record<string, unknown> }).profile ?? {}) as Record<string, unknown>;
+                  const a = (userReport as { auth?: Record<string, unknown> | null }).auth ?? null;
+                  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+                  const dateStr = (v: unknown) => {
+                    const s = str(v);
+                    if (!s) return null;
+                    const d = new Date(s);
+                    return isNaN(d.getTime()) ? s : d.toLocaleString();
+                  };
+                  const rows: { label: string; value: React.ReactNode }[] = [
+                    { label: 'Email', value: str(p.email) ?? (a ? str(a.email) : null) ?? '—' },
+                    { label: 'Name', value: str(p.full_name) ?? str(p.company_name) ?? (a ? str(a.display_name) : null) ?? '—' },
+                    { label: 'Role', value: str(p.role) ?? '—' },
+                    { label: 'Plan', value: str(p.subscription_status) ?? 'free' },
+                    { label: 'Credits', value: typeof p.credits === 'number' ? (p.credits as number).toLocaleString() : '—' },
+                    { label: 'Joined', value: dateStr(a?.auth_created_at) ?? dateStr(p.created_at) ?? '—' },
+                    { label: 'Last sign-in', value: (a && dateStr(a.last_sign_in)) ?? '—' },
+                  ];
+                  return (
+                    <div className="space-y-1.5 border-t border-gray-200 pt-3">
+                      {rows.map((r) => (
+                        <div key={r.label} className="flex items-baseline justify-between gap-3">
+                          <span className="text-[10px] text-gray-500 uppercase tracking-wide flex-shrink-0">{r.label}</span>
+                          <span className="text-sm text-gray-800 text-right break-all">{r.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-gray-50 rounded-lg px-3 py-3">
                     <p className="text-[10px] text-gray-500 uppercase tracking-wide">Runs (7d)</p>
