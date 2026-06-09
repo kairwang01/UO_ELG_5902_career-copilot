@@ -68,7 +68,7 @@ export const SiteMobileNav: React.FC = () => {
                 className={linkClass}
                 onClick={() => setOpen(false)}
               >
-                {isBusiness ? 'Business Portal' : 'Want to Join Business?'}
+                {isBusiness ? 'Business Portal' : 'Want to join our business program?'}
               </Link>
               <Link
                 to={workspaceHref}

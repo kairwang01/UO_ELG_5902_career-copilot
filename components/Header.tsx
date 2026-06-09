@@ -201,7 +201,7 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                         href={SITE_ROUTES.employers}
                                         className="hidden sm:inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
                                     >
-                                        Want to Join Business?
+                                        Want to join our business program?
                                     </a>
                                 )}
                             </div>
@@ -309,7 +309,7 @@ const Header: React.FC<HeaderProps> = ({ session, profile, onSetView, navigateTo
                                                     className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600"
                                                     role="menuitem"
                                                 >
-                                                    Want to Join Business?
+                                                    Want to join our business program?
                                                 </a>
                                             )}
                                             <button onClick={async () => { setIsMenuOpen(false); await data.auth.signOut('local'); }} className="w-full text-left text-gray-700 dark:text-gray-200 block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600" role="menuitem">

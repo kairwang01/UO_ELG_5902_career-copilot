@@ -81,7 +81,7 @@ export const SiteHeader: React.FC = () => {
                   to={SITE_ROUTES.employers}
                   className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
                 >
-                  Want to Join Business?
+                  Want to join our business program?
                 </Link>
               )}
               <Link

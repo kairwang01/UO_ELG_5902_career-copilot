@@ -171,7 +171,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
             Why Post With Us?
           </h2>
           <p className="text-center mb-12 max-w-2xl mx-auto text-gray-600">
-            Access a unique pool of candidates who are serious about their professional growth
+            From AI-powered matching to one-click posting — everything you need to hire with confidence.
           </p>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
