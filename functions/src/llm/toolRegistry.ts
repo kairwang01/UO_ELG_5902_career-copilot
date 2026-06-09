@@ -27,6 +27,8 @@ export interface ToolSpec {
   creditKey: string | null;
   /** Pure payload → LLMRequest builder. */
   build: (payload: any) => LLMRequest; // eslint-disable-line @typescript-eslint/no-explicit-any
+  quotaFallback?: (payload: any) => LLMRequest; // eslint-disable-line @typescript-eslint/no-explicit-any
+  quotaFallbackNotice?: string;
 }
 
 // Reused schemas ------------------------------------------------------------
@@ -145,6 +147,16 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
         responseSchema: OPPORTUNITY_SCHEMA,
       };
     },
+    quotaFallback: (p) => ({
+      prompt: buildPrompt("findOpportunitiesOffline", {
+        marketName: p.marketName,
+        resumeText: p.resumeText,
+      }),
+      useGoogleSearch: false,
+      responseSchema: OPPORTUNITY_SCHEMA,
+    }),
+    quotaFallbackNotice:
+      "Live Google Search grounding is temporarily unavailable because the Gemini search/tool quota has been exhausted. Results below are AI-generated suggestions without live web sources.",
   },
 
   optimizeLinkedInProfile: {

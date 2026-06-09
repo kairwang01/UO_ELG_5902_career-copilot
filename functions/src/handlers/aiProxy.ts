@@ -53,6 +53,26 @@ function tryParseJson(str: string): unknown {
   }
 }
 
+function isQuotaError(error: unknown): boolean {
+  const err = error as { code?: number | string; message?: string; status?: number };
+  const message = (err?.message ?? "").toLowerCase();
+  return (
+    err?.status === 429 ||
+    err?.code === 429 ||
+    err?.code === "resource-exhausted" ||
+    message.includes("resource_exhausted") ||
+    message.includes("quota exceeded") ||
+    message.includes("quota")
+  );
+}
+
+function addNotice(data: unknown, notice: string | undefined): unknown {
+  if (!notice || !data || typeof data !== "object" || Array.isArray(data)) {
+    return data;
+  }
+  return { ...(data as Record<string, unknown>), notice };
+}
+
 export const aiProxyFunction = onCall({ invoker: "public" }, async (request) => {
   const uid = requireAuth(request);
 
@@ -83,9 +103,23 @@ export const aiProxyFunction = onCall({ invoker: "public" }, async (request) => 
     await ensurePlatformCaches();
     const llmRequest = spec.build(payload ?? {});
     const provider = await resolveProvider(uid, model);
-    const result = await provider.generate(llmRequest);
+    let notice: string | undefined;
+    let result;
 
-    const data = result.raw !== undefined ? result.raw : tryParseJson(result.text);
+    try {
+      result = await provider.generate(llmRequest);
+    } catch (err) {
+      if (!spec.quotaFallback || !isQuotaError(err)) {
+        throw err;
+      }
+      result = await provider.generate(spec.quotaFallback(payload ?? {}));
+      notice = spec.quotaFallbackNotice;
+    }
+
+    const data = addNotice(
+      result.raw !== undefined ? result.raw : tryParseJson(result.text),
+      notice
+    );
 
     return {
       data,
