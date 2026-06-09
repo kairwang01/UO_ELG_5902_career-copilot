@@ -10,6 +10,7 @@ export {
   refreshPlatformCaches,
   getGeminiApiKey,
   getGeminiModel,
+  getGeminiFallbackModel,
   getKairllmApiKey,
   getKairllmBaseUrl,
   getDeepseekApiKey,

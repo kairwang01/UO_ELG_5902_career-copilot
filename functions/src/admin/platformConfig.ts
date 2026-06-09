@@ -72,6 +72,11 @@ export function getGeminiModel(): string {
   return llmCache?.gemini_model || process.env.GEMINI_MODEL || "gemini-2.0-flash";
 }
 
+export function getGeminiFallbackModel(): string | undefined {
+  const model = llmCache?.gemini_fallback_model || process.env.GEMINI_FALLBACK_MODEL;
+  return model?.trim() || undefined;
+}
+
 export function getKairllmBaseUrl(): string {
   const url = llmCache?.kairllm_base_url || process.env.KAIRLLM_BASE_URL || "https://ai.gogosling.ca/v1";
   return url.replace(/\/$/, "");

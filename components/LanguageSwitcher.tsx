@@ -2,10 +2,10 @@ import React from 'react';
 
 export const SUPPORTED_LANGUAGES = [
     { code: 'en', name: 'English' },
+    { code: 'fr', name: 'Français' },
     { code: 'zh', name: '中文' },
     { code: 'ja', name: '日本語' },
     { code: 'de', name: 'Deutsch' },
-    { code: 'fr', name: 'Français' },
     { code: 'vi', name: 'Tiếng Việt' },
 ];
 

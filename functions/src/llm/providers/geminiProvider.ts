@@ -16,7 +16,11 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { LLMProvider, LLMRequest, LLMResult } from "../LLMProvider";
-import { getGeminiApiKey, getGeminiModel } from "../../config/env";
+import {
+  getGeminiApiKey,
+  getGeminiFallbackModel,
+  getGeminiModel,
+} from "../../config/env";
 
 // The default model is resolved at CONSTRUCTION time (getGeminiModel(), in the
 // constructor below), never at module-load time — otherwise it would capture a
@@ -62,17 +66,32 @@ function extractJson(str: string): unknown {
   }
 }
 
+function isQuotaError(error: unknown): boolean {
+  const err = error as { message?: string; status?: number; code?: number | string };
+  const message = (err?.message ?? "").toLowerCase();
+  return (
+    err?.status === 429 ||
+    err?.code === 429 ||
+    message.includes("resource_exhausted") ||
+    message.includes("quota exceeded") ||
+    message.includes("quota")
+  );
+}
+
 export class GeminiProvider implements LLMProvider {
   readonly name = "gemini";
 
   private readonly ai: GoogleGenAI;
   private readonly model: string;
+  private readonly fallbackModel?: string;
 
   constructor(model?: string) {
     this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
     // Read the admin-configured model at construction time (cache is warm by now,
     // because resolveProvider() calls ensurePlatformCaches() before building us).
     this.model = model || getGeminiModel();
+    const fallback = getGeminiFallbackModel();
+    this.fallbackModel = fallback && fallback !== this.model ? fallback : undefined;
   }
 
   async generate(req: LLMRequest): Promise<LLMResult> {
@@ -108,11 +127,24 @@ export class GeminiProvider implements LLMProvider {
       config.temperature = req.temperature;
     }
 
-    const response = await this.ai.models.generateContent({
-      model: this.model,
-      contents,
-      ...(Object.keys(config).length > 0 ? { config } : {}),
-    });
+    const generateWithModel = (model: string) =>
+      this.ai.models.generateContent({
+        model,
+        contents,
+        ...(Object.keys(config).length > 0 ? { config } : {}),
+      });
+
+    let modelUsed = this.model;
+    let response;
+    try {
+      response = await generateWithModel(this.model);
+    } catch (error) {
+      if (!this.fallbackModel || !isQuotaError(error)) {
+        throw error;
+      }
+      modelUsed = this.fallbackModel;
+      response = await generateWithModel(this.fallbackModel);
+    }
 
     if (!response.text) {
       throw new Error("Gemini returned an empty response.");
@@ -127,7 +159,7 @@ export class GeminiProvider implements LLMProvider {
     return {
       text,
       raw,
-      model: this.model,
+      model: modelUsed,
       groundingChunks,
       usage: {
         inputTokens: response.usageMetadata?.promptTokenCount,
