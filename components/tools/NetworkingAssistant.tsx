@@ -90,7 +90,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
   );
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Mapping your network" steps={["Analyzing your background…","Identifying the right contacts…","Drafting outreach messages…"]} onCancel={cancel} />;
+    if (loading) return <StagedLoader title="Mapping your network" steps={["Analyzing your background…","Identifying the right contacts…","Drafting outreach messages…"]} onCancel={cancel} icon="🤝" accent="sky" />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

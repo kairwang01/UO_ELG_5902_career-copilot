@@ -124,6 +124,8 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
         ]}
         intervalMs={1800}
         onCancel={cancel}
+        icon="📝"
+        accent="lime"
       />
     );
     if (error && apiStatus === 'online') return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
