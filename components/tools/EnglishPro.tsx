@@ -444,8 +444,505 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
         </div>
     );
     
-    // ... other render functions
-    
+    // --- Spoken Mode ---
+    const renderSpokenMode = () => (
+        <div className="space-y-4">
+            {!spokenResult ? (
+                <>
+                    {/* Topic card */}
+                    <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+                        <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-2">Speaking Topic</h4>
+                        {currentTopic ? (
+                            <p className="text-gray-700 dark:text-gray-300 text-sm italic">"{currentTopic}"</p>
+                        ) : (
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">Press the button below to get an IELTS-style speaking topic.</p>
+                        )}
+                        <button
+                            onClick={fetchNewSpeakingTopic}
+                            disabled={isFetchingTopic}
+                            className="mt-3 text-sm bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 py-1.5 px-3 rounded-md disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {isFetchingTopic && (
+                                <svg className="animate-spin h-3.5 w-3.5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>
+                            )}
+                            {currentTopic ? t('tool_english_pro_spoken_new_topic') : t('tool_english_pro_spoken_get_topic')}
+                        </button>
+                    </div>
+
+                    {/* Mic section */}
+                    {!isSpeechSupported ? (
+                        <div className="p-4 border border-yellow-400 dark:border-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-sm text-yellow-800 dark:text-yellow-300">
+                            {t('tool_english_pro_spoken_not_supported')}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center gap-4 py-4">
+                            <button
+                                onClick={toggleListening}
+                                className={`w-20 h-20 rounded-full font-bold text-white text-sm flex flex-col items-center justify-center gap-1 transition-all shadow-lg focus:outline-none focus:ring-4 ${
+                                    isListening
+                                        ? 'bg-red-600 hover:bg-red-700 focus:ring-red-300 animate-pulse'
+                                        : 'bg-blue-700 hover:bg-blue-800 focus:ring-blue-300'
+                                }`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                </svg>
+                                <span className="text-xs">{isListening ? t('tool_english_pro_spoken_stop_mic') : t('tool_english_pro_spoken_start_mic')}</span>
+                            </button>
+                            {isListening && (
+                                <p className="text-xs text-red-600 dark:text-red-400 font-medium animate-pulse">Recording… speak now</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Live transcript */}
+                    {(transcript || isListening) && (
+                        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+                            <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{t('tool_english_pro_spoken_live_transcript')}</h5>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 min-h-[3rem]">{transcript || <span className="italic text-gray-400">Listening…</span>}</p>
+                        </div>
+                    )}
+                </>
+            ) : (
+                <div className="space-y-4">
+                    <h4 className="font-bold text-lg text-center text-gray-900 dark:text-gray-100">{t('tool_english_pro_spoken_results_title')}</h4>
+
+                    {/* Scores row */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {renderResultCard(t('tool_english_pro_spoken_clarity_score'), (
+                            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                                {spokenResult.clarityScore}<span className="text-base font-normal text-gray-500 dark:text-gray-400">/100</span>
+                            </p>
+                        ))}
+                        {renderResultCard(t('tool_english_pro_spoken_pacing'), (
+                            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                                {spokenResult.pacingWPM}<span className="text-base font-normal text-gray-500 dark:text-gray-400"> {t('tool_english_pro_spoken_wpm')}</span>
+                            </p>
+                        ))}
+                    </div>
+
+                    {/* Filler words */}
+                    {spokenResult.fillerWords.length > 0 && renderResultCard(t('tool_english_pro_spoken_filler_words'), (
+                        <div className="flex flex-wrap gap-2 mt-1">
+                            {spokenResult.fillerWords.map((fw, i) => (
+                                <span key={i} className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-xs font-medium px-2.5 py-1 rounded-full">
+                                    "{fw.word}" <span className="font-bold">×{fw.count}</span>
+                                </span>
+                            ))}
+                        </div>
+                    ))}
+
+                    {/* Feedback & suggestions */}
+                    {renderResultCard(t('tool_english_pro_spoken_feedback'), <p>{spokenResult.feedbackSummary}</p>)}
+                    {spokenResult.improvementSuggestions.length > 0 && renderResultCard(t('tool_english_pro_spoken_suggestions'), (
+                        <ul className="space-y-1 list-disc list-inside">
+                            {spokenResult.improvementSuggestions.map((s, i) => <li key={i}>{s}</li>)}
+                        </ul>
+                    ))}
+
+                    <button
+                        onClick={() => { setSpokenResult(null); setTranscript(''); }}
+                        className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300"
+                    >
+                        {t('tool_english_pro_practice_again_button')}
+                    </button>
+                </div>
+            )}
+            <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
+        </div>
+    );
+
+    // --- Reading Mode ---
+    const renderReadingMode = () => {
+        const practiceResult = readingComprehensionResult as (EnglishReadingAnalysisResult & { passage?: string }) | null;
+        const questions: ComprehensionQuestion[] = practiceResult?.comprehensionQuestions ?? [];
+
+        const renderComprehensionSubMode = () => (
+            <div className="space-y-4">
+                {!readingComprehensionResult ? (
+                    <>
+                        {/* Generate or paste */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 space-y-3">
+                                <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_english_pro_reading_generate_practice')}</h5>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">AI will generate a reading passage matched to your target IELTS band.</p>
+                                <button
+                                    onClick={generateReadingPractice}
+                                    disabled={loading}
+                                    className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2 px-4 rounded-lg text-sm"
+                                >
+                                    {loading ? t('tool_english_pro_generating_button') : t('tool_english_pro_reading_generate_button')}
+                                </button>
+                            </div>
+                            <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 space-y-3">
+                                <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_english_pro_reading_paste_text')}</h5>
+                                <textarea
+                                    value={readingUserInput}
+                                    onChange={e => setReadingUserInput(e.target.value)}
+                                    rows={4}
+                                    className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm text-sm"
+                                    placeholder={t('tool_english_pro_reading_placeholder')}
+                                />
+                                <button
+                                    onClick={runReadingAnalysis}
+                                    disabled={loading || !readingUserInput.trim()}
+                                    className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2 px-4 rounded-lg text-sm"
+                                >
+                                    {loading ? t('tool_english_pro_analyzing_button') : t('tool_english_pro_reading_analyze_button')}
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <div className="space-y-4">
+                        {/* Passage */}
+                        {renderResultCard(t('tool_english_pro_reading_passage'), (
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                                {practiceResult?.passage ?? readingUserInput}
+                            </p>
+                        ))}
+
+                        {/* Vocabulary list (only on analyzed user text) */}
+                        {!practiceResult?.passage && (practiceResult as EnglishReadingAnalysisResult | null)?.vocabularyList?.length ? renderResultCard('Key Vocabulary', (
+                            <table className="w-full text-xs">
+                                <thead><tr className="text-left text-gray-500 dark:text-gray-400 border-b dark:border-slate-600"><th className="pb-1 pr-2">Word</th><th className="pb-1 pr-2">Definition</th><th className="pb-1">Example</th></tr></thead>
+                                <tbody>
+                                    {(practiceResult as EnglishReadingAnalysisResult).vocabularyList.map((v, i) => (
+                                        <tr key={i} className="border-b dark:border-slate-700 last:border-0">
+                                            <td className="py-1 pr-2 font-semibold text-blue-600 dark:text-blue-400">{v.word}</td>
+                                            <td className="py-1 pr-2">{v.definition}</td>
+                                            <td className="py-1 italic text-gray-500 dark:text-gray-400">{v.example}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )) : null}
+
+                        {/* Summary (analyzed text only) */}
+                        {!practiceResult?.passage && (practiceResult as EnglishReadingAnalysisResult | null)?.summary
+                            ? renderResultCard('Summary', <p>{(practiceResult as EnglishReadingAnalysisResult).summary}</p>)
+                            : null
+                        }
+
+                        {/* Questions */}
+                        {questions.length > 0 && renderResultCard(t('tool_english_pro_reading_questions'), (
+                            <ol className="space-y-4 mt-1">
+                                {questions.map((q, i) => (
+                                    <li key={i} className="space-y-1">
+                                        <p className="font-medium text-gray-800 dark:text-gray-100">{i + 1}. {q.question}</p>
+                                        {!readingEvaluation ? (
+                                            <input
+                                                type="text"
+                                                value={userAnswers[i] ?? ''}
+                                                onChange={e => {
+                                                    const next = [...userAnswers];
+                                                    next[i] = e.target.value;
+                                                    setUserAnswers(next);
+                                                }}
+                                                placeholder={t('tool_english_pro_reading_your_answer')}
+                                                className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm text-sm px-3 py-1.5"
+                                            />
+                                        ) : (
+                                            <div className={`p-3 rounded-md text-sm ${readingEvaluation[i]?.isCorrect ? 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700'}`}>
+                                                <p className="font-semibold">{readingEvaluation[i]?.isCorrect ? '✓ Correct' : '✗ Incorrect'}</p>
+                                                <p className="text-gray-600 dark:text-gray-300">{readingEvaluation[i]?.feedback}</p>
+                                                {!readingEvaluation[i]?.isCorrect && (
+                                                    <p className="mt-1"><span className="font-medium">{t('tool_english_pro_reading_correct_answer')}:</span> {q.answer}</p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </li>
+                                ))}
+                            </ol>
+                        ))}
+
+                        {/* Check / practice again */}
+                        {!readingEvaluation ? (
+                            <button
+                                onClick={checkReadingAnswers}
+                                disabled={loading || userAnswers.filter(Boolean).length !== questions.length}
+                                className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg"
+                            >
+                                {loading ? t('tool_english_pro_checking_button') : t('tool_english_pro_reading_check_answers')}
+                            </button>
+                        ) : (
+                            <>
+                                {readingEvaluation && (
+                                    <p className="text-center text-sm text-gray-600 dark:text-gray-300">
+                                        {t('tool_english_pro_reading_results_summary')
+                                            .replace('{correct}', String(readingEvaluation.filter(e => e.isCorrect).length))
+                                            .replace('{total}', String(readingEvaluation.length))}
+                                    </p>
+                                )}
+                                <button
+                                    onClick={() => { setReadingComprehensionResult(null); setReadingEvaluation(null); setUserAnswers([]); setReadingUserInput(''); }}
+                                    className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300"
+                                >
+                                    {t('tool_english_pro_reading_practice_again')}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+
+        const renderFlashcardsSubMode = () => {
+            if (loading && flashcards.length === 0) {
+                return <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">{t('tool_english_pro_generating_button')}</p>;
+            }
+            if (flashcards.length === 0) {
+                return <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">No flashcards loaded.</p>;
+            }
+
+            const isComplete = currentCardIndex >= flashcards.length;
+
+            if (isComplete) {
+                return (
+                    <div className="p-6 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-center space-y-3">
+                        <h4 className="font-bold text-xl text-gray-900 dark:text-gray-100">{t('tool_english_pro_flashcard_complete')}</h4>
+                        <p className="text-gray-600 dark:text-gray-300">
+                            {t('tool_english_pro_flashcard_final_score')
+                                .replace('{score}', String(flashcardScore))
+                                .replace('{total}', String(flashcards.length))}
+                        </p>
+                        <button
+                            onClick={() => { setFlashcards([]); setCurrentCardIndex(0); setFlashcardScore(0); setReadingSubMode('select'); }}
+                            className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300"
+                        >
+                            {t('tool_english_pro_reading_practice_again')}
+                        </button>
+                    </div>
+                );
+            }
+
+            const card = flashcards[currentCardIndex];
+            // distractors already shuffled by generateFlashcards (includes definition as one option)
+            const options = card.distractors;
+
+            return (
+                <div className="space-y-4">
+                    {/* Score */}
+                    <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
+                        <span>{t('tool_english_pro_flashcard_score')}: <strong className="text-gray-800 dark:text-gray-100">{flashcardScore}</strong></span>
+                        <span>{currentCardIndex + 1} / {flashcards.length}</span>
+                    </div>
+
+                    {/* Card */}
+                    <div className="p-6 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-center">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{t('tool_english_pro_flashcard_question')}</p>
+                        <h4 className="text-3xl font-bold text-blue-600 dark:text-blue-400">{card.word}</h4>
+                    </div>
+
+                    {/* Options */}
+                    <div className="space-y-2">
+                        {options.map((opt, i) => {
+                            const isSelected = selectedFlashcardAnswer === opt;
+                            const isCorrect = opt === card.definition;
+                            let btnClass = 'w-full text-left py-3 px-4 rounded-lg border text-sm font-medium transition-colors ';
+                            if (!isFlashcardAnswered) {
+                                btnClass += 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200';
+                            } else if (isCorrect) {
+                                btnClass += 'border-green-500 bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-300';
+                            } else if (isSelected && !isCorrect) {
+                                btnClass += 'border-red-500 bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300';
+                            } else {
+                                btnClass += 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 opacity-60';
+                            }
+                            return (
+                                <button
+                                    key={i}
+                                    disabled={isFlashcardAnswered}
+                                    onClick={() => {
+                                        setSelectedFlashcardAnswer(opt);
+                                        setIsFlashcardAnswered(true);
+                                        if (opt === card.definition) setFlashcardScore(s => s + 1);
+                                    }}
+                                    className={btnClass}
+                                >
+                                    {opt}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Next */}
+                    {isFlashcardAnswered && (
+                        <button
+                            onClick={() => { setCurrentCardIndex(i => i + 1); setSelectedFlashcardAnswer(null); setIsFlashcardAnswered(false); }}
+                            className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 px-4 rounded-lg"
+                        >
+                            {t('tool_english_pro_flashcard_next')}
+                        </button>
+                    )}
+                </div>
+            );
+        };
+
+        return (
+            <div className="space-y-4">
+                {readingSubMode === 'select' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                            onClick={() => setReadingSubMode('comprehension')}
+                            className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500"
+                        >
+                            <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_reading_comprehension_title')}</h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{t('tool_english_pro_reading_comprehension_desc')}</p>
+                        </button>
+                        <button
+                            onClick={generateFlashcards}
+                            disabled={loading}
+                            className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500 disabled:opacity-60"
+                        >
+                            <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_reading_flashcards_title')}</h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{t('tool_english_pro_reading_flashcards_desc')}</p>
+                            {loading && <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">{t('tool_english_pro_generating_button')}</p>}
+                        </button>
+                    </div>
+                )}
+                {readingSubMode === 'comprehension' && renderComprehensionSubMode()}
+                {readingSubMode === 'flashcards' && renderFlashcardsSubMode()}
+
+                {readingSubMode !== 'select' && (
+                    <button
+                        onClick={() => { setReadingSubMode('select'); setReadingComprehensionResult(null); setReadingEvaluation(null); setUserAnswers([]); setReadingUserInput(''); setFlashcards([]); }}
+                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                        ← Back to Reading Options
+                    </button>
+                )}
+                <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
+            </div>
+        );
+    };
+
+    // --- Listening Mode ---
+    const playClip = () => {
+        try {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(currentClip.text);
+            u.lang = 'en-US';
+            u.rate = 0.95;
+            window.speechSynthesis.speak(u);
+        } catch {}
+    };
+
+    const renderListeningMode = () => {
+        const clipIndex = LISTENING_CLIPS.findIndex(c => c.id === currentClip.id);
+        const isSpeechSynthesisSupported = 'speechSynthesis' in window;
+
+        return (
+            <div className="space-y-4">
+                {/* Clip indicator */}
+                <div className="flex items-center justify-between p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {t('tool_english_pro_listening_clip_label')} {clipIndex + 1} {t('tool_english_pro_listening_of')} {LISTENING_CLIPS.length}
+                    </span>
+                    {!listeningResult && (
+                        <button
+                            onClick={() => {
+                                const nextIndex = (clipIndex + 1) % LISTENING_CLIPS.length;
+                                setCurrentClip(LISTENING_CLIPS[nextIndex]);
+                                setUserTranscription('');
+                                setListeningResult(null);
+                            }}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                            {t('tool_english_pro_listening_try_another')}
+                        </button>
+                    )}
+                </div>
+
+                {!listeningResult ? (
+                    <>
+                        {/* Play button */}
+                        <div className="flex justify-center">
+                            <button
+                                onClick={playClip}
+                                disabled={!isSpeechSynthesisSupported}
+                                title={isSpeechSynthesisSupported ? undefined : 'Speech synthesis not supported in this browser'}
+                                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-full shadow-lg"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                {t('tool_english_pro_listening_play_audio')}
+                            </button>
+                        </div>
+                        {!isSpeechSynthesisSupported && (
+                            <p className="text-xs text-center text-yellow-700 dark:text-yellow-400">Audio playback is not supported in this browser.</p>
+                        )}
+
+                        {/* Transcription input */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_english_pro_listening_desc')}</label>
+                            <textarea
+                                value={userTranscription}
+                                onChange={e => setUserTranscription(e.target.value)}
+                                rows={4}
+                                className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm"
+                                placeholder={t('tool_english_pro_listening_placeholder')}
+                            />
+                        </div>
+
+                        <button
+                            onClick={runListeningAnalysis}
+                            disabled={loading || !userTranscription.trim()}
+                            className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg"
+                        >
+                            {loading ? t('tool_english_pro_analyzing_button') : t('tool_english_pro_listening_check_button')}
+                        </button>
+                    </>
+                ) : (
+                    <div className="space-y-4">
+                        <h4 className="font-bold text-lg text-center text-gray-900 dark:text-gray-100">{t('tool_english_pro_listening_results_title')}</h4>
+
+                        {/* Similarity score */}
+                        {renderResultCard(t('tool_english_pro_listening_similarity_score'), (
+                            <p className="text-4xl font-bold text-blue-600 dark:text-blue-400">
+                                {listeningResult.similarityScore}<span className="text-base font-normal text-gray-500 dark:text-gray-400">%</span>
+                            </p>
+                        ))}
+
+                        {/* Side-by-side versions */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {renderResultCard(t('tool_english_pro_listening_your_version'), (
+                                <p className="whitespace-pre-wrap text-sm">{listeningResult.diffView}</p>
+                            ))}
+                            {renderResultCard(t('tool_english_pro_listening_correct_version'), (
+                                <p className="whitespace-pre-wrap text-sm">{listeningResult.originalTranscript}</p>
+                            ))}
+                        </div>
+
+                        {/* Feedback on common errors */}
+                        {listeningResult.feedbackOnCommonErrors.length > 0 && renderResultCard(t('tool_english_pro_listening_feedback'), (
+                            <ul className="space-y-1 list-disc list-inside">
+                                {listeningResult.feedbackOnCommonErrors.map((fb, i) => <li key={i}>{fb}</li>)}
+                            </ul>
+                        ))}
+
+                        <button
+                            onClick={() => {
+                                const nextIndex = (clipIndex + 1) % LISTENING_CLIPS.length;
+                                setCurrentClip(LISTENING_CLIPS[nextIndex]);
+                                setUserTranscription('');
+                                setListeningResult(null);
+                            }}
+                            className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300"
+                        >
+                            {t('tool_english_pro_listening_try_another')}
+                        </button>
+                    </div>
+                )}
+                <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
+            </div>
+        );
+    };
+
     // Main component return
     return (
         <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-lg animate-fade-in">
@@ -467,7 +964,9 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 <>
                     {practiceMode === 'hub' && renderPracticeHub()}
                     {practiceMode === 'written' && renderWrittenMode()}
-                    {/* ... other mode renders */}
+                    {practiceMode === 'spoken' && renderSpokenMode()}
+                    {practiceMode === 'reading' && renderReadingMode()}
+                    {practiceMode === 'listening' && renderListeningMode()}
                 </>
             )}
         </div>
