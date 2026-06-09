@@ -161,9 +161,9 @@ export function PortalSidebar({
           </div>
           <div className="min-w-0">
             <div className={`text-sm font-semibold truncate ${dm ? 'text-white' : 'text-gray-900'}`}>
-              {profile?.full_name || 'Employer'}
+              {profile?.full_name || 'Business'}
             </div>
-            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Employer Account</div>
+            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Business Account</div>
           </div>
         </div>
       </div>
