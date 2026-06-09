@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { SiteLayout } from '../components/SiteLayout';
 import { SiteButton } from '../components/SiteButton';
 import { SiteCard } from '../components/SiteCard';
@@ -87,12 +88,33 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, ctaHref, t }) => (
 
 export const PricingPage: React.FC = () => {
   const { t } = useMarketingI18n();
+  const location = useLocation();
   const [audience, setAudience] = useState<'jobseeker' | 'employer'>('jobseeker');
+  const [upsellDismissed, setUpsellDismissed] = useState(false);
   const plans = audience === 'jobseeker' ? jobseekerPlans : employerPlans;
   const ctaHref = audience === 'jobseeker' ? SITE_ROUTES.workspace : SITE_ROUTES.portal;
+  const showBusinessUpsell =
+    !upsellDismissed &&
+    new URLSearchParams(location.search).get('from') === 'business-upsell';
 
   return (
     <SiteLayout pageId="pricing">
+      {showBusinessUpsell && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 bg-amber-50 border-b border-amber-200 px-4 py-3 text-sm text-amber-900"
+        >
+          <span>{t('site_pricing_business_upsell_banner')}</span>
+          <button
+            type="button"
+            onClick={() => setUpsellDismissed(true)}
+            className="shrink-0 rounded p-1 hover:bg-amber-100 transition-colors"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <section className="relative overflow-hidden bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_55%,#f8fafc_100%)] py-14 sm:py-20">
         <div className="pointer-events-none absolute left-1/2 top-0 h-72 w-[44rem] -translate-x-1/2 rounded-full bg-blue-100/55 blur-3xl" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

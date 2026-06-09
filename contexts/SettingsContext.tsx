@@ -17,14 +17,20 @@ export const useSettings = () => {
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isAIMode, setIsAIMode] = useState(() => {
-    const saved = localStorage.getItem('aiModeEnabled');
-    return saved !== null ? saved === 'true' : true;
+    try {
+      const saved = localStorage.getItem('aiModeEnabled');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
   });
 
   const toggleAIMode = () => {
     setIsAIMode((prev) => {
       const newState = !prev;
-      localStorage.setItem('aiModeEnabled', String(newState));
+      try {
+        localStorage.setItem('aiModeEnabled', String(newState));
+      } catch { /* localStorage unavailable in strict private browsing */ }
       return newState;
     });
   };

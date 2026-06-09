@@ -24,19 +24,25 @@ export function useSiteSession(): SiteSessionState {
   const [session, setSession] = useState<AppSession | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [sessionResolved, setSessionResolved] = useState(false);
+  const [profileSettled, setProfileSettled] = useState(false);
 
   useEffect(() => {
     let active = true;
     data.auth.getSession().then((s) => {
       if (!active) return;
       setSession(s);
-      setReady(true);
+      setSessionResolved(true);
+      // No session means no profile fetch will happen — settle immediately.
+      if (!s?.user) setProfileSettled(true);
     });
     const { unsubscribe } = data.auth.onAuthStateChange((_event, s) => {
       if (!active) return;
       setSession(s);
-      setReady(true);
+      setSessionResolved(true);
+      if (!s?.user) {
+        setProfileSettled(true);
+      }
     });
     return () => {
       active = false;
@@ -49,15 +55,24 @@ export function useSiteSession(): SiteSessionState {
     if (!session?.user) {
       setProfile(null);
       setIsAdmin(false);
+      // profileSettled is already set by the session effect for the no-session path.
       return;
     }
+    // Reset settled flag while fetching for this user.
+    setProfileSettled(false);
     data.profiles
       .get(session.user.id)
       .then((r) => {
-        if (active) setProfile(r.data ?? null);
+        if (active) {
+          setProfile(r.data ?? null);
+          setProfileSettled(true);
+        }
       })
       .catch(() => {
-        if (active) setProfile(null);
+        if (active) {
+          setProfile(null);
+          setProfileSettled(true);
+        }
       });
     adminCheckAccess()
       .then((r) => {
@@ -75,6 +90,8 @@ export function useSiteSession(): SiteSessionState {
     profile?.role === 'employer' ||
     profile?.subscription_status === 'single_post' ||
     profile?.subscription_status === 'job_pack';
+
+  const ready = sessionResolved && profileSettled;
 
   return { session, profile, ready, isAdmin, isBusiness };
 }

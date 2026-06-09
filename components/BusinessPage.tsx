@@ -17,6 +17,10 @@ interface BusinessPageProps {
   // Optional: enter the hiring portal at a specific page
   onEnterPortal?: (page: PortalPage) => void;
   refreshProfile?: () => Promise<void>;
+  // When true, Firebase has restored the persisted session (or confirmed no session).
+  // When false, the session is still being restored — auth-modal params must wait.
+  // When undefined (prop not wired), hydration guard is skipped (legacy behaviour).
+  authHydrated?: boolean;
 }
 
 // Business plans matching the prototype design — static ids/prices/periods only;
@@ -90,6 +94,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   onBack,
   onEnterPortal,
   refreshProfile,
+  authHydrated,
 }) => {
   const pricingRef = useRef<HTMLElement>(null);
   const location = useLocation();
@@ -121,14 +126,31 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   // while already mounted on /portal re-opens the modal. (Previously a one-shot ref
   // + non-reactive window.location.search meant the second click did nothing —
   // the same bug we fixed for /workspace?auth=signin in CareerApp.)
+  //
+  // Hydration guard: if authHydrated is explicitly false (CareerApp has wired the
+  // prop but Firebase has not yet restored the persisted session), bail out WITHOUT
+  // stripping the query. The effect will re-run once authHydrated flips to true, at
+  // which point the session state is accurate and the params are still present.
+  // If authHydrated is undefined (prop not wired), the guard is skipped to preserve
+  // legacy behaviour for any consumer that does not pass the prop.
   React.useEffect(() => {
+    if (authHydrated === false) return;
+
     const params = new URLSearchParams(location.search);
     const auth = params.get('auth');
     const start = params.get('start');
     if (!auth && !start) return;
 
-    if (auth === 'signin') setModal('signin');
-    if (auth === 'signup') setModal('signup');
+    // Only open auth modals when the user is NOT already signed in; a signed-in
+    // user deep-linking with ?auth=signin (e.g. from a stale email link) should
+    // not be interrupted with a redundant modal.
+    if (!session) {
+      if (auth === 'signin') setModal('signin');
+      if (auth === 'signup') setModal('signup');
+    }
+
+    // ?start=post-job is NOT gated on !session — a signed-in employer must still
+    // land in the portal. onEnterPortal's own session check handles the redirect.
     if (start === 'post-job') {
       if (session && onEnterPortal) {
         onEnterPortal('post-job');
@@ -140,17 +162,17 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     // Strip the query via react-router so location.search stays in sync; the
     // effect re-runs once more and no-ops (no params).
     navigate(location.pathname, { replace: true });
-  }, [location.search, location.pathname, navigate, session, onEnterPortal]);
+  }, [location.search, location.pathname, navigate, session, onEnterPortal, authHydrated]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Hero */}
       <main className="max-w-[1088px] mx-auto px-6 py-16 md:py-24">
-        <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6 text-gray-900">
+        <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6 text-gray-900 dark:text-gray-100">
           {t('business_page_hero_title_part1')}{' '}
           <span className="text-[#1D4ED8]">{t('business_page_hero_title_part2')}</span>{t('business_page_hero_title_part3')}
         </h1>
-        <p className="text-lg mb-8 leading-relaxed max-w-3xl text-gray-600">
+        <p className="text-lg mb-8 leading-relaxed max-w-3xl text-gray-600 dark:text-gray-300">
           {t('business_page_hero_subtitle')}
         </p>
         <div className="flex flex-wrap gap-4">
@@ -162,7 +184,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
           </button>
           <button
             onClick={handleDiscoverTalent}
-            className="border border-gray-300 text-gray-700 px-8 py-3 rounded-md hover:border-gray-400 transition-colors font-medium"
+            className="border border-gray-300 text-gray-700 px-8 py-3 rounded-md hover:border-gray-400 transition-colors font-medium dark:border-slate-600 dark:text-gray-300 dark:hover:border-slate-500"
           >
             {t('employer_dashboard_tab_discover')}
           </button>
@@ -172,10 +194,10 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
       {/* Features — "Why Post With Us?" */}
       <section className="py-16">
         <div className="max-w-[1088px] mx-auto px-6">
-          <h2 className="text-center text-3xl font-bold mb-4 text-gray-900">
+          <h2 className="text-center text-3xl font-bold mb-4 text-gray-900 dark:text-gray-100">
             {t('business_page_features_title')}
           </h2>
-          <p className="text-center mb-12 max-w-2xl mx-auto text-gray-600">
+          <p className="text-center mb-12 max-w-2xl mx-auto text-gray-600 dark:text-gray-300">
             {t('business_page_features_subtitle')}
           </p>
 
@@ -218,12 +240,12 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                 ),
               },
             ].map((feature) => (
-              <div key={feature.titleKey} className="rounded-xl p-6 shadow-sm bg-white">
-                <div className="w-12 h-12 rounded-md flex items-center justify-center mb-4 bg-blue-100">
+              <div key={feature.titleKey} className="rounded-xl p-6 shadow-sm bg-white dark:bg-slate-800 dark:border dark:border-slate-700">
+                <div className="w-12 h-12 rounded-md flex items-center justify-center mb-4 bg-blue-100 dark:bg-blue-900/40">
                   {feature.icon}
                 </div>
-                <h3 className="text-lg font-semibold mb-2 text-gray-900">{t(feature.titleKey)}</h3>
-                <p className="text-sm text-gray-600">{t(feature.descKey)}</p>
+                <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">{t(feature.titleKey)}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t(feature.descKey)}</p>
               </div>
             ))}
           </div>
@@ -234,13 +256,13 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
       <section
         id="pricing"
         ref={pricingRef}
-        className="py-20 bg-gray-50"
+        className="py-20 bg-gray-50 dark:bg-gray-950"
       >
         <div className="max-w-[1088px] mx-auto px-6">
-          <h2 className="text-center text-4xl font-bold mb-4 text-gray-900">
+          <h2 className="text-center text-4xl font-bold mb-4 text-gray-900 dark:text-gray-100">
             {t('business_page_pricing_title')}
           </h2>
-          <p className="text-center mb-14 max-w-2xl mx-auto text-gray-500">
+          <p className="text-center mb-14 max-w-2xl mx-auto text-gray-500 dark:text-gray-400">
             {t('business_page_pricing_subtitle')}
           </p>
 
@@ -251,7 +273,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                 className={`relative rounded-2xl p-7 flex flex-col ${
                   plan.featured
                     ? 'bg-[#0F172A] text-white shadow-2xl ring-2 ring-[#1D4ED8]'
-                    : 'bg-white text-gray-900 shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-sm dark:border dark:border-slate-700'
                 }`}
               >
                 {plan.highlight && (
@@ -262,20 +284,20 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                   </div>
                 )}
 
-                <p className={`font-semibold mb-3 ${plan.featured ? 'text-gray-300' : 'text-gray-700'}`}>
+                <p className={`font-semibold mb-3 ${plan.featured ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300'}`}>
                   {t(plan.nameKey)}
                 </p>
 
                 <div className="flex items-end gap-1 mb-1">
-                  <span className={`text-5xl font-bold leading-none ${plan.featured ? 'text-white' : 'text-gray-900'}`}>
+                  <span className={`text-5xl font-bold leading-none ${plan.featured ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
                     {plan.price}
                   </span>
-                  <span className={`mb-1 ${plan.featured ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <span className={`mb-1 ${plan.featured ? 'text-gray-400' : 'text-gray-500 dark:text-gray-400'}`}>
                     {plan.period}
                   </span>
                 </div>
 
-                <div className={`h-px my-5 ${plan.featured ? 'bg-gray-700' : 'bg-gray-100'}`} />
+                <div className={`h-px my-5 ${plan.featured ? 'bg-gray-700' : 'bg-gray-100 dark:bg-slate-700'}`} />
 
                 <ul className="flex flex-col gap-3 flex-1 mb-8">
                   {plan.featureKeys.map((featureKey) => (
@@ -288,7 +310,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
-                      <span className={`text-sm ${plan.featured ? 'text-gray-300' : 'text-gray-600'}`}>
+                      <span className={`text-sm ${plan.featured ? 'text-gray-300' : 'text-gray-600 dark:text-gray-300'}`}>
                         {t(featureKey)}
                       </span>
                     </li>

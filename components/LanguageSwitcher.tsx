@@ -22,7 +22,10 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ onLanguageChange, c
             onLanguageChange(langCode);
         } catch (error) {
             console.error('Error saving language preference to local storage:', error);
-            alert(`Error updating language preference.`);
+            // alert() removed: preference save is non-critical; the UI language is
+            // already switched locally. useToast is not safe here because
+            // LanguageSwitcher is rendered in Sidebar (line 924 of CareerApp.tsx),
+            // which is outside the ToastProvider (line 1049).
         }
     };
 

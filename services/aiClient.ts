@@ -243,7 +243,11 @@ async function callToolWithGrounding<T>(tool: string, payload: Record<string, un
     >(firebaseFunctions, 'aiProxy');
     const res = await fn({ tool, payload, model: currentModelId });
     updateApiStatus('online');
-    return { ...(res.data?.data ?? {}), groundingChunks: res.data?.groundingChunks } as T;
+    const parsed = res.data?.data;
+    if (parsed === undefined || parsed === null) {
+      throw new Error('The AI returned an empty or unparseable response. Please try again.');
+    }
+    return { ...(parsed as object), groundingChunks: res.data?.groundingChunks } as T;
   } catch (err) {
     reportStatusFromError(err);
     throw new Error(formatCallableError(err));

@@ -4,10 +4,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
-import { analyzeResume, setApiStatusUpdater } from './services/aiClient';
+import { analyzeResume, setApiStatusUpdater, setAiModel } from './services/aiClient';
 import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
 import { httpsCallable } from 'firebase/functions';
-import { firebaseFunctions } from './lib/firebaseClient';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { firebaseFunctions, firestoreDb } from './lib/firebaseClient';
 import { data, type AppSession as Session } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
 import { useLocalization } from './hooks/useLocalization';
@@ -154,7 +155,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     const root = window.document.documentElement;
     root.classList.remove(theme === 'dark' ? 'light' : 'dark');
     root.classList.add(theme);
-    localStorage.setItem('theme', theme);
+    try { localStorage.setItem('theme', theme); } catch { /* storage unavailable */ }
   }, [theme]);
   
   const toggleTheme = () => {
@@ -451,6 +452,11 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
         setResumeText('');
         setCredits(0);
         sessionStorage.clear();
+        try {
+          localStorage.removeItem('preferred_ai_model');
+          localStorage.removeItem('aiModeEnabled');
+        } catch { /* storage unavailable */ }
+        setAiModel(undefined);
         return;
       }
 
@@ -472,6 +478,24 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
 
     return () => unsubscribe();
   }, [setCredits]);
+
+  // Live profile sync: credits deducted server-side, tier changes from the admin
+  // portal, and payment upgrades appear without a re-login.
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid) return;
+    const unsub = onSnapshot(
+      doc(firestoreDb, 'users', uid),
+      (snap) => {
+        if (!snap.exists()) return;
+        const p = { id: uid, ...snap.data() } as UserProfile;
+        setProfile(p);
+        if (typeof p.credits === 'number') setCredits(p.credits);
+      },
+      (err) => { console.error('profile listener error:', err); }
+    );
+    return () => unsub();
+  }, [session?.user?.id, setCredits]);
 
   useEffect(() => {
     if (session && isProfileLoaded && isCandidate) {
@@ -529,7 +553,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   
   const navigateToBusinessPricing = () => {
     if (siteShell) {
-      navigate('/pricing');
+      navigate('/pricing?from=business-upsell');
       return;
     }
     setView('business');
@@ -684,6 +708,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
           }
         }}
         refreshProfile={getProfile}
+        authHydrated={authHydrated}
       />
     </React.Suspense>
   );
@@ -998,7 +1023,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     if (view === 'business') {
         return (
             <React.Suspense fallback={<LoadingSpinner market={market} />}>
-                <BusinessPage t={t} session={session} profile={profile} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} refreshProfile={getProfile} />
+                <BusinessPage t={t} session={session} profile={profile} onSelectBusinessPlan={handleBusinessPlanSelection} onBack={() => handleSetView('home')} onEnterPortal={(page) => { setPortalInitialPage(page); handleSetView('home'); }} refreshProfile={getProfile} authHydrated={authHydrated} />
             </React.Suspense>
         );
     }
@@ -1028,6 +1053,13 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} />; }
     if (session && !showHomePageOverride) {
         if (!isProfileLoaded || !isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600 dark:text-gray-400">{t('dashboard_loading')}</p></div>; }
+        if (profile?.role === 'agency') {
+            return (
+                <React.Suspense fallback={<LoadingSpinner market={market} />}>
+                    <AgencyHub session={session} profile={profile} t={t} />
+                </React.Suspense>
+            );
+        }
         if (!isCandidate) return renderRoleFallback();
         return renderDashboard();
     }
