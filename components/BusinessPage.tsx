@@ -1,5 +1,6 @@
 
 import React, { useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import BusinessSignInModal from './business/BusinessSignInModal';
@@ -91,7 +92,8 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   refreshProfile,
 }) => {
   const pricingRef = useRef<HTMLElement>(null);
-  const handledQueryRef = useRef(false);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [modal, setModal] = React.useState<ModalState>('none');
 
   const handlePostJob = () => {
@@ -114,13 +116,16 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     }
   };
 
+  // Honour ?auth=signin|signup and ?start=post-job. Reads react-router's reactive
+  // location.search and depends on it, so clicking the header "Sign In" link AGAIN
+  // while already mounted on /portal re-opens the modal. (Previously a one-shot ref
+  // + non-reactive window.location.search meant the second click did nothing —
+  // the same bug we fixed for /workspace?auth=signin in CareerApp.)
   React.useEffect(() => {
-    if (handledQueryRef.current) return;
-    handledQueryRef.current = true;
-
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     const auth = params.get('auth');
     const start = params.get('start');
+    if (!auth && !start) return;
 
     if (auth === 'signin') setModal('signin');
     if (auth === 'signup') setModal('signup');
@@ -132,10 +137,10 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
       }
     }
 
-    if (auth || start) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, [session, onEnterPortal]);
+    // Strip the query via react-router so location.search stays in sync; the
+    // effect re-runs once more and no-ops (no params).
+    navigate(location.pathname, { replace: true });
+  }, [location.search, location.pathname, navigate, session, onEnterPortal]);
 
   return (
     <div className="min-h-screen bg-gray-50">
