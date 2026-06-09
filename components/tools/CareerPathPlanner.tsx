@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { generateCareerPath, generateSkillBridgeProject } from '../../services/aiClient';
 import type { CareerPathResult, SkillBridgeProject } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { DownloadButtons } from './ToolUtils';
 import type { AppSession as Session } from '../../lib/data';
 
@@ -23,7 +24,7 @@ const actionIcons: { [key: string]: React.ReactNode } = {
 
 
 const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, market, t, openTool, session }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CareerPathResult | null>(null);
   const [desiredRole, setDesiredRole] = useState('');
@@ -55,16 +56,17 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
         setError("You must be logged in to use this tool.");
         return;
     }
-    setLoading(true);
+    const alive = begin();
     setError(null);
     setResult(null);
     try {
       const apiResult = await generateCareerPath(resumeText, input, market, session);
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -122,7 +124,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   };
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner market={market} />;
+    if (loading) return <StagedLoader title="Mapping your path" steps={["Analyzing your experience…","Exploring career paths…","Building your roadmap…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

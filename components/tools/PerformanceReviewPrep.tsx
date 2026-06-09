@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { generatePerformanceReviewPrep } from '../../services/aiClient';
 import type { PerformanceReviewResult } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 interface PerformanceReviewPrepProps {
   resumeText: string;
@@ -9,7 +10,7 @@ interface PerformanceReviewPrepProps {
 }
 
 const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeText, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PerformanceReviewResult | null>(null);
   const [accomplishments, setAccomplishments] = useState('');
@@ -20,15 +21,16 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
       setError('Please provide your job title and key accomplishments.');
       return;
     }
-    setLoading(true);
+    const alive = begin();
     setError(null);
     try {
       const apiResult = await generatePerformanceReviewPrep(resumeText, accomplishments, jobTitle);
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -60,7 +62,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner />;
+    if (loading) return <StagedLoader title="Preparing your review" steps={["Reading your accomplishments…","Structuring talking points…","Building STAR examples…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
     return (

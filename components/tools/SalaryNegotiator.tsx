@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { generateSalaryNegotiationStrategy } from '../../services/aiClient';
 import type { SalaryNegotiationResult } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'SGD', 'AED'];
 
@@ -12,7 +13,7 @@ interface SalaryNegotiatorProps {
 }
 
 const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<(SalaryNegotiationResult & { groundingChunks: any[] | undefined; }) | null>(null);
   const [jobTitle, setJobTitle] = useState('');
@@ -26,16 +27,17 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       setError(t('tool_salary_negotiator_error_required'));
       return;
     }
-    setLoading(true);
+    const alive = begin();
     setError(null);
     setResult(null);
     try {
       const apiResult = await generateSalaryNegotiationStrategy(resumeText, jobTitle, company, market, offer, offerCurrency);
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -76,7 +78,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner market={market} />;
+    if (loading) return <StagedLoader title="Building your strategy" steps={["Reading your offer details…","Researching current market rates…","Crafting your negotiation plan…","Polishing talking points…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

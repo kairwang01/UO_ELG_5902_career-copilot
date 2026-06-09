@@ -50,7 +50,7 @@ export function formatCallableError(err: unknown): string {
     detailsStr.includes('resource_exhausted');
 
   if (isQuota) {
-    return 'Gemini API quota exceeded. Wait about 30 seconds and try again, or ask the project admin to check API key billing in Google AI Studio.';
+    return 'The selected AI model is rate-limited or out of quota. Wait ~30s and retry, or switch models in the picker (top-right). Admins can verify the model’s API key & billing in Admin → AI.';
   }
   if (code === 'functions/unauthenticated') {
     return 'Please sign in to use AI features.';
@@ -62,7 +62,7 @@ export function formatCallableError(err: unknown): string {
     return message || 'User profile not found. Sign out and sign back in.';
   }
   if (code === 'functions/internal' && (lower === 'internal' || message === 'INTERNAL')) {
-    return 'AI request failed on the server. This is often a Gemini quota or API-key issue — wait 30s and retry, or check billing on the key in Google AI Studio.';
+    return 'AI request failed on the server. Try switching the model in the picker (top-right) and retry in ~30s, or ask an admin to verify the selected model’s API key in Admin → AI.';
   }
   return message || 'An error occurred while calling the AI service.';
 }
@@ -213,25 +213,41 @@ export const getBusinessLlmConfig = async (): Promise<BusinessLlmConfigResult> =
 };
 
 /**
- * Calls the legacy per-tool callable on production (e.g. findOpportunities).
- * The consolidated aiProxy callable lacks Cloud Run invoker IAM for this deployer;
- * the 40 existing tool functions already have invoker access from the original deploy.
+ * Dispatches a long-tail tool through the consolidated `aiProxy` callable, which
+ * applies tier-gated model routing (Gemini / KairLLM / DeepSeek / custom). The
+ * legacy per-tool functions are Gemini-only and ignore the selected model — this
+ * is why selecting KairLLM/DeepSeek used to have no effect. aiProxy returns
+ * `{ data, text, groundingChunks }`; the parsed result is `.data`.
  */
 async function callTool<T>(tool: string, payload: Record<string, unknown>): Promise<T> {
   try {
-    const fn = httpsCallable<Record<string, unknown>, T>(firebaseFunctions, tool);
-    const res = await fn({ ...payload, model: currentModelId });
+    const fn = httpsCallable<
+      { tool: string; payload: Record<string, unknown>; model?: string },
+      { data?: T; text?: string; groundingChunks?: unknown }
+    >(firebaseFunctions, 'aiProxy');
+    const res = await fn({ tool, payload, model: currentModelId });
     updateApiStatus('online');
-    return res.data;
+    return (res.data?.data ?? (res.data as unknown)) as T;
   } catch (err) {
     reportStatusFromError(err);
     throw new Error(formatCallableError(err));
   }
 }
 
-/** Same as callTool — legacy callables return groundingChunks inline when present. */
+/** Like callTool, but merges aiProxy's separate groundingChunks back into the result. */
 async function callToolWithGrounding<T>(tool: string, payload: Record<string, unknown>): Promise<T> {
-  return callTool<T>(tool, payload);
+  try {
+    const fn = httpsCallable<
+      { tool: string; payload: Record<string, unknown>; model?: string },
+      { data?: Record<string, unknown>; text?: string; groundingChunks?: unknown }
+    >(firebaseFunctions, 'aiProxy');
+    const res = await fn({ tool, payload, model: currentModelId });
+    updateApiStatus('online');
+    return { ...(res.data?.data ?? {}), groundingChunks: res.data?.groundingChunks } as T;
+  } catch (err) {
+    reportStatusFromError(err);
+    throw new Error(formatCallableError(err));
+  }
 }
 
 // ---- Resume / cover letter / career path (dedicated callables) -------------

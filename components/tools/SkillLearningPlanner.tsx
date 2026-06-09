@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { generateLearningPlan } from '../../services/aiClient';
 import type { LearningPlanResult } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 interface SkillLearningPlannerProps {
   resumeText: string;
@@ -10,7 +11,7 @@ interface SkillLearningPlannerProps {
 }
 
 const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText, market, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LearningPlanResult | null>(null);
   const [skill, setSkill] = useState('');
@@ -20,15 +21,16 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
       setError('Please enter a skill you want to learn.');
       return;
     }
-    setLoading(true);
+    const alive = begin();
     setError(null);
     try {
       const apiResult = await generateLearningPlan(resumeText, skill, market);
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -46,7 +48,7 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner />;
+    if (loading) return <StagedLoader title="Designing your learning plan" steps={["Reviewing your resume…","Mapping the skill path…","Curating projects & milestones…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
     return (

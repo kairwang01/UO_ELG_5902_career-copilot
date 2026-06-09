@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { data, type AppSession as Session } from '../../lib/data';
 import { analyzeEnglishProficiency, analyzeSpokenEnglish, analyzeEnglishReading, evaluateReadingComprehension, analyzeEnglishListening, generateReadingPracticePassage, generateSpeakingTopics, generateVocabularyFlashcards } from '../../services/aiClient';
 import type { EnglishProResult, SpokenEnglishAnalysisResult, EnglishReadingAnalysisResult, ReadingEvaluation, EnglishListeningAnalysisResult, ReadingPracticePassage, VocabularyFlashcard, UserProfile, VocabularyItem, ComprehensionQuestion } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 const ENGLISH_PRO_TOPICS = [
     "Write an email to a colleague asking for an update on a project.",
@@ -46,7 +47,7 @@ const isYesterday = (date1: Date, date2: Date) => {
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 
 const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshProfile }) => {
-    const [loading, setLoading] = useState(false);
+    const { loading, begin, end, cancel } = useCancellableLoading();
     const [error, setError] = useState<string | null>(null);
     const [practiceMode, setPracticeMode] = useState<'hub' | 'written' | 'spoken' | 'reading' | 'listening'>('hub');
     
@@ -161,7 +162,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
 
     const handleStartNewPractice = () => {
-        setLoading(false);
+        cancel();
         setError(null);
         setPracticeMode('hub');
         // Reset all sub-modes and results
@@ -179,26 +180,28 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     // Written
     const runWrittenTool = async () => {
         if (!writtenInput.trim()) { setError(t('tool_english_pro_error_required')); return; }
-        setLoading(true); setError(null); setOriginalWrittenInput(writtenInput);
+        const alive = begin(); setError(null); setOriginalWrittenInput(writtenInput);
         try {
             const res = await analyzeEnglishProficiency(writtenInput, nativeLanguage, targetIeltsBand);
+            if (!alive()) return;
             setWrittenResult(res);
             await handlePracticeCompletion();
-        } catch (err) { setError(err instanceof Error ? err.message : 'An error occurred.'); }
-        finally { setLoading(false); }
+        } catch (err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        finally { if (alive()) end(); }
     };
     
     // Spoken
     const runSpokenAnalysis = useCallback(async (finalTranscript: string, duration: number) => {
         if (!finalTranscript.trim()) { setError("No speech was detected."); return; }
-        setLoading(true); setError(null); setTranscript(finalTranscript);
+        const alive = begin(); setError(null); setTranscript(finalTranscript);
         try {
             const res = await analyzeSpokenEnglish(finalTranscript, duration, targetIeltsBand);
+            if (!alive()) return;
             setSpokenResult(res);
             await handlePracticeCompletion();
-        } catch (err) { setError(err instanceof Error ? err.message : 'An error occurred.'); }
-        finally { setLoading(false); }
-    }, [targetIeltsBand, handlePracticeCompletion]);
+        } catch (err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        finally { if (alive()) end(); }
+    }, [targetIeltsBand, handlePracticeCompletion, begin, end]);
 
     // Speech recognition setup
     useEffect(() => {
@@ -265,61 +268,66 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     // Reading
     const runReadingAnalysis = async () => {
         if (!readingUserInput.trim()) { setError("Please paste some text to analyze."); return; }
-        setLoading(true); setError(null); setReadingEvaluation(null); setUserAnswers([]);
+        const alive = begin(); setError(null); setReadingEvaluation(null); setUserAnswers([]);
         try {
             const res = await analyzeEnglishReading(readingUserInput, targetIeltsBand);
+            if (!alive()) return;
             setReadingComprehensionResult(res);
             setReadingSubMode('comprehension');
             await handlePracticeCompletion();
-        } catch(err) { setError(err instanceof Error ? err.message : 'An error occurred.'); }
-        finally { setLoading(false); }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        finally { if (alive()) end(); }
     };
 
     const generateReadingPractice = async () => {
-        setLoading(true); setError(null); setReadingEvaluation(null); setUserAnswers([]);
+        const alive = begin(); setError(null); setReadingEvaluation(null); setUserAnswers([]);
         try {
             const res = await generateReadingPracticePassage(targetIeltsBand);
+            if (!alive()) return;
             setReadingComprehensionResult(res);
             setReadingSubMode('comprehension');
-        } catch(err) { setError(err instanceof Error ? err.message : 'An error occurred.'); }
-        finally { setLoading(false); }
-    }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        finally { if (alive()) end(); }
+    };
 
     const checkReadingAnswers = async () => {
         const res = readingComprehensionResult as EnglishReadingAnalysisResult;
         const textToUse = (res as any).passage || readingUserInput;
         if (!res || !res.comprehensionQuestions || userAnswers.length !== res.comprehensionQuestions.length) return;
-        setLoading(true); setError(null);
+        const alive = begin(); setError(null);
         try {
             const evaluation = await evaluateReadingComprehension(textToUse, res.comprehensionQuestions, userAnswers);
+            if (!alive()) return;
             setReadingEvaluation(evaluation);
             await handlePracticeCompletion();
-        } catch(err) { setError(err instanceof Error ? err.message : 'An error occurred.'); }
-        finally { setLoading(false); }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        finally { if (alive()) end(); }
     };
 
     const generateFlashcards = async () => {
-        setLoading(true); setError(null); setFlashcards([]);
+        const alive = begin(); setError(null); setFlashcards([]);
         try {
             const { cards } = await generateVocabularyFlashcards(targetIeltsBand);
+            if (!alive()) return;
             setFlashcards(cards.map(c => ({...c, distractors: shuffleArray([...c.distractors, c.definition])})));
             setCurrentCardIndex(0);
             setFlashcardScore(0);
             setReadingSubMode('flashcards');
-        } catch(err) { setError(err instanceof Error ? err.message : 'An error occurred.'); }
-        finally { setLoading(false); }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        finally { if (alive()) end(); }
     };
 
     // Listening
     const runListeningAnalysis = async () => {
         if (!userTranscription.trim()) { setError("Please type what you heard."); return; }
-        setLoading(true); setError(null);
+        const alive = begin(); setError(null);
         try {
             const res = await analyzeEnglishListening(currentClip.text, userTranscription, targetIeltsBand);
+            if (!alive()) return;
             setListeningResult(res);
             await handlePracticeCompletion();
-        } catch(err) { setError(err instanceof Error ? err.message : 'An error occurred.'); }
-        finally { setLoading(false); }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        finally { if (alive()) end(); }
     };
     
     // UI Renderers
@@ -435,9 +443,24 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     return (
         <div className="p-4 bg-gray-50 rounded-lg animate-fade-in">
             {error && <div className="text-red-600 bg-red-100 p-3 rounded-md text-sm mb-4">{error}</div>}
-            {practiceMode === 'hub' && renderPracticeHub()}
-            {practiceMode === 'written' && renderWrittenMode()}
-            {/* ... other mode renders */}
+            {loading ? (
+                <StagedLoader
+                    title="Analyzing your English"
+                    steps={[
+                        'Reading your submission…',
+                        'Checking grammar & clarity…',
+                        'Scoring against your target band…',
+                        'Writing your feedback…',
+                    ]}
+                    onCancel={cancel}
+                />
+            ) : (
+                <>
+                    {practiceMode === 'hub' && renderPracticeHub()}
+                    {practiceMode === 'written' && renderWrittenMode()}
+                    {/* ... other mode renders */}
+                </>
+            )}
         </div>
     );
 };

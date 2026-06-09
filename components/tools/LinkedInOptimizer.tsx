@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { optimizeLinkedInProfile, optimizeLinkedInProfileFromText } from '../../services/aiClient';
 import type { LinkedInOptimization } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 interface LinkedInOptimizerProps {
   resumeText: string;
@@ -10,7 +11,7 @@ interface LinkedInOptimizerProps {
 }
 
 const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, market, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LinkedInOptimization | null>(null);
   const [linkedinTab, setLinkedinTab] = useState<'resume' | 'profile'>('resume');
@@ -25,7 +26,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
     customPrompt?: string;
     additionalUrl?: string;
   } = {}) => {
-    setLoading(true);
+    const alive = begin();
     setError(null);
     setResult(null);
     try {
@@ -33,8 +34,8 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
       if (options.mode === 'profile') {
         if (!options.profileText) throw new Error(t('tool_linkedin_optimizer_error_required'));
         apiResult = await optimizeLinkedInProfileFromText(
-            options.profileText, 
-            resumeText, 
+            options.profileText,
+            resumeText,
             market,
             options.customPrompt,
             options.additionalUrl
@@ -42,11 +43,12 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
       } else {
         apiResult = await optimizeLinkedInProfile(resumeText, market);
       }
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -129,7 +131,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner market={market} />;
+    if (loading) return <StagedLoader title="Optimizing your profile" steps={["Reading your profile…","Identifying improvements…","Rewriting headline & summary…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 
