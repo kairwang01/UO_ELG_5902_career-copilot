@@ -112,6 +112,7 @@ const AdminPortal: React.FC = () => {
   // LLM form fields
   const [geminiKey, setGeminiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('');
+  const [geminiFallbackModel, setGeminiFallbackModel] = useState('');
   const [kairllmKey, setKairllmKey] = useState('');
   const [kairllmUrl, setKairllmUrl] = useState('');
   const [deepseekKey, setDeepseekKey] = useState('');
@@ -156,6 +157,7 @@ const AdminPortal: React.FC = () => {
       const cfg = await adminGetLlmConfig();
       setLlm(cfg);
       setGeminiModel(cfg.gemini_model ?? '');
+      setGeminiFallbackModel(cfg.gemini_fallback_model ?? '');
       setKairllmUrl(cfg.kairllm_base_url ?? '');
       setDeepseekUrl(cfg.deepseek_base_url ?? '');
     } catch (e) {
@@ -261,6 +263,7 @@ const AdminPortal: React.FC = () => {
       const updated = await adminUpdateLlmConfig({
         gemini_api_key: geminiKey || undefined,
         gemini_model: geminiModel || undefined,
+        gemini_fallback_model: geminiFallbackModel || undefined,
         kairllm_api_key: kairllmKey || undefined,
         kairllm_base_url: kairllmUrl || undefined,
         deepseek_api_key: deepseekKey || undefined,
@@ -715,6 +718,17 @@ const AdminPortal: React.FC = () => {
                         />
                       </div>
 
+                      <div>
+                        <FieldLabel htmlFor="gemini-fallback-model">Fallback model</FieldLabel>
+                        <input
+                          id="gemini-fallback-model"
+                          value={geminiFallbackModel}
+                          onChange={(e) => setGeminiFallbackModel(e.target.value)}
+                          placeholder="gemini-flash-latest"
+                          className={textInput}
+                        />
+                      </div>
+
                       {/* Test + Save row */}
                       <div className="flex items-center gap-2 pt-1 flex-wrap">
                         <button
@@ -737,6 +751,7 @@ const AdminPortal: React.FC = () => {
                               const updated = await adminUpdateLlmConfig({
                                 gemini_api_key: geminiKey || undefined,
                                 gemini_model: geminiModel || undefined,
+                                gemini_fallback_model: geminiFallbackModel || undefined,
                               });
                               setLlm(updated); setGeminiKey('');
                             } catch (e) { setError(e instanceof Error ? e.message : 'Save failed'); }

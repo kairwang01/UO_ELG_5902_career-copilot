@@ -42,6 +42,7 @@ export const adminGetLlmConfig = () =>
 export const adminUpdateLlmConfig = (payload: {
   gemini_api_key?: string;
   gemini_model?: string;
+  gemini_fallback_model?: string;
   kairllm_api_key?: string;
   kairllm_base_url?: string;
   deepseek_api_key?: string;
