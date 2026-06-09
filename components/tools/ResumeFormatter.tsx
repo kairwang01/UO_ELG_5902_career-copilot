@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { DownloadButtons, renderFormattedText } from './ToolUtils';
 import { SUPPORTED_MARKETS } from '../../config';
 
@@ -14,7 +15,7 @@ interface ResumeFormatterProps {
 }
 
 const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FormattedResume | null>(null);
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
@@ -22,16 +23,17 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const [targetMarket, setTargetMarket] = useState<string>(market);
 
   const runTool = async (options: { coverLetter?: string } = {}) => {
-    setLoading(true);
+    const alive = begin();
     setError(null);
     setResult(null);
     try {
       const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter);
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -90,7 +92,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner market={targetMarket} />;
+    if (loading) return <StagedLoader title="Reformatting your resume" steps={["Reading your resume…","Reformatting the layout…","Polishing the final document…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

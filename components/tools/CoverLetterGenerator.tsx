@@ -5,6 +5,7 @@ import type { CoverLetter } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { DownloadButtons } from './ToolUtils';
 import { useApiStatus } from '../../contexts/ApiStatusContext';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 interface CoverLetterGeneratorProps {
   resumeText: string;
@@ -37,7 +38,7 @@ Sincerely,
 [Your Name]`;
 
 const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText, market, initialInput, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CoverLetter | null>(null);
   const [jobDescription, setJobDescription] = useState(initialInput);
@@ -61,17 +62,18 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
         setError(t('tool_cover_letter_error_required'));
         return;
     }
-    setLoading(true);
+    const alive = begin();
     setError(null);
     setResult(null);
     try {
       const apiResult = await generateCoverLetter(resumeText, input, market);
+      if (!alive()) return;
       setResult(apiResult);
       setEditableResult(apiResult.letter);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -121,6 +123,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
           'Drafting & polishing…',
         ]}
         intervalMs={1800}
+        onCancel={cancel}
       />
     );
     if (error && apiStatus === 'online') return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;

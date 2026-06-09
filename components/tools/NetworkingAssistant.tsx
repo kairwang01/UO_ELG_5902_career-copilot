@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { generateNetworkingStrategy } from '../../services/aiClient';
 import type { NetworkingStrategyResult } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 interface NetworkingAssistantProps {
   resumeText: string;
@@ -10,7 +11,7 @@ interface NetworkingAssistantProps {
 }
 
 const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, market, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<NetworkingStrategyResult | null>(null);
   const [targetCompany, setTargetCompany] = useState('');
@@ -22,16 +23,17 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
       setError(t('tool_networking_assistant_error_required'));
       return;
     }
-    setLoading(true);
+    const alive = begin();
     setError(null);
     setResult(null);
     try {
       const apiResult = await generateNetworkingStrategy(resumeText, company, role, location, market);
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -88,7 +90,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner market={market} />;
+    if (loading) return <StagedLoader title="Mapping your network" steps={["Analyzing your background…","Identifying the right contacts…","Drafting outreach messages…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

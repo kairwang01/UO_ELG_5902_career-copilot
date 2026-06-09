@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { generateAgilePracticeTest } from '../../services/aiClient';
 import type { AgilePracticeTestResult } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 const AGILE_ROLES = [
     'Scrum Master', 'Product Owner', 'Developer / Engineer', 'Agile Coach', 'Cyber Security Analyst', 'Project / Program Manager', 'Business Analyst'
@@ -21,7 +22,7 @@ interface AgileCoachProps {
 }
 
 const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgilePracticeTestResult | null>(null);
   const [selectedAgileRole, setSelectedAgileRole] = useState<string>(AGILE_ROLES[0]);
@@ -31,10 +32,11 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
   const [userAnswers, setUserAnswers] = useState<(number | null)[]>([]);
 
   const runTool = async (role: string, certification: string) => {
-    setLoading(true);
+    const alive = begin();
     setError(null);
     try {
       const apiResult = await generateAgilePracticeTest(role, certification);
+      if (!alive()) return;
       setResult(apiResult);
       if (apiResult?.practiceQuestions) {
         setUserAnswers(new Array(apiResult.practiceQuestions.length).fill(null));
@@ -42,10 +44,12 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
         setTestStage('in_progress');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-      setTestStage('setup');
+      if (alive()) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+        setTestStage('setup');
+      }
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -149,7 +153,7 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
     );
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <StagedLoader title="Preparing your test" steps={["Setting up your exam…","Generating practice questions…","Adding tips & explanations…"]} onCancel={cancel} />;
   if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
 
   switch (testStage) {

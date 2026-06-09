@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { generateProfessionalEmail } from '../../services/aiClient';
 import type { ProfessionalEmailResult } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { DownloadButtons } from './ToolUtils';
 
 const EMAIL_SCENARIOS = { 'Thank You': 'Post-Interview Thank You', 'Follow-up': 'Application Follow-up', 'Networking': 'Networking Outreach', 'Application': 'Job Application Submission' };
@@ -35,7 +36,7 @@ const Slider: React.FC<{ label: string; minLabel: string; maxLabel: string; valu
 
 
 const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProfessionalEmailResult | null>(null);
   const [editableResult, setEditableResult] = useState('');
@@ -52,7 +53,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) =>
   const [emailDetails, setEmailDetails] = useState<{ [key: string]: string }>({});
 
   const runTool = async () => {
-    setLoading(true);
+    const alive = begin();
     setError(null);
     try {
       let scenarioForApi = '';
@@ -71,14 +72,15 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) =>
         scenarioForApi = emailScenario;
         detailsForApi = emailDetails;
       }
-      
+
       const apiResult = await generateProfessionalEmail(resumeText, scenarioForApi, detailsForApi, market, tone, style, confidence);
+      if (!alive()) return;
       setResult(apiResult);
       setEditableResult(apiResult.body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -153,7 +155,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) =>
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner />;
+    if (loading) return <StagedLoader title="Composing your email" steps={["Reading the context…","Drafting your email…","Refining tone & style…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

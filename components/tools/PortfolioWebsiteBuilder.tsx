@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useSettings } from '../../contexts/SettingsContext';
 
 const HTML_TEMPLATE = `
@@ -493,8 +494,7 @@ interface PortfolioWebsiteBuilderProps {
 }
 
 const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resumeText, initialInput, profile, t }) => {
-  const [loading, setLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('');
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioWebsiteResult | null>(null);
   
@@ -554,8 +554,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setError(t('tool_portfolio_error_required'));
       return;
     }
-    setLoading(true);
-    setLoadingMessage(isAIMode ? t('tool_portfolio_analyzing_message') : 'Building static showcase...');
+    const alive = begin();
     setError(null);
     try {
       let extractedContent: PortfolioContent;
@@ -576,8 +575,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
               experience: [],
           };
       }
-      
-      setLoadingMessage(t('tool_portfolio_building_message'));
+
+      if (!alive()) return;
 
       const finalHtml = buildHtml({
         content: extractedContent,
@@ -590,10 +589,9 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setPreviewTheme(details.theme);
       setCurrentStep('result');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
-      setLoadingMessage('');
+      if (alive()) end();
     }
   };
 
@@ -607,7 +605,6 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       return;
     }
     setHeadshotStep('generating');
-    setLoadingMessage(t('tool_portfolio_generating_avatars_message'));
     setError(null);
     try {
         const results = await generateProfessionalHeadshot(uploadedImage.data);
@@ -616,8 +613,6 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to generate avatars. The image might not be suitable.');
         setHeadshotStep('photo_uploaded');
-    } finally {
-        setLoadingMessage('');
     }
   };
 
@@ -806,7 +801,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         case 'generating':
              return (
                  <div className="text-center p-8">
-                    <p className="text-xl text-gray-800 dark:text-gray-100 font-semibold mb-2">{loadingMessage || 'Generating...'}</p>
+                    <p className="text-xl text-gray-800 dark:text-gray-100 font-semibold mb-2">{t('tool_portfolio_generating_avatars_message') || 'Generating...'}</p>
                     <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"></div>
                  </div>
              );
@@ -837,7 +832,20 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   };
 
 
-  const renderInput = () => (
+  const renderInput = () => {
+    if (loading) return (
+      <StagedLoader
+        title="Building your website"
+        steps={[
+          'Reading your resume…',
+          'Designing the layout…',
+          'Generating each section…',
+          'Assembling your page…',
+        ]}
+        onCancel={cancel}
+      />
+    );
+    return (
     <div className="max-w-4xl mx-auto space-y-10 animate-fade-in">
         <div className="flex items-center justify-between mb-2">
             <button 
@@ -917,21 +925,15 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             {error && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-xl text-sm border border-red-200 dark:border-red-800/50">{error}</div>}
             
             <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transform active:scale-[0.98] transition-all">
-                {loading ? (
-                    <>
-                        <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        <span>{loadingMessage}</span>
-                    </>
-                ) : (
-                    <>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
-                        <span>{t('tool_portfolio_generate_button')}</span>
-                    </>
-                )}
+                <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                    <span>{t('tool_portfolio_generate_button')}</span>
+                </>
             </button>
         </form>
     </div>
-  );
+    );
+  };
 
   const mainViewRenderer = () => {
       if (currentStep === 'result') return renderResult();
@@ -947,7 +949,6 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   };
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result || !previewTheme) return null;
     

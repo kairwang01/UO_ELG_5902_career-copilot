@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { findOpportunities } from '../../services/aiClient';
 import type { OpportunityResult, Opportunity } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import type { AppSession as Session } from '../../lib/data';
 import {
   addDoc,
@@ -27,7 +28,9 @@ interface OpportunityFinderProps {
 }
 
 const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, market, openTool, session, t }) => {
-  const [loading, setLoading] = useState(true);
+  // Initialise true: this tool auto-fetches on mount, so the loader should show
+  // immediately (preserves the pre-refactor useState(true) behaviour).
+  const { loading, begin, end, cancel } = useCancellableLoading(true);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OpportunityResult | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
@@ -85,26 +88,40 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   }, [session, t]);
 
   const runTool = useCallback(async () => {
-    setLoading(true);
+    const alive = begin();
     setError(null);
     try {
       await fetchAppliedJobs();
       const apiResult = await findOpportunities(resumeText, market, session);
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
-  }, [resumeText, market, session, fetchAppliedJobs]);
+  }, [resumeText, market, session, fetchAppliedJobs, begin, end]);
   
   useEffect(() => {
     runTool();
   }, [runTool]);
 
-  if (loading) return <LoadingSpinner market={market} />;
+  if (loading) return <StagedLoader title="Finding opportunities" steps={["Reading your resume…","Searching live job postings…","Matching & ranking roles…","Building search strategies…"]} onCancel={cancel} />;
   if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
-  if (!result) return null;
+  // No result yet (e.g. the user cancelled the auto-fetch) — offer a graceful retry
+  // instead of a blank screen, since this tool has no input form to fall back to.
+  if (!result) return (
+    <div className="flex flex-col items-center justify-center text-center my-24 gap-4 animate-fade-in">
+      <p className="text-gray-500 dark:text-gray-400">Your job search was cancelled.</p>
+      <button
+        type="button"
+        onClick={() => runTool()}
+        className="inline-flex items-center gap-2 rounded-lg bg-blue-700 hover:bg-blue-800 px-5 py-2.5 text-white font-semibold transition-colors"
+      >
+        Search again
+      </button>
+    </div>
+  );
 
   const { opportunities, jobSearchStrategies, groundingChunks } = result;
   

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { findIndustryEvents } from '../../services/aiClient';
 import type { EventScoutResult } from '../../types';
-import LoadingSpinner from '../LoadingSpinner';
+import StagedLoader from '../StagedLoader';
+import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 
 interface IndustryEventScoutProps {
   t: (key: string) => string;
@@ -17,7 +18,7 @@ const eventTypeConfig: { [key in EventFilter]: { label: string; color: string; }
 };
 
 const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
-  const [loading, setLoading] = useState(false);
+  const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EventScoutResult | null>(null);
   const [field, setField] = useState('');
@@ -29,15 +30,16 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
       setError('Please provide your field of interest and a location.');
       return;
     }
-    setLoading(true);
+    const alive = begin();
     setError(null);
     try {
       const apiResult = await findIndustryEvents(field, location);
+      if (!alive()) return;
       setResult(apiResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
-      setLoading(false);
+      if (alive()) end();
     }
   };
 
@@ -61,7 +63,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
   );
 
   const renderResult = () => {
-    if (loading) return <LoadingSpinner />;
+    if (loading) return <StagedLoader title="Finding events" steps={["Understanding your field…","Searching for events…","Curating the best matches…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 
