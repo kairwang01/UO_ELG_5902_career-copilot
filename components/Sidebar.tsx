@@ -60,7 +60,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentLang,
   onLanguageChange,
 }) => {
-  const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(true);
+  // Default collapsed: the full tool list is long, so the sidebar leads with a single
+  // "Browse all tools" entry (the dedicated gallery) and keeps the quick-list one tap away.
+  const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(false);
   const { addToast } = useToast();
 
   const workspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
@@ -129,7 +131,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* AI Toolkit Section */}
         <div className="space-y-1">
             <div className="flex items-center justify-between px-4 mb-2">
-                <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Assisted Tools</h3>
+                <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Assisted Tools <span className="text-gray-300 dark:text-slate-600">· {ALL_TOOLS_CONFIG.length}</span></h3>
                 <button 
                     onClick={() => setIsToolkitExpanded(!isToolkitExpanded)}
                     className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
@@ -138,6 +140,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </button>
             </div>
             
+            {/* Dedicated tools gallery — declutters the sidebar; the quick-list stays
+                one tap away via the chevron above. */}
+            <button
+                onClick={() => { onViewChange('toolkit'); onToolSelect(null); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+                    activeView === 'toolkit'
+                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800/50 hover:text-gray-900 dark:hover:text-slate-100'
+                }`}
+            >
+                <Wrench className={`h-4.5 w-4.5 transition-transform group-hover:scale-110 ${activeView === 'toolkit' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`} />
+                <span className="flex-1 text-left">Browse all tools</span>
+                <ChevronRight className="h-3.5 w-3.5 opacity-50" />
+            </button>
+
             {isToolkitExpanded && (
                 <div className="space-y-0.5 animate-fade-in">
                     {ALL_TOOLS_CONFIG.map((tool) => {

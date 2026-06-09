@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
+import { useSiteSession } from '../hooks/useSiteSession';
 import { SiteLanguageSwitcher } from './SiteLanguageSwitcher';
 
 export const SiteMobileNav: React.FC = () => {
@@ -9,6 +10,8 @@ export const SiteMobileNav: React.FC = () => {
   const { pathname } = useLocation();
   const isEmployerSurface = pathname.startsWith(SITE_ROUTES.employers) || pathname.startsWith(SITE_ROUTES.portal);
   const { t } = useMarketingI18n();
+  const { session, isAdmin, isBusiness } = useSiteSession();
+  const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : SITE_ROUTES.workspace;
@@ -53,20 +56,46 @@ export const SiteMobileNav: React.FC = () => {
           <Link to={SITE_ROUTES.employers} className={linkClass} onClick={() => setOpen(false)}>
             {t('site_nav_for_employers')}
           </Link>
-          <Link
-            to={signInHref}
-            className="block py-3 text-sm font-medium text-[var(--site-action)]"
-            onClick={() => setOpen(false)}
-          >
-            {t('site_nav_sign_in')}
-          </Link>
-          <Link
-            to={primaryCtaHref}
-            className="block rounded-[var(--site-radius)] bg-[var(--site-action)] px-3 py-3 text-center text-sm font-semibold text-white mt-3"
-            onClick={() => setOpen(false)}
-          >
-            {isEmployerSurface ? t('business_hero_get_started_button') : t('site_cta_analyze_resume')}
-          </Link>
+          {session ? (
+            <>
+              {isAdmin && (
+                <Link to={SITE_ROUTES.admin} className={`${linkClass} text-indigo-600 font-medium`} onClick={() => setOpen(false)}>
+                  Admin Portal
+                </Link>
+              )}
+              <Link
+                to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.employers}
+                className={linkClass}
+                onClick={() => setOpen(false)}
+              >
+                {isBusiness ? 'Business Portal' : 'Want to Join Business?'}
+              </Link>
+              <Link
+                to={workspaceHref}
+                className="block rounded-[var(--site-radius)] bg-[var(--site-action)] px-3 py-3 text-center text-sm font-semibold text-white mt-3"
+                onClick={() => setOpen(false)}
+              >
+                Workspace
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                to={signInHref}
+                className="block py-3 text-sm font-medium text-[var(--site-action)]"
+                onClick={() => setOpen(false)}
+              >
+                {t('site_nav_sign_in')}
+              </Link>
+              <Link
+                to={primaryCtaHref}
+                className="block rounded-[var(--site-radius)] bg-[var(--site-action)] px-3 py-3 text-center text-sm font-semibold text-white mt-3"
+                onClick={() => setOpen(false)}
+              >
+                {isEmployerSurface ? t('business_hero_get_started_button') : t('site_cta_analyze_resume')}
+              </Link>
+            </>
+          )}
           <div className="py-3">
             <SiteLanguageSwitcher variant="mobile" />
           </div>

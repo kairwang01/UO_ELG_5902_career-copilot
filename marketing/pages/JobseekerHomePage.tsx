@@ -10,11 +10,21 @@ import { SiteFaq } from '../components/SiteFaq';
 import { WorkflowSteps } from '../components/WorkflowSteps';
 import { ToolLibrary } from '../components/ToolLibrary';
 import { SiteVerifiedTalent } from '../components/SiteVerifiedTalent';
+import { Navigate } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
+import { useSiteSession } from '../hooks/useSiteSession';
 
 export const JobseekerHomePage: React.FC = () => {
   const { t } = useMarketingI18n();
+  const { session, ready, isBusiness } = useSiteSession();
+
+  // A signed-in user has no reason to sit on the marketing home — route them to
+  // their workspace (or the hiring portal for business accounts). This is also why
+  // they no longer see a stale "Sign In" here.
+  if (ready && session) {
+    return <Navigate to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace} replace />;
+  }
   const proofPoints = [
     t('site_tool_resume_report'),
     t('site_workflow_practice_title'),

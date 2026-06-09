@@ -4,11 +4,14 @@ import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { SiteMobileNav } from './SiteMobileNav';
 import { SiteLanguageSwitcher } from './SiteLanguageSwitcher';
+import { useSiteSession } from '../hooks/useSiteSession';
 
 export const SiteHeader: React.FC = () => {
   const { pathname } = useLocation();
   const isEmployerSurface = pathname.startsWith(SITE_ROUTES.employers) || pathname.startsWith(SITE_ROUTES.portal);
   const { t } = useMarketingI18n();
+  const { session, isAdmin, isBusiness } = useSiteSession();
+  const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : SITE_ROUTES.workspace;
@@ -56,18 +59,54 @@ export const SiteHeader: React.FC = () => {
           <div className="hidden md:block">
             <SiteLanguageSwitcher />
           </div>
-          <Link
-            to={signInHref}
-            className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
-          >
-            {t('site_nav_sign_in')}
-          </Link>
-          <Link
-            to={primaryCtaHref}
-            className="hidden sm:inline-flex min-h-[40px] items-center justify-center rounded-[var(--site-radius)] bg-[var(--site-action)] px-4 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)] whitespace-nowrap"
-          >
-            {isEmployerSurface ? t('business_hero_get_started_button') : t('site_cta_analyze_resume')}
-          </Link>
+          {session ? (
+            <>
+              {isAdmin && (
+                <Link
+                  to={SITE_ROUTES.admin}
+                  className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-indigo-600 hover:text-indigo-700 whitespace-nowrap"
+                >
+                  Admin Portal
+                </Link>
+              )}
+              {isBusiness ? (
+                <Link
+                  to={SITE_ROUTES.portal}
+                  className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
+                >
+                  Business Portal
+                </Link>
+              ) : (
+                <Link
+                  to={SITE_ROUTES.employers}
+                  className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
+                >
+                  Want to Join Business?
+                </Link>
+              )}
+              <Link
+                to={workspaceHref}
+                className="hidden sm:inline-flex min-h-[40px] items-center justify-center rounded-[var(--site-radius)] bg-[var(--site-action)] px-4 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)] whitespace-nowrap"
+              >
+                Workspace
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                to={signInHref}
+                className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
+              >
+                {t('site_nav_sign_in')}
+              </Link>
+              <Link
+                to={primaryCtaHref}
+                className="hidden sm:inline-flex min-h-[40px] items-center justify-center rounded-[var(--site-radius)] bg-[var(--site-action)] px-4 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)] whitespace-nowrap"
+              >
+                {isEmployerSurface ? t('business_hero_get_started_button') : t('site_cta_analyze_resume')}
+              </Link>
+            </>
+          )}
           <SiteMobileNav />
         </div>
       </div>
