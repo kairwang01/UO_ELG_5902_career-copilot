@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BarChart3 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
 import { analyzeResume, setApiStatusUpdater } from './services/aiClient';
 import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
@@ -87,6 +87,7 @@ const buildLocalProfile = (
 
 const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'workspace' }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs'>('home');
@@ -135,7 +136,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
 
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);
-  const authQueryHandledRef = useRef(false);
   // True after Firebase fires its first onAuthStateChanged (persisted session known).
   const [authHydrated, setAuthHydrated] = useState(false);
   // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
@@ -162,21 +162,26 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   };
 
   useEffect(() => {
-    // Wait for Firebase to restore a persisted session before honouring ?auth=signin.
-    // Otherwise a returning user briefly sees session=null, the modal opens, and they
-    // must submit credentials again even though they are already signed in.
-    if (entry !== 'workspace' || !authHydrated || authQueryHandledRef.current || session) return;
+    // Honour ?auth=signin|signup|forgot on the /workspace surface. Reads react-router's
+    // reactive location.search (NOT window.location) and depends on it, so clicking the
+    // header "Sign In" link AGAIN — e.g. after signing out while still mounted on
+    // /workspace — re-opens the auth view. (Previously a one-shot ref + non-reactive
+    // window.location.search meant the second click did nothing.)
+    //
+    // Wait for Firebase to restore a persisted session first: a returning, already
+    // signed-in user must not be shown the modal (session guard below).
+    if (entry !== 'workspace' || !authHydrated || session) return;
 
-    const params = new URLSearchParams(window.location.search);
-    const auth = params.get('auth');
+    const auth = new URLSearchParams(location.search).get('auth');
     if (auth !== 'signin' && auth !== 'signup' && auth !== 'forgot') return;
 
-    authQueryHandledRef.current = true;
     setAuthMode('candidate');
     setInitialAuthView(auth === 'signup' ? 'sign_up' : auth === 'forgot' ? 'forgot_password' : 'sign_in');
     setView('auth');
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }, [entry, session, authHydrated]);
+    // Strip the query via react-router so location.search stays in sync and a refresh
+    // doesn't reopen the modal; this re-runs the effect, which then no-ops (no param).
+    navigate(location.pathname, { replace: true });
+  }, [entry, session, authHydrated, location.search, location.pathname, navigate]);
 
   // Close the auth modal as soon as a session exists (login success or async restore).
   useEffect(() => {
