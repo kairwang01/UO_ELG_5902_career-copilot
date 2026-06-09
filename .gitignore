@@ -1,4 +1,4 @@
-# Logs
+# Logs & Caches
 logs
 *.log
 npm-debug.log*
@@ -6,11 +6,20 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.npm-cache*
+.npx-cache
 
+# Dependency directories
 node_modules
+
+# Build outputs
 dist
 dist-ssr
+
+# Environment, Keys & Firebase
 *.local
+.env.local
+.firebase-cli-config
 
 # Editor directories and files
 .vscode/*
@@ -23,18 +32,13 @@ dist-ssr
 *.sln
 *.sw?
 
-# Key
-.env.local
-
-# Local project planning docs (not for GitHub)
+# Local project planning & design docs (not for GitHub)
 project-planning/
-
-# Local design reference dump (not part of the app build)
 design/
 
 # Beta screenshot QA artifacts (regenerate via npm run beta:qa)
 beta/qa-screenshots/*.png
 
-# Local tooling / scratch (not part of the app)
+# Local tooling / scratch / AI companions (not part of the app)
 .claude/
 .workbuddy/

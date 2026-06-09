@@ -1,74 +1,51 @@
 /**
- * TypeScript 接口定义 — Firestore 数据结构
- *
- * 我们的数据库已迁移到 Firestore (NoSQL)。以前的 jsonb 字段现在直接存为标准的
- * JS Object / Array。原来独立的 interview_exchanges 问答记录，现在直接作为
- * exchanges 数组内嵌在 session 里（查面试记录一次拉全，省读取费用）。求职申请里
- * 加了几个【冗余字段】（如 job_title / candidate_name），列表渲染直接用，不要二次查询。
- *
- * 来源说明：本文件最初在 firebase-migration 分支整理；合并到 dev 时补齐了之后新增的
- * 字段（email / preferred_language / custom_provider、agency 角色、job_applications
- * 的 compatibility_score）以及「平台 & 后台」集合（platform_config / usage_events /
- * credit_ledger / admin_audit_log），见文件末尾「4. 平台 & 后台集合」。
- *
- * 这些接口与 firestore.rules 里的校验器(validUser / validJobPosting / …)一一对应——
- * 改 schema 时两处一起改。
- */
+* TypeScript 接口定义 - Firestore 数据结构
+* 
+* 大家注意，我们现在的数据库正在迁移到 Firestore (NoSQL)。
+* 以前的 jsonb 字段现在直接存为标准的 JS Object 或 Array 即可。
+* 原来独立的 interview_exchanges 问答记录，现在直接作为 exchanges 数组嵌套在 session 里面了，大家查面试记录的时候一次就能全拉出来。
+* 另外，求职申请里加上了几个冗余字段（比如 job_title），列表渲染时直接用，不要去二次查询。具体的字段看 types/database.ts 即可！
+*/
 
 import { Timestamp } from 'firebase/firestore';
 
 /**
- * 💡 数据结构总览：
- *
- *  [根集合] users  (原 profiles + auth.users)
- *  ├── [子集合] career_paths
- *  ├── [子集合] interview_sessions   (interview_exchanges 已内嵌为 exchanges 数组)
- *  ├── [子集合] job_opportunities
- *  ├── [子集合] resume_analyses
- *  ├── [子集合] tool_events
- *  └── [子集合] weekly_insights
- *  [根集合] job_postings
- *  [根集合] job_applications
- *
- *  [后台 · server-only] platform_config/{llm | quotas | access | models | prompts}
- *  [后台 · server-only] usage_events  /  credit_ledger  /  admin_audit_log
+ * 💡 数据结构总览 (对应原 10 张 SQL 表)：
+ * * [根集合] users (原 profiles + auth.users)
+ * ├── [子集合] career_paths (原 career_path_analyses)
+ * ├── [子集合] interview_sessions (原 interview_sessions + interview_exchanges 内嵌)
+ * ├── [子集合] job_opportunities (原 job_opportunities)
+ * ├── [子集合] resume_analyses (原 resume_analyses)
+ * ├── [子集合] tool_events (原 tool_usage_events)
+ * └── [子集合] weekly_insights (原 weekly_insights)
+ * * [根集合] job_postings (原 job_postings)
+ * [根集合] job_applications (原 job_applications)
  */
 
-// ==========================================
-// 1. 根集合: users (用户主表)   路径: /users/{uid}
-// ==========================================
 
-/** 雇主/商家自带 LLM 端点 (BYOA)。仅服务端经 setBusinessLlmConfig 写入；客户端不可改。 */
-export interface CustomProviderConfig {
-  base_url: string;
-  api_key: string;
-  model: string;
-}
-
+// ==========================================
+// 1. 根集合: users (用户主表)
+// 路径: /users/{uid}
+// ==========================================
 export interface UserDocument {
-  role: 'candidate' | 'employer' | 'agency'; // 默认 'candidate'
+  role: 'candidate' | 'employer'; // 默认 'candidate'
   full_name?: string;
-  email?: string;                 // 以 Firebase Auth 为权威来源；文档内为冗余
-  preferred_language?: string;
   avatar_url?: string;
-  subscription_status?: string;   // 'free' | 'essentials' | 'accelerator' | 'executive' | 'single_post' | 'job_pack' | 'pending_*'
+  subscription_status?: string;
   resume_text?: string;
-
+  
   // 雇主专属字段
   company_name?: string;
   company_description?: string;
   company_logo_url?: string;
   company_website?: string;
-
+  
   // 业务状态字段
-  english_pro_streak: number;     // 默认 0
+  english_pro_streak: number; // 默认 0
   english_pro_last_practice?: Timestamp;
   wallet_address?: string;
-  credits: number;                // 默认 100 (初始授予)
-
-  // LLM 自定义端点 (business / BYOA) — 仅服务端写入
-  custom_provider?: CustomProviderConfig;
-
+  credits: number; // 默认 0
+  
   created_at: Timestamp;
   updated_at?: Timestamp;
 }
@@ -82,9 +59,9 @@ export interface CareerPathDocument {
   desired_role: string;
   summary?: string;
   // 原 jsonb 字段转换为 TS 的 Record 或数组
-  skill_gaps?: Record<string, any>;
-  actionable_steps?: any[];
-  bridge_roles?: any[];
+  skill_gaps?: Record<string, any>; 
+  actionable_steps?: any[]; 
+  bridge_roles?: any[]; 
   created_at: Timestamp;
 }
 
@@ -111,23 +88,23 @@ export interface JobOpportunityDocument {
   job_title: string;
   company: string;
   location?: string;
-  url: string;                    // 原来是 UNIQUE，Firestore 中需在代码层校验
+  url: string; // 原来是 UNIQUE，Firestore 中需在代码层校验
   ai_summary?: string;
   compatibility_score?: number;
   missing_skills?: Record<string, any>; // 原 jsonb
-  is_saved: boolean;              // 默认 true
+  is_saved: boolean; // 默认 true
   created_at: Timestamp;
 }
 
 // 路径: /users/{uid}/resume_analyses
 export interface ResumeAnalysisDocument {
-  event_id?: string;              // 关联的 tool_event ID
-  score: number;                  // 0 - 100
+  event_id?: string; // 关联的 tool_event ID
+  score: number; // 0 - 100
   market_name: string;
   summary?: string;
-  strengths?: any[];              // 原 jsonb
-  improvements?: any[];           // 原 jsonb
-  keywords?: string[];            // 原 jsonb
+  strengths?: any[]; // 原 jsonb
+  improvements?: any[]; // 原 jsonb
+  keywords?: string[]; // 原 jsonb
   created_at: Timestamp;
 }
 
@@ -146,118 +123,35 @@ export interface WeeklyInsightDocument {
   created_at: Timestamp;
 }
 
+
 // ==========================================
 // 3. 根集合: 职位与申请
 // ==========================================
 
 // 路径: /job_postings/{job_id}
 export interface JobPostingDocument {
-  employer_id: string;            // 关联 User UID
+  employer_id: string; // 关联 User UID
   title: string;
   description?: string;
   location?: string;
   salary_range?: string;
-  is_active: boolean;             // 默认 true
+  is_active: boolean; // 默认 true
   created_at: Timestamp;
   updated_at: Timestamp;
 }
 
 // 路径: /job_applications/{application_id}
 export interface JobApplicationDocument {
-  job_id: string;                 // 关联 JobPosting ID
-  candidate_id: string;           // 关联 User UID (候选人)
-
-  // 💡 重点：以下为 NoSQL 独有的【冗余字段】，避免前端同时查 users 和 job_postings
-  employer_id: string;
+  job_id: string; // 关联 JobPosting ID
+  candidate_id: string; // 关联 User UID (候选人)
+  
+  // 💡 重点：以下为 NoSQL 独有的【冗余字段】
+  // 为了避免前端同时去查 users 表和 job_postings 表，这里冗余存储常用信息
+  employer_id: string; 
   job_title: string;
   candidate_name: string;
-
-  status: 'Applied' | 'Interviewing' | 'Rejected' | 'Hired'; // 默认 'Applied'
-  compatibility_score?: number;   // dev 新增：申请时记录匹配度
+  
+  status: 'Applied' | 'Interviewing' | 'Rejected' | 'Hired'; // 原默认 'Applied'
   notes?: string;
   application_date: Timestamp;
-}
-
-// ==========================================
-// 4. 平台 & 后台集合 (Admin platform — dev 新增, 仅服务端 / Admin SDK 读写)
-//    firestore.rules 对客户端一律默认拒绝；只有 admin* Cloud Functions 可读写。
-// ==========================================
-
-// 路径: /platform_config/llm  — admin 管理的 LLM 凭证 (api_key 仅服务端可见，前端只拿掩码)
-export interface PlatformLlmConfig {
-  gemini_api_key?: string;
-  gemini_model?: string;
-  kairllm_api_key?: string;
-  kairllm_base_url?: string;
-  deepseek_api_key?: string;
-  deepseek_base_url?: string;
-  updated_at?: string;            // ISO 字符串
-  updated_by?: string;            // admin uid
-}
-
-// 路径: /platform_config/quotas  — 全局/单用户每日上限 (0 = 不限)
-export interface PlatformQuotas {
-  daily_tool_run_limit?: number;
-  daily_credit_spend_limit?: number;
-  per_user_daily_credit_limit?: number;
-  enabled?: boolean;
-  updated_at?: string;
-  updated_by?: string;
-}
-
-// 路径: /platform_config/access  — 管理员白名单
-export interface PlatformAccess {
-  admin_uids?: string[];
-  updated_at?: string;
-  updated_by?: string;
-}
-
-// 单条模型注册项 (platform_config/models.models[])
-export interface ModelEntry {
-  id: string;                     // 选择 id（前端 picker 用）
-  label: string;                  // 显示名（可在 admin 改）
-  provider: 'gemini' | 'openai-compatible';
-  base_url?: string;              // openai-compatible 自定义端点
-  api_key?: string;               // 自定义 key；builtin 时可省（继承 platform_config/llm）
-  builtin?: 'kairllm' | 'deepseek';
-  providerModel: string;          // 传给 provider 的 model（'' = provider 默认）
-  minTier: 'free' | 'paid' | 'business';
-  enabled: boolean;
-}
-
-// 路径: /platform_config/models  — 动态模型注册表（空 = 用代码内置 DEFAULT_MODELS）
-export interface PlatformModels {
-  models?: ModelEntry[];
-}
-
-// 路径: /platform_config/prompts  — { promptKey: 模板字符串 }，覆盖代码内置默认提示词
-export type PlatformPrompts = Record<string, string>;
-
-// 路径: /usage_events/{id}  — 每次计费工具运行的事件流
-export interface UsageEventDocument {
-  uid: string;
-  tool: string;
-  credit_cost: number;
-  status: 'deducted' | 'refunded';
-  created_at: Timestamp;
-}
-
-// 路径: /credit_ledger/{id}  — 积分流水（扣费 / 退款 / 管理员调整）
-export interface CreditLedgerDocument {
-  uid: string;
-  amount: number;                 // +增 / -扣
-  balance_after: number;
-  reason: string;                 // e.g. 'admin_adjustment' | tool key
-  tool?: string;
-  admin_uid?: string;             // 管理员调整时记录
-  created_at: Timestamp;
-}
-
-// 路径: /admin_audit_log/{id}  — 所有 admin 变更的只读审计流水（绝不记录原始 key）
-export interface AdminAuditDocument {
-  admin_uid: string;
-  action: string;                 // adjust_credits | set_subscription | set_admin | update_llm_config | update_quotas | create_model | update_model | delete_model | test_model | ...
-  target_uid?: string | null;
-  details?: Record<string, unknown>;
-  created_at: Timestamp;
 }
