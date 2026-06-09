@@ -85,14 +85,14 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
   const renderFallback = () => (
     <div className="space-y-4">
-        <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400">
-            <h4 className="font-bold text-yellow-800">AI Not Available</h4>
-            <p className="text-sm text-yellow-700 mt-1">The AI service is currently unavailable. You can use this professional template to get started on your cover letter.</p>
+        <div className="p-4 bg-yellow-50 dark:bg-amber-900/20 border-l-4 border-yellow-400">
+            <h4 className="font-bold text-yellow-800 dark:text-amber-300">AI Not Available</h4>
+            <p className="text-sm text-yellow-700 dark:text-amber-300 mt-1">The AI service is currently unavailable. You can use this professional template to get started on your cover letter.</p>
         </div>
         <textarea
           value={COVER_LETTER_TEMPLATE}
           onChange={(e) => setEditableResult(e.target.value)}
-          className="w-full h-96 p-4 border rounded-lg bg-white font-serif text-sm"
+          className="w-full h-96 p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-serif text-sm dark:text-gray-300"
         />
         <DownloadButtons textContent={editableResult || COVER_LETTER_TEMPLATE} baseFilename="cover_letter_template" />
     </div>
@@ -101,7 +101,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   const renderInput = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <textarea
-        className="w-full h-40 bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
+        className="w-full h-40 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
         placeholder={t('tool_cover_letter_placeholder')}
         value={jobDescription}
         onChange={(e) => setJobDescription(e.target.value)}
@@ -135,13 +135,13 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h4 className="text-lg font-bold">{t('tool_cover_letter_results_title')}</h4>
+          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_cover_letter_results_title')}</h4>
           <DownloadButtons textContent={editableResult} baseFilename="cover_letter" />
         </div>
         <textarea
           value={editableResult}
           onChange={(e) => setEditableResult(e.target.value)}
-          className="w-full h-96 p-4 border rounded-lg bg-white font-serif text-sm"
+          className="w-full h-96 p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-serif text-sm dark:text-gray-300"
         />
       </div>
     );

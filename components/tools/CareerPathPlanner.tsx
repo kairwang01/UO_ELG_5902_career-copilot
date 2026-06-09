@@ -78,10 +78,10 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
   const renderInput = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-sm text-gray-600">{t('tool_career_path_setup_desc')}</p>
+      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_career_path_setup_desc')}</p>
       <input
         type="text"
-        className="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
+        className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
         placeholder={t('tool_career_path_placeholder')}
         value={desiredRole}
         onChange={(e) => setDesiredRole(e.target.value)}
@@ -138,17 +138,17 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
           <DownloadButtons textContent={formatForDownload(result)} baseFilename={`career_roadmap_for_${desiredRole.replace(/\s/g, '_')}`} />
         </div>
         
-        <p className="text-gray-700 p-4 bg-blue-50 border border-blue-200 rounded-lg">{summary}</p>
-        
+        <p className="text-gray-700 dark:text-gray-300 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-lg">{summary}</p>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-4 border rounded-lg bg-white">
-              <h5 className="font-bold text-yellow-800">{t('tool_career_path_skill_gaps')}</h5>
-              <ul className="mt-2 space-y-3 text-gray-800 text-sm">
+            <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+              <h5 className="font-bold text-yellow-800 dark:text-amber-300">{t('tool_career_path_skill_gaps')}</h5>
+              <ul className="mt-2 space-y-3 text-gray-800 dark:text-gray-300 text-sm">
                 {overallSkillGaps.map(gap => (
                     <li key={gap.skill}>
                         <div className="flex justify-between items-start">
                            <span><strong>{gap.skill}:</strong> {gap.reason}</span>
-                           <button onClick={() => handleGenerateProject(gap.skill)} disabled={generatingProjectForSkill === gap.skill} className="ml-2 flex-shrink-0 text-xs bg-yellow-100 text-yellow-800 font-semibold px-2 py-1 rounded-full hover:bg-yellow-200 disabled:opacity-50">
+                           <button onClick={() => handleGenerateProject(gap.skill)} disabled={generatingProjectForSkill === gap.skill} className="ml-2 flex-shrink-0 text-xs bg-yellow-100 dark:bg-amber-900/20 text-yellow-800 dark:text-amber-300 font-semibold px-2 py-1 rounded-full hover:bg-yellow-200 dark:hover:bg-amber-900/30 disabled:opacity-50">
                                {generatingProjectForSkill === gap.skill ? '...' : 'Project'}
                            </button>
                         </div>
@@ -156,22 +156,22 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                 ))}
               </ul>
             </div>
-             <div className="p-4 border rounded-lg bg-white">
-              <h5 className="font-bold text-indigo-800">{t('tool_career_path_bridge_roles')}</h5>
-              <ul className="list-disc list-inside mt-2 space-y-2 text-gray-800 text-sm">
+             <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+              <h5 className="font-bold text-indigo-800 dark:text-indigo-300">{t('tool_career_path_bridge_roles')}</h5>
+              <ul className="list-disc list-inside mt-2 space-y-2 text-gray-800 dark:text-gray-300 text-sm">
                 {bridgeRoles.map(role => <li key={role.title}><strong>{role.title}:</strong> {role.reason}</li>)}
               </ul>
             </div>
         </div>
-        
+
         {(generatedProject || projectError) && (
-            <div className="p-4 border-2 border-dashed border-blue-300 bg-blue-50 rounded-lg animate-fade-in">
-                 <h3 className="font-bold text-lg text-blue-800 mb-3">Skill Bridge Project Idea</h3>
-                 {projectError && <div className="text-red-600 bg-red-100 p-4 rounded-lg">{projectError}</div>}
+            <div className="p-4 border-2 border-dashed border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 rounded-lg animate-fade-in">
+                 <h3 className="font-bold text-lg text-blue-800 dark:text-blue-300 mb-3">Skill Bridge Project Idea</h3>
+                 {projectError && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-lg">{projectError}</div>}
                  {generatedProject && (
                      <div className="space-y-3">
-                        <h4 className="font-semibold text-blue-900">{generatedProject.projectTitle}</h4>
-                        <p className="text-sm italic text-gray-600">{generatedProject.objective}</p>
+                        <h4 className="font-semibold text-blue-900 dark:text-blue-300">{generatedProject.projectTitle}</h4>
+                        <p className="text-sm italic text-gray-600 dark:text-gray-400">{generatedProject.objective}</p>
                         <div>
                             <p className="text-sm font-semibold">Key Features:</p>
                             <ul className="list-disc list-inside text-sm ml-4">{generatedProject.keyFeatures.map((f, i) => <li key={i}>{f}</li>)}</ul>
@@ -201,29 +201,29 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                     <span className="absolute -left-[35px] flex items-center justify-center w-6 h-6 bg-blue-600 rounded-full ring-4 ring-white">
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4zM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10zM5 13h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2z" /></svg>
                     </span>
-                    <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <div className="p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm">
                         <div className="flex justify-between items-center mb-2">
-                            <h4 className="text-lg font-semibold text-gray-900">{phase.phaseTitle}</h4>
-                            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">{phase.estimatedDuration}</span>
+                            <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{phase.phaseTitle}</h4>
+                            <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs font-medium px-2.5 py-0.5 rounded-full">{phase.estimatedDuration}</span>
                         </div>
-                        <p className="text-sm italic text-gray-600 mb-4">{phase.goal}</p>
-                        
+                        <p className="text-sm italic text-gray-600 dark:text-gray-400 mb-4">{phase.goal}</p>
+
                         <div className="space-y-4">
-                           <h6 className="font-semibold text-gray-700">Actionable Steps:</h6>
+                           <h6 className="font-semibold text-gray-700 dark:text-gray-300">Actionable Steps:</h6>
                             {phase.actionableSteps.map((step, stepIndex) => (
-                                <div key={stepIndex} className="text-sm p-3 bg-gray-50 rounded-md border">
-                                    <div className="flex items-center gap-2 font-semibold text-gray-800">
+                                <div key={stepIndex} className="text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md border dark:border-slate-600">
+                                    <div className="flex items-center gap-2 font-semibold text-gray-800 dark:text-gray-200">
                                         {actionIcons[step.type]}
                                         <span className="capitalize">{step.type}</span>
                                     </div>
-                                    <p className="mt-1 pl-7">{step.description}</p>
+                                    <p className="mt-1 pl-7 dark:text-gray-300">{step.description}</p>
                                     {step.resources && step.resources.length > 0 && (
-                                        <p className="text-xs mt-2 pl-7 text-gray-500"><strong>Resources:</strong> {step.resources.join(', ')}</p>
+                                        <p className="text-xs mt-2 pl-7 text-gray-500 dark:text-gray-400"><strong>Resources:</strong> {step.resources.join(', ')}</p>
                                     )}
                                 </div>
                             ))}
 
-                            <h6 className="font-semibold text-gray-700 pt-2">Milestones:</h6>
+                            <h6 className="font-semibold text-gray-700 dark:text-gray-300 pt-2">Milestones:</h6>
                              <ul className="list-none space-y-2">
                                 {phase.milestones.map((milestone, msIndex) => (
                                 <li key={msIndex} className="flex items-start text-sm">

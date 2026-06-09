@@ -41,13 +41,13 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const renderInput = () => (
     <div className="space-y-4 animate-fade-in">
       <div>
-        <label htmlFor="target-market" className="block text-sm font-medium text-gray-700">Target Market</label>
-        <p className="text-xs text-gray-500">The AI will adapt the format, language, and ATS standards for this country.</p>
+        <label htmlFor="target-market" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Market</label>
+        <p className="text-xs text-gray-500 dark:text-gray-400">The AI will adapt the format, language, and ATS standards for this country.</p>
         <select
           id="target-market"
           value={targetMarket}
           onChange={(e) => setTargetMarket(e.target.value)}
-          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
         >
           {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
@@ -64,17 +64,17 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
           />
         </div>
         <div className="ml-3 text-sm leading-6">
-          <label htmlFor="include-cover-letter" className="font-medium text-gray-900">{t('tool_resume_formatter_include_cover_letter_label')}</label>
-          <p className="text-gray-500">{t('tool_resume_formatter_include_cover_letter_desc')}</p>
+          <label htmlFor="include-cover-letter" className="font-medium text-gray-900 dark:text-gray-100">{t('tool_resume_formatter_include_cover_letter_label')}</label>
+          <p className="text-gray-500 dark:text-gray-400">{t('tool_resume_formatter_include_cover_letter_desc')}</p>
         </div>
       </div>
       {includeCoverLetter && (
         <div className="animate-fade-in">
-          <label htmlFor="cover-letter-text" className="block text-sm font-medium text-gray-700 mb-1">{t('tool_resume_formatter_cover_letter_label')}</label>
+          <label htmlFor="cover-letter-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_resume_formatter_cover_letter_label')}</label>
           <textarea
             id="cover-letter-text"
             rows={10}
-            className="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
+            className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
             placeholder={t('tool_resume_formatter_cover_letter_placeholder')}
             value={coverLetterForFormatting}
             onChange={(e) => setCoverLetterForFormatting(e.target.value)}
@@ -101,13 +101,13 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h4 className="text-lg font-bold">{t('tool_resume_formatter_results_title')} for {targetMarket}</h4>
+          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} for {targetMarket}</h4>
           <DownloadButtons textContent={formattedText} baseFilename={`${targetMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
         </div>
-        <div className="p-4 border rounded-lg bg-white max-h-96 overflow-y-auto font-serif text-sm">
+        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 max-h-96 overflow-y-auto font-serif text-sm dark:text-gray-300">
           {renderFormattedText(formattedText)}
         </div>
-        <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200">
+        <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300">
             &larr; Localize for Another Market
         </button>
       </div>

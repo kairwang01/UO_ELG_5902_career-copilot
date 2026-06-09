@@ -121,21 +121,26 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
         }
     }, [profile]);
 
-    const handlePracticeCompletion = useCallback(async () => {
+    // FIX 5: accept an optional alive guard so that a cancelled run cannot pop
+    // a streak/error update after the component has already moved on.
+    const handlePracticeCompletion = useCallback(async (alive?: () => boolean) => {
         if (!session?.user || !profile) return;
 
         // Prevent updating streak if goal is already complete for the day
         if (dailyGoalComplete) return;
 
+        // Guard: if the caller was cancelled before we reach state updates, bail.
+        if (alive && !alive()) return;
+
         setDailyGoalComplete(true);
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0];
-        
+
         const lastPracticeDateStr = profile.english_pro_last_practice;
         const currentStreak = profile.english_pro_streak || 0;
-        
+
         let newStreak = 1; // Default to 1 for a new or broken streak
-        
+
         if (lastPracticeDateStr) {
             const lastDate = new Date(lastPracticeDateStr);
             if (isYesterday(lastDate, today)) {
@@ -157,7 +162,8 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             await refreshProfile();
         } catch (dbError) {
             console.error("Failed to update streak in database:", dbError);
-            setError("Could not save your practice progress. Your analysis is still available.");
+            // Only surface the error if the run was not cancelled.
+            if (!alive || alive()) setError("Could not save your practice progress. Your analysis is still available.");
         }
     }, [session, profile, refreshProfile, dailyGoalComplete]);
 
@@ -186,7 +192,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             const res = await analyzeEnglishProficiency(writtenInput, nativeLanguage, targetIeltsBand);
             if (!alive()) return;
             setWrittenResult(res);
-            await handlePracticeCompletion();
+            await handlePracticeCompletion(alive);
         } catch (err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
         finally { if (alive()) end(); }
     };
@@ -199,7 +205,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             const res = await analyzeSpokenEnglish(finalTranscript, duration, targetIeltsBand);
             if (!alive()) return;
             setSpokenResult(res);
-            await handlePracticeCompletion();
+            await handlePracticeCompletion(alive);
         } catch (err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
         finally { if (alive()) end(); }
     }, [targetIeltsBand, handlePracticeCompletion, begin, end]);
@@ -275,7 +281,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             if (!alive()) return;
             setReadingComprehensionResult(res);
             setReadingSubMode('comprehension');
-            await handlePracticeCompletion();
+            await handlePracticeCompletion(alive);
         } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
         finally { if (alive()) end(); }
     };
@@ -300,7 +306,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             const evaluation = await evaluateReadingComprehension(textToUse, res.comprehensionQuestions, userAnswers);
             if (!alive()) return;
             setReadingEvaluation(evaluation);
-            await handlePracticeCompletion();
+            await handlePracticeCompletion(alive);
         } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
         finally { if (alive()) end(); }
     };
@@ -326,22 +332,22 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             const res = await analyzeEnglishListening(currentClip.text, userTranscription, targetIeltsBand);
             if (!alive()) return;
             setListeningResult(res);
-            await handlePracticeCompletion();
+            await handlePracticeCompletion(alive);
         } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
         finally { if (alive()) end(); }
     };
     
     // UI Renderers
     const renderResultCard = (title: string, content: React.ReactNode) => (
-        <div className="p-4 border rounded-lg bg-white">
-            <h5 className="font-bold text-gray-800">{title}</h5>
-            <div className="mt-2 text-sm">{content}</div>
+        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+            <h5 className="font-bold text-gray-800 dark:text-gray-100">{title}</h5>
+            <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">{content}</div>
         </div>
     );
     
     const renderPracticeHub = () => (
         <div className="space-y-6">
-            <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg text-center">
+            <div className="p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/60 rounded-lg text-center">
                  <div className="flex justify-center items-center gap-4">
                     <div className="relative">
                         <svg className="w-16 h-16" viewBox="0 0 100 100">
@@ -364,37 +370,37 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         </div>
                     </div>
                     <div>
-                        <h3 className="text-2xl font-bold text-gray-800">Day Streak</h3>
-                        <p className="text-gray-600">Keep practicing daily to build your streak!</p>
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Day Streak</h3>
+                        <p className="text-gray-600 dark:text-gray-300">Keep practicing daily to build your streak!</p>
                     </div>
                 </div>
                 {dailyGoalComplete && <p className="text-green-600 font-semibold mt-3">Daily practice goal complete.</p>}
             </div>
 
             <div className="space-y-3">
-                 <label htmlFor="ielts-band" className="block text-sm font-medium text-gray-700">{t('tool_english_pro_goal_setting_title')}</label>
-                 <p className="text-xs text-gray-500">{t('tool_english_pro_goal_setting_desc')}</p>
-                 <select id="ielts-band" value={targetIeltsBand} onChange={e => setTargetIeltsBand(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                 <label htmlFor="ielts-band" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_english_pro_goal_setting_title')}</label>
+                 <p className="text-xs text-gray-500 dark:text-gray-400">{t('tool_english_pro_goal_setting_desc')}</p>
+                 <select id="ielts-band" value={targetIeltsBand} onChange={e => setTargetIeltsBand(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
                     {IELTS_BANDS.map(band => <option key={band} value={band}>{band}</option>)}
                  </select>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button onClick={() => setPracticeMode('written')} className="p-6 bg-white border rounded-lg text-left hover:shadow-lg hover:border-blue-300">
-                    <h4 className="font-bold text-lg">Written Practice</h4>
-                    <p className="text-sm text-gray-600">Write professional emails and get instant feedback on grammar, tone, and vocabulary.</p>
+                <button onClick={() => setPracticeMode('written')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">Written Practice</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Write professional emails and get instant feedback on grammar, tone, and vocabulary.</p>
                 </button>
-                 <button onClick={() => setPracticeMode('spoken')} className="p-6 bg-white border rounded-lg text-left hover:shadow-lg hover:border-blue-300">
-                    <h4 className="font-bold text-lg">Spoken Practice</h4>
-                    <p className="text-sm text-gray-600">Practice speaking on professional topics and get analyzed for clarity, pacing, and filler words.</p>
+                 <button onClick={() => setPracticeMode('spoken')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">Spoken Practice</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Practice speaking on professional topics and get analyzed for clarity, pacing, and filler words.</p>
                 </button>
-                 <button onClick={() => setPracticeMode('reading')} className="p-6 bg-white border rounded-lg text-left hover:shadow-lg hover:border-blue-300">
-                    <h4 className="font-bold text-lg">Reading Practice</h4>
-                    <p className="text-sm text-gray-600">Test your comprehension with AI-generated passages and questions or practice vocabulary with flashcards.</p>
+                 <button onClick={() => setPracticeMode('reading')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">Reading Practice</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Test your comprehension with AI-generated passages and questions or practice vocabulary with flashcards.</p>
                 </button>
-                 <button onClick={() => setPracticeMode('listening')} className="p-6 bg-white border rounded-lg text-left hover:shadow-lg hover:border-blue-300">
-                    <h4 className="font-bold text-lg">Listening Practice</h4>
-                    <p className="text-sm text-gray-600">Listen to short audio clips and transcribe them to test your listening accuracy.</p>
+                 <button onClick={() => setPracticeMode('listening')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">Listening Practice</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Listen to short audio clips and transcribe them to test your listening accuracy.</p>
                 </button>
             </div>
         </div>
@@ -405,36 +411,36 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             {!writtenResult ? (
                 <>
                     <div>
-                        <label htmlFor="native-language" className="block text-sm font-medium text-gray-700">{t('tool_english_pro_lang_label')}</label>
-                        <p className="text-xs text-gray-500">{t('tool_english_pro_lang_desc')}</p>
-                        <select id="native-language" value={nativeLanguage} onChange={e => setNativeLanguage(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <label htmlFor="native-language" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_english_pro_lang_label')}</label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('tool_english_pro_lang_desc')}</p>
+                        <select id="native-language" value={nativeLanguage} onChange={e => setNativeLanguage(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
                             {SUPPORTED_LANGUAGES.map(lang => <option key={lang}>{lang}</option>)}
                         </select>
                     </div>
                      <div>
-                        <label htmlFor="email-text" className="block text-sm font-medium text-gray-700">{t('tool_english_pro_prompt_label')}</label>
-                         <p className="text-xs text-gray-500">{t('tool_english_pro_prompt_desc')}</p>
-                        <div className="flex flex-wrap gap-2 my-2">{ENGLISH_PRO_TOPICS.map((topic, i) => <button key={i} onClick={() => setWrittenInput(t(`tool_english_pro_topic_${i + 1}`))} className="text-xs bg-gray-100 hover:bg-gray-200 p-2 rounded-md">{t(`tool_english_pro_topic_${i + 1}`)}</button>)}</div>
-                        <textarea id="email-text" value={writtenInput} onChange={e => setWrittenInput(e.target.value)} rows={8} className="w-full border-gray-300 rounded-md shadow-sm" placeholder={t('tool_english_pro_placeholder')} />
+                        <label htmlFor="email-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_english_pro_prompt_label')}</label>
+                         <p className="text-xs text-gray-500 dark:text-gray-400">{t('tool_english_pro_prompt_desc')}</p>
+                        <div className="flex flex-wrap gap-2 my-2">{ENGLISH_PRO_TOPICS.map((topic, i) => <button key={i} onClick={() => setWrittenInput(t(`tool_english_pro_topic_${i + 1}`))} className="text-xs bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 p-2 rounded-md">{t(`tool_english_pro_topic_${i + 1}`)}</button>)}</div>
+                        <textarea id="email-text" value={writtenInput} onChange={e => setWrittenInput(e.target.value)} rows={8} className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm" placeholder={t('tool_english_pro_placeholder')} />
                     </div>
                     <button onClick={runWrittenTool} disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">{loading ? t('tool_english_pro_analyzing_button') : t('tool_english_pro_analyze_button')}</button>
                 </>
             ) : (
                 <div className="space-y-4">
-                    <h4 className="font-bold text-lg text-center">{t('tool_english_pro_results_title')}</h4>
-                    {renderResultCard(t('tool_english_pro_cefr_label'), <p className="font-bold text-blue-600 text-xl">{writtenResult.overallBand.level} <span className="text-sm font-normal text-gray-600">- {writtenResult.overallBand.description}</span></p>)}
+                    <h4 className="font-bold text-lg text-center text-gray-900 dark:text-gray-100">{t('tool_english_pro_results_title')}</h4>
+                    {renderResultCard(t('tool_english_pro_cefr_label'), <p className="font-bold text-blue-600 dark:text-blue-400 text-xl">{writtenResult.overallBand.level} <span className="text-sm font-normal text-gray-600 dark:text-gray-400">- {writtenResult.overallBand.description}</span></p>)}
                     {writtenResult.culturalTip && renderResultCard(t('tool_english_pro_cultural_tip'), <p>{writtenResult.culturalTip}</p>)}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {renderResultCard(t('tool_english_pro_original_label'), <p className="whitespace-pre-wrap">{originalWrittenInput}</p>)}
                         {renderResultCard(t('tool_english_pro_corrected_label'), <p className="whitespace-pre-wrap">{writtenResult.correctedEmail}</p>)}
                     </div>
                     {renderResultCard(t('tool_english_pro_feedback_label'), (
-                        <ul className="space-y-3">{writtenResult.improvementAreas.map((area, i) => <li key={i}><strong>{area.category}:</strong> <span className="line-through text-red-600">{area.originalText}</span> &rarr; <span className="text-green-600">{area.suggestion}</span><br/><em className="text-xs text-gray-500">{area.explanation}</em></li>)}</ul>
+                        <ul className="space-y-3">{writtenResult.improvementAreas.map((area, i) => <li key={i}><strong>{area.category}:</strong> <span className="line-through text-red-600">{area.originalText}</span> &rarr; <span className="text-green-600">{area.suggestion}</span><br/><em className="text-xs text-gray-500 dark:text-gray-400">{area.explanation}</em></li>)}</ul>
                     ))}
-                    <button onClick={() => setWrittenResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200">{t('tool_english_pro_practice_again_button')}</button>
+                    <button onClick={() => setWrittenResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300">{t('tool_english_pro_practice_again_button')}</button>
                 </div>
             )}
-            <button onClick={handleStartNewPractice} className="text-sm text-blue-600 hover:underline">&larr; Back to English Pro Hub</button>
+            <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; Back to English Pro Hub</button>
         </div>
     );
     
@@ -442,7 +448,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     
     // Main component return
     return (
-        <div className="p-4 bg-gray-50 rounded-lg animate-fade-in">
+        <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-lg animate-fade-in">
             {error && <div className="text-red-600 bg-red-100 p-3 rounded-md text-sm mb-4">{error}</div>}
             {loading ? (
                 <StagedLoader

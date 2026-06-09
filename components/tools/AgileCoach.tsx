@@ -66,16 +66,16 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
 
   const renderSetup = () => (
     <div className="space-y-4">
-      <p className="text-sm text-gray-600">{t('tool_agile_coach_setup_desc')}</p>
+      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_agile_coach_setup_desc')}</p>
       <div>
-        <label htmlFor="agile-role" className="block text-sm font-medium text-gray-700">{t('tool_agile_coach_role_label')}</label>
-        <select id="agile-role" value={selectedAgileRole} onChange={e => setSelectedAgileRole(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+        <label htmlFor="agile-role" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_agile_coach_role_label')}</label>
+        <select id="agile-role" value={selectedAgileRole} onChange={e => setSelectedAgileRole(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
           {AGILE_ROLES.map(role => <option key={role}>{role}</option>)}
         </select>
       </div>
       <div>
-        <label htmlFor="agile-cert" className="block text-sm font-medium text-gray-700">{t('tool_agile_coach_cert_label')}</label>
-        <select id="agile-cert" value={selectedCertification} onChange={e => setSelectedCertification(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+        <label htmlFor="agile-cert" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_agile_coach_cert_label')}</label>
+        <select id="agile-cert" value={selectedCertification} onChange={e => setSelectedCertification(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
           {AGILE_CERTIFICATIONS.map(cert => <option key={cert}>{cert}</option>)}
         </select>
       </div>
@@ -90,21 +90,21 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
     const currentQuestion = result.practiceQuestions[currentQuestionIndex];
     return (
       <div className="animate-fade-in">
-        <h4 className="font-bold text-lg text-gray-800">{result.examTitle}</h4>
-        <p className="text-sm text-gray-500 mb-4">{t('tool_agile_coach_question_of').replace('{current}', String(currentQuestionIndex + 1)).replace('{total}', String(result.practiceQuestions.length))}</p>
-        <div className="p-4 border rounded-lg bg-gray-50 mb-4">
-          <p className="font-semibold text-gray-900">{currentQuestion.questionText}</p>
+        <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100">{result.examTitle}</h4>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{t('tool_agile_coach_question_of').replace('{current}', String(currentQuestionIndex + 1)).replace('{total}', String(result.practiceQuestions.length))}</p>
+        <div className="p-4 border dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-700 mb-4">
+          <p className="font-semibold text-gray-900 dark:text-gray-100">{currentQuestion.questionText}</p>
         </div>
         <div className="space-y-3">
           {currentQuestion.options.map((option, index) => (
-            <button key={index} onClick={() => handleAnswerSelect(index)} className={`w-full text-left p-3 border rounded-lg transition-colors flex items-start ${userAnswers[currentQuestionIndex] === index ? 'bg-blue-100 border-blue-400' : 'bg-white border-gray-300 hover:bg-gray-100'}`}>
-              <span className={`mr-3 flex-shrink-0 flex items-center justify-center h-6 w-6 rounded-full text-sm font-bold ${userAnswers[currentQuestionIndex] === index ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>{String.fromCharCode(65 + index)}</span>
+            <button key={index} onClick={() => handleAnswerSelect(index)} className={`w-full text-left p-3 border rounded-lg transition-colors flex items-start ${userAnswers[currentQuestionIndex] === index ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 dark:text-gray-300'}`}>
+              <span className={`mr-3 flex-shrink-0 flex items-center justify-center h-6 w-6 rounded-full text-sm font-bold ${userAnswers[currentQuestionIndex] === index ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300'}`}>{String.fromCharCode(65 + index)}</span>
               <span>{option}</span>
             </button>
           ))}
         </div>
         <div className="mt-6 flex justify-between items-center">
-          <span className="text-sm text-gray-600">{t('tool_agile_coach_answered').replace('{answered}', String(userAnswers.filter(a => a !== null).length)).replace('{total}', String(result.practiceQuestions.length))}</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">{t('tool_agile_coach_answered').replace('{answered}', String(userAnswers.filter(a => a !== null).length)).replace('{total}', String(result.practiceQuestions.length))}</span>
           {currentQuestionIndex < result.practiceQuestions.length - 1 ? (
             <button onClick={handleNextQuestion} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">{t('tool_agile_coach_next_button')}</button>
           ) : (
@@ -122,27 +122,27 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
     return (
       <div className="animate-fade-in space-y-6">
         <div>
-          <h4 className="text-xl font-bold text-gray-900">{t('tool_agile_coach_results_title')}</h4>
+          <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('tool_agile_coach_results_title')}</h4>
           <p className="text-2xl font-semibold" style={{ color: score >= 70 ? '#16a34a' : '#dc2626' }}>{t('tool_agile_coach_score').replace('{score}', score.toFixed(0)).replace('{correct}', String(correctAnswers)).replace('{total}', String(result.practiceQuestions.length))}</p>
         </div>
         <div className="space-y-4">
-          <h5 className="font-bold text-lg">{t('tool_agile_coach_review_answers')}</h5>
+          <h5 className="font-bold text-lg dark:text-gray-100">{t('tool_agile_coach_review_answers')}</h5>
           {result.practiceQuestions.map((q, index) => {
             const userAnswer = userAnswers[index];
             const isCorrect = userAnswer === q.correctAnswerIndex;
             return (
-              <div key={index} className={`p-4 rounded-lg border ${isCorrect ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
-                <p className="font-semibold text-gray-800 mb-2">{index + 1}. {q.questionText}</p>
-                <p className="text-sm"><span className="font-bold">{t('tool_agile_coach_your_answer')}:</span> {userAnswer !== null ? q.options[userAnswer] : t('tool_agile_coach_not_answered')}</p>
-                {!isCorrect && <p className="text-sm"><span className="font-bold">{t('tool_agile_coach_correct_answer')}:</span> {q.options[q.correctAnswerIndex]}</p>}
-                <p className="mt-2 text-sm text-gray-700 p-2 bg-gray-100 rounded-md"><span className="font-semibold">{t('tool_agile_coach_explanation')}:</span> {q.explanation}</p>
+              <div key={index} className={`p-4 rounded-lg border ${isCorrect ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20' : 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'}`}>
+                <p className="font-semibold text-gray-800 dark:text-gray-100 mb-2">{index + 1}. {q.questionText}</p>
+                <p className="text-sm dark:text-gray-300"><span className="font-bold">{t('tool_agile_coach_your_answer')}:</span> {userAnswer !== null ? q.options[userAnswer] : t('tool_agile_coach_not_answered')}</p>
+                {!isCorrect && <p className="text-sm dark:text-gray-300"><span className="font-bold">{t('tool_agile_coach_correct_answer')}:</span> {q.options[q.correctAnswerIndex]}</p>}
+                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 p-2 bg-gray-100 dark:bg-slate-700 rounded-md"><span className="font-semibold">{t('tool_agile_coach_explanation')}:</span> {q.explanation}</p>
               </div>
             );
           })}
         </div>
-        <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h5 className="font-bold text-lg text-blue-900">{t('tool_agile_coach_exam_tips')}</h5>
-          <ul className="list-disc list-inside space-y-2 text-blue-800">
+        <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-lg">
+          <h5 className="font-bold text-lg text-blue-900 dark:text-blue-300">{t('tool_agile_coach_exam_tips')}</h5>
+          <ul className="list-disc list-inside space-y-2 text-blue-800 dark:text-blue-300">
             {result.examTips.map((tip, i) => <li key={i}>{tip}</li>)}
           </ul>
         </div>

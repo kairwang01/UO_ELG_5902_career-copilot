@@ -5,6 +5,7 @@ import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, User
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useToast } from '../Toast';
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -549,6 +550,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   }, [initialInput]);
 
   const { isAIMode } = useSettings();
+  const { addToast } = useToast();
 
   const runTool = async () => {
     if (!details.tagline || !details.bio) {
@@ -967,7 +969,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       element.click();
       element.remove();
     };
-    const copyToClipboard = () => navigator.clipboard.writeText(themedHtmlContent).then(() => alert(t('tool_portfolio_copy_code_success')), () => alert(t('tool_portfolio_copy_code_fail')));
+    const copyToClipboard = () => navigator.clipboard.writeText(themedHtmlContent).then(() => addToast(t('tool_portfolio_copy_code_success'), 'success'), () => addToast(t('tool_portfolio_copy_code_fail'), 'error'));
 
     return (
       <div className="space-y-4">

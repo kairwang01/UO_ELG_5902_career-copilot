@@ -96,23 +96,23 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) =>
 
   const renderInput = () => (
     <form onSubmit={handleSubmit} className="space-y-6">
-       <div className="p-1 bg-gray-200 rounded-lg flex">
-            <button type="button" onClick={() => setCraftingMode('draft')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${craftingMode === 'draft' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600'}`}>
+       <div className="p-1 bg-gray-200 dark:bg-slate-700 rounded-lg flex">
+            <button type="button" onClick={() => setCraftingMode('draft')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${craftingMode === 'draft' ? 'bg-white dark:bg-slate-600 text-blue-700 dark:text-blue-300 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}>
                 {t('tool_email_crafter_mode_draft')}
             </button>
-            <button type="button" onClick={() => setCraftingMode('reply')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${craftingMode === 'reply' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600'}`}>
+            <button type="button" onClick={() => setCraftingMode('reply')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${craftingMode === 'reply' ? 'bg-white dark:bg-slate-600 text-blue-700 dark:text-blue-300 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}>
                 {t('tool_email_crafter_mode_reply')}
             </button>
         </div>
 
       {craftingMode === 'draft' ? (
         <div className="space-y-4 animate-fade-in">
-          <p className="text-sm text-gray-600">{t('tool_email_crafter_draft_desc')}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_email_crafter_draft_desc')}</p>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">{t('tool_email_crafter_scenario_label')}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('tool_email_crafter_scenario_label')}</label>
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(EMAIL_SCENARIOS).map(([key, value]) => (
-                <button type="button" key={key} onClick={() => setEmailScenario(value)} className={`p-3 border-2 rounded-lg text-left transition-all text-sm ${emailScenario === value ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
+                <button type="button" key={key} onClick={() => setEmailScenario(value)} className={`p-3 border-2 rounded-lg text-left transition-all text-sm ${emailScenario === value ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-gray-300'}`}>
                   {t(`tool_email_crafter_scenario_${key.toLowerCase().replace(' ', '_')}`)}
                 </button>
               ))}
@@ -122,8 +122,8 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) =>
             <div className="space-y-3 pt-2 animate-fade-in">
               {(SCENARIO_DETAILS[Object.keys(EMAIL_SCENARIOS).find(key => EMAIL_SCENARIOS[key as keyof typeof EMAIL_SCENARIOS] === emailScenario) || ''] || []).map(detail => (
                 <div key={detail}>
-                  <label htmlFor={detail} className="block text-sm font-medium text-gray-700">{detail}</label>
-                  <input type="text" id={detail} onChange={(e) => handleDetailChange(detail, e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" required={!detail.includes('optional')} />
+                  <label htmlFor={detail} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{detail}</label>
+                  <input type="text" id={detail} onChange={(e) => handleDetailChange(detail, e.target.value)} className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500" required={!detail.includes('optional')} />
                 </div>
               ))}
             </div>
@@ -131,19 +131,19 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) =>
         </div>
       ) : (
          <div className="animate-fade-in">
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('tool_email_crafter_reply_label')}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_email_crafter_reply_label')}</label>
             <textarea
                 value={receivedEmailText}
                 onChange={(e) => setReceivedEmailText(e.target.value)}
                 rows={8}
-                className="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
+                className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
                 placeholder={t('tool_email_crafter_reply_placeholder')}
             />
         </div>
       )}
 
-      <div className="p-4 bg-gray-50 border rounded-lg space-y-4">
-            <h4 className="font-semibold text-center text-gray-700">{t('tool_email_crafter_style_title')}</h4>
+      <div className="p-4 bg-gray-50 dark:bg-slate-700 border dark:border-slate-600 rounded-lg space-y-4">
+            <h4 className="font-semibold text-center text-gray-700 dark:text-gray-200">{t('tool_email_crafter_style_title')}</h4>
             <Slider label={t('tool_email_crafter_tone_label')} minLabel={t('tool_email_crafter_tone_min')} maxLabel={t('tool_email_crafter_tone_max')} value={tone} onChange={e => setTone(parseInt(e.target.value))} />
             <Slider label={t('tool_email_crafter_style_label')} minLabel={t('tool_email_crafter_style_min')} maxLabel={t('tool_email_crafter_style_max')} value={style} onChange={e => setStyle(parseInt(e.target.value))} />
             <Slider label={t('tool_email_crafter_confidence_label')} minLabel={t('tool_email_crafter_confidence_min')} maxLabel={t('tool_email_crafter_confidence_max')} value={confidence} onChange={e => setConfidence(parseInt(e.target.value))} />
@@ -164,18 +164,18 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) =>
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h4 className="text-lg font-bold">{t('tool_email_crafter_results_title')}</h4>
+          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_email_crafter_results_title')}</h4>
           <DownloadButtons textContent={`Subject: ${subject}\n\n${editableResult}`} baseFilename="email_draft" />
         </div>
-        <div className="p-4 border rounded-lg bg-white">
-          <h5 className="font-bold text-gray-800">{t('tool_email_crafter_subject_label')}</h5>
-          <p className="mt-1 text-sm p-2 bg-gray-50 rounded-md border">{subject}</p>
+        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_email_crafter_subject_label')}</h5>
+          <p className="mt-1 text-sm p-2 bg-gray-50 dark:bg-slate-700 rounded-md border dark:border-slate-600 dark:text-gray-300">{subject}</p>
         </div>
-        <div className="p-4 border rounded-lg bg-white">
-          <h5 className="font-bold text-gray-800">{t('tool_email_crafter_body_label')}</h5>
-          <textarea value={editableResult} onChange={(e) => setEditableResult(e.target.value)} className="w-full h-72 mt-1 text-sm p-2 bg-gray-50 rounded-md border" />
+        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_email_crafter_body_label')}</h5>
+          <textarea value={editableResult} onChange={(e) => setEditableResult(e.target.value)} className="w-full h-72 mt-1 text-sm p-2 bg-gray-50 dark:bg-slate-700 rounded-md border dark:border-slate-600 dark:text-gray-100" />
         </div>
-         <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200">
+         <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300">
               &larr; {t('tool_email_crafter_back_button')}
           </button>
       </div>

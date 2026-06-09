@@ -6,6 +6,7 @@ import type { OpportunityResult, Opportunity } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import type { AppSession as Session } from '../../lib/data';
+import { useToast } from '../Toast';
 import {
   addDoc,
   collection,
@@ -32,7 +33,12 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // Initialise true: this tool auto-fetches on mount, so the loader should show
   // immediately (preserves the pre-refactor useState(true) behaviour).
   const { loading, begin, end, cancel } = useCancellableLoading(true);
+  const { addToast } = useToast();
   const [error, setError] = useState<string | null>(null);
+  // FIX 1: derive a stable primitive so auth token-refresh (which creates a new
+  // session object reference) does not cascade through useCallback deps and
+  // refire the expensive AI search.
+  const sessionUserId = session?.user?.id ?? null;
   const [result, setResult] = useState<OpportunityResult | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [opportunityFilters, setOpportunityFilters] = useState<{ company: string, location: string }>({ company: 'all', location: 'all' });
@@ -40,10 +46,10 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
 
   const applyToInternalJob = async (jobId: string, compatibilityScore: number | undefined) => {
     if (!session?.user) {
-        alert('You must be signed in to apply.');
+        addToast('You must be signed in to apply.', 'error');
         return;
     }
-    
+
     try {
         const db = getFirestore(firebaseApp);
         const jobSnap = await getDoc(doc(db, 'job_postings', jobId));
@@ -67,41 +73,54 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         setAppliedJobs(prev => new Set(prev).add(jobId));
     } catch (err) {
         console.error('Error applying to job:', err);
-        alert(t('tool_opportunity_finder_apply_error'));
+        addToast(t('tool_opportunity_finder_apply_error'), 'error');
     }
   };
 
   const fetchAppliedJobs = useCallback(async () => {
-    if (!session?.user) return;
+    // FIX 1: depend on the primitive sessionUserId, not the session object.
+    // Token refreshes recreate the session object without changing the user id,
+    // so using the primitive prevents spurious re-runs.
+    if (!sessionUserId) return;
     try {
         const db = getFirestore(firebaseApp);
         const snap = await getDocs(
           query(
             collection(db, 'job_applications'),
-            where('candidate_id', '==', session.user.id),
+            where('candidate_id', '==', sessionUserId),
           ),
         );
         setAppliedJobs(new Set(snap.docs.map((app) => app.data().job_id as string)));
     } catch (err) {
         console.error("Could not fetch applied jobs:", err);
+        // Note: this is a non-fatal side-fetch; error is surfaced but does not
+        // block the main result (runTool clears it after setResult — see FIX 2).
         setError(t('tool_opportunity_finder_error_fetch_applied'));
     }
-  }, [session, t]);
+  }, [sessionUserId, t]);
 
   const runTool = useCallback(async () => {
     const alive = begin();
     setError(null);
     try {
       await fetchAppliedJobs();
+      // findOpportunities accepts session for legacy signature compatibility;
+      // the closure value is fine here — we only fix deps to use the primitive.
       const apiResult = await findOpportunities(resumeText, market, session);
       if (!alive()) return;
       setResult(apiResult);
+      // FIX 2: fetchAppliedJobs failure sets an error, but we have a good AI
+      // result now — clear the non-fatal side-error so results render correctly.
+      setError(null);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
       if (alive()) end();
     }
-  }, [resumeText, market, session, fetchAppliedJobs, begin, end]);
+    // FIX 1: use sessionUserId (primitive) instead of session (object) so that
+    // token-refresh events that recreate the session object do not refire this
+    // callback (and therefore the expensive AI search + double credit spend).
+  }, [resumeText, market, sessionUserId, fetchAppliedJobs, begin, end]);
   
   useEffect(() => {
     runTool();
@@ -146,7 +165,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
 
   return (
     <div className="space-y-4">
-      <h4 className="text-lg font-bold">{t('tool_opportunity_finder_results_title')}</h4>
+      <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_opportunity_finder_results_title')}</h4>
 
       {notice && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100">
@@ -156,7 +175,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
       )}
       
       {jobSearchStrategies && jobSearchStrategies.length > 0 && (
-        <div className="p-4 mb-6 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg">
+        <div className="p-4 mb-6 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 rounded-r-lg">
             <h5 className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 7.072l.707-.707a1 1 0 111.414 1.414l-.707.707a1 1 0 01-1.414-1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" />
@@ -171,7 +190,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         </div>
       )}
 
-      <div className="flex gap-4 items-center text-sm p-2 bg-gray-100 dark:bg-slate-800 rounded-md">
+      <div className="flex gap-4 items-center text-sm p-2 bg-gray-100 dark:bg-slate-800 rounded-md text-gray-800 dark:text-gray-200">
         <span>{t('tool_opportunity_finder_filter_label')}:</span>
         <select value={opportunityFilters.company} onChange={e => setOpportunityFilters(p => ({...p, company: e.target.value}))} className="border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
           {companyOptions.map(c => <option key={c} value={c}>{c === 'all' ? t('tool_opportunity_finder_filter_all_companies') : c}</option>)}
@@ -231,7 +250,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         })}
       </div>
       {groundingChunks && groundingChunks.length > 0 && (
-        <div className="pt-2 border-t text-xs text-gray-500 dark:text-gray-400">
+        <div className="pt-2 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400">
           <p className="font-semibold mb-1">{t('tool_opportunity_finder_sources_label')}:</p>
           <ul className="list-disc list-inside">
             {groundingChunks.filter((chunk: any) => chunk.web).map((chunk: any, i: number) => (
