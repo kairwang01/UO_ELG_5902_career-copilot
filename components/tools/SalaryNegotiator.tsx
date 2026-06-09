@@ -78,7 +78,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
   );
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Building your strategy" steps={["Reading your offer details…","Researching current market rates…","Crafting your negotiation plan…","Polishing talking points…"]} onCancel={cancel} />;
+    if (loading) return <StagedLoader title="Building your strategy" steps={["Reading your offer details…","Researching current market rates…","Crafting your negotiation plan…","Polishing talking points…"]} onCancel={cancel} icon="💰" accent="emerald" />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

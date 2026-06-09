@@ -106,7 +106,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     runTool();
   }, [runTool]);
 
-  if (loading) return <StagedLoader title="Finding opportunities" steps={["Reading your resume…","Searching live job postings…","Matching & ranking roles…","Building search strategies…"]} onCancel={cancel} />;
+  if (loading) return <StagedLoader title="Finding opportunities" steps={["Reading your resume…","Searching live job postings…","Matching & ranking roles…","Building search strategies…"]} onCancel={cancel} icon="🔍" accent="fuchsia" />;
   if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
   // No result yet (e.g. the user cancelled the auto-fetch) — offer a graceful retry
   // instead of a blank screen, since this tool has no input form to fall back to.

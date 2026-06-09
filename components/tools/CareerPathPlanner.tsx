@@ -124,7 +124,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   };
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Mapping your path" steps={["Analyzing your experience…","Exploring career paths…","Building your roadmap…"]} onCancel={cancel} />;
+    if (loading) return <StagedLoader icon="🧭" accent="teal" title="Mapping your path" steps={["Analyzing your experience…","Exploring career paths…","Building your roadmap…"]} onCancel={cancel} />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

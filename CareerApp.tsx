@@ -1006,6 +1006,8 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     if (isLoading) {
       return (
         <StagedLoader
+          icon="📊"
+          accent="blue"
           title="Analyzing your resume"
           steps={[
             'Submitting…',

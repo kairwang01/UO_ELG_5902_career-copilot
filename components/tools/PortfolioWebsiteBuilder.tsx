@@ -835,6 +835,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const renderInput = () => {
     if (loading) return (
       <StagedLoader
+        icon="🌐"
+        accent="pink"
         title="Building your website"
         steps={[
           'Reading your resume…',

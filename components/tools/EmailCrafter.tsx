@@ -155,7 +155,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t }) =>
   );
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Composing your email" steps={["Reading the context…","Drafting your email…","Refining tone & style…"]} onCancel={cancel} />;
+    if (loading) return <StagedLoader title="Composing your email" steps={["Reading the context…","Drafting your email…","Refining tone & style…"]} onCancel={cancel} icon="✉️" accent="rose" />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 

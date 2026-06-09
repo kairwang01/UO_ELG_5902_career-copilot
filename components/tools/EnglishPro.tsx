@@ -445,6 +445,8 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             {error && <div className="text-red-600 bg-red-100 p-3 rounded-md text-sm mb-4">{error}</div>}
             {loading ? (
                 <StagedLoader
+                    icon="🗣️"
+                    accent="purple"
                     title="Analyzing your English"
                     steps={[
                         'Reading your submission…',

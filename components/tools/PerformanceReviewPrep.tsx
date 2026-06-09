@@ -62,7 +62,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
   );
 
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Preparing your review" steps={["Reading your accomplishments…","Structuring talking points…","Building STAR examples…"]} onCancel={cancel} />;
+    if (loading) return <StagedLoader title="Preparing your review" steps={["Reading your accomplishments…","Structuring talking points…","Building STAR examples…"]} onCancel={cancel} icon="📈" accent="indigo" />;
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
     return (
