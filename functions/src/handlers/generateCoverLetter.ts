@@ -12,8 +12,9 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
-import { getProvider } from "../llm/router";
-import { deductCredits } from "../credits/deductCredits";
+import { resolveProvider } from "../llm/models";
+import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
+import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 
 interface GenerateCoverLetterRequest {
@@ -34,7 +35,7 @@ const COVER_LETTER_SCHEMA = {
   required: ["letter"],
 };
 
-export const generateCoverLetterFunction = onCall(async (request) => {
+export const generateCoverLetterFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
   const uid = requireAuth(request);
 
   const data = request.data as GenerateCoverLetterRequest;
@@ -57,11 +58,16 @@ export const generateCoverLetterFunction = onCall(async (request) => {
     `Keep it concise (3–4 paragraphs), confident, and specific.\n\n` +
     `Resume:\n${data.resumeText}\n\nJob Description:\n${data.jobDescription}`;
 
-  const provider = getProvider();
-  const result = await provider.generate({
-    prompt,
-    responseSchema: COVER_LETTER_SCHEMA,
-  });
+  const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
+  try {
+    const result = await provider.generate({
+      prompt,
+      responseSchema: COVER_LETTER_SCHEMA,
+    });
 
-  return result.raw as CoverLetter;
+    return result.raw as CoverLetter;
+  } catch (err) {
+    await refundCredits(uid, TOOL_CREDIT_COSTS["cover-letter"]);
+    throw err;
+  }
 });

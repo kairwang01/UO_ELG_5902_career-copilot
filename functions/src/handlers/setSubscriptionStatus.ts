@@ -1,103 +1,92 @@
 /**
  * setSubscriptionStatus — HTTPS Callable Cloud Function.
  *
- * Allows authenticated users to set their own subscription_status via the
- * Firebase Admin SDK (which bypasses Firestore security rules).
+ * Sets the caller's users/{uid}.subscription_status to a validated plan key.
+ * This is a SERVER-ONLY write: firestore.rules forbids the client from changing
+ * subscription_status directly, so this callable (Admin SDK, bypasses rules) is
+ * the single authorized path.
  *
- * Why server-side? The Firestore security rules block client writes to
- * subscription_status to prevent self-granting of paid plans. This Cloud
- * Function is the only trusted path for legitimate status updates that
- * originate from the client (e.g., selecting a business plan, dev mode
- * plan switching for testing).
+ * The four frontend call sites send the plan key in three different shapes
+ * (see CareerApp.tsx), so this handler normalizes them:
+ *   - "pending_biz_<plan>"  → business plan "<plan>"   (e.g. pending_biz_single_post → single_post)
+ *   - "pending_<plan>"      → candidate plan "<plan>"   (e.g. pending_essentials → essentials)
+ *   - "<plan>"              → used as-is (already stripped, or "free", or a dev-mode key)
  *
- * In production, paid plan upgrades will be triggered by the Stripe webhook
- * instead. This function covers:
- *   - Business plan selection intent ("pending_biz_*")
- *   - Dev mode plan switching (internal testing only)
+ * CREDITS POLICY (deliberate): this handler sets subscription_status ONLY. It does
+ * NOT grant credits — granting here would let the bypassable dev-mode / pending-plan
+ * paths act as a free credit faucet and would reset balances on every sign-in.
+ * Plan credits are the future Stripe webhook's responsibility.
  *
- * Frontend usage:
- *   import { getFunctions, httpsCallable } from "firebase/functions";
+ * Frontend integration:
  *   const fn = httpsCallable(getFunctions(), "setSubscriptionStatus");
- *   await fn({ planKey: "pro" });
+ *   const { data } = await fn({ planKey });  // → { subscription_status, credits }
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { getApps, initializeApp } from "firebase-admin/app";
+import * as admin from "firebase-admin";
+import { requireAuth } from "../middleware/auth";
+import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 
-// Initialise the Admin SDK once (other handlers may have already done this).
-if (!getApps().length) {
-  initializeApp();
+if (!admin.apps.length) {
+  admin.initializeApp();
 }
 
-const db = getFirestore();
+const db = admin.firestore();
+
+/** Candidate subscription plans (mirror of config.ts ALL_PLANS keys). */
+const CANDIDATE_PLANS = new Set(["free", "essentials", "accelerator", "executive"]);
+
+/** Business / employer plans (mirror of config.ts BUSINESS_PLANS keys). */
+const BUSINESS_PLANS = new Set(["single_post", "job_pack"]);
 
 interface SetSubscriptionStatusRequest {
-  /** The plan key to set, e.g. "free", "pro", "pending_biz_startup". */
   planKey: string;
 }
 
-// Allowed subscription status values.
-// Add new plan keys here as plans are introduced.
-const ALLOWED_PLAN_KEYS = new Set([
-  // Candidate plans
-  "free",
-  "essentials",
-  "accelerator",
-  "executive",
-  // Legacy aliases
-  "pro",
-  "agency",
-  // Candidate pending (Stripe not yet confirmed)
-  "pending_essentials",
-  "pending_accelerator",
-  "pending_executive",
-  // Business plans (active, set by Stripe webhook or demo bypass)
-  "single_post",
-  "job_pack",
-  // Business plans pending (intent, before Stripe payment)
-  "pending_biz_single_post",
-  "pending_biz_job_pack",
-  // Legacy business pending keys (kept for backward compatibility)
-  "pending_biz_startup",
-  "pending_biz_growth",
-  "pending_biz_enterprise",
-  // Dev / testing aliases
-  "dev_free",
-  "dev_pro",
-  "dev_agency",
-]);
+/**
+ * Normalizes a raw planKey into a bare plan name, stripping the
+ * "pending_" / "pending_biz_" routing prefixes the frontend adds.
+ */
+function normalizePlanKey(raw: string): string {
+  if (raw.startsWith("pending_biz_")) return raw.slice("pending_biz_".length);
+  if (raw.startsWith("pending_")) return raw.slice("pending_".length);
+  return raw;
+}
 
-export const setSubscriptionStatusFunction = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    // 1. Auth check
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "You must be signed in.");
-    }
+export const setSubscriptionStatusFunction = onCall(async (request) => {
+  const uid = requireAuth(request);
 
-    const { planKey } = request.data as SetSubscriptionStatusRequest;
+  const data = request.data as SetSubscriptionStatusRequest;
+  const rawKey = typeof data?.planKey === "string" ? data.planKey.trim() : "";
 
-    // 2. Validate input
-    if (!planKey || typeof planKey !== "string") {
-      throw new HttpsError("invalid-argument", "planKey must be a non-empty string.");
-    }
+  if (!rawKey) {
+    throw new HttpsError("invalid-argument", "planKey is required.");
+  }
 
-    if (!ALLOWED_PLAN_KEYS.has(planKey)) {
-      throw new HttpsError(
-        "invalid-argument",
-        `Invalid planKey: "${planKey}". Allowed values: ${[...ALLOWED_PLAN_KEYS].join(", ")}.`,
-      );
-    }
+  const plan = normalizePlanKey(rawKey);
 
-    const uid = request.auth.uid;
+  if (!CANDIDATE_PLANS.has(plan) && !BUSINESS_PLANS.has(plan)) {
+    throw new HttpsError("invalid-argument", `Unknown plan key: ${rawKey}`);
+  }
 
-    // 3. Update via Admin SDK (bypasses Firestore security rules safely).
-    await db.collection("users").doc(uid).update({
-      subscription_status: planKey,
-      updated_at: FieldValue.serverTimestamp(),
-    });
+  const userRef = db.collection(USERS_COLLECTION).doc(uid);
+  const snap = await userRef.get();
+  if (!snap.exists) {
+    throw new HttpsError(
+      "not-found",
+      "User profile not found. Please sign out and sign back in."
+    );
+  }
 
-    return { success: true, planKey };
-  },
-);
+  await userRef.set(
+    {
+      [USER_FIELDS.subscriptionStatus]: plan,
+      [USER_FIELDS.updatedAt]: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+
+  // Return the authoritative values so the frontend can sync its local state.
+  const credits: number = snap.get(USER_FIELDS.credits) ?? 0;
+  return { subscription_status: plan, credits };
+});

@@ -19,8 +19,9 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
-import { getProvider } from "../llm/router";
-import { deductCredits } from "../credits/deductCredits";
+import { resolveProvider } from "../llm/models";
+import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
+import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 
 // ---------------------------------------------------------------------------
@@ -86,7 +87,7 @@ const ANALYSIS_SCHEMA = {
 // ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
-export const analyzeResumeFunction = onCall(async (request) => {
+export const analyzeResumeFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
   // Step 1: Verify authentication
   // requireAuth throws HttpsError("unauthenticated") if the caller is not signed in.
   const uid = requireAuth(request);
@@ -131,13 +132,19 @@ export const analyzeResumeFunction = onCall(async (request) => {
 
   // Step 5: Call the LLM through the router
   // Router returns GeminiProvider in Phase A; Phase B upgrades this to cascade routing.
-  const provider = getProvider();
-  const result = await provider.generate({
-    prompt,
-    parts,
-    responseSchema: ANALYSIS_SCHEMA,
-  });
+  const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
+  try {
+    const result = await provider.generate({
+      prompt,
+      parts,
+      responseSchema: ANALYSIS_SCHEMA,
+    });
 
-  // Step 6: Return the structured result
-  return result.raw as AnalysisResult;
+    // Step 6: Return the structured result
+    return result.raw as AnalysisResult;
+  } catch (err) {
+    // Model call failed after charging — refund so the user isn't billed for nothing.
+    await refundCredits(uid, TOOL_CREDIT_COSTS["resume-analysis"]);
+    throw err;
+  }
 });

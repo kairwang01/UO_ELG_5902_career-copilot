@@ -113,27 +113,39 @@ export const listEmployerJobs = async (employerId: string): Promise<JobPosting[]
   return sortByCreatedDesc(snap.docs.map((jobDoc) => mapJobPosting(jobDoc.id, jobDoc.data())));
 };
 
-export const listJobApplications = async (jobId: string): Promise<JobApplication[]> => {
+// Reads every application addressed to this employer in a SINGLE owner-scoped query.
+// The employer_id filter both satisfies firestore.rules (owner-scoped read) and avoids
+// the previous N+1 (one query per job). All employer-side application reads go through here.
+export const listApplicationsForEmployer = async (employerId: string): Promise<JobApplication[]> => {
   const appsQuery = query(
     collection(firestoreDb, 'job_applications'),
-    where('job_id', '==', jobId),
+    where('employer_id', '==', employerId),
   );
   const snap = await getDocs(appsQuery);
   return snap.docs.map((appDoc) => mapApplication(appDoc.id, appDoc.data()));
 };
 
-export const listApplicationsForJobs = async (jobIds: string[]): Promise<JobApplication[]> => {
-  const results = await Promise.all(jobIds.map((jobId) => listJobApplications(jobId)));
-  return results.flat();
+export const listJobApplications = async (jobId: string, employerId: string): Promise<JobApplication[]> => {
+  const all = await listApplicationsForEmployer(employerId);
+  return all.filter((app) => app.job_id === jobId);
+};
+
+export const listApplicationsForJobs = async (jobIds: string[], employerId: string): Promise<JobApplication[]> => {
+  const wanted = new Set(jobIds);
+  const all = await listApplicationsForEmployer(employerId);
+  return all.filter((app) => wanted.has(app.job_id));
 };
 
 export const listEmployerJobsWithCounts = async (employerId: string): Promise<JobPostingWithCount[]> => {
-  const jobs = await listEmployerJobs(employerId);
-  const withCounts = await Promise.all(jobs.map(async (job) => {
-    const applications = await listJobApplications(job.id);
-    return { ...job, applicant_count: applications.length };
-  }));
-  return withCounts;
+  const [jobs, applications] = await Promise.all([
+    listEmployerJobs(employerId),
+    listApplicationsForEmployer(employerId),
+  ]);
+  const counts = new Map<string, number>();
+  for (const app of applications) {
+    counts.set(app.job_id, (counts.get(app.job_id) ?? 0) + 1);
+  }
+  return jobs.map((job) => ({ ...job, applicant_count: counts.get(job.id) ?? 0 }));
 };
 
 export const listActiveEmployerJobs = async (employerId: string): Promise<JobPosting[]> => (

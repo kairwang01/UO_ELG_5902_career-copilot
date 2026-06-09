@@ -12,8 +12,9 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
-import { getProvider } from "../llm/router";
-import { deductCredits } from "../credits/deductCredits";
+import { resolveProvider } from "../llm/models";
+import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
+import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 
 // ---------------------------------------------------------------------------
@@ -120,7 +121,7 @@ const CAREER_PATH_SCHEMA = {
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const generateCareerPathFunction = onCall(async (request) => {
+export const generateCareerPathFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
   const uid = requireAuth(request);
 
   const data = request.data as GenerateCareerPathRequest;
@@ -144,11 +145,16 @@ export const generateCareerPathFunction = onCall(async (request) => {
     `suggest bridge roles if a direct transition is unrealistic, and give an honest summary.\n\n` +
     `Resume:\n${data.resumeText}`;
 
-  const provider = getProvider();
-  const result = await provider.generate({
-    prompt,
-    responseSchema: CAREER_PATH_SCHEMA,
-  });
+  const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
+  try {
+    const result = await provider.generate({
+      prompt,
+      responseSchema: CAREER_PATH_SCHEMA,
+    });
 
-  return result.raw as CareerPathResult;
+    return result.raw as CareerPathResult;
+  } catch (err) {
+    await refundCredits(uid, TOOL_CREDIT_COSTS["career-path"]);
+    throw err;
+  }
 });

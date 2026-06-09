@@ -1,0 +1,60 @@
+/**
+ * generateHeadshot — HTTPS Callable Cloud Function.
+ *
+ * Server-side port of geminiService.generateProfessionalHeadshot().
+ * Uses the Gemini image model directly (not the text LLMProvider) and returns
+ * base64-encoded image variations. The API key stays server-side.
+ *
+ * Frontend integration (services/aiClient.ts):
+ *   const fn = httpsCallable(getFunctions(), "generateHeadshot");
+ *   const { data } = await fn({ imageBase64 });  // → { images: string[] }
+ */
+
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { GoogleGenAI } from "@google/genai";
+import { requireAuth } from "../middleware/auth";
+import { GEMINI_API_KEY, getGeminiApiKey } from "../config/env";
+
+interface GenerateHeadshotRequest {
+  imageBase64: string;
+}
+
+// ~6MB of base64 (≈4.5MB raw) upper bound to keep request size / cost sane.
+const MAX_IMAGE_BASE64_LEN = 8_000_000;
+
+export const generateHeadshotFunction = onCall({ secrets: [GEMINI_API_KEY] }, async (request) => {
+  requireAuth(request);
+
+  const { imageBase64 } = (request.data ?? {}) as GenerateHeadshotRequest;
+  if (!imageBase64 || typeof imageBase64 !== "string") {
+    throw new HttpsError("invalid-argument", "imageBase64 is required.");
+  }
+  if (imageBase64.length > MAX_IMAGE_BASE64_LEN) {
+    throw new HttpsError("invalid-argument", "Image is too large.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-image",
+    contents: {
+      parts: [
+        { inlineData: { data: imageBase64, mimeType: "image/jpeg" } },
+        {
+          text:
+            "Generate 3 variations of this image as a professional corporate headshot. " +
+            "Maintain the person's identity. Provide a neutral, soft-focus background. " +
+            "Ensure a professional and polished look.",
+        },
+      ],
+    },
+  });
+
+  const images: string[] = [];
+  for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+    if (part.inlineData?.data) images.push(part.inlineData.data);
+  }
+  if (images.length === 0) {
+    throw new HttpsError("internal", "The AI did not return any images.");
+  }
+  return { images };
+});

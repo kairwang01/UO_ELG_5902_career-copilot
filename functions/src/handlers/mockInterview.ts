@@ -26,8 +26,9 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
-import { getProvider } from "../llm/router";
-import { deductCredits } from "../credits/deductCredits";
+import { resolveProvider } from "../llm/models";
+import { GEMINI_API_KEY, KAIRLLM_API_KEY } from "../config/env";
+import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 
 // ---------------------------------------------------------------------------
@@ -102,9 +103,10 @@ const EVALUATE_SCHEMA = {
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const mockInterviewFunction = onCall(async (request) => {
+export const mockInterviewFunction = onCall({ secrets: [GEMINI_API_KEY, KAIRLLM_API_KEY] }, async (request) => {
   const uid = requireAuth(request);
   const data = request.data as MockInterviewRequest;
+  const modelId = (request.data as { model?: string })?.model;
 
   if (!data.mode || !["generate", "evaluate"].includes(data.mode)) {
     throw new HttpsError(
@@ -113,8 +115,8 @@ export const mockInterviewFunction = onCall(async (request) => {
     );
   }
 
-  await deductCredits(uid, TOOL_CREDIT_COSTS["mock-interview"], "mock-interview");
-
+  // Validate the per-mode required fields BEFORE charging, so a malformed request
+  // never burns the (150) mock-interview credits.
   if (data.mode === "generate") {
     if (!data.resumeText?.trim()) {
       throw new HttpsError("invalid-argument", "resumeText is required for generate mode.");
@@ -122,6 +124,19 @@ export const mockInterviewFunction = onCall(async (request) => {
     if (!data.jobDescription?.trim()) {
       throw new HttpsError("invalid-argument", "jobDescription is required for generate mode.");
     }
+  } else {
+    if (!data.question?.trim()) {
+      throw new HttpsError("invalid-argument", "question is required for evaluate mode.");
+    }
+    if (!data.answer?.trim()) {
+      throw new HttpsError("invalid-argument", "answer is required for evaluate mode.");
+    }
+  }
+
+  if (data.mode === "generate") {
+    // Charge ONCE per interview session — at question generation, not per answer
+    // evaluation (evaluate turns within the same session are free).
+    await deductCredits(uid, TOOL_CREDIT_COSTS["mock-interview"], "mock-interview");
 
     const prompt =
       `You are an experienced ${data.marketName ?? "Canadian"} hiring manager. ` +
@@ -129,23 +144,21 @@ export const mockInterviewFunction = onCall(async (request) => {
       `situational, and culture-fit questions. Tailor them to the job and the candidate's background.\n\n` +
       `Resume:\n${data.resumeText}\n\nJob Description:\n${data.jobDescription}`;
 
-    const provider = getProvider();
-    const result = await provider.generate({
-      prompt,
-      responseSchema: GENERATE_SCHEMA,
-    });
+    const provider = await resolveProvider(uid, modelId);
+    try {
+      const result = await provider.generate({
+        prompt,
+        responseSchema: GENERATE_SCHEMA,
+      });
 
-    return result.raw as GenerateResult;
+      return result.raw as GenerateResult;
+    } catch (err) {
+      await refundCredits(uid, TOOL_CREDIT_COSTS["mock-interview"]);
+      throw err;
+    }
 
   } else {
-    // evaluate mode
-    if (!data.question?.trim()) {
-      throw new HttpsError("invalid-argument", "question is required for evaluate mode.");
-    }
-    if (!data.answer?.trim()) {
-      throw new HttpsError("invalid-argument", "answer is required for evaluate mode.");
-    }
-
+    // evaluate mode (required fields already validated above, before charging)
     const prompt =
       `You are an expert interview coach. Evaluate the candidate's answer to the interview question below.\n\n` +
       `Question: ${data.question}\n\n` +
@@ -154,7 +167,7 @@ export const mockInterviewFunction = onCall(async (request) => {
       `Score the answer 0–100, identify specific strengths and areas to improve, ` +
       `and provide a model answer that would score highly.`;
 
-    const provider = getProvider();
+    const provider = await resolveProvider(uid, modelId);
     const result = await provider.generate({
       prompt,
       responseSchema: EVALUATE_SCHEMA,
