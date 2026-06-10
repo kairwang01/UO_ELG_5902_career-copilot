@@ -33,6 +33,7 @@ export { generateCoverLetterFunction  as generateCoverLetter   } from "./handler
 export { generateCareerPathFunction   as generateCareerPath    } from "./handlers/generateCareerPath";
 export { setSubscriptionStatusFunction as setSubscriptionStatus } from "./handlers/setSubscriptionStatus";
 export { onUserCreatedFunction        as onUserCreated         } from "./handlers/onUserCreated";
+export { createJobApplicationFunction as createJobApplication  } from "./handlers/jobApplications";
 export { adminGetDashboardFunction    as adminGetDashboard     } from "./handlers/adminPortal";
 export { adminGetLlmConfigFunction   as adminGetLlmConfig     } from "./handlers/adminPortal";
 export { adminUpdateLlmConfigFunction as adminUpdateLlmConfig } from "./handlers/adminPortal";

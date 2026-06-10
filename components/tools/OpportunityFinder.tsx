@@ -8,17 +8,16 @@ import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import type { AppSession as Session } from '../../lib/data';
 import { useToast } from '../Toast';
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
   getFirestore,
   query,
-  serverTimestamp,
   where,
 } from 'firebase/firestore';
-import { app as firebaseApp } from '../../lib/firebaseClient';
+import { httpsCallable } from 'firebase/functions';
+import { app as firebaseApp, firebaseFunctions } from '../../lib/firebaseClient';
 import { renderFormattedText } from './ToolUtils';
 import { loadJobPreferences, preferencesToPromptBlock, prefsSummaryLine } from '../../hooks/useJobPreferences';
 
@@ -63,24 +62,12 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     }
 
     try {
-        const db = getFirestore(firebaseApp);
-        const jobSnap = await getDoc(doc(db, 'job_postings', jobId));
-        if (!jobSnap.exists()) {
-          throw new Error('Job posting not found.');
-        }
-        const jobData = jobSnap.data();
-        const candidateName = session.user.user_metadata?.full_name || session.user.email || 'Candidate';
-        await addDoc(collection(db, 'job_applications'), {
-          job_id: jobId,
-          candidate_id: session.user.id,
-          employer_id: jobData.employer_id,
-          job_title: jobData.title,
-          candidate_name: candidateName,
-          status: 'Applied',
-          compatibility_score: compatibilityScore ?? null,
-          notes: null,
-          application_date: serverTimestamp(),
-        });
+        // Write goes through a Cloud Function: employer_id / job_title are read
+        // server-side from the authoritative job_postings doc (not forgeable from
+        // the client), duplicates are rejected atomically, and Firestore rules
+        // forbid client-side creates on job_applications.
+        const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
+        await createJobApplication({ jobId, compatibilityScore: compatibilityScore ?? null });
 
         setAppliedJobs(prev => new Set(prev).add(jobId));
     } catch (err) {

@@ -49,14 +49,20 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
   useEffect(() => {
     setJobDescription(initialInput);
-    if (initialInput) {
+    // Only auto-run once the resume is available — otherwise the call fails
+    // server-side (no resume) and wastes a credit. Re-runs when resumeText loads.
+    if (initialInput && resumeText?.trim()) {
         runTool(initialInput);
     }
-  }, [initialInput]);
+  }, [initialInput, resumeText]);
 
   const runTool = async (input: string) => {
     if (apiStatus !== 'online') {
         setError("The AI is currently unavailable. Please try again later.");
+        return;
+    }
+    if (!resumeText?.trim()) {
+        setError('Please upload your resume first.');
         return;
     }
     if (!input) {
