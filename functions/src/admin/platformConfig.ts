@@ -142,11 +142,14 @@ export function getModelRegistry(): ModelEntry[] {
   return _defaultModels ?? [];
 }
 
-/** Admin-safe view: api_key replaced with masked preview. */
+/** Admin-safe view: api_key and api_keys replaced with masked previews. */
 export function getModelRegistryMasked(): ModelEntry[] {
   return getModelRegistry().map((m) => ({
     ...m,
     api_key: m.api_key ? maskSecret(m.api_key) : undefined,
+    api_keys: m.api_keys?.length
+      ? m.api_keys.map((k) => maskSecret(k))
+      : undefined,
   }));
 }
 

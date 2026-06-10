@@ -3,20 +3,31 @@
  * to confirm a model/key is working.
  *
  * Security invariants:
- *   - requireAdmin is called first — unauthenticated or non-admin callers get
- *     unauthenticated / permission-denied before any key is touched.
+ *   - requireRole('super') is called first — only super-admins may test key material.
  *   - The raw api_key is NEVER returned in the response, logged in the audit
  *     trail, or included in error messages (scrubbed via scrubKey()).
  *   - The test prompt is tiny (cost-bounded: ~5 input tokens, ~2 output tokens).
  *   - A 15-second Promise.race timeout prevents hanging on dead endpoints.
  *   - Returns { ok: false, error } on failure — never throws — so the UI always
  *     gets a structured response rather than an opaque Functions error.
+ *
+ * Supported request shapes (exactly ONE of id / config must be present):
+ *
+ *   { id: string }
+ *     Test a registry model using its configured key pool (full rotation),
+ *     OR optionally target one specific key in the pool via:
+ *       keyIndex: number  — 0-based index into api_keys (or api_key if no pool)
+ *       rawKey: string    — ad-hoc raw key to substitute (bypasses pool entirely)
+ *     At most one of keyIndex / rawKey may be set at a time.
+ *
+ *   { config: AdHocConfig }
+ *     Test an ad-hoc config (e.g. a key the admin just typed in the UI).
+ *     Same ad-hoc shape as before; unchanged.
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { requireAdmin } from "../middleware/auth";
-import { ensurePlatformCaches } from "../admin/platformConfig";
-import { getModelRegistry } from "../admin/platformConfig";
+import { requireRole } from "../admin/roles";
+import { ensurePlatformCaches, getModelRegistry } from "../admin/platformConfig";
 import { buildProvider } from "../llm/models";
 import { logAdminAction } from "../admin/usageLog";
 import { ModelEntry } from "../admin/schema";
@@ -47,10 +58,21 @@ interface AdHocConfig {
  * Exactly ONE of `id` or `config` must be present:
  *   { id: string }           — test a model already in the registry by id
  *   { config: AdHocConfig }  — test an ad-hoc config (e.g. a key the admin just typed)
+ *
+ * When using `id`, optionally supply ONE of:
+ *   keyIndex: number  — 0-based index into the model's api_keys pool (or api_key for
+ *                       single-key models).  Tests that specific key only; bypasses
+ *                       rotation so other keys in the pool are not tried on failure.
+ *   rawKey: string    — override the key entirely with this raw value; bypasses the
+ *                       stored pool.  Useful to preview-test a key before adding it.
  */
 interface TestModelRequest {
   id?: string;
   config?: AdHocConfig;
+  /** 0-based index into the model's key pool (api_keys or api_key). */
+  keyIndex?: number;
+  /** Raw API key override — bypasses the stored pool entirely. */
+  rawKey?: string;
 }
 
 /** Success response. */
@@ -79,11 +101,15 @@ const VALID_BUILTINS = new Set(["kairllm", "deepseek"]);
  * Replaces every occurrence of a non-empty secret string in `message` with
  * "[REDACTED]" so api_keys never leak through error text.
  */
-function scrubKey(message: string, apiKey: string | undefined): string {
-  if (!apiKey) return message;
-  // Escape regex metacharacters in the key before using it as a pattern.
-  const escaped = apiKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return message.replace(new RegExp(escaped, "g"), "[REDACTED]");
+function scrubKey(message: string, ...apiKeys: (string | undefined)[]): string {
+  let result = message;
+  for (const apiKey of apiKeys) {
+    if (!apiKey) continue;
+    // Escape regex metacharacters in the key before using it as a pattern.
+    const escaped = apiKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(new RegExp(escaped, "g"), "[REDACTED]");
+  }
+  return result;
 }
 
 /** 15-second hard timeout so a dead endpoint doesn't hang the function. */
@@ -96,137 +122,237 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
+/**
+ * Resolves the ordered key pool for a registry entry:
+ *   api_keys (if non-empty) → [api_key] → [] (builtin keys are in the provider itself)
+ */
+function resolvePool(found: ModelEntry): string[] {
+  if (found.api_keys && found.api_keys.length > 0) return found.api_keys;
+  if (found.api_key) return [found.api_key];
+  return [];
+}
+
 // ---------------------------------------------------------------------------
 // Callable
 // ---------------------------------------------------------------------------
 
-export const adminTestModelFunction = onCall({ invoker: "public" }, async (request): Promise<TestModelResponse> => {
-  // ── 1. Auth gate ──────────────────────────────────────────────────────────
-  const adminUid = await requireAdmin(request);
+export const adminTestModelFunction = onCall(
+  { invoker: "public" },
+  async (request): Promise<TestModelResponse> => {
+    // ── 1. Auth gate — 'super' only (key material is involved) ───────────────
+    const { uid: adminUid } = await requireRole(request, "super");
 
-  // ── 2. Warm platform config caches (needed for builtin key getters) ───────
-  await ensurePlatformCaches();
+    // ── 2. Warm platform config caches (needed for builtin key getters) ───────
+    await ensurePlatformCaches();
 
-  const data = (request.data ?? {}) as TestModelRequest;
+    const data = (request.data ?? {}) as TestModelRequest;
 
-  // ── 3. Resolve the ModelEntry to build a provider from ───────────────────
-  let entry: ModelEntry;
-  let idOrProvider: string; // for audit log — never the key
-  let rawApiKey: string | undefined; // held only for scrubbing errors
+    // ── 3. Validate keyIndex / rawKey mutual exclusivity ─────────────────────
+    const hasKeyIndex =
+      data.keyIndex !== undefined && data.keyIndex !== null;
+    const hasRawKey =
+      typeof data.rawKey === "string" && data.rawKey.trim().length > 0;
 
-  if (typeof data.id === "string" && data.id.trim()) {
-    // ── 3a. Registry lookup path ─────────────────────────────────────────
-    const id = data.id.trim();
-    const registry = getModelRegistry();
-    const found = registry.find((m) => m.id === id);
-    if (!found) {
-      throw new HttpsError("invalid-argument", `Model "${id}" not found in the registry.`);
-    }
-    if (found.id === "custom") {
-      // The "custom" sentinel is a BYOA entry stored per-user — it is not
-      // testable from here (no uid context). Reject explicitly.
+    if (hasKeyIndex && hasRawKey) {
       throw new HttpsError(
         "invalid-argument",
-        'The "custom" model is a per-user BYOA sentinel and cannot be tested via this endpoint.'
-      );
-    }
-    entry = found;
-    idOrProvider = id;
-    rawApiKey = found.api_key; // may be undefined (builtin resolves it at buildProvider time)
-  } else if (data.config && typeof data.config === "object") {
-    // ── 3b. Ad-hoc config path ───────────────────────────────────────────
-    const cfg = data.config;
-
-    if (!VALID_PROVIDERS.has(cfg.provider)) {
-      throw new HttpsError(
-        "invalid-argument",
-        `config.provider must be "gemini" or "openai-compatible".`
+        "Provide at most one of keyIndex or rawKey, not both."
       );
     }
 
-    if (cfg.provider === "openai-compatible") {
-      const hasBuiltin = cfg.builtin && VALID_BUILTINS.has(cfg.builtin);
-      if (!hasBuiltin) {
-        // Without a builtin, an explicit base_url (https) + api_key are required.
-        if (!cfg.base_url || !cfg.base_url.startsWith("https://")) {
+    // ── 4. Resolve the ModelEntry to build a provider from ───────────────────
+    let entry: ModelEntry;
+    let idOrProvider: string; // for audit log — never the key
+    // Collect raw keys for scrubbing; never include them in logs or responses.
+    const rawKeysForScrubbing: (string | undefined)[] = [];
+
+    if (typeof data.id === "string" && data.id.trim()) {
+      // ── 4a. Registry lookup path ─────────────────────────────────────────
+      const id = data.id.trim();
+      const registry = getModelRegistry();
+      const found = registry.find((m) => m.id === id);
+      if (!found) {
+        throw new HttpsError("invalid-argument", `Model "${id}" not found in the registry.`);
+      }
+      if (found.id === "custom") {
+        throw new HttpsError(
+          "invalid-argument",
+          'The "custom" model is a per-user BYOA sentinel and cannot be tested via this endpoint.'
+        );
+      }
+
+      let rawKeyOverride: string | undefined;
+
+      if (hasRawKey) {
+        // Admin supplies a raw key to test (e.g. before adding to pool)
+        rawKeyOverride = (data.rawKey as string).trim();
+        rawKeysForScrubbing.push(rawKeyOverride);
+      } else if (hasKeyIndex) {
+        // Admin wants to test a specific key from the pool by index
+        const pool = resolvePool(found);
+        const idx = Number(data.keyIndex);
+        if (!Number.isInteger(idx) || idx < 0) {
+          throw new HttpsError("invalid-argument", "keyIndex must be a non-negative integer.");
+        }
+        if (pool.length === 0) {
           throw new HttpsError(
             "invalid-argument",
-            "config.base_url (starting with https://) is required for openai-compatible without a builtin."
+            `Model "${id}" has no explicit key pool (uses builtin platform key). ` +
+              `Use rawKey to test a specific key.`
           );
         }
-        if (!cfg.api_key) {
+        if (idx >= pool.length) {
           throw new HttpsError(
             "invalid-argument",
-            "config.api_key is required for openai-compatible without a builtin."
+            `keyIndex ${idx} is out of range — model "${id}" has ${pool.length} key(s) (indices 0–${pool.length - 1}).`
           );
+        }
+        rawKeyOverride = pool[idx];
+        rawKeysForScrubbing.push(rawKeyOverride);
+      } else {
+        // Normal path: use the full pool (rotation handled inside buildProvider)
+        rawKeysForScrubbing.push(found.api_key, ...(found.api_keys ?? []));
+      }
+
+      entry = found;
+      idOrProvider = id;
+
+      // Build the provider, passing the raw key override if present
+      // (bypasses pool rotation for the specific-key test case)
+      const provider = buildProvider(entry, rawKeyOverride);
+
+      // ── 5. Minimal generation with timeout ─────────────────────────────────
+      const startMs = Date.now();
+      let ok = false;
+      let responseText = "";
+      let errorMessage = "";
+      let latencyMs = 0;
+
+      try {
+        const result = await withTimeout(
+          provider.generate({ prompt: "Reply with exactly the word: OK" }),
+          15_000
+        );
+        latencyMs = Date.now() - startMs;
+        ok = true;
+        responseText = (result.text ?? "").slice(0, 300);
+      } catch (err: unknown) {
+        latencyMs = Date.now() - startMs;
+        const raw = err instanceof Error ? err.message : String(err);
+        errorMessage = scrubKey(raw, ...rawKeysForScrubbing);
+      }
+
+      // ── 6. Audit log ────────────────────────────────────────────────────────
+      await logAdminAction({
+        admin_uid: adminUid,
+        action: "test_model",
+        details: {
+          id_or_provider: idOrProvider,
+          ok,
+          latencyMs,
+          key_mode: hasRawKey ? "rawKey" : hasKeyIndex ? `keyIndex:${data.keyIndex}` : "pool",
+          ...(ok ? {} : { error_present: true }),
+        },
+      });
+
+      if (ok) return { ok: true, text: responseText, latencyMs };
+      return { ok: false, error: errorMessage };
+
+    } else if (data.config && typeof data.config === "object") {
+      // ── 4b. Ad-hoc config path ─────────────────────────────────────────────
+      if (hasKeyIndex || hasRawKey) {
+        throw new HttpsError(
+          "invalid-argument",
+          "keyIndex and rawKey are only valid when using the `id` path, not `config`."
+        );
+      }
+
+      const cfg = data.config;
+
+      if (!VALID_PROVIDERS.has(cfg.provider)) {
+        throw new HttpsError(
+          "invalid-argument",
+          `config.provider must be "gemini" or "openai-compatible".`
+        );
+      }
+
+      if (cfg.provider === "openai-compatible") {
+        const hasBuiltin = cfg.builtin && VALID_BUILTINS.has(cfg.builtin);
+        if (!hasBuiltin) {
+          if (!cfg.base_url || !cfg.base_url.startsWith("https://")) {
+            throw new HttpsError(
+              "invalid-argument",
+              "config.base_url (starting with https://) is required for openai-compatible without a builtin."
+            );
+          }
+          if (!cfg.api_key) {
+            throw new HttpsError(
+              "invalid-argument",
+              "config.api_key is required for openai-compatible without a builtin."
+            );
+          }
         }
       }
+
+      // Coerce into a ModelEntry-shaped object so buildProvider() can consume it.
+      entry = {
+        id: "test",
+        label: "test",
+        provider: cfg.provider,
+        providerModel: cfg.providerModel ?? "",
+        minTier: "free",
+        enabled: true,
+        ...(cfg.builtin ? { builtin: cfg.builtin as ModelEntry["builtin"] } : {}),
+        ...(cfg.base_url ? { base_url: cfg.base_url } : {}),
+        ...(cfg.api_key ? { api_key: cfg.api_key } : {}),
+      };
+      idOrProvider = cfg.provider + (cfg.builtin ? `/${cfg.builtin}` : "");
+      rawKeysForScrubbing.push(cfg.api_key);
+
+      const provider = buildProvider(entry);
+
+      // ── 5b. Minimal generation with timeout ────────────────────────────────
+      const startMs = Date.now();
+      let ok = false;
+      let responseText = "";
+      let errorMessage = "";
+      let latencyMs = 0;
+
+      try {
+        const result = await withTimeout(
+          provider.generate({ prompt: "Reply with exactly the word: OK" }),
+          15_000
+        );
+        latencyMs = Date.now() - startMs;
+        ok = true;
+        responseText = (result.text ?? "").slice(0, 300);
+      } catch (err: unknown) {
+        latencyMs = Date.now() - startMs;
+        const raw = err instanceof Error ? err.message : String(err);
+        errorMessage = scrubKey(raw, ...rawKeysForScrubbing);
+      }
+
+      // ── 6b. Audit log ───────────────────────────────────────────────────────
+      await logAdminAction({
+        admin_uid: adminUid,
+        action: "test_model",
+        details: {
+          id_or_provider: idOrProvider,
+          ok,
+          latencyMs,
+          key_mode: "adhoc",
+          ...(ok ? {} : { error_present: true }),
+        },
+      });
+
+      if (ok) return { ok: true, text: responseText, latencyMs };
+      return { ok: false, error: errorMessage };
+
+    } else {
+      throw new HttpsError(
+        "invalid-argument",
+        'Provide either { id: string } to test a registry model or { config: {...} } for an ad-hoc test.'
+      );
     }
-
-    // Coerce into a ModelEntry-shaped object so buildProvider() can consume it.
-    entry = {
-      id: "test",
-      label: "test",
-      provider: cfg.provider,
-      providerModel: cfg.providerModel ?? "",
-      minTier: "free",
-      enabled: true,
-      ...(cfg.builtin ? { builtin: cfg.builtin as ModelEntry["builtin"] } : {}),
-      ...(cfg.base_url ? { base_url: cfg.base_url } : {}),
-      ...(cfg.api_key ? { api_key: cfg.api_key } : {}),
-    };
-    idOrProvider = cfg.provider + (cfg.builtin ? `/${cfg.builtin}` : "");
-    rawApiKey = cfg.api_key;
-  } else {
-    throw new HttpsError(
-      "invalid-argument",
-      'Provide either { id: string } to test a registry model or { config: {...} } for an ad-hoc test.'
-    );
   }
-
-  // ── 4. Build the provider (reuses all key/base resolution from models.ts) ─
-  const provider = buildProvider(entry);
-
-  // ── 5. Minimal generation with timeout ───────────────────────────────────
-  const startMs = Date.now();
-  let ok = false;
-  let responseText = "";
-  let errorMessage = "";
-  let latencyMs = 0;
-
-  try {
-    const result = await withTimeout(
-      provider.generate({ prompt: "Reply with exactly the word: OK" }),
-      15_000
-    );
-    latencyMs = Date.now() - startMs;
-    ok = true;
-    // Truncate to 300 chars — never return more than needed.
-    responseText = (result.text ?? "").slice(0, 300);
-  } catch (err: unknown) {
-    latencyMs = Date.now() - startMs;
-    const raw = err instanceof Error ? err.message : String(err);
-    // SECURITY: scrub any occurrence of the raw api_key from the error message.
-    errorMessage = scrubKey(raw, rawApiKey);
-  }
-
-  // ── 6. Audit log ──────────────────────────────────────────────────────────
-  // NEVER log: api_key, responseText (could contain sensitive echo), raw errors.
-  await logAdminAction({
-    admin_uid: adminUid,
-    action: "test_model",
-    details: {
-      id_or_provider: idOrProvider,
-      ok,
-      latencyMs,
-      // error_present omitted when ok=true to keep audit rows tidy
-      ...(ok ? {} : { error_present: true }),
-    },
-  });
-
-  // ── 7. Return structured response (never throws past this point) ──────────
-  if (ok) {
-    return { ok: true, text: responseText, latencyMs };
-  }
-  return { ok: false, error: errorMessage };
-});
+);
