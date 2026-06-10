@@ -4,7 +4,7 @@ import { calculateCompatibility } from '../services/aiClient';
 import type { UserProfile } from '../types';
 import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';
-import { listCandidateProfilesWithResume } from '../lib/recruitingData';
+import { listCandidateProfilesWithResume, listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -26,7 +26,30 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
 
     const [candidateToUnlock, setCandidateToUnlock] = useState<(MatchedCandidate & { index: number }) | null>(null);
     const [candidateToEngage, setCandidateToEngage] = useState<(MatchedCandidate & { index: number }) | null>(null);
-    
+
+    // Posted-job selector state
+    const [postedJobs, setPostedJobs] = useState<JobPosting[]>([]);
+    const [jobsLoaded, setJobsLoaded] = useState(false);
+
+    // Fetch employer's active posted jobs once on mount
+    useEffect(() => {
+        if (!profile.id) return;
+        listActiveEmployerJobs(profile.id)
+            .then((jobs) => setPostedJobs(jobs))
+            .catch(() => { /* silent fail — hide selector */ })
+            .finally(() => setJobsLoaded(true));
+    }, [profile.id]);
+
+    const handleSelectPostedJob = (jobId: string) => {
+        if (!jobId) return;
+        const job = postedJobs.find((j) => j.id === jobId);
+        if (!job) return;
+        const parts: string[] = [job.title];
+        if (job.location) parts.push(job.location);
+        if (job.description) parts.push('', job.description);
+        setJobDescription(parts.join('\n'));
+    };
+
     // Pre-fetch verified talent on component mount
     useEffect(() => {
         const fetchVerifiedTalent = async () => {
@@ -137,11 +160,38 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
             <p className="text-gray-600 mb-6">Paste a job description to proactively find matching candidates from the Career CoPilot talent pool.</p>
             
             <form onSubmit={handleSearch} className="space-y-4">
+                {/* Posted-job selector — only shown when the employer has active postings */}
+                {jobsLoaded && postedJobs.length > 0 && (
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('talent_select_posted_job')}
+                        </label>
+                        <select
+                            defaultValue=""
+                            onChange={(e) => handleSelectPostedJob(e.target.value)}
+                            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            <option value="" disabled>
+                                {t('talent_select_posted_job_placeholder')}
+                            </option>
+                            {postedJobs.map((job) => (
+                                <option key={job.id} value={job.id}>
+                                    {job.title}{job.location ? ` — ${job.location}` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+                {jobsLoaded && postedJobs.length === 0 && (
+                    <p className="text-sm text-gray-400 dark:text-gray-500 italic">
+                        {t('talent_no_posted_jobs')}
+                    </p>
+                )}
                 <textarea
                     value={jobDescription}
                     onChange={(e) => setJobDescription(e.target.value)}
                     rows={8}
-                    className="w-full bg-white border border-gray-300 rounded-lg shadow-sm p-4 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600 border border-gray-300 rounded-lg shadow-sm p-4 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Paste the full job description here..."
                 />
                  {error && <div className="text-red-600 bg-red-100 p-3 rounded-md text-sm">{error}</div>}

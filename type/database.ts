@@ -55,10 +55,14 @@ export interface UserDocument {
   resume_text?: string;
 
   // 雇主专属字段
+  // NOTE: these mirror the firestore.rules validUser whitelist — update both together
   company_name?: string;
   company_description?: string;
   company_logo_url?: string;
   company_website?: string;
+  company_size?: string;    // '1-10' | '11-50' | '51-200' | '201-500' | '500+'
+  industry?: string;        // e.g. "Software / FinTech / Education"
+  founded_year?: string;    // 4-digit year string e.g. "2015"
 
   // 业务状态字段
   english_pro_streak: number;     // 默认 0

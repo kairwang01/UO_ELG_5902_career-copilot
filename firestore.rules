@@ -123,6 +123,9 @@ service cloud.firestore {
           "company_description",
           "company_logo_url",
           "company_website",
+          "company_size",
+          "industry",
+          "founded_year",
           "english_pro_streak",
           "english_pro_last_practice",
           "wallet_address",
@@ -146,6 +149,9 @@ service cloud.firestore {
         optionalString(data, "subscription_status", 80) &&
         optionalString(data, "resume_text", 200000) &&
         optionalString(data, "company_name", 160) &&
+        optionalString(data, "company_size", 20) &&
+        optionalString(data, "industry", 80) &&
+        optionalString(data, "founded_year", 8) &&
         optionalString(data, "company_description", 5000) &&
         optionalUrl(data, "company_logo_url", 2048) &&
         optionalUrl(data, "company_website", 2048) &&

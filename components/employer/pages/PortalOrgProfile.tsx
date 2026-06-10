@@ -14,16 +14,21 @@ interface PortalOrgProfileProps {
   t: (key: string) => string;
 }
 
+const COMPANY_SIZE_OPTIONS = ['1-10', '11-50', '51-200', '201-500', '500+'] as const;
+
 /*
   Inline version of CompanyProfileForm adapted as a full page (no modal wrapper).
   Wired to the shared Firebase profile adapter and CompanyLogo uploader.
 */
-export function PortalOrgProfile({ session, profile, darkMode, onSaved }: PortalOrgProfileProps) {
+export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: PortalOrgProfileProps) {
   const dm = darkMode;
   const [companyName, setCompanyName] = useState('');
   const [website, setWebsite] = useState('');
   const [description, setDescription] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [companySize, setCompanySize] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [foundedYear, setFoundedYear] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -32,6 +37,9 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved }: Portal
     setWebsite(profile.company_website || '');
     setDescription(profile.company_description || '');
     setLogoUrl(profile.company_logo_url || null);
+    setCompanySize(profile.company_size || '');
+    setIndustry(profile.industry || '');
+    setFoundedYear(profile.founded_year || '');
   }, [profile]);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -44,6 +52,9 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved }: Portal
         company_website: website,
         company_description: description,
         company_logo_url: logoUrl,
+        company_size: companySize || undefined,
+        industry: industry || undefined,
+        founded_year: foundedYear || undefined,
       });
 
       if (error) throw error;
@@ -113,6 +124,48 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved }: Portal
                 />
               </div>
 
+              {/* Company Size */}
+              <div>
+                <label className={label}>{t('org_company_size')}</label>
+                <select
+                  value={companySize}
+                  onChange={(e) => setCompanySize(e.target.value)}
+                  className={`${input} appearance-none`}
+                >
+                  <option value="">—</option>
+                  {COMPANY_SIZE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Industry */}
+              <div>
+                <label className={label}>{t('org_industry')}</label>
+                <input
+                  type="text"
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                  placeholder={t('org_industry_ph')}
+                  className={input}
+                />
+              </div>
+
+              {/* Founded Year */}
+              <div>
+                <label className={label}>{t('org_founded_year')}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{4}"
+                  maxLength={4}
+                  value={foundedYear}
+                  onChange={(e) => setFoundedYear(e.target.value)}
+                  placeholder="e.g. 2015"
+                  className={input}
+                />
+              </div>
+
               <div>
                 <label className={label}>Description</label>
                 <textarea
@@ -139,6 +192,9 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved }: Portal
                     setWebsite(profile.company_website || '');
                     setDescription(profile.company_description || '');
                     setLogoUrl(profile.company_logo_url || null);
+                    setCompanySize(profile.company_size || '');
+                    setIndustry(profile.industry || '');
+                    setFoundedYear(profile.founded_year || '');
                     setMessage(null);
                   }}
                   className={`flex-1 px-6 py-3 border rounded-lg transition-colors ${

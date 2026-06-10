@@ -47,7 +47,7 @@ const AgencyHeader = ({ onOpenSettings, onOpenHistory, title, subtitle, iconColo
 );
 
 const FilterTabs = ({ currentFilter, setFilter, counts }: { currentFilter: string, setFilter: (f: string) => void, counts: any }) => (
-    <div className="flex flex-wrap gap-2 px-6 py-4 bg-white border-b border-gray-100">
+    <div className="flex flex-wrap gap-2 px-6 py-4 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
         {[
             { id: 'all', label: 'All Files', count: counts.all },
             { id: 'complete', label: 'Done', count: counts.complete, color: 'text-green-600' },
@@ -59,8 +59,8 @@ const FilterTabs = ({ currentFilter, setFilter, counts }: { currentFilter: strin
                 onClick={() => setFilter(tab.id)}
                 className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                     currentFilter === tab.id
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-slate-900 dark:bg-slate-600 text-white shadow-md'
+                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                 }`}
             >
                 {tab.label} <span className={`ml-1 ${currentFilter === tab.id ? 'text-slate-300' : tab.color || 'text-gray-500'}`}>({tab.count})</span>
@@ -153,16 +153,17 @@ const AnalysisResultModal = ({ file, onClose }: { file: BulkAnalysisItem, onClos
 };
 
 const CandidateAvatar: React.FC<{ name: string }> = ({ name }) => {
-    const initials = name
+    const initials = (name || '?')
         .split(' ')
-        .map(n => n[0])
+        .map(n => n[0] ?? '')
+        .filter(Boolean)
         .slice(0, 2)
         .join('')
-        .toUpperCase();
+        .toUpperCase() || '?';
     
     // Deterministic color based on name length
     const colors = ['bg-blue-100 text-blue-700', 'bg-green-100 text-green-700', 'bg-purple-100 text-purple-700', 'bg-yellow-100 text-yellow-700', 'bg-pink-100 text-pink-700', 'bg-indigo-100 text-indigo-700'];
-    const colorClass = colors[name.length % colors.length];
+    const colorClass = colors[(name || '').length % colors.length];
 
     return (
         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${colorClass} border border-white shadow-sm flex-shrink-0`}>
@@ -314,7 +315,7 @@ const PrepKitModal: React.FC<{
 }> = ({ file, onClose }) => {
     if (!file.prepKit) return null;
 
-    const { weakSpots, keyProjects, predictedQuestions } = file.prepKit;
+    const { weakSpots = [], keyProjects = [], predictedQuestions = [] } = file.prepKit;
     const candidateName = file.candidateName || file.fileName;
 
     const formatForDownload = () => {
@@ -627,11 +628,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     // Unified sorting logic for both modes
     const sortedFiles = [...files].sort((a, b) => getScore(b) - getScore(a));
 
-    const filteredFiles = currentFilter === 'all' 
-        ? files 
-        : files.filter(f => f.status === currentFilter);
-
-    // When displaying, we use the filtered set, but preserve the sort order
+    // Filtered + sorted display list
     const displayFiles = sortedFiles.filter(f => currentFilter === 'all' || f.status === currentFilter);
 
     const counts = {
@@ -674,7 +671,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                         <select
                             value={market}
                             onChange={(e) => setMarket(e.target.value)}
-                            className="bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                            className="bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
                         >
                             {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
@@ -709,8 +706,8 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             </div>
 
             {/* Main Container */}
-            <div className="bg-gray-50 p-2 rounded-2xl">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-gray-50 dark:bg-slate-900/50 p-2 rounded-2xl">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
                     <AgencyHeader 
                         onOpenSettings={() => addToast("Settings feature coming soon!", 'info')} 
                         onOpenHistory={() => addToast("History feature coming soon!", 'info')}
@@ -731,21 +728,21 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                 
                                 {/* JD Source Tabs */}
                                 <div className="flex gap-2 mb-4 border-b border-blue-200 dark:border-blue-800 pb-2">
-                                    <button 
-                                        onClick={() => setJdSource('paste')} 
-                                        className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === 'paste' ? 'text-blue-700 border-b-2 border-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                    <button
+                                        onClick={() => setJdSource('paste')}
+                                        className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === 'paste' ? 'text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                                     >
                                         Paste Text
                                     </button>
-                                    <button 
-                                        onClick={() => setJdSource('url')} 
-                                        className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === 'url' ? 'text-blue-700 border-b-2 border-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                    <button
+                                        onClick={() => setJdSource('url')}
+                                        className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === 'url' ? 'text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                                     >
                                         Import from URL
                                     </button>
-                                    <button 
-                                        onClick={() => setJdSource('select')} 
-                                        className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === 'select' ? 'text-blue-700 border-b-2 border-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                    <button
+                                        onClick={() => setJdSource('select')}
+                                        className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === 'select' ? 'text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                                     >
                                         Select Posted Job
                                     </button>
@@ -757,7 +754,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                         value={jobDescription}
                                         onChange={(e) => setJobDescription(e.target.value)}
                                         placeholder="Paste the full job description here to compare candidates against..."
-                                        className="w-full h-32 bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
+                                        className="w-full h-32 bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
                                     />
                                 )}
 
@@ -768,7 +765,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                             value={jdUrl}
                                             onChange={(e) => setJdUrl(e.target.value)}
                                             placeholder="https://company.com/careers/job-123"
-                                            className="flex-1 bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
+                                            className="flex-1 bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
                                         />
                                         <button 
                                             onClick={handleJdUrlImport} 
@@ -782,10 +779,10 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                 )}
 
                                 {jdSource === 'select' && (
-                                    <select 
-                                        value={selectedInternalJobId} 
+                                    <select
+                                        value={selectedInternalJobId}
                                         onChange={handleInternalJobSelect}
-                                        className="w-full bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
+                                        className="w-full bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
                                     >
                                         <option value="">-- Select a posted job --</option>
                                         {internalJobs.map(job => (
@@ -804,34 +801,34 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                 onDrop={handleDrop}
                                 onClick={() => fileInputRef.current?.click()}
                                 className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
-                                    isDragging 
-                                    ? 'border-blue-500 bg-blue-50' 
-                                    : 'border-gray-300 hover:border-blue-400 bg-gray-50'
+                                    isDragging
+                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                    : 'border-gray-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 bg-gray-50 dark:bg-slate-700/30'
                                 }`}
                             >
-                                <input 
-                                    type="file" 
-                                    ref={fileInputRef} 
-                                    className="hidden" 
-                                    multiple 
-                                    onChange={handleFileInput} 
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    multiple
+                                    onChange={handleFileInput}
                                     accept=".pdf,.docx,.txt,.png,.jpg"
                                 />
-                                <div className="bg-white p-4 rounded-full inline-block shadow-sm mb-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div className="bg-white dark:bg-slate-700 p-4 rounded-full inline-block shadow-sm mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                     </svg>
                                 </div>
-                                <p className="text-xl font-medium text-gray-900">Drag & Drop resumes here</p>
-                                <p className="text-sm text-gray-500 mt-2">{mode === 'matching' ? 'Step 2: Upload Files to Rank' : 'Or click to browse files'}</p>
+                                <p className="text-xl font-medium text-gray-900 dark:text-gray-100">Drag & Drop resumes here</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{mode === 'matching' ? 'Step 2: Upload Files to Rank' : 'Or click to browse files'}</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 {/* Actions Toolbar */}
-                                <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                    <button 
-                                        onClick={() => fileInputRef.current?.click()} 
-                                        className="text-sm font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                <div className="flex justify-between items-center bg-gray-50 dark:bg-slate-700/50 p-3 rounded-lg border border-gray-200 dark:border-slate-600">
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                                         Add More
@@ -839,7 +836,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                     <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileInput} accept=".pdf,.docx,.txt,.png,.jpg" />
                                     
                                     <div className="flex gap-2">
-                                        <button onClick={() => setFiles([])} className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-md font-medium" disabled={isAnalyzing}>Clear All</button>
+                                        <button onClick={() => setFiles([])} className="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md font-medium" disabled={isAnalyzing}>Clear All</button>
                                         <button 
                                             onClick={runBulkAnalysis} 
                                             disabled={isAnalyzing || files.every(f => f.status === 'complete')} 
@@ -873,8 +870,8 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                                         const rankBadge = (
                                                             <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
                                                                 index < 3
-                                                                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                                                                    : 'bg-gray-50 text-gray-500 border border-gray-100'
+                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800'
+                                                                    : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600'
                                                             }`}>
                                                                 {index + 1}
                                                             </span>
@@ -913,33 +910,42 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                                             </button>
                                                                         )}
-                                                                        <button 
+                                                                        <button
                                                                             onClick={() => file.blindResumeText ? setViewBlindResumeId(file.id) : handleAnonymize(file.id)}
                                                                             disabled={file.isAnonymizing}
-                                                                            className={`p-2 rounded-full transition-colors ${file.blindResumeText ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                                                            title="Blind Resume"
+                                                                            className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${file.blindResumeText ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/40' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
+                                                                            title={file.isAnonymizing ? 'Anonymizing...' : 'Blind Resume'}
                                                                         >
-                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                                                            {file.isAnonymizing
+                                                                                ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                                                : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                                                            }
                                                                         </button>
                                                                         {mode === 'matching' && (
-                                                                            <button 
+                                                                            <button
                                                                                 onClick={() => file.prepKit ? setViewPrepKitId(file.id) : handleGeneratePrepKit(file.id)}
                                                                                 disabled={file.isPrepping}
-                                                                                className={`p-2 rounded-full transition-colors ${file.prepKit ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                                                                title="Prep Kit"
+                                                                                className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${file.prepKit ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-800/40' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
+                                                                                title={file.isPrepping ? 'Generating prep kit...' : 'Prep Kit'}
                                                                             >
-                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                                                                                {file.isPrepping
+                                                                                    ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                                                    : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                                                                                }
                                                                             </button>
                                                                         )}
-                                                                        <button 
+                                                                        <button
                                                                             onClick={() => file.pitchEmail ? setViewPitchId(file.id) : handleGeneratePitch(file.id)}
                                                                             disabled={file.isPitching}
-                                                                            className={`p-2 rounded-full transition-colors ${file.pitchEmail ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                                                            title="Generate Pitch"
+                                                                            className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${file.pitchEmail ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-800/40' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
+                                                                            title={file.isPitching ? 'Generating pitch...' : 'Generate Pitch'}
                                                                         >
-                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                                                            {file.isPitching
+                                                                                ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                                                : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                                                            }
                                                                         </button>
-                                                                        <button onClick={() => removeFile(file.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full" title="Remove">
+                                                                        <button onClick={() => removeFile(file.id)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full" title="Remove">
                                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                                                                 <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                                                                             </svg>
