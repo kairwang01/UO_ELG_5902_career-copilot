@@ -970,8 +970,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
           credits={credits}
           theme={theme}
           onToggleTheme={toggleTheme}
-          isAIMode={isAIMode}
-          onToggleAIMode={toggleAIMode}
           activeTool={activeTool}
           onToolSelect={setActiveTool}
           onLogout={() => data.auth.signOut()}

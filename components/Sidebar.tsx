@@ -18,9 +18,7 @@ import {
 } from 'lucide-react';
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
-import { useToast } from './Toast';
 import LanguageSwitcher from './LanguageSwitcher';
-import ModelSelector from './ModelSelector';
 
 type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
 
@@ -32,8 +30,6 @@ interface SidebarProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   onLogout: () => void;
-  isAIMode: boolean;
-  onToggleAIMode: () => void;
   activeTool: string | null;
   onToolSelect: (tool: string | null) => void;
   t: (key: string) => string;
@@ -46,8 +42,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   onViewChange,
   profile,
   credits,
-  isAIMode,
-  onToggleAIMode,
   activeTool,
   onToolSelect,
   t,
@@ -57,7 +51,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   // Default collapsed: the full tool list is long, so the sidebar leads with a single
   // "Browse all tools" entry (the dedicated gallery) and keeps the quick-list one tap away.
   const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(false);
-  const { addToast } = useToast();
 
   const workspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -154,18 +147,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="space-y-0.5 animate-fade-in">
                     {ALL_TOOLS_CONFIG.map((tool) => {
                         const isToolActive = activeTool === tool.key;
-                        // Tools are credit-based: anyone can open them and the run cost is
-                        // charged in credits. The only gate is AI Mode being on.
-                        const toolRequiresAI = !isAIMode && tool.aiDependent !== false;
 
                         return (
                             <button
                                 key={tool.key}
                                 onClick={() => {
-                                    if (toolRequiresAI) {
-                                        addToast('Enable assisted tools to use this feature.', 'info');
-                                        return;
-                                    }
                                     onViewChange('toolkit');
                                     onToolSelect(tool.key);
                                 }}
@@ -173,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     isToolActive
                                         ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
                                         : 'text-gray-500 dark:text-slate-500 hover:text-gray-800 dark:hover:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800/30'
-                                } ${toolRequiresAI ? 'opacity-50' : ''}`}
+                                }`}
                             >
                                 <div className={`flex-shrink-0 transition-transform duration-200 ${isToolActive ? 'scale-110' : 'group-hover:scale-110'}`}>
                                     {React.cloneElement(tool.icon, { className: 'h-3.5 w-3.5' })}
@@ -184,29 +170,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                     })}
                 </div>
             )}
-        </div>
-
-        {/* AI Mode Toggle in Sidebar */}
-        <div className="pt-2">
-             <div className="px-4 py-3 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800/50">
-                <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <MessageSquare className="h-3 w-3" />
-                        Assistance
-                    </span>
-                    <button
-                        onClick={onToggleAIMode}
-                        className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isAIMode ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}
-                    >
-                        <span className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white transition ${isAIMode ? 'translate-x-4.5' : 'translate-x-1'}`} />
-                    </button>
-                </div>
-                <p className="text-[9px] text-gray-500 dark:text-slate-500">
-                    {isAIMode ? "Assisted tools are enabled" : "Assisted tools are restricted"}
-                </p>
-                {/* Model picker — only renders for paid+ users (server-gated). */}
-                <ModelSelector className="mt-3" />
-             </div>
         </div>
 
         {/* Language switcher — lets users change language after sign-in */}

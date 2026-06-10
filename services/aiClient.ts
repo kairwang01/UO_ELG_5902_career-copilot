@@ -145,11 +145,13 @@ export const analyzeResume = async (
   });
 };
 
-// Model selection — paid+ users can pick a model; the choice is gated server-side
-// (free users always fall back to the default regardless of what's sent here).
+// Model selection — only the 'custom' value is honoured on load; any other stored
+// value (stale free/paid picks like 'gemini', 'kairllm', etc.) is ignored so that
+// admin-side routing decides the model. BYOA business users must have 'custom'
+// reinstated by BusinessCustomApi.useEffect on mount.
 const MODEL_STORAGE_KEY = 'preferred_ai_model';
-let currentModelId: string | undefined =
-  (typeof localStorage !== 'undefined' ? localStorage.getItem(MODEL_STORAGE_KEY) : null) || undefined;
+const _stored = typeof localStorage !== 'undefined' ? localStorage.getItem(MODEL_STORAGE_KEY) : null;
+let currentModelId: string | undefined = _stored === 'custom' ? 'custom' : undefined;
 
 export const getAiModel = (): string | undefined => currentModelId;
 export const setAiModel = (id: string | undefined): void => {

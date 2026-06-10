@@ -9,7 +9,8 @@ import Avatar from './Avatar';
 import { STRIPE_CUSTOMER_PORTAL_LINK, ALL_PLANS, PLAN_HIERARCHY } from '../config';
 import { ethers } from 'ethers';
 import ApiKeyManager from './ApiKeyManager';
-import ModelSelector from './ModelSelector';
+import { BusinessCustomApi } from './ModelSelector';
+import { listModels } from '../services/aiClient';
 
 // A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
 const TALENT_NFT_CONTRACT_ADDRESS = '0x2A3b1A43842238321a22542a035921A362358189';
@@ -33,6 +34,32 @@ const TALENT_NFT_ABI = [
 
 const TARGET_CHAIN_ID = 11155111; // Sepolia Testnet Chain ID
 const TARGET_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia Chain ID in Hex
+
+/**
+ * Shown to non-business users in place of the removed model picker.
+ * BusinessCustomApi (rendered just before this) renders nothing for non-business
+ * users, so this note fills that slot with a one-liner instead.
+ * Both components read isBusiness from listModels(); they coordinate so that
+ * a business user sees only the BYOA form and a non-business user sees only this note.
+ */
+const ModelSelectorManagedNote: React.FC<{ t: (key: string) => string }> = ({ t }) => {
+  const [isBusiness, setIsBusiness] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    listModels()
+      .then(({ isBusiness: biz }) => setIsBusiness(!!biz))
+      .catch(() => setIsBusiness(false));
+  }, []);
+
+  // Hide while loading or if business (BusinessCustomApi handles that case)
+  if (isBusiness === null || isBusiness) return null;
+
+  return (
+    <p className="mt-6 text-xs text-gray-400 dark:text-slate-500 italic">
+      {t('account_model_managed')}
+    </p>
+  );
+};
 
 interface AccountProps {
   session: Session;
@@ -485,9 +512,10 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
             <ApiKeyManager session={session} onViewDocs={() => onSetView('api_docs')} />
         </div>
 
-        {/* AI Model — self-hides on free tier; paid users pick a premium model,
-            business users configure their own bring-your-own LLM endpoint here. */}
-        <ModelSelector className="mt-10 max-w-md" t={t} />
+        {/* AI Model — routing is admin-controlled server-side.
+            Non-business users see a muted info line; business users keep their BYOA form. */}
+        <BusinessCustomApi className="mt-10 max-w-md" t={t} />
+        <ModelSelectorManagedNote t={t} />
 
 
         {/* Web3 Identity Section */}

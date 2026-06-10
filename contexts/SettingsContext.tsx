@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode } from 'react';
 
 interface SettingsContextType {
   isAIMode: boolean;
@@ -16,24 +16,12 @@ export const useSettings = () => {
 };
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [isAIMode, setIsAIMode] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aiModeEnabled');
-      return saved !== null ? saved === 'true' : true;
-    } catch {
-      return true;
-    }
-  });
+  // AI Mode is always on — model routing is controlled by admins server-side.
+  // The toggle UI has been removed; this constant keeps existing consumers compiling.
+  const isAIMode = true;
 
-  const toggleAIMode = () => {
-    setIsAIMode((prev) => {
-      const newState = !prev;
-      try {
-        localStorage.setItem('aiModeEnabled', String(newState));
-      } catch { /* localStorage unavailable in strict private browsing */ }
-      return newState;
-    });
-  };
+  // No-op: kept so any residual call sites (e.g. Header) compile without changes.
+  const toggleAIMode = () => {};
 
   return (
     <SettingsContext.Provider value={{ isAIMode, toggleAIMode }}>

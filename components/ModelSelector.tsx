@@ -9,13 +9,13 @@ import {
 } from '../services/aiClient';
 
 /**
- * AI model picker. Calls listModels() — which returns only the models the user's
- * tier allows — and renders a dropdown.
+ * ModelSelector — full model picker (kept for backward-compat imports).
+ * Now only used internally; the public surface exposed to Account.tsx is
+ * `BusinessCustomApi` — the isolated BYOA config form for business users.
  *
- * - Free tier: single model (picker hides itself — nothing to choose).
- * - Paid tier: dropdown with 2–3 models.
- * - Business tier: dropdown + "Custom · your API" option with an inline config
- *   form for base URL / API key / model name, persisted via setBusinessLlmConfig.
+ * The general model dropdown has been removed from all user-facing UI
+ * (model routing is admin-controlled server-side). Business users retain
+ * the ability to configure and activate their own custom LLM endpoint.
  */
 
 interface ConfigFormState {
@@ -253,3 +253,183 @@ const ModelSelector: React.FC<{ className?: string; t?: (key: string) => string 
 };
 
 export default ModelSelector;
+
+/**
+ * BusinessCustomApi — focused BYOA config form for business-tier users.
+ *
+ * Checks the user's tier via listModels(). If isBusiness is false the component
+ * renders nothing. Otherwise it shows the inline form that lets the user set their
+ * custom LLM endpoint (base URL + API key + model name) and activates model id
+ * 'custom' via setAiModel once the config is saved.
+ *
+ * Usage in Account.tsx:
+ *   <BusinessCustomApi className="mt-10 max-w-md" t={t} />
+ */
+export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string) => string }> = ({ className, t: _t }) => {
+  const [isBusiness, setIsBusiness] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  const [form, setForm] = useState<ConfigFormState>(EMPTY_FORM);
+  const [maskedKey, setMaskedKey] = useState<string | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formMsg, setFormMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const formLoadedRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    listModels()
+      .then(({ isBusiness: biz }) => {
+        if (!active) return;
+        setIsBusiness(!!biz);
+        setReady(true);
+      })
+      .catch(() => { setReady(true); });
+    return () => { active = false; };
+  }, []);
+
+  // Load existing config once on mount
+  useEffect(() => {
+    if (!isBusiness || formLoadedRef.current) return;
+    formLoadedRef.current = true;
+    setFormLoading(true);
+    getBusinessLlmConfig()
+      .then((cfg) => {
+        if (cfg.configured) {
+          setForm({ base_url: cfg.base_url, api_key: '', model: cfg.model });
+          setMaskedKey(cfg.api_key_masked);
+          // Restore the active custom selection so callers see 'custom' as current model.
+          setAiModel('custom');
+        }
+      })
+      .catch(() => { /* Non-fatal — form stays blank */ })
+      .finally(() => setFormLoading(false));
+  }, [isBusiness]);
+
+  const handleFormSave = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormMsg(null);
+
+    if (!form.base_url.startsWith('https://')) {
+      setFormMsg({ type: 'error', text: 'Base URL must start with https://' });
+      return;
+    }
+    if (!form.api_key && !maskedKey) {
+      setFormMsg({ type: 'error', text: 'API key is required.' });
+      return;
+    }
+    if (!form.model.trim()) {
+      setFormMsg({ type: 'error', text: 'Model name is required.' });
+      return;
+    }
+
+    setFormLoading(true);
+    try {
+      await setBusinessLlmConfig({
+        base_url: form.base_url.trim(),
+        api_key: form.api_key,
+        model: form.model.trim(),
+      });
+      setForm((prev) => ({ ...prev, api_key: '' }));
+      setMaskedKey(null);
+      formLoadedRef.current = false;
+      // Activate 'custom' so aiClient sends model='custom' to the server.
+      setAiModel('custom');
+      setFormMsg({ type: 'success', text: 'Custom LLM config saved.' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Save failed. Check your inputs and try again.';
+      setFormMsg({ type: 'error', text: msg });
+    } finally {
+      setFormLoading(false);
+    }
+  }, [form, maskedKey]);
+
+  if (!ready || !isBusiness) return null;
+
+  return (
+    <div className={className}>
+      <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
+        Custom AI Endpoint
+      </h2>
+
+      <form
+        onSubmit={handleFormSave}
+        className="mt-4 rounded-xl border border-blue-200 dark:border-blue-800/60 bg-blue-50/60 dark:bg-blue-950/30 p-4 flex flex-col gap-3"
+      >
+        <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          Bring Your Own LLM Endpoint
+        </p>
+
+        {/* Base URL */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 mb-1">
+            API Base URL
+          </label>
+          <input
+            type="url"
+            required
+            placeholder="https://api.example.com/v1"
+            value={form.base_url}
+            onChange={(e) => setForm((prev) => ({ ...prev, base_url: e.target.value }))}
+            disabled={formLoading}
+            className="w-full text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+          />
+        </div>
+
+        {/* API key */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 mb-1">
+            API Key{maskedKey && !form.api_key ? (
+              <span className="ml-1.5 font-normal text-gray-400 dark:text-slate-500">
+                (current: {maskedKey})
+              </span>
+            ) : null}
+          </label>
+          <input
+            type="password"
+            autoComplete="new-password"
+            placeholder={maskedKey ? 'Enter new key to replace' : 'sk-…'}
+            value={form.api_key}
+            onChange={(e) => setForm((prev) => ({ ...prev, api_key: e.target.value }))}
+            disabled={formLoading}
+            className="w-full text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+          />
+        </div>
+
+        {/* Model name */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 mb-1">
+            Model Name
+          </label>
+          <input
+            type="text"
+            required
+            placeholder="e.g. gpt-4o or meta-llama/llama-3-8b"
+            value={form.model}
+            onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))}
+            disabled={formLoading}
+            className="w-full text-sm rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+          />
+        </div>
+
+        {/* Feedback */}
+        {formMsg && (
+          <p className={`text-xs font-medium leading-snug ${
+            formMsg.type === 'success'
+              ? 'text-green-600 dark:text-green-400'
+              : 'text-red-600 dark:text-red-400'
+          }`}>
+            {formMsg.text}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={formLoading}
+          className="self-end text-sm font-semibold px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {formLoading ? 'Saving…' : 'Save configuration'}
+        </button>
+      </form>
+    </div>
+  );
+};
