@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Settings,
   Sparkles,
+  BookmarkCheck,
 } from 'lucide-react';
 import type { UserProfile } from '../../types';
 import LanguageSwitcher from '../LanguageSwitcher';
@@ -19,6 +20,7 @@ export type PortalPage =
   | 'post-job'
   | 'job-listings'
   | 'talent-pool'
+  | 'shortlist'
   | 'agency-hub'
   | 'company-profile'
   | 'account-settings'
@@ -117,6 +119,7 @@ export function PortalSidebar({
         {navItem('post-job', 'Post a Job', Briefcase)}
         {navItem('job-listings', 'My Job Listings', FileText)}
         {navItem('talent-pool', 'Discover Talent', Users)}
+        {navItem('shortlist', 'Shortlist', BookmarkCheck)}
         {navItem('agency-hub', 'Agency Hub', Building2)}
 
         <div className="pt-6 space-y-2">

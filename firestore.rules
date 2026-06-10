@@ -268,6 +268,63 @@ service cloud.firestore {
         optionalString(data, "actionable_tip", 5000);
     }
 
+    function validShortlistStatus(status) {
+      return status in ["saved", "contacted", "rejected"];
+    }
+
+    function validShortlistEntry(data) {
+      return data.keys().hasOnly([
+          "candidate_name",
+          "candidate_snapshot",
+          "job_id",
+          "job_title",
+          "match_score",
+          "match_reasons",
+          "missing_requirements",
+          "notes",
+          "status",
+          "saved_at",
+          "saved_by"
+        ]) &&
+        data.keys().hasAll([
+          "candidate_name", "job_id", "job_title",
+          "match_score", "match_reasons",
+          "notes", "status", "saved_at", "saved_by"
+        ]) &&
+        data.candidate_name is string &&
+        data.candidate_name.size() > 0 &&
+        data.candidate_name.size() <= 200 &&
+        data.job_id is string &&
+        data.job_id.size() > 0 &&
+        data.job_id.size() <= 128 &&
+        data.job_title is string &&
+        data.job_title.size() > 0 &&
+        data.job_title.size() <= 200 &&
+        data.match_score is number &&
+        data.match_score >= 0 &&
+        data.match_score <= 100 &&
+        data.match_reasons is list &&
+        data.match_reasons.size() <= 20 &&
+        (!hasField(data, "missing_requirements") || data.missing_requirements == null ||
+          (data.missing_requirements is list && data.missing_requirements.size() <= 20)) &&
+        data.notes is string &&
+        data.notes.size() <= 2000 &&
+        validShortlistStatus(data.status) &&
+        data.saved_at is timestamp &&
+        data.saved_by is string &&
+        data.saved_by.size() > 0 &&
+        data.saved_by.size() <= 128 &&
+        (!hasField(data, "candidate_snapshot") || data.candidate_snapshot == null ||
+          data.candidate_snapshot is map);
+    }
+
+    // Update: only notes and status may change.
+    function validShortlistEntryUpdate(data) {
+      return data.notes is string &&
+        data.notes.size() <= 2000 &&
+        validShortlistStatus(data.status);
+    }
+
     function validJobPosting(data) {
       return data.keys().hasOnly([
           "employer_id",
@@ -398,6 +455,24 @@ service cloud.firestore {
       match /weekly_insights/{docId} {
         allow read: if isOwner(userId);
         allow create, update: if isOwner(userId) && validWeeklyInsight(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // ---- users/{userId}/shortlists/{id} -----------------------------------
+      // Employer-only snapshots saved during Talent Discovery. The employer
+      // (userId) is the exclusive reader/writer. Candidate user docs are never
+      // referenced-read here — data is captured as a snapshot at save time.
+      match /shortlists/{docId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) && validShortlistEntry(request.resource.data);
+
+        allow update: if isOwner(userId)
+          && validShortlistEntryUpdate(request.resource.data)
+          && unchanged(["candidate_name", "candidate_snapshot", "job_id",
+                        "job_title", "match_score", "match_reasons",
+                        "missing_requirements", "saved_at", "saved_by"]);
+
         allow delete: if isOwner(userId);
       }
     }

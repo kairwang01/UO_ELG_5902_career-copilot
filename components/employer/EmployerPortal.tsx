@@ -14,6 +14,7 @@ import { PortalTalentPool } from './pages/PortalTalentPool';
 import { PortalOrgProfile } from './pages/PortalOrgProfile';
 import { PortalAccountSettings } from './pages/PortalAccountSettings';
 import { PortalBilling } from './pages/PortalBilling';
+import { PortalShortlist } from './pages/PortalShortlist';
 import {
   listApplicationsForJobs,
   listEmployerJobsWithCounts,
@@ -175,6 +176,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
       case 'post-job': return jobToEdit ? 'Edit Job Posting' : 'Post a Job';
       case 'job-listings': return 'My Job Listings';
       case 'talent-pool': return 'Discover Talent';
+      case 'shortlist': return 'Shortlist';
       case 'agency-hub': return 'Agency Hub';
       case 'company-profile': return 'Organization Profile';
       case 'account-settings': return 'Account Settings';
@@ -285,6 +287,14 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               profile={profile}
               darkMode={darkMode}
               navigateToBusinessPricing={navigateToBusinessPricing}
+              t={t}
+            />
+          )}
+
+          {currentPage === 'shortlist' && (
+            <PortalShortlist
+              session={session}
+              darkMode={darkMode}
               t={t}
             />
           )}
