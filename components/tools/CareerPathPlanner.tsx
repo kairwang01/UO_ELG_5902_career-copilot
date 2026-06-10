@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Compass } from 'lucide-react';
 import { generateCareerPath, generateSkillBridgeProject } from '../../services/aiClient';
 import type { CareerPathResult, SkillBridgeProject } from '../../types';
@@ -6,6 +6,7 @@ import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { DownloadButtons } from './ToolUtils';
 import type { AppSession as Session } from '../../lib/data';
+import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 
 interface CareerPathPlannerProps {
   resumeText: string;
@@ -14,6 +15,8 @@ interface CareerPathPlannerProps {
   openTool: (tool: string, input?: string) => void;
   session: Session | null;
 }
+
+const SAMPLE_ROLE = 'Senior Product Manager';
 
 const actionIcons: { [key: string]: React.ReactNode } = {
   course: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
@@ -33,6 +36,9 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   const [generatingProjectForSkill, setGeneratingProjectForSkill] = useState<string | null>(null);
   const [generatedProject, setGeneratedProject] = useState<SkillBridgeProject | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
+
+  // SmartSuggest: derive role chips from resume (pure, no AI)
+  const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
 
   const handleGenerateProject = async (skill: string) => {
     setGeneratingProjectForSkill(skill);
@@ -78,7 +84,34 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
   const renderInput = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* (a) INTRO CARD */}
+      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+        <p className="font-medium text-slate-700 dark:text-slate-300">{t('tool_career_path_intro_line1')}</p>
+        <p className="mt-0.5">{t('tool_career_path_intro_line2')}</p>
+      </div>
+
       <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_career_path_setup_desc')}</p>
+
+      {/* (b) SAMPLE-FILL */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setDesiredRole(SAMPLE_ROLE)}
+          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {t('try_example')}
+        </button>
+      </div>
+
+      {/* SmartSuggestChips for target role */}
+      {resumeText && (
+        <SmartSuggestChips
+          items={suggestions.roles}
+          onPick={(v) => setDesiredRole(v)}
+          label={t('smart_suggest_target_roles')}
+        />
+      )}
+
       <input
         type="text"
         className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
@@ -87,12 +120,26 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
         onChange={(e) => setDesiredRole(e.target.value)}
         required
       />
+
+      {/* (e) ERROR RETRY */}
+      {error && (
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-3 flex items-start gap-3">
+          <p className="text-sm text-red-700 dark:text-red-400 flex-1">{error}</p>
+          <button
+            type="submit"
+            className="shrink-0 text-xs font-semibold text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded px-2 py-1 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+          >
+            {t('try_again')}
+          </button>
+        </div>
+      )}
+
       <button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
         {loading ? t('tool_career_path_analyzing_button') : t('tool_career_path_generate_button')}
       </button>
     </form>
   );
-  
+
   const formatForDownload = (res: CareerPathResult): string => {
     let content = `# Your Career Path to: ${desiredRole}\n\n`;
     content += `## Summary\n${res.summary}\n\n`;
@@ -126,7 +173,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
   const renderResult = () => {
     if (loading) return <StagedLoader icon={<Compass />} accent="teal" title="Mapping your path" steps={["Analyzing your experience…","Exploring career paths…","Building your roadmap…"]} onCancel={cancel} />;
-    if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
+
     if (!result) return null;
 
     // Defensive defaults: even with the output-cap fix, a malformed/partial AI
@@ -143,9 +190,19 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
       <div className="space-y-8 animate-fade-in">
         <div className="flex justify-between items-center">
           <h4 className="text-xl font-bold">{t('tool_career_path_results_title')}</h4>
-          <DownloadButtons textContent={formatForDownload(result)} baseFilename={`career_roadmap_for_${desiredRole.replace(/\s/g, '_')}`} />
+          {/* (d) RESULT ACTIONS: Download + start-over */}
+          <div className="flex items-center gap-2">
+            <DownloadButtons textContent={formatForDownload(result)} baseFilename={`career_roadmap_for_${desiredRole.replace(/\s/g, '_')}`} />
+            <button
+              type="button"
+              onClick={() => { setResult(null); setError(null); }}
+              className="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              {t('tool_start_over')}
+            </button>
+          </div>
         </div>
-        
+
         <p className="text-gray-700 dark:text-gray-300 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-lg">{summary}</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -202,11 +259,11 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
         {/* Roadmap Timeline */}
         <div>
-            <h3 className="text-lg font-bold text-gray-800 mb-4 text-center">Your Personal Roadmap</h3>
-            <div className="relative border-l-2 border-blue-200 ml-4 py-4">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4 text-center">Your Personal Roadmap</h3>
+            <div className="relative border-l-2 border-blue-200 dark:border-blue-800 ml-4 py-4">
             {roadmap.map((phase, index) => (
                 <div key={index} className="mb-10 ml-8 relative">
-                    <span className="absolute -left-[35px] flex items-center justify-center w-6 h-6 bg-blue-600 rounded-full ring-4 ring-white">
+                    <span className="absolute -left-[35px] flex items-center justify-center w-6 h-6 bg-blue-600 rounded-full ring-4 ring-white dark:ring-slate-900">
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4zM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10zM5 13h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2z" /></svg>
                     </span>
                     <div className="p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm">
@@ -249,6 +306,8 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
       </div>
     );
   };
+
+  if (loading) return <StagedLoader icon={<Compass />} accent="teal" title="Mapping your path" steps={["Analyzing your experience…","Exploring career paths…","Building your roadmap…"]} onCancel={cancel} />;
 
   return result ? renderResult() : renderInput();
 };

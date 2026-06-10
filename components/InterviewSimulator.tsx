@@ -1,7 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { MessageSquare } from 'lucide-react';
 import { generateInterviewQuestions, evaluateInterviewAnswer, type InterviewQuestion, type InterviewEvaluation } from '../services/aiClient';
 import type { AppSession as Session } from '../lib/data';
+import StagedLoader from './StagedLoader';
+import { useRecentApplications } from '../hooks/useRecentApplications';
 
 interface InterviewSimulatorProps {
   resumeText: string;
@@ -20,8 +23,22 @@ interface Message {
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const isSpeechSupported = !!SpeechRecognition;
 
+// Sample job description for "Try an example"
+const SAMPLE_JOB_DESC = `Job Title: Software Engineer II
+Company: Amazon
+Location: Ottawa, ON
+
+We are looking for a Software Engineer to join our AWS team. You will design and build distributed systems handling millions of requests per day, work closely with senior engineers on complex technical challenges, and participate in on-call rotations.
+
+Requirements:
+- 2+ years of professional software development experience
+- Strong command of at least one compiled language (Java, C++, Go)
+- Solid understanding of data structures, algorithms, and system design
+- Experience with cloud platforms (AWS preferred)
+- Excellent verbal and written communication skills`;
+
 const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, onClose, t, session }) => {
-    const [stage, setStage] = useState<'setup' | 'interviewing' | 'finished'>('setup');
+    const [stage, setStage] = useState<'setup' | 'loading' | 'interviewing' | 'finished'>('setup');
     const [jobDescription, setJobDescription] = useState('');
     const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -33,6 +50,9 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const recognitionRef = useRef<any>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
+    // Recent applications for the job-context selector
+    const { applications } = useRecentApplications(session);
+
     const formatEvaluation = (e: InterviewEvaluation): string => {
         const strengths = e.strengths?.length ? `\n\n✅ Strengths:\n• ${e.strengths.join('\n• ')}` : '';
         const improvements = e.improvements?.length ? `\n\n🔧 To improve:\n• ${e.improvements.join('\n• ')}` : '';
@@ -43,7 +63,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-    
+
     useEffect(() => {
         if (isSpeechSupported) {
             recognitionRef.current = new SpeechRecognition();
@@ -52,12 +72,9 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             recognitionRef.current.lang = 'en-US';
 
             recognitionRef.current.onresult = (event: any) => {
-                let interimTranscript = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
                         setUserInput(prev => prev + event.results[i][0].transcript);
-                    } else {
-                        interimTranscript += event.results[i][0].transcript;
                     }
                 }
             };
@@ -80,7 +97,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             setError("You must be logged in to start an interview.");
             return;
         }
-        setIsLoading(true);
+        setStage('loading');
         setError(null);
 
         try {
@@ -97,8 +114,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             setStage('interviewing');
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to start interview session.");
-        } finally {
-            setIsLoading(false);
+            setStage('setup');
         }
     };
 
@@ -138,6 +154,16 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         }
     };
 
+    const handleRestart = () => {
+        setStage('setup');
+        setMessages([]);
+        setQuestions([]);
+        setCurrentIndex(0);
+        setUserInput('');
+        setError(null);
+        setJobDescription('');
+    };
+
     const toggleListening = () => {
         if (!isSpeechSupported) {
             setError(t('tool_mock_interview_speech_error'));
@@ -163,14 +189,76 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             case 'system':
                 return <div key={index} className="text-center my-4 text-sm text-gray-500 dark:text-gray-400 italic">{msg.content}</div>;
         }
+    };
+
+    // (c) Staged loader while generating questions
+    if (stage === 'loading') {
+        return (
+            <StagedLoader
+                title={t('tool_mock_interview_starting_button')}
+                steps={[
+                    t('tool_mock_interview_loader_step1'),
+                    t('tool_mock_interview_loader_step2'),
+                    t('tool_mock_interview_loader_step3'),
+                ]}
+                onCancel={() => setStage('setup')}
+                icon={<MessageSquare />}
+                accent="violet"
+            />
+        );
     }
-    
+
     return (
         <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full flex flex-col h-full animate-fade-in">
             {stage === 'setup' && (
                 <form onSubmit={handleStartInterview} className="p-6 space-y-4">
+                    {/* (a) Intro card */}
+                    <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-1">
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_mock_interview_intro_title')}</p>
+                        <p>{t('tool_mock_interview_intro_desc')}</p>
+                    </div>
+
                     <h4 className="font-semibold text-lg text-gray-800 dark:text-gray-100">{t('tool_mock_interview_setup_title')}</h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t('tool_mock_interview_setup_desc')}</p>
+
+                    {/* Recent applications selector + sample fill */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        {/* (b) Try an example */}
+                        <button
+                            type="button"
+                            onClick={() => setJobDescription(SAMPLE_JOB_DESC)}
+                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline self-start"
+                        >
+                            {t('tool_mock_interview_try_example')}
+                        </button>
+                        {/* Recent applications — hidden when none */}
+                        {applications.length > 0 && (
+                            <div className="flex-1 sm:max-w-xs">
+                                <select
+                                    defaultValue=""
+                                    onChange={(e) => {
+                                        if (!e.target.value) return;
+                                        const app = applications.find(a => a.id === e.target.value);
+                                        if (!app) return;
+                                        setJobDescription(prev => {
+                                            const titleLine = `Job Title: ${app.job_title}`;
+                                            if (prev.includes(titleLine)) return prev;
+                                            return titleLine + (prev ? '\n\n' + prev : '');
+                                        });
+                                    }}
+                                    className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="" disabled>{t('tool_mock_interview_recent_apps_placeholder')}</option>
+                                    {applications.map((app) => (
+                                        <option key={app.id} value={app.id}>
+                                            {app.job_title}{app.status ? ` — ${app.status}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+
                     <div>
                         <label htmlFor="job-description" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{t('tool_mock_interview_job_desc_label')}</label>
                         <textarea
@@ -182,9 +270,25 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                             onChange={(e) => setJobDescription(e.target.value)}
                         />
                     </div>
-                    {error && <div className="text-red-600 text-sm">{error}</div>}
-                    <button type="submit" disabled={isLoading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
-                        {isLoading ? t('tool_mock_interview_starting_button') : t('tool_mock_interview_start_button')}
+
+                    {/* (e) Error box with retry */}
+                    {error && (
+                        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
+                            <svg className="h-5 w-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
+                            <div className="flex-1">
+                                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                                <button
+                                    type="submit"
+                                    className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:underline"
+                                >
+                                    {t('tool_mock_interview_retry')}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <button type="submit" className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 px-4 rounded-lg">
+                        {t('tool_mock_interview_start_button')}
                     </button>
                 </form>
             )}
@@ -216,12 +320,36 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                                     {t('tool_mock_interview_send_button')}
                                 </button>
                             </form>
-                            {error && <p className="text-red-600 text-xs mt-2">{error}</p>}
+                            {/* (e) Inline error with retry during interview */}
+                            {error && (
+                                <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 flex items-center gap-2">
+                                    <p className="text-sm text-red-700 dark:text-red-300 flex-1">{error}</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setError(null)}
+                                        className="text-xs font-semibold text-red-700 dark:text-red-300 hover:underline shrink-0"
+                                    >
+                                        {t('tool_mock_interview_dismiss_error')}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                      {stage === 'finished' && (
-                        <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-slate-800 text-center">
-                            <button onClick={onClose} className="px-6 py-2 bg-blue-700 text-white font-semibold rounded-lg hover:bg-blue-800">
+                        <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-slate-800 flex flex-wrap gap-3 justify-center">
+                            {/* (d) Start over affordance */}
+                            <button
+                                type="button"
+                                onClick={handleRestart}
+                                className="px-6 py-2 border-2 border-dashed border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+                            >
+                                {t('tool_mock_interview_restart_button')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-6 py-2 bg-blue-700 text-white font-semibold rounded-lg hover:bg-blue-800"
+                            >
                                 {t('tool_mock_interview_close_button')}
                             </button>
                         </div>

@@ -352,6 +352,12 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                         <h3 className="font-semibold text-slate-900 dark:text-slate-100 leading-snug">
                           {job.title}
                         </h3>
+                        {/* Company name — muted, shown when snapshotted on the posting */}
+                        {job.company_name && (
+                          <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">
+                            {job.company_name}
+                          </span>
+                        )}
                         {/* Rating chip — shown when employer has reviews */}
                         {showRatingChip && (
                           <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-full px-2 py-0.5 whitespace-nowrap">

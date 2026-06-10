@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Users } from 'lucide-react';
 import { generateNetworkingStrategy } from '../../services/aiClient';
 import type { NetworkingStrategyResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
+import { DownloadButtons } from './ToolUtils';
+import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 
 interface NetworkingAssistantProps {
   resumeText: string;
   market: string;
   t: (key: string) => string;
 }
+
+const SAMPLE_COMPANY = 'Shopify';
+const SAMPLE_ROLE = 'Senior Software Engineer';
+const SAMPLE_LOCATION = 'Ottawa, ON';
 
 const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, market, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
@@ -18,6 +24,9 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
   const [targetCompany, setTargetCompany] = useState('');
   const [targetRole, setTargetRole] = useState('');
   const [targetLocation, setTargetLocation] = useState('');
+
+  // SmartSuggest: derive role chips from resume (pure, no AI)
+  const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
 
   const runTool = async (company: string, role: string, location: string) => {
     if (!company || !role || !location) {
@@ -45,7 +54,27 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
 
   const renderInput = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* (a) INTRO CARD */}
+      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+        <p className="font-medium text-slate-700 dark:text-slate-300">{t('tool_networking_intro_line1')}</p>
+        <p className="mt-0.5">{t('tool_networking_intro_line2')}</p>
+      </div>
+
       <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_networking_assistant_setup_desc')}</p>
+
+      {/* (b) SAMPLE-FILL */}
+      <button
+        type="button"
+        onClick={() => {
+          setTargetCompany(SAMPLE_COMPANY);
+          setTargetRole(SAMPLE_ROLE);
+          setTargetLocation(SAMPLE_LOCATION);
+        }}
+        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+      >
+        {t('try_example')}
+      </button>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="target-company" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_networking_assistant_company_label')}</label>
@@ -74,6 +103,18 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
       </div>
       <div>
         <label htmlFor="target-role" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_networking_assistant_role_label')}</label>
+
+        {/* SmartSuggestChips for target role */}
+        {resumeText && (
+          <div className="mt-1 mb-2">
+            <SmartSuggestChips
+              items={suggestions.roles}
+              onPick={(v) => setTargetRole(v)}
+              label={t('smart_suggest_target_roles')}
+            />
+          </div>
+        )}
+
         <input
           type="text"
           id="target-role"
@@ -84,21 +125,59 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
           required
         />
       </div>
+
+      {/* (e) ERROR RETRY */}
+      {error && (
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-3 flex items-start gap-3">
+          <p className="text-sm text-red-700 dark:text-red-400 flex-1">{error}</p>
+          <button
+            type="submit"
+            className="shrink-0 text-xs font-semibold text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded px-2 py-1 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+          >
+            {t('try_again')}
+          </button>
+        </div>
+      )}
+
       <button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
         {loading ? t('tool_networking_assistant_generating_button') : t('tool_networking_assistant_generate_button')}
       </button>
     </form>
   );
 
+  const formatForDownload = (res: NetworkingStrategyResult): string => {
+    let content = `# Networking Strategy: ${targetRole} at ${targetCompany} (${targetLocation})\n\n`;
+    content += `## Strategy Summary\n${res.strategySummary}\n\n`;
+    content += `## Contact Suggestions\n`;
+    res.contactSuggestions.forEach((s, i) => {
+      content += `### Contact ${i + 1}: ${s.contactType}\n`;
+      content += `**Why:** ${s.reason}\n\n`;
+      content += `**Outreach Message:**\n${s.outreachMessage}\n\n`;
+    });
+    return content;
+  };
+
   const renderResult = () => {
-    if (loading) return <StagedLoader title="Mapping your network" steps={["Analyzing your background…","Identifying the right contacts…","Drafting outreach messages…"]} onCancel={cancel} icon={<Users />} accent="sky" />;
-    if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 
     const { strategySummary, contactSuggestions } = result;
     return (
       <div className="space-y-6">
-        <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_networking_assistant_results_title').replace('{company}', targetCompany).replace('{location}', targetLocation)}</h4>
+        {/* (d) RESULT ACTIONS */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_networking_assistant_results_title').replace('{company}', targetCompany).replace('{location}', targetLocation)}</h4>
+          <div className="flex items-center gap-2">
+            <DownloadButtons textContent={formatForDownload(result)} baseFilename={`networking_strategy_${targetCompany.replace(/\s/g, '_')}`} />
+            <button
+              type="button"
+              onClick={() => { setResult(null); setError(null); }}
+              className="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              {t('tool_start_over')}
+            </button>
+          </div>
+        </div>
+
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg">
           <h5 className="font-semibold text-blue-900 dark:text-blue-300">{t('tool_networking_assistant_approach_label')}</h5>
           <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">{strategySummary}</p>
@@ -123,9 +202,10 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
                             value={suggestion.outreachMessage}
                             className="w-full h-48 mt-2 text-sm p-2 bg-white dark:bg-slate-800 rounded-md border-gray-300 dark:border-slate-600 dark:text-gray-300 font-mono"
                         />
-                        <button 
+                        <button
+                            type="button"
                             onClick={() => navigator.clipboard.writeText(suggestion.outreachMessage)}
-                            className="mt-2 text-xs font-semibold text-blue-600 hover:underline"
+                            className="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
                         >
                             {t('tool_networking_assistant_copy_button')}
                         </button>
@@ -134,12 +214,18 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
              </details>
           ))}
         </div>
-         <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300">
+        <button
+          type="button"
+          onClick={() => { setResult(null); setError(null); }}
+          className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300"
+        >
             &larr; {t('tool_networking_assistant_new_plan_button')}
         </button>
       </div>
     );
   };
+
+  if (loading) return <StagedLoader title={t('tool_networking_loader_title')} steps={[t('tool_networking_step1'), t('tool_networking_step2'), t('tool_networking_step3')]} onCancel={cancel} icon={<Users />} accent="sky" />;
 
   return result ? renderResult() : renderInput();
 };

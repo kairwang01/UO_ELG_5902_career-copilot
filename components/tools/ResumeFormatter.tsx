@@ -20,6 +20,12 @@ const MARKET_HINT_KEY: Record<string, string> = {
   'Australia':      'resume_market_hint_australia',
 };
 
+// (b) sample cover letter — does NOT touch resumeText
+const SAMPLE_COVER_LETTER =
+  'Dear Hiring Manager,\n\nI am excited to apply for the Software Engineer role at Acme Corp. ' +
+  'With 4 years of experience building scalable web applications using React and Node.js, ' +
+  'I am confident I can contribute from day one.\n\nThank you for your consideration.\n\nSincerely,\nAlex Chen';
+
 interface ResumeFormatterProps {
   resumeText: string;
   market: string;
@@ -52,6 +58,12 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
 
   const renderInput = () => (
     <div className="space-y-4 animate-fade-in">
+      {/* (a) INTRO CARD */}
+      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-0.5">
+        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_resume_formatter_intro_title')}</p>
+        <p>{t('tool_resume_formatter_intro_desc')}</p>
+      </div>
+
       <div>
         <label htmlFor="target-market" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Market</label>
         <p className="text-xs text-gray-500 dark:text-gray-400">The AI will adapt the format, language, and ATS standards for this country.</p>
@@ -87,8 +99,18 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
         </div>
       </div>
       {includeCoverLetter && (
-        <div className="animate-fade-in">
-          <label htmlFor="cover-letter-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_resume_formatter_cover_letter_label')}</label>
+        <div className="animate-fade-in space-y-1">
+          <div className="flex justify-between items-center">
+            <label htmlFor="cover-letter-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_resume_formatter_cover_letter_label')}</label>
+            {/* (b) SAMPLE FILL — only fills cover letter, never touches resumeText */}
+            <button
+              type="button"
+              onClick={() => setCoverLetterForFormatting(SAMPLE_COVER_LETTER)}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {t('tool_try_example')}
+            </button>
+          </div>
           <textarea
             id="cover-letter-text"
             rows={10}
@@ -111,13 +133,29 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   );
 
   const renderResult = () => {
+    // (c) StagedLoader already has onCancel + icon + accent — preserved as-is
     if (loading) return <StagedLoader title="Reformatting your resume" steps={["Reading your resume…","Reformatting the layout…","Polishing the final document…"]} onCancel={cancel} icon={<FileText />} accent="blue" />;
-    if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
+
+    // (e) ERROR RETRY
+    if (error) return (
+      <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 space-y-3">
+        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+        <button
+          type="button"
+          onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
+          className="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
+        >
+          {t('tool_try_again')}
+        </button>
+      </div>
+    );
+
     if (!result) return null;
 
     const { formattedText } = result;
     return (
       <div className="space-y-4">
+        {/* (d) DownloadButtons already present; "format for another market" button already present — preserved */}
         <div className="flex justify-between items-center">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} for {targetMarket}</h4>
           <DownloadButtons textContent={formattedText} baseFilename={`${targetMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />

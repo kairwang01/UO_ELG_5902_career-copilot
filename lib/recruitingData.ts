@@ -18,6 +18,7 @@ export interface JobPosting {
   id: string;
   employer_id: string;
   title: string;
+  company_name: string | null;
   location: string | null;
   description: string | null;
   salary_range: string | null;
@@ -43,6 +44,7 @@ export interface JobPostingPatch {
   location: string;
   description: string;
   salary_range: string;
+  company_name?: string | null;
 }
 
 const toIsoString = (value: unknown): string => {
@@ -63,6 +65,7 @@ const mapJobPosting = (id: string, data: DocumentData): JobPosting => ({
   id,
   employer_id: String(data.employer_id ?? ''),
   title: String(data.title ?? ''),
+  company_name: data.company_name ?? null,
   location: data.location ?? null,
   description: data.description ?? null,
   salary_range: data.salary_range ?? null,
@@ -170,9 +173,12 @@ export const saveJobPosting = async (
     return;
   }
 
+  // Snapshot company_name at creation time so job cards always show the company
+  // name even if the employer later renames their profile.
   await addDoc(collection(firestoreDb, 'job_postings'), {
     ...jobData,
     employer_id: employerId,
+    company_name: patch.company_name ?? null,
     is_active: true,
     created_at: serverTimestamp(),
   });

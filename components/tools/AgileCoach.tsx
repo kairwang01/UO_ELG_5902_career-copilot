@@ -17,6 +17,10 @@ const AGILE_CERTIFICATIONS = [
     'Certified DevSecOps Professional (CDP)', 'PMP (Project Management Professional)'
 ];
 
+// (b) sample defaults
+const SAMPLE_ROLE = 'Scrum Master';
+const SAMPLE_CERT = 'PSM I (Professional Scrum Master)';
+
 interface AgileCoachProps {
   onClose: () => void;
   t: (key: string) => string;
@@ -66,7 +70,28 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
 
   const renderSetup = () => (
     <div className="space-y-4">
+      {/* (a) INTRO CARD */}
+      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-0.5">
+        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_agile_coach_intro_title')}</p>
+        <p>{t('tool_agile_coach_intro_desc')}</p>
+      </div>
+
       <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_agile_coach_setup_desc')}</p>
+
+      {/* (b) SAMPLE FILL */}
+      <div className="text-right">
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedAgileRole(SAMPLE_ROLE);
+            setSelectedCertification(SAMPLE_CERT);
+          }}
+          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {t('tool_try_example')}
+        </button>
+      </div>
+
       <div>
         <label htmlFor="agile-role" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_agile_coach_role_label')}</label>
         <select id="agile-role" value={selectedAgileRole} onChange={e => setSelectedAgileRole(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
@@ -146,6 +171,7 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
             {result.examTips.map((tip, i) => <li key={i}>{tip}</li>)}
           </ul>
         </div>
+        {/* (d) "retake" already present; close also present — preserved */}
         <div className="flex gap-4">
           <button onClick={onClose} className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">{t('tool_agile_coach_close_button')}</button>
           <button onClick={handleRetakeTest} className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">{t('tool_agile_coach_retake_button')}</button>
@@ -154,8 +180,22 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
     );
   };
 
+  // (c) StagedLoader already has onCancel + icon + accent — preserved as-is
   if (loading) return <StagedLoader title="Preparing your test" steps={["Setting up your exam…","Generating practice questions…","Adding tips & explanations…"]} onCancel={cancel} icon={<Award />} accent="orange" />;
-  if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
+
+  // (e) ERROR RETRY
+  if (error) return (
+    <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 space-y-3">
+      <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+      <button
+        type="button"
+        onClick={() => runTool(selectedAgileRole, selectedCertification)}
+        className="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
+      >
+        {t('tool_try_again')}
+      </button>
+    </div>
+  );
 
   switch (testStage) {
     case 'in_progress': return renderTestInProgress();

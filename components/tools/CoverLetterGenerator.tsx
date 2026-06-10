@@ -7,12 +7,15 @@ import StagedLoader from '../StagedLoader';
 import { DownloadButtons } from './ToolUtils';
 import { useApiStatus } from '../../contexts/ApiStatusContext';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
+import { useRecentApplications } from '../../hooks/useRecentApplications';
+import type { AppSession as Session } from '../../lib/data';
 
 interface CoverLetterGeneratorProps {
   resumeText: string;
   market: string;
   initialInput: string;
   t: (key: string) => string;
+  session: Session | null;
 }
 
 const COVER_LETTER_TEMPLATE = `[Your Name]
@@ -38,7 +41,20 @@ Thank you for considering my application. I have attached my resume for your rev
 Sincerely,
 [Your Name]`;
 
-const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText, market, initialInput, t }) => {
+// Sample job description for "Try an example"
+const SAMPLE_JOB_DESC = `Job Title: Frontend Software Engineer
+Company: Shopify
+Location: Ottawa, ON (Remote-friendly)
+
+We are looking for a Frontend Software Engineer to join our growing team. You will build and maintain high-quality React/TypeScript components, collaborate with designers and backend engineers, and ship features used by millions of merchants worldwide.
+
+Requirements:
+- 2+ years of experience with React and TypeScript
+- Strong understanding of web performance and accessibility
+- Experience with REST and GraphQL APIs
+- Passion for clean, maintainable code`;
+
+const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText, market, initialInput, t, session }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CoverLetter | null>(null);
@@ -46,6 +62,9 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   const [editableResult, setEditableResult] = useState('');
 
   const { apiStatus } = useApiStatus();
+
+  // Recent applications for the job-context selector
+  const { applications } = useRecentApplications(session);
 
   useEffect(() => {
     setJobDescription(initialInput);
@@ -89,6 +108,19 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     runTool(jobDescription);
   };
 
+  // Fill job description from a recent application (job_title only — no stored description)
+  const handleSelectRecentApp = (appId: string) => {
+    if (!appId) return;
+    const app = applications.find(a => a.id === appId);
+    if (!app) return;
+    setJobDescription(prev => {
+      // Prepend the job title line if not already present
+      const titleLine = `Job Title: ${app.job_title}`;
+      if (prev.includes(titleLine)) return prev;
+      return titleLine + (prev ? '\n\n' + prev : '');
+    });
+  };
+
   const renderFallback = () => (
     <div className="space-y-4">
         <div className="p-4 bg-yellow-50 dark:bg-amber-900/20 border-l-4 border-yellow-400">
@@ -106,6 +138,40 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
   const renderInput = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* (a) Intro card */}
+      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-1">
+        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_cover_letter_intro_title')}</p>
+        <p>{t('tool_cover_letter_intro_desc')}</p>
+      </div>
+
+      {/* (b) Sample fill + recent apps row */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setJobDescription(SAMPLE_JOB_DESC)}
+          className="text-xs text-blue-600 dark:text-blue-400 hover:underline self-start"
+        >
+          {t('tool_cover_letter_try_example')}
+        </button>
+        {/* Recent applications selector */}
+        {applications.length > 0 && (
+          <div className="flex-1 sm:max-w-xs">
+            <select
+              defaultValue=""
+              onChange={(e) => handleSelectRecentApp(e.target.value)}
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="" disabled>{t('tool_cover_letter_recent_apps_placeholder')}</option>
+              {applications.map((app) => (
+                <option key={app.id} value={app.id}>
+                  {app.job_title}{app.status ? ` — ${app.status}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
       <textarea
         className="w-full h-40 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
         placeholder={t('tool_cover_letter_placeholder')}
@@ -113,6 +179,24 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
         onChange={(e) => setJobDescription(e.target.value)}
         required
       />
+
+      {/* (e) Error box with retry */}
+      {error && apiStatus === 'online' && (
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
+          <svg className="h-5 w-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
+          <div className="flex-1">
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <button
+              type="button"
+              onClick={() => runTool(jobDescription)}
+              className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:underline"
+            >
+              {t('tool_cover_letter_retry')}
+            </button>
+          </div>
+        </div>
+      )}
+
       <button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
         {loading ? t('tool_cover_letter_generating_button') : t('tool_cover_letter_generate_button')}
       </button>
@@ -135,7 +219,21 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
         accent="lime"
       />
     );
-    if (error && apiStatus === 'online') return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
+    if (error && apiStatus === 'online') return (
+      <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
+        <svg className="h-5 w-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
+        <div className="flex-1">
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          <button
+            type="button"
+            onClick={() => runTool(jobDescription)}
+            className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:underline"
+          >
+            {t('tool_cover_letter_retry')}
+          </button>
+        </div>
+      </div>
+    );
     if (!result) return apiStatus !== 'online' ? renderFallback() : renderInput();
 
     return (
@@ -149,6 +247,14 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
           onChange={(e) => setEditableResult(e.target.value)}
           className="w-full h-96 p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-serif text-sm dark:text-gray-300"
         />
+        {/* (d) Start over / run again */}
+        <button
+          type="button"
+          onClick={() => { setResult(null); setError(null); }}
+          className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300"
+        >
+          &larr; {t('tool_cover_letter_back_button')}
+        </button>
       </div>
     );
   };
