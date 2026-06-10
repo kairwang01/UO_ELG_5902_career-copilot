@@ -8,6 +8,7 @@ import { CaseSnapshots } from '../components/CaseSnapshots';
 import { UserVoices } from '../components/UserVoices';
 import { SiteFaq } from '../components/SiteFaq';
 import { WorkflowSteps } from '../components/WorkflowSteps';
+import { FeatureShowcase } from '../components/FeatureShowcase';
 import { ToolLibrary } from '../components/ToolLibrary';
 import { SiteVerifiedTalent } from '../components/SiteVerifiedTalent';
 import { Navigate } from 'react-router-dom';
@@ -105,6 +106,8 @@ export const JobseekerHomePage: React.FC = () => {
           />
         </div>
       </section>
+
+      <FeatureShowcase t={t} />
 
       <section className="py-14 sm:py-[var(--site-section)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-8 lg:gap-10">
