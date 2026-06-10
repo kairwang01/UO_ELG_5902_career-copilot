@@ -920,8 +920,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
           onSignOut={() => data.auth.signOut()}
           t={t}
           initialPage={portalInitialPage}
-          isAIMode={isAIMode}
-          onToggleAIMode={toggleAIMode}
           theme={theme}
           onToggleTheme={toggleTheme}
           currentLang={currentLang}

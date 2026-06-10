@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { analyzeCandidateMatch } from '../services/aiClient';
+import { discoverTalent, type DiscoveredCandidate } from '../services/aiClient';
 import type { UserProfile } from '../types';
 import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';
-import { listCandidateProfilesWithResume, listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
+import { listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
 import { saveToShortlist } from '../lib/shortlistData';
 import { BookmarkCheck, BookmarkPlus, CheckCircle2, XCircle } from 'lucide-react';
 
@@ -15,6 +15,39 @@ interface MatchedCandidate extends UserProfile {
     potentialGaps: string[];
     suggestedQuestions: string[];
 }
+
+/**
+ * The server returns only SAFE fields (no resume_text/email — privacy by design;
+ * full profiles unlock via the paid flow). Modals expect a UserProfile shape, so
+ * we wrap the safe payload in a null stub.
+ */
+const toMatchedCandidate = (c: DiscoveredCandidate, fallbackSummary?: string): MatchedCandidate => ({
+    id: c.id,
+    updated_at: '',
+    full_name: null,
+    avatar_url: null,
+    subscription_status: 'free',
+    role: 'candidate',
+    company_name: null,
+    company_website: null,
+    company_description: null,
+    company_logo_url: null,
+    resume_text: null,
+    preferred_language: null,
+    wallet_address: null,
+    nft_minted: null,
+    nft_staked: c.nft_staked,
+    nft_earnings: null,
+    nft_token_id: null,
+    english_pro_streak: null,
+    english_pro_last_practice: null,
+    credits: 0,
+    compatibilityScore: c.compatibilityScore,
+    summary: c.summary || fallbackSummary || '',
+    strengths: c.strengths,
+    potentialGaps: c.potentialGaps,
+    suggestedQuestions: c.suggestedQuestions,
+});
 
 interface TalentDiscoveryProps {
     t: (key: string) => string;
@@ -87,80 +120,45 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
         setJobDescription(parts.join('\n'));
     };
 
-    // Pre-fetch verified talent on component mount
+    // Pre-fetch verified talent on component mount — server-side read (client
+    // reads of other users' profiles are rules-blocked by design).
     useEffect(() => {
+        let cancelled = false;
         const fetchVerifiedTalent = async () => {
             setLoading(true);
             try {
-                const candidates = (await listCandidateProfilesWithResume(50))
-                    .filter((candidate) => candidate.nft_staked)
-                    .slice(0, 10);
-
-                // Simulate a generic match score for display before a specific search
-                const pseudoMatched = candidates.map(c => ({
-                    ...c,
-                    compatibilityScore: 0,
-                    summary: "This candidate's skills are verified and staked in the talent vault.",
-                    strengths: [],
-                    potentialGaps: [],
-                    suggestedQuestions: [],
-                }));
-                setVerifiedResults(pseudoMatched);
-
+                const { candidates } = await discoverTalent();
+                if (cancelled) return;
+                setVerifiedResults(candidates.map((c) => toMatchedCandidate(c, t('discover_verified_summary_default'))));
             } catch (err) {
-                 setError(err instanceof Error ? err.message : 'Could not load verified talent.');
+                if (!cancelled) setError(err instanceof Error ? err.message : t('talent_load_error'));
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
         fetchVerifiedTalent();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!jobDescription.trim()) {
-            setError('Please provide a job description to search for talent.');
+            setError(t('talent_jd_required'));
             return;
         }
         setLoading(true);
         setError(null);
         setRegularResults(null);
         try {
-            const candidates = await listCandidateProfilesWithResume(50);
-            if (candidates.length === 0) {
-                setRegularResults([]);
-                setVerifiedResults([]);
-                return;
-            }
-
-            const allMatched: MatchedCandidate[] = [];
-            for (const candidate of candidates) {
-                if (!candidate.resume_text) {
-                    continue;
-                }
-                try {
-                    const matchResult = await analyzeCandidateMatch(candidate.resume_text, jobDescription);
-                    allMatched.push({
-                        ...candidate,
-                        compatibilityScore: matchResult.score,
-                        summary: matchResult.summary,
-                        strengths: matchResult.strengths,
-                        potentialGaps: matchResult.potentialGaps,
-                        suggestedQuestions: matchResult.suggestedQuestions,
-                    });
-                } catch (e) {
-                    console.error(`Error matching candidate ${candidate.id}:`, e);
-                    // Don't add to results if matching fails
-                }
-            }
-
-            allMatched.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
-
+            // One server call: candidates are read and matched server-side; only
+            // safe, scored fields come back (sorted by score desc).
+            const { candidates } = await discoverTalent(jobDescription);
+            const allMatched = candidates.map((c) => toMatchedCandidate(c));
             setVerifiedResults(allMatched.filter(c => c.nft_staked));
             setRegularResults(allMatched.filter(c => !c.nft_staked && c.compatibilityScore >= 70));
-
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'An unknown error occurred during the search.');
+            setError(err instanceof Error ? err.message : t('talent_search_error'));
         } finally {
             setLoading(false);
         }
@@ -223,7 +221,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                         <div key={candidate.id} className="p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg">
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-white">Candidate #{index + 1}</p>
+                                    <p className="font-bold text-white">{t('talent_candidate_label').replace('{n}', String(index + 1))}</p>
                                     <p className="text-sm text-gray-300 mt-1">{candidate.summary}</p>
                                     {/* Strengths chips */}
                                     {candidate.strengths.length > 0 && (
@@ -251,7 +249,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                     {candidate.compatibilityScore > 0 && (
                                         <div className="text-right">
                                             <p className="text-2xl font-bold text-green-400">{candidate.compatibilityScore}%</p>
-                                            <p className="text-xs text-gray-300">Match</p>
+                                            <p className="text-xs text-gray-300">{t('talent_match_label')}</p>
                                         </div>
                                     )}
                                     <div className="flex flex-col gap-2">
@@ -287,7 +285,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
             </div>
 
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('discover_regular_title')}</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">Paste a job description to proactively find matching candidates from the Career CoPilot talent pool.</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">{t('talent_search_desc')}</p>
 
             <form onSubmit={handleSearch} className="space-y-4">
                 {/* Posted-job selector — only shown when the employer has active postings */}
@@ -322,32 +320,32 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                     onChange={(e) => setJobDescription(e.target.value)}
                     rows={8}
                     className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600 border border-gray-300 rounded-lg shadow-sm p-4 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Paste the full job description here..."
+                    placeholder={t('talent_jd_placeholder')}
                 />
                  {error && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm">{error}</div>}
                  <button type="submit" disabled={loading} className="w-full sm:w-auto px-8 py-3 bg-blue-700 text-white font-bold rounded-lg shadow-md hover:bg-blue-800 disabled:bg-blue-400">
-                    {loading ? 'Searching...' : 'Find Matching Candidates'}
+                    {loading ? t('talent_searching') : t('talent_search_button')}
                 </button>
             </form>
 
             {loading && (
                 <div className="text-center mt-8">
                     <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-3 text-gray-600 dark:text-gray-400">Analyzing talent pool...</p>
+                    <p className="mt-3 text-gray-600 dark:text-gray-400">{t('talent_analyzing_pool')}</p>
                 </div>
             )}
 
             {regularResults && (
                 <div className="mt-8">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
-                        {regularResults.length > 0 ? `Found ${regularResults.length} other match(es)` : 'No other strong matches found'}
+                        {regularResults.length > 0 ? t('talent_found_matches').replace('{n}', String(regularResults.length)) : t('talent_no_matches')}
                     </h3>
                     <div className="space-y-4">
                         {regularResults.map((candidate, index) => (
                             <div key={candidate.id} className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-sm">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-gray-800 dark:text-white">Candidate #{index + 1}</p>
+                                        <p className="font-bold text-gray-800 dark:text-white">{t('talent_candidate_label').replace('{n}', String(index + 1))}</p>
                                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{candidate.summary}</p>
                                         {/* Strengths chips */}
                                         {candidate.strengths.length > 0 && (
@@ -363,7 +361,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                         {/* Potential gaps */}
                                         {candidate.potentialGaps.length > 0 && (
                                             <div className="mt-2">
-                                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Potential gaps:</p>
+                                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('talent_potential_gaps')}</p>
                                                 <ul className="space-y-0.5">
                                                     {candidate.potentialGaps.slice(0, 3).map((g, i) => (
                                                         <li key={i} className="flex items-start gap-1 text-xs text-red-600 dark:text-red-400">
@@ -378,7 +376,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                     <div className="flex items-start gap-3 flex-shrink-0">
                                         <div className="text-right">
                                             <p className="text-2xl font-bold text-green-600 dark:text-green-400">{candidate.compatibilityScore}%</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">Match</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{t('talent_match_label')}</p>
                                         </div>
                                         <button
                                             onClick={() => handleSaveToShortlist(candidate)}

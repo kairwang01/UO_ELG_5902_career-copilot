@@ -214,6 +214,36 @@ export const getBusinessLlmConfig = async (): Promise<BusinessLlmConfigResult> =
   return res.data;
 };
 
+// ---- Employer talent discovery (server-side; resumes never reach the browser) --
+
+export interface DiscoveredCandidate {
+  id: string;
+  nft_staked: boolean;
+  compatibilityScore: number;
+  summary: string;
+  strengths: string[];
+  potentialGaps: string[];
+  suggestedQuestions: string[];
+}
+
+export interface DiscoverTalentResult {
+  candidates: DiscoveredCandidate[];
+  scanned?: number;
+  eligible?: number;
+}
+
+/**
+ * Server-side talent search. Without a jobDescription it returns the verified
+ * (staked) rail; with one it returns AI-scored matches. Candidate resume text
+ * stays on the server — clients are rules-blocked from reading other profiles.
+ */
+export const discoverTalent = (jobDescription?: string): Promise<DiscoverTalentResult> =>
+  callDedicated(async () => {
+    const fn = httpsCallable<{ jobDescription?: string }, DiscoverTalentResult>(firebaseFunctions, 'discoverTalent');
+    const res = await fn(jobDescription ? { jobDescription } : {});
+    return res.data;
+  });
+
 /**
  * Dispatches a long-tail tool through the consolidated `aiProxy` callable, which
  * applies tier-gated model routing (Gemini / KairLLM / DeepSeek / custom). The

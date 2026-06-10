@@ -53,6 +53,13 @@ export const SiteHeader: React.FC = () => {
           >
             {t('site_nav_for_employers')}
           </Link>
+          {/* Symmetric cross-link: the business surface previously had no way back
+              to the job-seeker side except the logo (team-flagged nav gap). */}
+          {isEmployerSurface && (
+            <Link to={SITE_ROUTES.home} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+              {t('site_nav_for_jobseekers')}
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">

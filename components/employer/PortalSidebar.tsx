@@ -9,7 +9,6 @@ import {
   CreditCard,
   ChevronRight,
   Settings,
-  Sparkles,
   BookmarkCheck,
 } from 'lucide-react';
 import type { UserProfile } from '../../types';
@@ -33,10 +32,9 @@ interface PortalSidebarProps {
   profile: UserProfile | null;
   darkMode: boolean;
   onToggleDark: () => void;
-  isAIMode: boolean;
-  onToggleAIMode: () => void;
   currentLang: string;
   onLanguageChange: (lang: string) => void;
+  t: (key: string) => string;
 }
 
 export function PortalSidebar({
@@ -45,10 +43,9 @@ export function PortalSidebar({
   onGoHome,
   profile,
   darkMode,
-  isAIMode,
-  onToggleAIMode,
   currentLang,
   onLanguageChange,
+  t,
 }: PortalSidebarProps) {
 
   const dm = darkMode;
@@ -67,17 +64,6 @@ export function PortalSidebar({
       <Icon className="w-5 h-5 flex-shrink-0" />
       <span className="flex-1 text-left">{label}</span>
       {currentPage === page && <ChevronRight className="w-4 h-4" />}
-    </button>
-  );
-
-  const toggle = (on: boolean, onToggle: () => void) => (
-    <button
-      onClick={onToggle}
-      className={`w-11 h-6 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-[#1d4ed8]' : dm ? 'bg-gray-600' : 'bg-gray-300'}`}
-    >
-      <div
-        className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform mt-0.5 ${on ? 'translate-x-5' : 'translate-x-0.5'}`}
-      />
     </button>
   );
 
@@ -107,39 +93,32 @@ export function PortalSidebar({
                 Career CoPilot
               </div>
             </button>
-            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>HIRING PORTAL</div>
+            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_subtitle')}</div>
           </div>
         </div>
       </div>
 
       <div className="flex-1 px-4 space-y-2 overflow-y-auto">
-        <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>WORKSPACE</div>
+        <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{t('portal_nav_workspace_group')}</div>
 
-        {navItem('dashboard', 'Dashboard', LayoutDashboard)}
-        {navItem('post-job', 'Post a Job', Briefcase)}
-        {navItem('job-listings', 'My Job Listings', FileText)}
-        {navItem('talent-pool', 'Discover Talent', Users)}
-        {navItem('shortlist', 'Shortlist', BookmarkCheck)}
-        {navItem('agency-hub', 'Agency Hub', Building2)}
+        {navItem('dashboard', t('portal_nav_dashboard'), LayoutDashboard)}
+        {navItem('post-job', t('portal_nav_post_job'), Briefcase)}
+        {navItem('job-listings', t('portal_nav_job_listings'), FileText)}
+        {navItem('talent-pool', t('portal_nav_discover'), Users)}
+        {navItem('shortlist', t('portal_nav_shortlist'), BookmarkCheck)}
+        {navItem('agency-hub', t('portal_nav_agency_hub'), Building2)}
 
         <div className="pt-6 space-y-2">
-          <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>SETTINGS</div>
-          {navItem('company-profile', 'Organization Profile', User)}
-          {navItem('account-settings', 'Account Settings', Settings)}
-          {navItem('billing', 'Billing & Plan', CreditCard)}
+          <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{t('portal_nav_settings_group')}</div>
+          {navItem('company-profile', t('portal_nav_org_profile'), User)}
+          {navItem('account-settings', t('portal_nav_account'), Settings)}
+          {navItem('billing', t('portal_nav_billing'), CreditCard)}
         </div>
 
-        {/* Toggles */}
+        {/* Language switcher — lets users change language after sign-in.
+            (The AI-Mode toggle was removed per the 2026-06-09 requirements:
+            model behaviour is governed by admins, not per-user toggles.) */}
         <div className="pt-4 space-y-0.5">
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className={`w-5 h-5 ${dm ? 'text-gray-400' : 'text-gray-600'}`} />
-              <span className={`text-sm ${dm ? 'text-gray-300' : 'text-gray-700'}`}>AI Mode</span>
-            </div>
-            {toggle(isAIMode, onToggleAIMode)}
-          </div>
-
-          {/* Language switcher — lets users change language after sign-in */}
           <LanguageSwitcher onLanguageChange={onLanguageChange} currentLang={currentLang} />
         </div>
       </div>
@@ -150,8 +129,8 @@ export function PortalSidebar({
         <div className="flex items-center gap-3 px-3 py-2">
           <CreditCard className="w-5 h-5 text-[#1d4ed8]" />
           <div>
-            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>CREDITS</div>
-            <div className={`font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>{profile?.credits ?? 0} CR</div>
+            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_credits_label')}</div>
+            <div className={`font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>{(profile?.credits ?? 0).toLocaleString()} CR</div>
           </div>
         </div>
         <div className="flex items-center gap-3 px-3 py-2">
@@ -164,9 +143,9 @@ export function PortalSidebar({
           </div>
           <div className="min-w-0">
             <div className={`text-sm font-semibold truncate ${dm ? 'text-white' : 'text-gray-900'}`}>
-              {profile?.full_name || 'Business'}
+              {profile?.full_name || t('portal_business_fallback_name')}
             </div>
-            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>Business Account</div>
+            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_business_account')}</div>
           </div>
         </div>
       </div>
