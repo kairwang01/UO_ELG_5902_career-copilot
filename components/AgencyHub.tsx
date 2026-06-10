@@ -426,18 +426,29 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     const [viewPitchId, setViewPitchId] = useState<string | null>(null);
     const [viewPrepKitId, setViewPrepKitId] = useState<string | null>(null);
     const [viewBlindResumeId, setViewBlindResumeId] = useState<string | null>(null);
+    const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+    const [jobsFetchError, setJobsFetchError] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Fetch internal jobs when 'select' tab is active
     useEffect(() => {
         if (mode === 'matching' && jdSource === 'select') {
+            setIsLoadingJobs(true);
+            setJobsFetchError(false);
             const fetchInternalJobs = async () => {
-                const jobs = await listActiveEmployerJobs(session.user.id);
-                setInternalJobs(jobs.map((job) => ({
-                    id: job.id,
-                    title: job.title,
-                    description: job.description,
-                })));
+                try {
+                    const jobs = await listActiveEmployerJobs(session.user.id);
+                    setInternalJobs(jobs.map((job) => ({
+                        id: job.id,
+                        title: job.title,
+                        description: job.description,
+                    })));
+                } catch (err) {
+                    console.error('Failed to fetch internal jobs:', err);
+                    setJobsFetchError(true);
+                } finally {
+                    setIsLoadingJobs(false);
+                }
             };
             fetchInternalJobs();
         }
@@ -779,16 +790,36 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                 )}
 
                                 {jdSource === 'select' && (
-                                    <select
-                                        value={selectedInternalJobId}
-                                        onChange={handleInternalJobSelect}
-                                        className="w-full bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="">-- Select a posted job --</option>
-                                        {internalJobs.map(job => (
-                                            <option key={job.id} value={job.id}>{job.title}</option>
-                                        ))}
-                                    </select>
+                                    isLoadingJobs ? (
+                                        <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 py-2">
+                                            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                            Loading posted jobs…
+                                        </div>
+                                    ) : jobsFetchError ? (
+                                        <div className="flex items-center justify-between gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">
+                                            <span>Failed to load jobs. Please try again.</span>
+                                            <button
+                                                onClick={() => { setJobsFetchError(false); setJdSource('select'); }}
+                                                className="text-xs font-semibold underline hover:no-underline"
+                                            >
+                                                Retry
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <select
+                                            value={selectedInternalJobId}
+                                            onChange={handleInternalJobSelect}
+                                            className="w-full bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">-- Select a posted job --</option>
+                                            {internalJobs.length === 0 && (
+                                                <option disabled value="">No active jobs found</option>
+                                            )}
+                                            {internalJobs.map(job => (
+                                                <option key={job.id} value={job.id}>{job.title}</option>
+                                            ))}
+                                        </select>
+                                    )
                                 )}
                             </div>
                         )}
@@ -851,11 +882,47 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                 {/* Batch Insights */}
                                 <BatchInsights files={files} mode={mode} />
 
+                                {/* Error file list — shown when filter is 'error' */}
+                                {currentFilter === 'error' && displayFiles.some(f => f.status === 'error') && (
+                                    <div className="space-y-2 animate-fade-in">
+                                        {displayFiles.filter(f => f.status === 'error').map(file => (
+                                            <div key={file.id} className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <CandidateAvatar name={file.fileName} />
+                                                    <div className="min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{file.fileName}</p>
+                                                        <p className="text-xs text-red-600 dark:text-red-400 truncate">{file.error || 'Analysis failed.'}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: 'queued', error: undefined } : f))}
+                                                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                                                    >
+                                                        Retry
+                                                    </button>
+                                                    <button onClick={() => removeFile(file.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Queued-but-not-started empty state */}
+                                {!isAnalyzing && !files.some(f => f.status === 'complete') && currentFilter !== 'error' && (
+                                    <div className="text-center py-10 text-gray-400 dark:text-gray-500 animate-fade-in">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                        <p className="text-sm font-medium">Files queued. Click <span className="text-blue-500">Analyze Queue</span> to start.</p>
+                                    </div>
+                                )}
+
                                 {/* Unified Leaderboard Table */}
                                 {files.some(f => f.status === 'complete') && (
                                     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden animate-fade-in">
                                         <div className="overflow-x-auto">
-                                            <table className="w-full text-left">
+                                            <table className="w-full text-left min-w-[640px]">
                                                 <thead className="bg-gray-50 dark:bg-slate-700/50 text-gray-700 dark:text-gray-200 uppercase text-xs font-semibold">
                                                     <tr>
                                                         <th className="px-6 py-4">Rank</th>
@@ -866,7 +933,9 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                                                    {displayFiles.filter(f => f.status === 'complete').map((file, index) => {
+                                                    {displayFiles.filter(f => f.status === 'complete').length === 0 ? (
+                                                        <tr><td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400 dark:text-gray-500">No completed results match this filter.</td></tr>
+                                                    ) : displayFiles.filter(f => f.status === 'complete').map((file, index) => {
                                                         const rankBadge = (
                                                             <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
                                                                 index < 3
