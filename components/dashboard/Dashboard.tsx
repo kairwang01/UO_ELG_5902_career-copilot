@@ -256,7 +256,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
     } finally {
       setLoading(false);
     }
-  }, [session, t, isAIMode]);
+    // Depend on the user id PRIMITIVE, not the session object: Firebase auth
+    // events (token refresh / tab refocus) recreate the session object without
+    // changing the user, and the object identity would re-fire the auto-fetch
+    // (incl. the weekly-summary AI call) on every such event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, t, isAIMode]);
 
   useEffect(() => {
     fetchDashboardData();

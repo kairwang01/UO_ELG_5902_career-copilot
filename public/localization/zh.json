@@ -1056,5 +1056,9 @@
   "browse_jobs_applied": "已申请",
   "browse_jobs_apply_success": "申请已提交！",
   "browse_jobs_apply_error": "申请失败，请稍后重试。",
-  "browse_jobs_sign_in_to_apply": "请先登录后再申请。"
+  "browse_jobs_sign_in_to_apply": "请先登录后再申请。",
+  "browse_jobs_posted_today": "今天",
+  "browse_jobs_posted_yesterday": "昨天",
+  "browse_jobs_posted_days_ago": "{n} 天前",
+  "browse_jobs_posted_weeks_ago": "{n} 周前"
 }

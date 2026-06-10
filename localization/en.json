@@ -1056,5 +1056,9 @@
   "browse_jobs_applied": "Applied",
   "browse_jobs_apply_success": "Application submitted!",
   "browse_jobs_apply_error": "Failed to apply. Please try again.",
-  "browse_jobs_sign_in_to_apply": "You must be signed in to apply."
+  "browse_jobs_sign_in_to_apply": "You must be signed in to apply.",
+  "browse_jobs_posted_today": "Today",
+  "browse_jobs_posted_yesterday": "Yesterday",
+  "browse_jobs_posted_days_ago": "{n} days ago",
+  "browse_jobs_posted_weeks_ago": "{n}w ago"
 }

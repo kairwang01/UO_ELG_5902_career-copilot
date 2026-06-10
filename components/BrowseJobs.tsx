@@ -33,14 +33,14 @@ const SkeletonCard: React.FC = () => (
   </div>
 );
 
-// ── helper: relative posted date ──────────────────────────────────────────────
-const postedLabel = (iso: string): string => {
+// ── helper: relative posted date (i18n via t) ─────────────────────────────────
+const postedLabel = (iso: string, t: (k: string) => string): string => {
   const ms = Date.now() - new Date(iso).getTime();
   const days = Math.floor(ms / 86_400_000);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  if (days === 0) return t('browse_jobs_posted_today');
+  if (days === 1) return t('browse_jobs_posted_yesterday');
+  if (days < 7) return t('browse_jobs_posted_days_ago').replace('{n}', String(days));
+  if (days < 30) return t('browse_jobs_posted_weeks_ago').replace('{n}', String(Math.floor(days / 7)));
   return new Date(iso).toLocaleDateString();
 };
 
@@ -51,7 +51,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   // ── data state ────────────────────────────────────────────────────────────
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState(false);
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
   const [applyingId, setApplyingId] = useState<string | null>(null);
 
@@ -72,23 +72,25 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   };
   useEffect(() => () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); }, []);
 
-  // ── fetch jobs on mount ───────────────────────────────────────────────────
+  // ── fetch jobs on mount (ONCE — no reactive deps; raw errors are logged and a
+  //    translated generic message is rendered, so `t` stays out of the deps) ────
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      setFetchError(null);
+      setFetchError(false);
       try {
         const data = await listAllActiveJobPostings();
         if (!cancelled) setJobs(data);
       } catch (err) {
-        if (!cancelled) setFetchError(err instanceof Error ? err.message : t('browse_jobs_fetch_error'));
+        console.error('BrowseJobs: failed to load postings:', err);
+        if (!cancelled) setFetchError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [t]);
+  }, []);
 
   // ── fetch already-applied jobs for current user ───────────────────────────
   const sessionUserId = session?.user?.id ?? null;
@@ -238,7 +240,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       {/* fetch error */}
       {fetchError && (
         <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
-          {fetchError}
+          {t('browse_jobs_fetch_error')}
         </div>
       )}
 
@@ -312,7 +314,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                           </span>
                         )}
                         <span className="text-xs text-slate-400 dark:text-slate-500">
-                          {postedLabel(job.created_at)}
+                          {postedLabel(job.created_at, t)}
                         </span>
                       </div>
                     </div>

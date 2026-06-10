@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Copy, Info, Search } from 'lucide-react';
 import { findOpportunities, calculateCompatibility, generateProfessionalEmail } from '../../services/aiClient';
 import type { OpportunityResult, Opportunity } from '../../types';
@@ -148,9 +148,19 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     // callback (and therefore the expensive AI search + double credit spend).
   }, [resumeText, market, sessionUserId, fetchAppliedJobs, begin, end]);
   
+  // Auto-run guard: this effect triggers a CREDIT-CHARGING AI search, so it must
+  // be idempotent per input set. Callback identity churn (e.g. a dependency like
+  // t/session regaining a new reference on parent re-renders) must never re-fire
+  // a paid search — that previously looped: deduct → live credits snapshot →
+  // re-render → effect refires → deduct again. The ref keys the run on the actual
+  // inputs; "Search again" calls runTool() directly and is unaffected.
+  const lastAutoRunKey = useRef<string | null>(null);
   useEffect(() => {
+    const runKey = `${sessionUserId ?? 'anon'}|${market}|${resumeText.length}`;
+    if (lastAutoRunKey.current === runKey) return;
+    lastAutoRunKey.current = runKey;
     runTool();
-  }, [runTool]);
+  }, [runTool, sessionUserId, market, resumeText]);
 
   // 4c: Why am I a fit?
   const handleWhyFit = useCallback(async (job: Opportunity) => {

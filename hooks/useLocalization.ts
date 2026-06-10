@@ -41,9 +41,15 @@ export const useLocalization = (initialLanguage?: string) => {
         return () => { isMounted = false; };
     }, []);
 
-    const t = (key: string): string => {
+    // IMPORTANT: t must be referentially stable. Many components put `t` in
+    // useCallback/useEffect dependency arrays; an unmemoized `t` gets a new
+    // identity on EVERY render of the consumer, which re-fires those effects.
+    // In OpportunityFinder this chained into an auto-rerun of the credit-charging
+    // AI search on every credits update (deduct → live snapshot → re-render →
+    // new t → effect refires → deduct again …) — an infinite credit drain.
+    const t = useCallback((key: string): string => {
         return translations[key] || fallback[key] || key; // active lang → English → key
-    };
+    }, [translations, fallback]);
 
     return { t, isLoaded, currentLang: language, changeLanguage };
 };
