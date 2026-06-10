@@ -304,6 +304,18 @@ export const adminUpdateQuotasFunction = onCall({ invoker: "public" }, async (re
     updated_by: adminUid,
   };
 
+  // free_max_output_tokens: optional positive int, 256–32768.
+  if (data.free_max_output_tokens !== undefined && data.free_max_output_tokens !== null) {
+    const v = Number(data.free_max_output_tokens);
+    if (!Number.isInteger(v) || v < 256 || v > 32768) {
+      throw new HttpsError(
+        "invalid-argument",
+        "free_max_output_tokens must be an integer between 256 and 32768."
+      );
+    }
+    patch.free_max_output_tokens = v;
+  }
+
   await db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.quotas).set(patch, { merge: true });
   await refreshPlatformCaches();
   await logAdminAction({

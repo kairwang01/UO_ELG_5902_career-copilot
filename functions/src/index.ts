@@ -24,6 +24,7 @@ setGlobalOptions({
 
 export { aiProxyFunction              as aiProxy               } from "./handlers/aiProxy";
 export { discoverTalentFunction       as discoverTalent        } from "./handlers/discoverTalent";
+export { onApplicationStatusChangeFunction as onApplicationStatusChange } from "./handlers/notifications";
 export { generateHeadshotFunction     as generateHeadshot      } from "./handlers/generateHeadshot";
 export { extractTextFromUrlFunction   as extractTextFromUrl    } from "./handlers/extractTextFromUrl";
 export { careerCoachFunction          as careerCoach           } from "./handlers/careerCoach";

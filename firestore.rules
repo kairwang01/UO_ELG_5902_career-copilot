@@ -329,6 +329,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           "employer_id",
           "title",
+          "company_name",
           "description",
           "location",
           "salary_range",
@@ -346,6 +347,7 @@ service cloud.firestore {
         data.is_active is bool &&
         data.created_at is timestamp &&
         data.updated_at is timestamp &&
+        optionalString(data, "company_name", 160) &&
         optionalString(data, "description", 20000) &&
         optionalString(data, "location", 180) &&
         optionalString(data, "salary_range", 120);
@@ -456,6 +458,22 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create, update: if isOwner(userId) && validWeeklyInsight(request.resource.data);
         allow delete: if isOwner(userId);
+      }
+
+      // ---- users/{userId}/notifications/{id} --------------------------------
+      // Written server-side only (Admin SDK via onApplicationStatusChange trigger).
+      // Candidates may read their own notifications and flip read→true; no other
+      // client mutations are allowed.
+      match /notifications/{id} {
+        allow read: if isOwner(userId);
+
+        // Only the `read` field may be changed by the owner (mark-read).
+        // All identity fields must remain unchanged.
+        allow update: if isOwner(userId)
+          && unchanged(["type", "application_id", "job_title", "status", "created_at"]);
+
+        // Server-only creates/deletes — trigger writes via Admin SDK.
+        allow create, delete: if false;
       }
 
       // ---- users/{userId}/shortlists/{id} -----------------------------------

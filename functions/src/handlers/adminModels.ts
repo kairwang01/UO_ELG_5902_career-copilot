@@ -225,6 +225,8 @@ function validateChainReferences(
 
 /**
  * Returns the effective model registry with api_key and api_keys masked.
+ * Includes lightweight key health info (failureCount, cooldownUntil, lastErrorCode)
+ * sourced from platform_config/key_health docs (best-effort — missing docs are skipped).
  * If Firestore has no models doc (or empty array), returns DEFAULT_MODELS.
  * Seeds nothing — read-only.
  *
@@ -233,8 +235,52 @@ function validateChainReferences(
 export const adminListModelsFunction = onCall({ invoker: "public" }, async (request) => {
   await requireRole(request, "admin");
   await ensurePlatformCaches();
+
+  // Fetch key health docs best-effort. The collection holds one doc per model id
+  // (document id === model id). Missing docs → no health data for that model.
+  let healthByModelId: Record<string, {
+    failureCount?: number;
+    cooldownUntil?: string | null;
+    lastErrorCode?: string | null;
+    lastFailureAt?: string | null;
+    anyCooled?: boolean;
+  }> = {};
+  try {
+    const healthSnap = await db
+      .collection(PLATFORM_CONFIG_COLLECTION)
+      .doc("key_health")
+      .get();
+    if (healthSnap.exists) {
+      const raw = healthSnap.data() ?? {};
+      // Each field at the top level is keyed by model id.
+      for (const [modelId, entry] of Object.entries(raw)) {
+        if (entry && typeof entry === "object") {
+          const e = entry as Record<string, unknown>;
+          const now = Date.now();
+          const cooldownUntil = typeof e.cooldown_until === "string" ? e.cooldown_until : null;
+          const anyCooled = cooldownUntil !== null && new Date(cooldownUntil).getTime() > now;
+          healthByModelId[modelId] = {
+            failureCount: typeof e.failure_count === "number" ? e.failure_count : undefined,
+            cooldownUntil: cooldownUntil,
+            lastErrorCode: typeof e.last_error_code === "string" ? e.last_error_code : null,
+            lastFailureAt: typeof e.last_failure_at === "string" ? e.last_failure_at : null,
+            anyCooled,
+          };
+        }
+      }
+    }
+  } catch {
+    // Health fetch is strictly best-effort; never block the response.
+  }
+
+  const maskedModels = getModelRegistryMasked().map((m) => {
+    const h = healthByModelId[m.id];
+    if (!h) return m;
+    return { ...m, keyHealth: h };
+  });
+
   return {
-    models: getModelRegistryMasked(),
+    models: maskedModels,
     // Include the admin-configured default so the UI can render the badge.
     defaultModelId: getDefaultModelId() ?? DEFAULT_MODEL_ID,
   };
