@@ -14,12 +14,23 @@ import {
     FileText,
     Building2,
     HelpCircle,
+    Timer,
+    Mic,
+    AlertTriangle,
+    Award,
 } from 'lucide-react';
-import { generateInterviewQuestions, evaluateInterviewAnswer, type InterviewQuestion, type InterviewEvaluation } from '../services/aiClient';
+import {
+    generateInterviewQuestions,
+    evaluateInterviewSession,
+    type InterviewQuestion,
+    type InterviewSessionReport,
+} from '../services/aiClient';
 import type { AppSession as Session } from '../lib/data';
 import StagedLoader from './StagedLoader';
 import { useRecentApplications } from '../hooks/useRecentApplications';
 import { listAllActiveJobPostings, type JobPosting } from '../lib/recruitingData';
+import InterviewerAvatar from './InterviewerAvatar';
+import { DownloadButtons } from './tools/ToolUtils';
 
 interface InterviewSimulatorProps {
   resumeText: string;
@@ -29,14 +40,13 @@ interface InterviewSimulatorProps {
   session: Session | null;
 }
 
-interface Message {
-    role: 'user' | 'model_question' | 'model_feedback' | 'system';
-    content: string;
-}
-
 // Check for SpeechRecognition API
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const isSpeechSupported = !!SpeechRecognition;
+
+// ── Real-interview pacing (per requirements) ──────────────────────────────────
+const PREP_SECONDS = 15;
+const ANSWER_SECONDS = 180;
 
 // ── Promo feature grid (8 selling points, i18n via mi_feat_* keys) ────────────
 const PROMO_FEATURES: { icon: React.ReactNode; titleKey: string; descKey: string; tint: string }[] = [
@@ -107,7 +117,7 @@ const COMPANY_INDUSTRIES: { id: string; labelKey: string }[] = [
     { id: 'other',         labelKey: 'mi_cind_other' },
 ];
 
-// ── Difficulty levels (the promo promises 难度自由切换 — so it must be real) ───
+// ── Difficulty levels ──────────────────────────────────────────────────────────
 type Difficulty = 'entry' | 'advanced' | 'challenge';
 const DIFFICULTY_DIRECTIVES: Record<Difficulty, string> = {
     entry:
@@ -123,6 +133,15 @@ const DIFFICULTY_OPTIONS: { id: Difficulty; labelKey: string }[] = [
     { id: 'challenge', labelKey: 'mi_difficulty_challenge' },
 ];
 
+// ── Verdict display map (AI returns the English verdict string) ───────────────
+const VERDICT_META: Record<string, { labelKey: string; cls: string }> = {
+    'strong hire':      { labelKey: 'mi_verdict_strong_hire', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+    'hire':             { labelKey: 'mi_verdict_hire',        cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+    'leaning hire':     { labelKey: 'mi_verdict_leaning_hire', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300' },
+    'leaning no hire':  { labelKey: 'mi_verdict_leaning_no',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+    'no hire':          { labelKey: 'mi_verdict_no',          cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+};
+
 // Sample for "Try an example"
 const SAMPLE = {
     title: 'Software Engineer II',
@@ -132,8 +151,12 @@ const SAMPLE = {
     companyName: 'Amazon',
 };
 
+const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
 const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, onClose, t, session }) => {
-    const [stage, setStage] = useState<'setup' | 'loading' | 'interviewing' | 'finished'>('setup');
+    const [stage, setStage] = useState<'setup' | 'loading' | 'interviewing' | 'evaluating' | 'report'>('setup');
+    const [showDisclaimer, setShowDisclaimer] = useState(false);
+    const [disclaimerChecked, setDisclaimerChecked] = useState(false);
 
     // ── Section 1: interview type ──
     const [interviewType, setInterviewType] = useState<InterviewType>('comprehensive');
@@ -156,15 +179,23 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     // ── FAQ accordion ──
     const [openFaq, setOpenFaq] = useState<string | null>(null);
 
+    // ── Timed interview state ──
     const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [userInput, setUserInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [phase, setPhase] = useState<'prep' | 'answer'>('prep');
+    const [prepLeft, setPrepLeft] = useState(PREP_SECONDS);
+    const [answerLeft, setAnswerLeft] = useState(ANSWER_SECONDS);
+    const [answerDraft, setAnswerDraft] = useState('');
+    const answersRef = useRef<string[]>([]);
+    const submittingRef = useRef(false);
+    const [avatarSpeaking, setAvatarSpeaking] = useState(false);
+    const [report, setReport] = useState<InterviewSessionReport | null>(null);
+    const [openBreakdown, setOpenBreakdown] = useState<number | null>(null);
+
     const [error, setError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
     const recognitionRef = useRef<any>(null);
-    const chatEndRef = useRef<HTMLDivElement>(null);
+    const answerBoxRef = useRef<HTMLTextAreaElement>(null);
 
     // Job sources: recent applications + platform postings (one fetch on mount)
     const { applications } = useRecentApplications(session);
@@ -180,6 +211,27 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const companyNameSuggestions = Array.from(
         new Set(postings.map((p) => p.company_name).filter((n): n is string => !!n)),
     );
+
+    // ── TTS: the avatar "speaks" each question (approximate mouth animation is
+    //    driven by these lifecycle events — see InterviewerAvatar for the
+    //    lip-sync design note) ──
+    const speak = (text: string) => {
+        try {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'en-US';
+            u.rate = 1;
+            u.onstart = () => setAvatarSpeaking(true);
+            u.onend = () => setAvatarSpeaking(false);
+            u.onerror = () => setAvatarSpeaking(false);
+            window.speechSynthesis.speak(u);
+        } catch { /* TTS unsupported — avatar just stays idle */ }
+    };
+    const cancelSpeech = () => {
+        try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+        setAvatarSpeaking(false);
+    };
+    useEffect(() => () => cancelSpeech(), []);
 
     const handleJobSourcePick = (value: string) => {
         if (!value) return;
@@ -209,11 +261,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         setCompanyOpen(true);
     };
 
-    /**
-     * Assemble the structured setup into the context string consumed by BOTH
-     * question generation and answer evaluation — the whole session honours
-     * type, role, profile, company and difficulty.
-     */
+    /** Assemble the structured setup into the context consumed by generation AND the final report. */
     const assembleContext = (): string => {
         const lines: string[] = [];
         lines.push(INTERVIEW_TYPE_DIRECTIVES[interviewType]);
@@ -239,17 +287,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         return lines.join('\n\n');
     };
 
-    const formatEvaluation = (e: InterviewEvaluation): string => {
-        const strengths = e.strengths?.length ? `\n\n✅ Strengths:\n• ${e.strengths.join('\n• ')}` : '';
-        const improvements = e.improvements?.length ? `\n\n🔧 To improve:\n• ${e.improvements.join('\n• ')}` : '';
-        const model = e.modelAnswer ? `\n\n💡 Model answer:\n${e.modelAnswer}` : '';
-        return `Score: ${e.score}/100${strengths}${improvements}${model}`;
-    };
-
-    useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
+    // ── Speech recognition (answers can be dictated) ──
     useEffect(() => {
         if (isSpeechSupported) {
             recognitionRef.current = new SpeechRecognition();
@@ -260,7 +298,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             recognitionRef.current.onresult = (event: any) => {
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
-                        setUserInput(prev => prev + event.results[i][0].transcript);
+                        setAnswerDraft(prev => prev + event.results[i][0].transcript);
                     }
                 }
             };
@@ -273,111 +311,160 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         }
     }, [t]);
 
-    const handleStartInterview = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!jobTitle.trim()) {
-            setError(t('mi_error_title_required'));
-            return;
-        }
-        if (!jobDescription.trim() && !jobResponsibilities.trim() && !jobRequirements.trim()) {
-            setError(t('mi_error_context_required'));
-            return;
-        }
-        if (!session) {
-            setError("You must be logged in to start an interview.");
-            return;
-        }
-        setStage('loading');
-        setError(null);
-
-        try {
-            const generated = await generateInterviewQuestions(resumeText, assembleContext(), market);
-            if (!generated.length) {
-                throw new Error("No interview questions were generated. Please try again.");
-            }
-            setQuestions(generated);
-            setCurrentIndex(0);
-            setMessages([
-                { role: 'system', content: t('tool_mock_interview_system_start') },
-                { role: 'model_question', content: generated[0].question },
-            ]);
-            setStage('interviewing');
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to start interview session.");
-            setStage('setup');
+    const stopListening = () => {
+        if (isListening) {
+            try { recognitionRef.current?.stop(); } catch { /* noop */ }
+            setIsListening(false);
         }
     };
-
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!userInput.trim() || isLoading) return;
-
-        const newUserMessage: Message = { role: 'user', content: userInput };
-        setMessages(prev => [...prev, newUserMessage]);
-        const currentInput = userInput;
-        setUserInput('');
-        setIsLoading(true);
-
-        try {
-            const currentQuestion = questions[currentIndex]?.question;
-            if (!currentQuestion) throw new Error("Interview session not initialized.");
-
-            const evaluation = await evaluateInterviewAnswer(currentQuestion, currentInput, assembleContext());
-
-            const newMessages: Message[] = [{ role: 'model_feedback', content: formatEvaluation(evaluation) }];
-
-            const nextIndex = currentIndex + 1;
-            if (nextIndex >= questions.length) {
-                newMessages.push({ role: 'system', content: 'Interview complete — review the feedback above. Great work!' });
-                setStage('finished');
-            } else {
-                newMessages.push({ role: 'model_question', content: questions[nextIndex].question });
-                setCurrentIndex(nextIndex);
-            }
-
-            setMessages(prev => [...prev, ...newMessages]);
-
-        } catch (err) {
-             setError(err instanceof Error ? err.message : "An error occurred during the interview.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleRestart = () => {
-        setStage('setup');
-        setMessages([]);
-        setQuestions([]);
-        setCurrentIndex(0);
-        setUserInput('');
-        setError(null);
-    };
-
     const toggleListening = () => {
         if (!isSpeechSupported) {
             setError(t('tool_mock_interview_speech_error'));
             return;
         }
         if (isListening) {
-            recognitionRef.current.stop();
-            setIsListening(false);
+            stopListening();
         } else {
             recognitionRef.current.start();
             setIsListening(true);
         }
     };
 
-    const renderMessage = (msg: Message, index: number) => {
-        switch(msg.role) {
-            case 'user':
-                return <div key={index} className="flex justify-end mb-4"><div className="bg-blue-600 text-white rounded-lg py-2 px-4 max-w-lg">{msg.content}</div></div>;
-            case 'model_question':
-                return <div key={index} className="flex justify-start mb-4"><div className="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-lg py-2 px-4 max-w-lg">{msg.content}</div></div>;
-            case 'model_feedback':
-                return <div key={index} className="my-2 p-3 bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-yellow-400 text-yellow-800 dark:text-yellow-200 rounded-r-lg text-sm max-w-lg whitespace-pre-line">{msg.content}</div>;
-            case 'system':
-                return <div key={index} className="text-center my-4 text-sm text-gray-500 dark:text-gray-400 italic">{msg.content}</div>;
+    // ── Flow: setup → disclaimer → generate → timed questions → session report ──
+    const handleStartClicked = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!jobTitle.trim()) { setError(t('mi_error_title_required')); return; }
+        if (!jobDescription.trim() && !jobResponsibilities.trim() && !jobRequirements.trim()) {
+            setError(t('mi_error_context_required')); return;
         }
+        if (!session) { setError("You must be logged in to start an interview."); return; }
+        setError(null);
+        setDisclaimerChecked(false);
+        setShowDisclaimer(true);
+    };
+
+    const beginInterview = async () => {
+        setShowDisclaimer(false);
+        setStage('loading');
+        setError(null);
+        try {
+            const generated = await generateInterviewQuestions(resumeText, assembleContext(), market);
+            if (!generated.length) throw new Error("No interview questions were generated. Please try again.");
+            answersRef.current = [];
+            submittingRef.current = false;
+            setQuestions(generated);
+            setCurrentIndex(0);
+            setAnswerDraft('');
+            setPhase('prep');
+            setPrepLeft(PREP_SECONDS);
+            setStage('interviewing');
+            speak(generated[0].question);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to start interview session.");
+            setStage('setup');
+        }
+    };
+
+    // Prep countdown → auto-start answering
+    useEffect(() => {
+        if (stage !== 'interviewing' || phase !== 'prep') return;
+        if (prepLeft <= 0) {
+            setPhase('answer');
+            setAnswerLeft(ANSWER_SECONDS);
+            setTimeout(() => answerBoxRef.current?.focus(), 50);
+            return;
+        }
+        const id = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
+        return () => clearTimeout(id);
+    }, [stage, phase, prepLeft]);
+
+    // Answer countdown → auto-submit
+    useEffect(() => {
+        if (stage !== 'interviewing' || phase !== 'answer') return;
+        if (answerLeft <= 0) {
+            submitAnswer();
+            return;
+        }
+        const id = setTimeout(() => setAnswerLeft((s) => s - 1), 1000);
+        return () => clearTimeout(id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stage, phase, answerLeft]);
+
+    const startAnsweringNow = () => {
+        cancelSpeech();
+        setPhase('answer');
+        setAnswerLeft(ANSWER_SECONDS);
+        setTimeout(() => answerBoxRef.current?.focus(), 50);
+    };
+
+    const finishAndEvaluate = async (qa: { question: string; answer: string }[]) => {
+        setStage('evaluating');
+        try {
+            const rep = await evaluateInterviewSession(qa, assembleContext(), resumeText);
+            setReport(rep);
+            setStage('report');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to evaluate the interview.");
+            setReport(null);
+            setStage('report'); // report stage renders the error + retry
+        }
+    };
+
+    const submitAnswer = () => {
+        if (submittingRef.current) return;
+        submittingRef.current = true;
+        stopListening();
+        cancelSpeech();
+
+        answersRef.current = [...answersRef.current, answerDraft.trim()];
+        const next = currentIndex + 1;
+        if (next < questions.length) {
+            setAnswerDraft('');
+            setCurrentIndex(next);
+            setPhase('prep');
+            setPrepLeft(PREP_SECONDS);
+            speak(questions[next].question);
+            submittingRef.current = false;
+        } else {
+            const qa = questions.map((q, i) => ({ question: q.question, answer: answersRef.current[i] ?? '' }));
+            finishAndEvaluate(qa);
+        }
+    };
+
+    const endInterviewEarly = () => {
+        if (!window.confirm(t('mi_end_confirm'))) return;
+        stopListening();
+        cancelSpeech();
+        // Count the current draft, mark the rest unanswered, evaluate what we have.
+        const answered = [...answersRef.current];
+        answered[currentIndex] = answerDraft.trim();
+        const qa = questions.map((q, i) => ({ question: q.question, answer: answered[i] ?? '' }));
+        finishAndEvaluate(qa);
+    };
+
+    const handleRestart = () => {
+        cancelSpeech();
+        stopListening();
+        setStage('setup');
+        setQuestions([]);
+        setCurrentIndex(0);
+        setAnswerDraft('');
+        answersRef.current = [];
+        submittingRef.current = false;
+        setReport(null);
+        setOpenBreakdown(null);
+        setError(null);
+    };
+
+    const formatReportForDownload = (rep: InterviewSessionReport): string => {
+        let s = `# Interview Report — ${jobTitle}\n\n`;
+        s += `Overall score: ${rep.overallScore}/100\nVerdict: ${rep.verdict}\n\n## Summary\n${rep.summary}\n\n`;
+        s += `## Strengths\n${rep.strengths.map((x) => `* ${x}`).join('\n')}\n\n`;
+        s += `## Improvements\n${rep.improvements.map((x) => `* ${x}`).join('\n')}\n\n## Question breakdown\n`;
+        rep.perQuestion.forEach((pq, i) => {
+            s += `\n### Q${i + 1} (${pq.score}/100): ${pq.question}\nYour answer: ${answersRef.current[i] || '(no answer)'}\nFeedback: ${pq.feedback}\n`;
+        });
+        return s;
     };
 
     // Numbered section header chip
@@ -392,7 +479,6 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const inputCls = "w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 transition shadow-sm";
     const labelCls = "block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1";
 
-    // (c) Staged loader while generating questions
     if (stage === 'loading') {
         return (
             <StagedLoader
@@ -409,10 +495,299 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         );
     }
 
+    if (stage === 'evaluating') {
+        return (
+            <StagedLoader
+                title={t('mi_report_title')}
+                steps={[t('mi_eval_step1'), t('mi_eval_step2'), t('mi_eval_step3')]}
+                icon={<ClipboardCheck />}
+                accent="violet"
+            />
+        );
+    }
+
+    // ── Timed interview room ──────────────────────────────────────────────────
+    if (stage === 'interviewing') {
+        const q = questions[currentIndex];
+        const isLast = currentIndex === questions.length - 1;
+        const timeLeft = phase === 'prep' ? prepLeft : answerLeft;
+        const timeMax = phase === 'prep' ? PREP_SECONDS : ANSWER_SECONDS;
+        const urgent = phase === 'answer' && answerLeft <= 30;
+        return (
+            <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full flex flex-col lg:flex-row h-full animate-fade-in overflow-hidden">
+                {/* Left: the interviewer */}
+                <div className="lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-6 flex flex-col items-center gap-4">
+                    <InterviewerAvatar
+                        speaking={avatarSpeaking}
+                        name={t('mi_avatar_name')}
+                        roleLabel={t('mi_avatar_role')}
+                    />
+                    <div className="text-center">
+                        <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+                            {t('mi_q_progress').replace('{n}', String(currentIndex + 1)).replace('{total}', String(questions.length))}
+                        </p>
+                        <div className="mt-2 flex items-center justify-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                                phase === 'prep'
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                            }`}>
+                                <Timer className="h-3 w-3" />
+                                {phase === 'prep' ? t('mi_phase_prep') : t('mi_phase_answer')}
+                            </span>
+                        </div>
+                        <p className={`mt-2 text-4xl font-mono font-bold tabular-nums ${urgent ? 'text-red-600 dark:text-red-400 animate-pulse' : 'text-gray-800 dark:text-gray-100'}`}>
+                            {fmtTime(timeLeft)}
+                        </p>
+                        {/* time progress */}
+                        <div className="mt-2 h-1.5 w-40 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+                            <div
+                                className={`h-full rounded-full transition-all duration-1000 ${urgent ? 'bg-red-500' : phase === 'prep' ? 'bg-amber-500' : 'bg-blue-600'}`}
+                                style={{ width: `${(timeLeft / timeMax) * 100}%` }}
+                            />
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={endInterviewEarly}
+                        className="mt-auto text-xs text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 underline"
+                    >
+                        {t('mi_end_interview')}
+                    </button>
+                </div>
+
+                {/* Right: question + answer area */}
+                <div className="flex-1 flex flex-col p-6 gap-4 min-h-[420px]">
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
+                        <span className="inline-block mb-2 px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wide bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                            {q?.category}
+                        </span>
+                        <p className="text-lg font-semibold text-gray-800 dark:text-gray-100 leading-relaxed">{q?.question}</p>
+                    </div>
+
+                    {phase === 'prep' ? (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-900/10 p-6 text-center">
+                            <p className="text-sm text-amber-700 dark:text-amber-300 max-w-md">{t('mi_prep_hint')}</p>
+                            <button
+                                type="button"
+                                onClick={startAnsweringNow}
+                                className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg"
+                            >
+                                {t('mi_start_now')}
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <textarea
+                                ref={answerBoxRef}
+                                value={answerDraft}
+                                onChange={(e) => setAnswerDraft(e.target.value)}
+                                placeholder={t('mi_answer_placeholder')}
+                                className="flex-1 min-h-[160px] w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 p-4 transition shadow-sm resize-none"
+                            />
+                            <div className="flex items-center gap-3">
+                                {isSpeechSupported && (
+                                    <button
+                                        type="button"
+                                        onClick={toggleListening}
+                                        aria-pressed={isListening}
+                                        className={`p-2.5 rounded-full transition-colors shrink-0 ${isListening ? 'bg-red-500 text-white animate-pulse-mic' : 'bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-slate-500'}`}
+                                        title={t('mi_answer_placeholder')}
+                                    >
+                                        <Mic className="h-5 w-5" />
+                                    </button>
+                                )}
+                                <p className="text-xs text-gray-400 dark:text-slate-500 flex-1">{t('mi_autosubmit_note')}</p>
+                                <button
+                                    type="button"
+                                    onClick={submitAnswer}
+                                    className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold rounded-lg shrink-0"
+                                >
+                                    {isLast ? t('mi_submit_last') : t('mi_submit_answer')}
+                                </button>
+                            </div>
+                        </>
+                    )}
+
+                    {error && (
+                        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // ── Final report ──────────────────────────────────────────────────────────
+    if (stage === 'report') {
+        if (!report) {
+            return (
+                <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-8 animate-fade-in text-center space-y-4">
+                    <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
+                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                    <div className="flex justify-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => finishAndEvaluate(questions.map((q, i) => ({ question: q.question, answer: answersRef.current[i] ?? '' })))}
+                            className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg"
+                        >
+                            {t('tool_mock_interview_retry')}
+                        </button>
+                        <button type="button" onClick={handleRestart} className="px-5 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-lg">
+                            {t('mi_practice_again')}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        const verdictMeta = VERDICT_META[report.verdict?.toLowerCase?.() ?? ''] ?? VERDICT_META['leaning hire'];
+        return (
+            <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-6 sm:p-8 animate-fade-in space-y-6 overflow-y-auto">
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                    {/* score ring */}
+                    <div className="relative h-28 w-28 shrink-0">
+                        <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
+                            <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-gray-200 dark:stroke-slate-700" strokeWidth="3.5" />
+                            <circle
+                                cx="18" cy="18" r="15.9" fill="none"
+                                className={report.overallScore >= 75 ? 'stroke-emerald-500' : report.overallScore >= 50 ? 'stroke-amber-500' : 'stroke-red-500'}
+                                strokeWidth="3.5" strokeLinecap="round"
+                                strokeDasharray={`${Math.max(0, Math.min(100, report.overallScore))} 100`}
+                            />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-3xl font-bold text-gray-800 dark:text-gray-100">{Math.round(report.overallScore)}</span>
+                            <span className="text-[10px] text-gray-400 dark:text-slate-500">/100</span>
+                        </div>
+                    </div>
+                    <div className="flex-1 text-center sm:text-left">
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center justify-center sm:justify-start gap-2">
+                            <Award className="h-5 w-5 text-violet-500" />
+                            {t('mi_report_title')}
+                        </h3>
+                        <div className="mt-2 flex items-center justify-center sm:justify-start gap-2">
+                            <span className="text-xs text-gray-500 dark:text-slate-400">{t('mi_verdict_label')}:</span>
+                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${verdictMeta.cls}`}>
+                                {t(verdictMeta.labelKey)}
+                            </span>
+                        </div>
+                        <p className="mt-3 text-sm text-gray-600 dark:text-slate-300 leading-relaxed">{report.summary}</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40 p-4">
+                        <h5 className="font-bold text-emerald-800 dark:text-emerald-300 text-sm mb-2">{t('mi_report_strengths')}</h5>
+                        <ul className="list-disc list-inside space-y-1 text-sm text-emerald-900/80 dark:text-emerald-200/80">
+                            {report.strengths.map((s, i) => <li key={i}>{s}</li>)}
+                        </ul>
+                    </div>
+                    <div className="rounded-xl bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/40 p-4">
+                        <h5 className="font-bold text-amber-800 dark:text-amber-300 text-sm mb-2">{t('mi_report_improvements')}</h5>
+                        <ul className="list-disc list-inside space-y-1 text-sm text-amber-900/80 dark:text-amber-200/80">
+                            {report.improvements.map((s, i) => <li key={i}>{s}</li>)}
+                        </ul>
+                    </div>
+                </div>
+
+                <div>
+                    <h5 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-2">{t('mi_report_breakdown')}</h5>
+                    <div className="divide-y divide-gray-100 dark:divide-slate-700 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                        {report.perQuestion.map((pq, i) => (
+                            <div key={i} className="bg-white dark:bg-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={() => setOpenBreakdown(openBreakdown === i ? null : i)}
+                                    aria-expanded={openBreakdown === i}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/40"
+                                >
+                                    <span className={`shrink-0 inline-flex items-center justify-center h-8 w-10 rounded-md text-xs font-bold ${
+                                        pq.score >= 75 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                        : pq.score >= 50 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+                                        {Math.round(pq.score)}
+                                    </span>
+                                    <span className="flex-1 text-sm text-gray-700 dark:text-gray-200 line-clamp-2">{pq.question}</span>
+                                    <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${openBreakdown === i ? 'rotate-180' : ''}`} />
+                                </button>
+                                {openBreakdown === i && (
+                                    <div className="px-4 pb-4 space-y-2 text-sm">
+                                        <p className="text-gray-500 dark:text-slate-400">
+                                            <span className="font-semibold text-gray-600 dark:text-slate-300">{t('mi_report_your_answer')}: </span>
+                                            {answersRef.current[i]?.trim() ? answersRef.current[i] : <em>{t('mi_no_answer')}</em>}
+                                        </p>
+                                        <p className="text-gray-700 dark:text-gray-200 bg-violet-50 dark:bg-violet-900/15 border border-violet-100 dark:border-violet-800/30 rounded-lg p-3">{pq.feedback}</p>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                    <DownloadButtons textContent={formatReportForDownload(report)} baseFilename={`interview_report_${jobTitle.replace(/\s+/g, '_') || 'session'}`} />
+                    <button
+                        type="button"
+                        onClick={handleRestart}
+                        className="px-6 py-2 border-2 border-dashed border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+                    >
+                        {t('mi_practice_again')}
+                    </button>
+                    <button type="button" onClick={onClose} className="px-6 py-2 bg-blue-700 text-white font-semibold rounded-lg hover:bg-blue-800">
+                        {t('tool_mock_interview_close_button')}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // ── Setup stage ───────────────────────────────────────────────────────────
     return (
-        <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full flex flex-col h-full animate-fade-in">
-            {stage === 'setup' && (
-                <form onSubmit={handleStartInterview} className="p-6 space-y-5">
+        <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full flex flex-col h-full animate-fade-in relative">
+            {/* Disclaimer modal — must be accepted before the interview starts */}
+            {showDisclaimer && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-xl p-4">
+                    <div className="max-w-lg w-full bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
+                        <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            {t('mi_disclaimer_title')}
+                        </h4>
+                        <ul className="space-y-2 text-sm text-gray-600 dark:text-slate-300 list-disc list-inside">
+                            <li>{t('mi_disclaimer_p1')}</li>
+                            <li>{t('mi_disclaimer_p2')}</li>
+                            <li>{t('mi_disclaimer_p3')}</li>
+                            <li>{t('mi_disclaimer_p4')}</li>
+                        </ul>
+                        <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={disclaimerChecked}
+                                onChange={(e) => setDisclaimerChecked(e.target.checked)}
+                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-700 focus:ring-blue-500"
+                            />
+                            <span>{t('mi_disclaimer_check')}</span>
+                        </label>
+                        <div className="flex justify-end gap-3 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setShowDisclaimer(false)}
+                                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+                            >
+                                {t('mi_disclaimer_cancel')}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!disclaimerChecked}
+                                onClick={beginInterview}
+                                className="px-4 py-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 dark:disabled:bg-blue-900/50 rounded-lg"
+                            >
+                                {t('mi_disclaimer_accept')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <form onSubmit={handleStartClicked} className="p-6 space-y-5">
                     {/* Promo feature grid — the 8 selling points */}
                     <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-blue-50/40 dark:from-slate-800/60 dark:to-blue-900/10 p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -448,6 +823,11 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                                 </div>
                             ))}
                         </div>
+                        {/* real-flow pacing note */}
+                        <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            <Timer className="h-3.5 w-3.5 shrink-0" />
+                            {t('mi_flow_note')}
+                        </p>
                     </div>
 
                     {/* ① Interview type */}
@@ -628,7 +1008,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                     <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-4">
                         <SectionHeader n={4} titleKey="mi_section_4_title" />
 
-                        {/* Difficulty switcher — the promo's 难度自由切换, for real */}
+                        {/* Difficulty switcher */}
                         <div>
                             <span className={labelCls}>{t('mi_difficulty_label')}</span>
                             <div className="inline-flex rounded-lg border border-gray-300 dark:border-slate-600 overflow-hidden" role="group" aria-label={t('mi_difficulty_label')}>
@@ -757,72 +1137,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                             ))}
                         </div>
                     </div>
-                </form>
-            )}
-
-            {(stage === 'interviewing' || stage === 'finished') && (
-                <>
-                    <div className="flex-grow overflow-y-auto p-6 space-y-4 bg-gray-50 dark:bg-slate-900/50">
-                        {messages.map(renderMessage)}
-                        {isLoading && <div className="flex justify-start mb-4"><div className="bg-gray-200 dark:bg-slate-700 text-gray-800 rounded-lg py-2 px-4 max-w-lg animate-pulse">...</div></div>}
-                        <div ref={chatEndRef} />
-                    </div>
-                    {stage === 'interviewing' && (
-                        <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-slate-800">
-                            <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
-                                <input
-                                    type="text"
-                                    value={userInput}
-                                    onChange={(e) => setUserInput(e.target.value)}
-                                    placeholder={t('tool_mock_interview_input_placeholder')}
-                                    className="flex-grow w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700"
-                                    disabled={isLoading}
-                                />
-                                {isSpeechSupported && (
-                                    <button type="button" onClick={toggleListening} className={`p-2 rounded-full transition-colors ${isListening ? 'bg-red-500 text-white animate-pulse-mic' : 'bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-200 hover:bg-gray-300'}`}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                                    </button>
-                                )}
-                                <button type="submit" disabled={isLoading || !userInput.trim()} className="px-4 py-2 bg-blue-700 text-white font-semibold rounded-full hover:bg-blue-800 disabled:bg-blue-400">
-                                    {t('tool_mock_interview_send_button')}
-                                </button>
-                            </form>
-                            {/* (e) Inline error with retry during interview */}
-                            {error && (
-                                <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 flex items-center gap-2">
-                                    <p className="text-sm text-red-700 dark:text-red-300 flex-1">{error}</p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setError(null)}
-                                        className="text-xs font-semibold text-red-700 dark:text-red-300 hover:underline shrink-0"
-                                    >
-                                        {t('tool_mock_interview_dismiss_error')}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                     {stage === 'finished' && (
-                        <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-slate-800 flex flex-wrap gap-3 justify-center">
-                            {/* (d) Start over affordance */}
-                            <button
-                                type="button"
-                                onClick={handleRestart}
-                                className="px-6 py-2 border-2 border-dashed border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
-                            >
-                                {t('tool_mock_interview_restart_button')}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="px-6 py-2 bg-blue-700 text-white font-semibold rounded-lg hover:bg-blue-800"
-                            >
-                                {t('tool_mock_interview_close_button')}
-                            </button>
-                        </div>
-                    )}
-                </>
-            )}
+            </form>
         </div>
     );
 };

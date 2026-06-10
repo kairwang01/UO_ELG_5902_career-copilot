@@ -116,6 +116,26 @@ export const evaluateInterviewAnswer = async (question: string, answer: string, 
   return res.data;
 };
 
+export interface InterviewSessionReport {
+  overallScore: number;
+  verdict: string; // "Strong Hire" | "Hire" | "Leaning Hire" | "Leaning No Hire" | "No Hire"
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  perQuestion: { question: string; score: number; feedback: string }[];
+}
+
+/** Holistic end-of-interview report over the full timed transcript (free within the session — charged at generate). */
+export const evaluateInterviewSession = async (
+  qa: { question: string; answer: string }[],
+  jobDescription: string,
+  resumeText: string,
+): Promise<InterviewSessionReport> => {
+  const fn = httpsCallable<any, InterviewSessionReport>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
+  const res = await fn({ mode: 'evaluate_session', qa, jobDescription, resumeText, model: currentModelId });
+  return res.data;
+};
+
 // ---- Career coach chat (stateless callable) --------------------------------
 export interface CoachMessage { role: 'user' | 'model'; content: string }
 
