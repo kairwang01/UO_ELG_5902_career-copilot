@@ -52,11 +52,13 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onSwitchToSignIn: () => void;
   onSignedUp?: () => Promise<void> | void;
+  t: (key: string) => string;
 }
 
-export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSignIn, onSignedUp }: Props) {
+export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSignIn, onSignedUp, t }: Props) {
   const [selectedPlan, setSelectedPlan] = useState('starter');
   const [orgName, setOrgName] = useState('');
+  const [contactName, setContactName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -74,6 +76,11 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedContactName = contactName.trim();
+    if (trimmedContactName.length < 2 || trimmedContactName.length > 80) {
+      setError(t('auth_contact_name'));
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -100,7 +107,7 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
         const { error: profileError } = await data.profiles.upsert({
           id: authData.id,
           subscription_status: statusForDb,
-          full_name: '',
+          full_name: trimmedContactName,
           company_name: orgName || null,
           role: 'employer',
           updated_at: new Date().toISOString(),
@@ -185,6 +192,16 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
             value={orgName}
             onChange={(e) => setOrgName(e.target.value)}
             required
+          />
+          <Input
+            type="text"
+            placeholder={t('auth_contact_name_ph')}
+            aria-label={t('auth_contact_name')}
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            required
+            minLength={2}
+            maxLength={80}
           />
           <Input
             type="email"

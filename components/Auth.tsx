@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
+import { updateProfile } from 'firebase/auth';
 import { data } from '@/lib/data';
+import { firebaseAuth } from '@/lib/firebaseClient';
 import { ALL_PLANS, BUSINESS_PLANS } from '@/config';
 import type { Plan } from '@/types';
 import { X } from 'lucide-react';
@@ -63,6 +65,7 @@ const getAuthErrorMessage = (message: string): string => {
 
 const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }) => {
   const [loading, setLoading] = useState(false);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -108,6 +111,13 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
   const handleSignUp = async (event: React.FormEvent) => {
     event.preventDefault();
 
+    // Validate full name before hitting the network.
+    const trimmedName = fullName.trim();
+    if (trimmedName.length < 2 || trimmedName.length > 80) {
+      setError(t('auth_name_required'));
+      return;
+    }
+
     // Catch typos before hitting the network.
     if (password !== confirmPassword) {
       setError(t('auth_error_password_mismatch'));
@@ -141,7 +151,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
       const { error: profileError } = await data.profiles.upsert({
         id: authData.id,
         subscription_status: statusForDb,
-        full_name: '',
+        full_name: trimmedName,
         role: mode === 'business' ? 'employer' : 'candidate',
         updated_at: new Date().toISOString(),
       });
@@ -149,6 +159,14 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
       if (profileError) {
         setError(`Account created, but we failed to set up your profile. Error: ${profileError.message}`);
       } else {
+        // Best-effort: set Firebase Auth displayName (non-fatal if it fails).
+        try {
+          if (firebaseAuth.currentUser) {
+            await updateProfile(firebaseAuth.currentUser, { displayName: trimmedName });
+          }
+        } catch {
+          // non-fatal — profile row already has the name
+        }
         setMessage('Account created successfully! You are now signed in.');
       }
     } else {
@@ -201,9 +219,10 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
             </div>
 
             <form onSubmit={handleSignUp} className="space-y-4">
-              <input className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" type="email" placeholder={mode === 'business' ? t('auth_placeholder_email_business') : t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
-              <input className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" type="password" placeholder={t('auth_placeholder_password')} value={password} onChange={(e) => setPassword(e.target.value)} required />
-              <input className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" type="password" placeholder={t('auth_placeholder_confirm_password')} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+              <input className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" type="text" placeholder={t('auth_placeholder_full_name')} value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} maxLength={80} />
+              <input className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" type="email" placeholder={mode === 'business' ? t('auth_placeholder_email_business') : t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <input className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" type="password" placeholder={t('auth_placeholder_password')} value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <input className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" type="password" placeholder={t('auth_placeholder_confirm_password')} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
               <button className="w-full bg-blue-700 text-white py-2.5 rounded-md hover:bg-blue-800 disabled:bg-blue-400 font-semibold" type="submit" disabled={loading}>
                 {loading ? t('auth_creating_account') : (mode === 'business' ? t('auth_signup_for_jobs') : t('auth_signup'))}
               </button>

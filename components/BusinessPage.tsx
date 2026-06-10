@@ -351,6 +351,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         onOpenChange={(open) => setModal(open ? 'signup' : 'none')}
         onSwitchToSignIn={() => setModal('signin')}
         onSignedUp={refreshProfile}
+        t={t}
       />
       <BusinessForgotPasswordModal
         isOpen={modal === 'forgot'}
