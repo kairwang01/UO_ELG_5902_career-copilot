@@ -48,6 +48,25 @@ const isSpeechSupported = !!SpeechRecognition;
 const PREP_SECONDS = 15;
 const ANSWER_SECONDS = 180;
 
+// The interviewer's portrait (public/interviewer.jpg, 640px JPEG). The persona
+// is female — pickVoice() below matches the TTS voice to the portrait.
+const INTERVIEWER_IMAGE = '/interviewer.jpg';
+
+/** Prefer a female English voice to match the interviewer portrait; voices load
+ *  async in some browsers, so fall back gracefully to the default. */
+const pickVoice = (): SpeechSynthesisVoice | null => {
+    try {
+        const voices = window.speechSynthesis.getVoices();
+        return (
+            voices.find((v) => v.lang.startsWith('en') && /female|samantha|victoria|zira|jenny|aria|karen|moira|tessa/i.test(v.name)) ??
+            voices.find((v) => v.lang === 'en-US') ??
+            null
+        );
+    } catch {
+        return null;
+    }
+};
+
 // ── Promo feature grid (8 selling points, i18n via mi_feat_* keys) ────────────
 const PROMO_FEATURES: { icon: React.ReactNode; titleKey: string; descKey: string; tint: string }[] = [
     { icon: <Target className="h-4 w-4" />,            titleKey: 'mi_feat_1_title', descKey: 'mi_feat_1_desc', tint: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300' },
@@ -221,6 +240,8 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             const u = new SpeechSynthesisUtterance(text);
             u.lang = 'en-US';
             u.rate = 1;
+            const voice = pickVoice();
+            if (voice) u.voice = voice;
             u.onstart = () => setAvatarSpeaking(true);
             u.onend = () => setAvatarSpeaking(false);
             u.onerror = () => setAvatarSpeaking(false);
@@ -519,6 +540,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                 <div className="lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-6 flex flex-col items-center gap-4">
                     <InterviewerAvatar
                         speaking={avatarSpeaking}
+                        imageUrl={INTERVIEWER_IMAGE}
                         name={t('mi_avatar_name')}
                         roleLabel={t('mi_avatar_role')}
                     />
