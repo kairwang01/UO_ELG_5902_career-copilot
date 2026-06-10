@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
-import { AdminAccessDenied, AdminVerifying } from './AdminAccessGate';
+import { AdminAccessDenied, AdminVerifying, resolveRoleWithFallback } from './AdminAccessGate';
 import AdminShell from './AdminShell';
 import {
   ActionBadge,
@@ -24,17 +24,25 @@ import {
   adminGetPrompts,
   adminGetQuotas,
   adminGetUserReport,
+  adminInviteAdmin,
   adminListAdmins,
   adminListModels,
+  adminListPromptVersions,
   adminListUsers,
+  adminPublishPrompt,
+  adminRemoveAdmin,
   adminResetPrompt,
+  adminRollbackPrompt,
+  adminSavePromptDraft,
   adminSetAdmin,
+  adminSetAdminRole,
   adminSetSubscription,
   adminTestModel,
   adminUpdateLlmConfig,
   adminUpdatePrompt,
   adminUpdateQuotas,
   adminUpsertModel,
+  adminWhoAmI,
   SUBSCRIPTION_PLANS,
   type AdminDashboard,
   type AdminRow,
@@ -42,8 +50,57 @@ import {
   type AuditLogEntry,
   type ModelEntry,
   type PromptEntry,
+  type PromptVersion,
   type TestModelResult,
 } from '../../services/adminClient';
+
+// ─── role type ────────────────────────────────────────────────────────────────
+type AdminRole = 'super' | 'admin' | 'reviewer';
+
+// ─── minimal i18n stub — keys returned in StructuredOutput ───────────────────
+const STRINGS: Record<string, string> = {
+  'admin.role.super': 'Super',
+  'admin.role.admin': 'Admin',
+  'admin.role.reviewer': 'Reviewer',
+  'admin.admins.title': 'Admin management',
+  'admin.admins.subtitle': 'Invite admins and reviewers. Super-only. Every action is audit-logged.',
+  'admin.admins.invite_label': 'Invite by email',
+  'admin.admins.invite_placeholder': 'person@company.com',
+  'admin.admins.invite_role': 'Role',
+  'admin.admins.invite_btn': 'Invite',
+  'admin.admins.empty': 'No admins listed.',
+  'admin.admins.remove_confirm': 'Remove this admin/reviewer? They will lose access immediately.',
+  'admin.admins.remove_btn': 'Remove',
+  'admin.admins.change_role': 'Change role',
+  'admin.admins.invited_at': 'Invited',
+  'admin.admins.status': 'Status',
+  'admin.prompts.save_draft': 'Save as draft',
+  'admin.prompts.change_summary': 'Change summary (optional)',
+  'admin.prompts.change_summary_placeholder': 'What changed and why…',
+  'admin.prompts.publish': 'Publish',
+  'admin.prompts.publish_confirm': 'Publish this version? It will take effect immediately for all users.',
+  'admin.prompts.rollback': 'Roll back',
+  'admin.prompts.rollback_confirm': 'Roll back to this version? It will become the active prompt immediately.',
+  'admin.prompts.versions': 'Version history',
+  'admin.prompts.versions_empty': 'No versions yet.',
+  'admin.prompts.status_draft': 'draft',
+  'admin.prompts.status_published': 'published',
+  'admin.prompts.status_rolled_back': 'rolled back',
+  'admin.credits.reason_label': 'Reason (required, 10–300 chars)',
+  'admin.credits.reason_placeholder': 'e.g. Refund for failed job scan on 2026-06-01',
+  'admin.credits.delta_constraint': 'Max ±5000 credits per adjustment.',
+  'admin.credits.apply': 'Apply',
+  'admin.model.api_keys_label': 'API keys (one per line)',
+  'admin.model.api_keys_placeholder': 'sk-… (new keys; existing masked keys listed below)',
+  'admin.model.fallback_chain': 'Fallback chain',
+  'admin.model.fallback_chain_hint': 'Model ids to try in order if this model fails.',
+  'admin.model.priority': 'Priority',
+  'admin.model.priority_hint': 'Lower = higher priority. Leave blank for default.',
+  'admin.model.test_key': 'Test',
+  'admin.model.masked_keys': 'Saved keys (masked)',
+  'admin.access.reviewer_only': 'You have reviewer access. Only Dashboard and Audit Log are available.',
+};
+const t = (key: string) => STRINGS[key] ?? key;
 
 type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'audit';
 
@@ -55,6 +112,7 @@ type TestStatus = { state: 'idle' } | { state: 'running' } | ({ state: 'done' } 
 const AdminPortal: React.FC = () => {
   const [session, setSession] = useState<Awaited<ReturnType<typeof data.auth.getSession>>>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -119,6 +177,24 @@ const AdminPortal: React.FC = () => {
   const [deepseekUrl, setDeepseekUrl] = useState('');
 
   const [creditDelta, setCreditDelta] = useState('100');
+  const [creditReason, setCreditReason] = useState('');
+
+  // prompt lifecycle state
+  const [promptChangeSummary, setPromptChangeSummary] = useState('');
+  const [promptVersionsKey, setPromptVersionsKey] = useState<string | null>(null);
+  const [promptVersions, setPromptVersions] = useState<PromptVersion[]>([]);
+  const [promptVersionsLoading, setPromptVersionsLoading] = useState(false);
+  const [promptVersionsFeedback, setPromptVersionsFeedback] = useState<{ ok?: string; err?: string } | null>(null);
+
+  // model form extended fields
+  const [mfApiKeys, setMfApiKeys] = useState(''); // textarea: one per line (new keys)
+  const [mfFallbackChain, setMfFallbackChain] = useState<string[]>([]);
+  const [mfPriority, setMfPriority] = useState('');
+
+  // invite-admin form (super only)
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'reviewer'>('admin');
+  const [inviteFeedback, setInviteFeedback] = useState<{ ok?: string; err?: string } | null>(null);
 
   useEffect(() => {
     data.auth.getSession().then(setSession);
@@ -129,11 +205,17 @@ const AdminPortal: React.FC = () => {
   useEffect(() => {
     if (!session) {
       setIsAdmin(null);
+      setAdminRole(null);
       return;
     }
     adminCheckAccess()
       .then((r) => setIsAdmin(r.admin))
       .catch(() => setIsAdmin(false));
+    // Fetch fine-grained role — backend is authoritative; UI just mirrors it for hiding elements.
+    // resolveRoleWithFallback handles permission-denied/not-found during rollout gracefully.
+    resolveRoleWithFallback(adminWhoAmI)
+      .then((role) => setAdminRole(role))
+      .catch(() => setAdminRole('admin'));
   }, [session]);
 
   // ── data loaders ──────────────────────────────────────────────────────────
@@ -240,6 +322,20 @@ const AdminPortal: React.FC = () => {
     }
   }, []);
 
+  const loadPromptVersions = useCallback(async (promptKey: string) => {
+    setPromptVersionsLoading(true);
+    setPromptVersionsFeedback(null);
+    setPromptVersions([]);
+    try {
+      const res = await adminListPromptVersions({ promptKey });
+      setPromptVersions(res.versions);
+    } catch (e) {
+      setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Failed to load versions' });
+    } finally {
+      setPromptVersionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!isAdmin) return;
     if (tab === 'dashboard') loadDashboard();
@@ -315,10 +411,20 @@ const AdminPortal: React.FC = () => {
     if (!selectedUid) return;
     const delta = Number(creditDelta);
     if (!Number.isFinite(delta) || delta === 0) return;
+    if (Math.abs(delta) > 5000) {
+      setError('Credit adjustment cannot exceed ±5000.');
+      return;
+    }
+    const reason = creditReason.trim();
+    if (reason.length < 10 || reason.length > 300) {
+      setError('Reason must be between 10 and 300 characters.');
+      return;
+    }
     setError(null);
     try {
-      await adminAdjustCredits(selectedUid, delta, 'admin_portal');
+      await adminAdjustCredits(selectedUid, delta, reason);
       setUserReport(await adminGetUserReport(selectedUid));
+      setCreditReason('');
       await loadUsers();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to adjust credits');
@@ -375,6 +481,41 @@ const AdminPortal: React.FC = () => {
     }
   };
 
+  const inviteAdmin = async () => {
+    const email = inviteEmail.trim();
+    if (!email) return;
+    setInviteFeedback(null);
+    try {
+      await adminInviteAdmin({ email, role: inviteRole });
+      setInviteEmail('');
+      setInviteFeedback({ ok: `Invited ${email} as ${inviteRole}.` });
+      await loadAdmins();
+    } catch (e) {
+      setInviteFeedback({ err: e instanceof Error ? e.message : 'Invite failed' });
+    }
+  };
+
+  const changeAdminRole = async (uid: string, role: 'admin' | 'reviewer') => {
+    setError(null);
+    try {
+      await adminSetAdminRole({ uid, role });
+      await loadAdmins();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to change role');
+    }
+  };
+
+  const removeAdminEntry = async (uid: string) => {
+    if (!window.confirm(t('admin.admins.remove_confirm'))) return;
+    setError(null);
+    try {
+      await adminRemoveAdmin({ uid });
+      await loadAdmins();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to remove admin');
+    }
+  };
+
   /** Open the add/edit form, seeding controlled fields from entry (or blank for new). */
   const openModelForm = (entry: ModelEntry | 'new') => {
     if (entry === 'new') {
@@ -384,6 +525,9 @@ const AdminPortal: React.FC = () => {
       setMfBuiltin('');
       setMfBaseUrl('');
       setMfApiKey('');
+      setMfApiKeys('');
+      setMfFallbackChain([]);
+      setMfPriority('');
       setMfProviderModel('');
       setMfMinTier('free');
       setMfEnabled(true);
@@ -394,6 +538,9 @@ const AdminPortal: React.FC = () => {
       setMfBuiltin(entry.builtin ?? '');
       setMfBaseUrl(entry.base_url ?? '');
       setMfApiKey(''); // never pre-fill — masked value is display-only
+      setMfApiKeys(''); // new keys textarea starts empty
+      setMfFallbackChain(entry.fallbackChain ?? []);
+      setMfPriority(entry.priority !== undefined ? String(entry.priority) : '');
       setMfProviderModel(entry.providerModel);
       setMfMinTier(entry.minTier);
       setMfEnabled(entry.enabled);
@@ -418,6 +565,12 @@ const AdminPortal: React.FC = () => {
       return;
     }
 
+    // parse multi-key textarea: non-empty trimmed lines
+    const newKeys = mfApiKeys
+      .split('\n')
+      .map((k) => k.trim())
+      .filter(Boolean);
+
     const entry: ModelEntry = {
       id,
       label,
@@ -426,6 +579,10 @@ const AdminPortal: React.FC = () => {
       ...(baseUrl ? { base_url: baseUrl } : {}),
       // send api_key only if non-empty; empty = keep existing
       ...(mfApiKey ? { api_key: mfApiKey } : {}),
+      // send api_keys only if new keys were typed
+      ...(newKeys.length > 0 ? { api_keys: newKeys } : {}),
+      ...(mfFallbackChain.length > 0 ? { fallbackChain: mfFallbackChain } : {}),
+      ...(mfPriority !== '' ? { priority: Number(mfPriority) } : {}),
       providerModel: mfProviderModel.trim(),
       minTier: mfMinTier,
       enabled: mfEnabled,
@@ -469,17 +626,30 @@ const AdminPortal: React.FC = () => {
     return <AdminAccessDenied />;
   }
 
+  // ── role-gating helpers ───────────────────────────────────────────────────
+  // Server is authoritative; these just drive UI visibility.
+  // reviewer: Dashboard + Audit Log only
+  // admin:    + Users (with credits), Prompts (draft-only), Quotas
+  // super:    everything + Admins management + Models & Keys + Publish/Rollback
+
+  const role = adminRole ?? 'admin'; // default to admin while loading
+  const isSuper = role === 'super';
+  const isAdminOrAbove = role === 'super' || role === 'admin';
+  const isReviewer = role === 'reviewer';
+
   // ── tab definitions ───────────────────────────────────────────────────────
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'ai', label: 'Models & Keys' },
-    { id: 'prompts', label: 'Prompts' },
-    { id: 'quotas', label: 'Quotas' },
-    { id: 'users', label: 'Users' },
-    { id: 'admins', label: 'Admins' },
-    { id: 'audit', label: 'Audit Log' },
+  const allTabs: { id: Tab; label: string; visible: boolean }[] = [
+    { id: 'dashboard', label: 'Dashboard', visible: true },
+    { id: 'ai', label: 'Models & Keys', visible: isSuper },
+    { id: 'prompts', label: 'Prompts', visible: isAdminOrAbove },
+    { id: 'quotas', label: 'Quotas', visible: isAdminOrAbove },
+    { id: 'users', label: 'Users', visible: isAdminOrAbove },
+    { id: 'admins', label: 'Admins', visible: isSuper },
+    { id: 'audit', label: 'Audit Log', visible: true },
   ];
+
+  const tabs = allTabs.filter((t) => t.visible).map(({ id, label }) => ({ id, label }));
 
   const refreshForTab = () => {
     if (tab === 'dashboard') loadDashboard();
@@ -508,7 +678,7 @@ const AdminPortal: React.FC = () => {
         {error && (
           <div
             role="alert"
-            className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm"
+            className="flex items-start gap-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg text-sm"
           >
             <span className="mt-0.5 text-red-600 shrink-0">✕</span>
             <span>{error}</span>
@@ -520,6 +690,14 @@ const AdminPortal: React.FC = () => {
             >
               ✕
             </button>
+          </div>
+        )}
+
+        {/* Reviewer notice */}
+        {isReviewer && (
+          <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-2.5 rounded-lg text-sm">
+            <span aria-hidden="true">ℹ</span>
+            <span>{t('admin.access.reviewer_only')}</span>
           </div>
         )}
 
@@ -1135,19 +1313,101 @@ const AdminPortal: React.FC = () => {
 
                     {/* API Key — only for openai-compatible non-builtin */}
                     {mfProvider === 'openai-compatible' && !mfBuiltin && (
-                      <div className="sm:col-span-2">
-                        <FieldLabel htmlFor="mf-api-key">API key</FieldLabel>
-                        <input
-                          id="mf-api-key"
-                          type="password"
-                          value={mfApiKey}
-                          onChange={(e) => setMfApiKey(e.target.value)}
-                          placeholder={modelForm !== 'new' ? 'leave blank to keep existing key' : 'sk-…'}
-                          className={textInput}
-                          autoComplete="off"
-                        />
+                      <div className="sm:col-span-2 space-y-3">
+                        <div>
+                          <FieldLabel htmlFor="mf-api-key">API key (single)</FieldLabel>
+                          <input
+                            id="mf-api-key"
+                            type="password"
+                            value={mfApiKey}
+                            onChange={(e) => setMfApiKey(e.target.value)}
+                            placeholder={modelForm !== 'new' ? 'leave blank to keep existing key' : 'sk-…'}
+                            className={textInput}
+                            autoComplete="off"
+                          />
+                        </div>
+
+                        {/* Multi-key pool: masked saved keys listed read-only with per-key Test */}
+                        {modelForm !== 'new' && (modelForm as ModelEntry).api_keys && (modelForm as ModelEntry).api_keys!.length > 0 && (
+                          <div>
+                            <FieldLabel>{t('admin.model.masked_keys')}</FieldLabel>
+                            <ul className="space-y-1 mt-1">
+                              {(modelForm as ModelEntry).api_keys!.map((k, idx) => {
+                                const keyTestId = `${mfId}__key_${idx}`;
+                                const kts = testStatus[keyTestId] ?? { state: 'idle' };
+                                const runKeyTest = async () => {
+                                  setTest(keyTestId, { state: 'running' });
+                                  try {
+                                    const res = await adminTestModel({ id: mfId, keyIndex: idx });
+                                    setTest(keyTestId, { state: 'done', ...res });
+                                  } catch (e) {
+                                    setTest(keyTestId, { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
+                                  }
+                                };
+                                return (
+                                  <li key={idx} className="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300">
+                                    <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded flex-1 truncate">{k}</span>
+                                    <button
+                                      type="button"
+                                      disabled={kts.state === 'running'}
+                                      onClick={runKeyTest}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                                    >
+                                      {kts.state === 'running' ? <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" /> : '⚡'}
+                                      {t('admin.model.test_key')}
+                                    </button>
+                                    {kts.state === 'done' && (
+                                      <span className={kts.ok ? 'text-emerald-600' : 'text-red-600'}>
+                                        {kts.ok ? `✓${kts.latencyMs !== undefined ? ` ${kts.latencyMs}ms` : ''}` : '✗'}
+                                      </span>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* New keys textarea */}
+                        <div>
+                          <FieldLabel htmlFor="mf-api-keys">{t('admin.model.api_keys_label')}</FieldLabel>
+                          <textarea
+                            id="mf-api-keys"
+                            value={mfApiKeys}
+                            onChange={(e) => setMfApiKeys(e.target.value)}
+                            rows={3}
+                            placeholder={t('admin.model.api_keys_placeholder')}
+                            className={`${textInput} font-mono text-xs resize-y`}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <p className="text-[11px] text-gray-400 mt-0.5">One key per line. Appended to the pool — existing keys are not removed.</p>
+                        </div>
                       </div>
                     )}
+
+                    {/* Fallback chain + priority — available for all provider types */}
+                    <div className="sm:col-span-2">
+                      <FieldLabel htmlFor="mf-fallback">{t('admin.model.fallback_chain')}</FieldLabel>
+                      <p className="text-[11px] text-gray-500 mb-1">{t('admin.model.fallback_chain_hint')}</p>
+                      <select
+                        id="mf-fallback"
+                        multiple
+                        value={mfFallbackChain}
+                        onChange={(e) => {
+                          const selected = Array.from<HTMLOptionElement>(e.target.selectedOptions).map((o) => o.value);
+                          setMfFallbackChain(selected);
+                        }}
+                        size={Math.min(4, models.length + 1)}
+                        className={`${textInput} h-auto`}
+                      >
+                        {models
+                          .filter((m) => m.id !== mfId)
+                          .map((m) => (
+                            <option key={m.id} value={m.id}>{m.label} ({m.id})</option>
+                          ))}
+                      </select>
+                    </div>
 
                     {/* Provider model */}
                     <div>
@@ -1179,6 +1439,21 @@ const AdminPortal: React.FC = () => {
                         <option value="paid">paid</option>
                         <option value="business">business</option>
                       </select>
+                    </div>
+
+                    {/* Priority */}
+                    <div>
+                      <FieldLabel htmlFor="mf-priority">{t('admin.model.priority')}</FieldLabel>
+                      <p className="text-[11px] text-gray-500 mb-1">{t('admin.model.priority_hint')}</p>
+                      <input
+                        id="mf-priority"
+                        type="number"
+                        min={0}
+                        value={mfPriority}
+                        onChange={(e) => setMfPriority(e.target.value)}
+                        placeholder="0"
+                        className={textInput}
+                      />
                     </div>
                   </div>
 
@@ -1619,40 +1894,60 @@ const AdminPortal: React.FC = () => {
                                     </p>
                                   )}
 
+                                  {/* Change summary */}
+                                  <div>
+                                    <FieldLabel htmlFor={`cs-${entry.key}`}>{t('admin.prompts.change_summary')}</FieldLabel>
+                                    <input
+                                      id={`cs-${entry.key}`}
+                                      value={promptChangeSummary}
+                                      onChange={(e) => setPromptChangeSummary(e.target.value)}
+                                      placeholder={t('admin.prompts.change_summary_placeholder')}
+                                      className={textInput}
+                                    />
+                                  </div>
+
                                   {/* Action buttons */}
                                   <div className="flex items-center gap-3 flex-wrap">
+                                    {/* Save as Draft (admin + super) */}
                                     <SaveButton
                                       onClick={async () => {
                                         setPromptSaving(true);
                                         try {
+                                          await adminSavePromptDraft({
+                                            promptKey: entry.key,
+                                            content: promptDraft,
+                                            changeSummary: promptChangeSummary || undefined,
+                                          });
+                                          // Also save the legacy override for immediate effect
                                           const res = await adminUpdatePrompt(entry.key, promptDraft);
-                                          // Patch just this row without blowing away the list
                                           setPrompts((prev) =>
                                             prev.map((p) =>
-                                              p.key === entry.key
-                                                ? { ...p, override: res.override }
-                                                : p,
+                                              p.key === entry.key ? { ...p, override: res.override } : p,
                                             ),
                                           );
+                                          setPromptChangeSummary('');
                                           setPromptFeedback((prev) => ({
                                             ...prev,
-                                            [entry.key]: { ok: 'Saved successfully.' },
+                                            [entry.key]: { ok: 'Saved as draft.' },
                                           }));
+                                          // Refresh version history if open
+                                          if (promptVersionsKey === entry.key) {
+                                            await loadPromptVersions(entry.key);
+                                          }
                                         } catch (e) {
                                           setPromptFeedback((prev) => ({
                                             ...prev,
-                                            [entry.key]: {
-                                              err: e instanceof Error ? e.message : 'Save failed',
-                                            },
+                                            [entry.key]: { err: e instanceof Error ? e.message : 'Save failed' },
                                           }));
                                         } finally {
                                           setPromptSaving(false);
                                         }
                                       }}
                                       loading={promptSaving}
-                                      label="Save override"
+                                      label={t('admin.prompts.save_draft')}
                                     />
 
+                                    {/* Reset to default */}
                                     <button
                                       type="button"
                                       disabled={!isOverridden || promptSaving}
@@ -1660,12 +1955,9 @@ const AdminPortal: React.FC = () => {
                                         setPromptSaving(true);
                                         try {
                                           await adminResetPrompt(entry.key);
-                                          // Patch this row: clear override, restore draft to default
                                           setPrompts((prev) =>
                                             prev.map((p) =>
-                                              p.key === entry.key
-                                                ? { ...p, override: null }
-                                                : p,
+                                              p.key === entry.key ? { ...p, override: null } : p,
                                             ),
                                           );
                                           setPromptDraft(entry.default);
@@ -1676,9 +1968,7 @@ const AdminPortal: React.FC = () => {
                                         } catch (e) {
                                           setPromptFeedback((prev) => ({
                                             ...prev,
-                                            [entry.key]: {
-                                              err: e instanceof Error ? e.message : 'Reset failed',
-                                            },
+                                            [entry.key]: { err: e instanceof Error ? e.message : 'Reset failed' },
                                           }));
                                         } finally {
                                           setPromptSaving(false);
@@ -1689,23 +1979,138 @@ const AdminPortal: React.FC = () => {
                                           ? 'text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 focus:ring-red-500'
                                           : 'text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed'
                                       }`}
-                                      title={
-                                        isOverridden
-                                          ? 'Discard override and restore compiled-in default'
-                                          : 'No override active — already using default'
-                                      }
+                                      title={isOverridden ? 'Discard override and restore default' : 'No override active'}
                                     >
                                       Reset to default
                                     </button>
 
+                                    {/* Version history toggle */}
                                     <button
                                       type="button"
-                                      onClick={() => setExpandedPromptKey(null)}
+                                      onClick={async () => {
+                                        if (promptVersionsKey === entry.key) {
+                                          setPromptVersionsKey(null);
+                                        } else {
+                                          setPromptVersionsKey(entry.key);
+                                          await loadPromptVersions(entry.key);
+                                        }
+                                      }}
+                                      className="text-sm text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:underline"
+                                    >
+                                      {promptVersionsKey === entry.key ? 'Hide history' : t('admin.prompts.versions')}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => { setExpandedPromptKey(null); setPromptVersionsKey(null); }}
                                       className="text-sm text-gray-500 hover:text-gray-700 transition-colors focus:outline-none focus:underline ml-auto"
                                     >
                                       Close
                                     </button>
                                   </div>
+
+                                  {/* Version history drawer */}
+                                  {promptVersionsKey === entry.key && (
+                                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                      <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500">
+                                        {t('admin.prompts.versions')}
+                                      </div>
+                                      {promptVersionsFeedback?.err && (
+                                        <p className="px-4 py-2 text-xs text-red-600">{promptVersionsFeedback.err}</p>
+                                      )}
+                                      {promptVersionsLoading ? (
+                                        <div className="flex items-center gap-2 px-4 py-4 text-sm text-gray-500">
+                                          <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                                          Loading…
+                                        </div>
+                                      ) : promptVersions.length === 0 ? (
+                                        <p className="px-4 py-3 text-sm text-gray-400">{t('admin.prompts.versions_empty')}</p>
+                                      ) : (
+                                        <ul className="divide-y divide-gray-100 dark:divide-gray-800 max-h-72 overflow-y-auto">
+                                          {promptVersions.map((v) => {
+                                            const statusColors: Record<string, string> = {
+                                              draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+                                              published: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+                                              rolled_back: 'bg-amber-50 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+                                            };
+                                            return (
+                                              <li key={v.id} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                  <div className="flex items-center gap-2 text-xs">
+                                                    <span className="font-mono text-gray-500">v{v.version}</span>
+                                                    <span className={`inline-block text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ${statusColors[v.status] ?? ''}`}>
+                                                      {t(`admin.prompts.status_${v.status}`) || v.status}
+                                                    </span>
+                                                    <span className="text-gray-400">{v.createdAt?.slice(0, 16).replace('T', ' ')}</span>
+                                                    {v.changeSummary && (
+                                                      <span className="text-gray-500 italic truncate max-w-[180px]" title={v.changeSummary}>
+                                                        {v.changeSummary}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                  {/* Publish / Rollback — super only */}
+                                                  {isSuper && (
+                                                    <div className="flex items-center gap-2">
+                                                      {v.status === 'draft' && (
+                                                        <button
+                                                          type="button"
+                                                          disabled={promptSaving}
+                                                          onClick={async () => {
+                                                            if (!window.confirm(t('admin.prompts.publish_confirm'))) return;
+                                                            setPromptSaving(true);
+                                                            try {
+                                                              await adminPublishPrompt({ versionId: v.id });
+                                                              setPromptVersionsFeedback({ ok: 'Published.' });
+                                                              await loadPromptVersions(entry.key);
+                                                            } catch (e) {
+                                                              setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Publish failed' });
+                                                            } finally {
+                                                              setPromptSaving(false);
+                                                            }
+                                                          }}
+                                                          className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-800 text-white font-medium transition-colors focus:outline-none disabled:opacity-50"
+                                                        >
+                                                          {t('admin.prompts.publish')}
+                                                        </button>
+                                                      )}
+                                                      {v.status === 'published' && (
+                                                        <span className="text-[10px] text-emerald-600 font-medium">active</span>
+                                                      )}
+                                                      {(v.status === 'published' || v.status === 'rolled_back') && v.status !== 'draft' && (
+                                                        <button
+                                                          type="button"
+                                                          disabled={promptSaving || v.status === 'rolled_back'}
+                                                          onClick={async () => {
+                                                            if (!window.confirm(t('admin.prompts.rollback_confirm'))) return;
+                                                            setPromptSaving(true);
+                                                            try {
+                                                              await adminRollbackPrompt({ versionId: v.id });
+                                                              setPromptVersionsFeedback({ ok: 'Rolled back.' });
+                                                              await loadPromptVersions(entry.key);
+                                                            } catch (e) {
+                                                              setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Rollback failed' });
+                                                            } finally {
+                                                              setPromptSaving(false);
+                                                            }
+                                                          }}
+                                                          className="text-xs px-2 py-1 rounded border border-amber-300 text-amber-700 hover:bg-amber-50 font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                          {t('admin.prompts.rollback')}
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </li>
+                                            );
+                                          })}
+                                        </ul>
+                                      )}
+                                      {promptVersionsFeedback?.ok && (
+                                        <p className="px-4 py-2 text-xs text-emerald-700 border-t border-gray-100">{promptVersionsFeedback.ok}</p>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </li>
@@ -1906,21 +2311,41 @@ const AdminPortal: React.FC = () => {
                 {/* Credit adjustment */}
                 <div className="space-y-2">
                   <FieldLabel>Adjust credits (+/-)</FieldLabel>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    {t('admin.credits.delta_constraint')}
+                  </p>
                   <div className="flex gap-2">
                     <input
                       type="number"
                       value={creditDelta}
                       onChange={(e) => setCreditDelta(e.target.value)}
+                      min={-5000}
+                      max={5000}
                       className={`${textInput} flex-1`}
                     />
-                    <button
-                      type="button"
-                      onClick={adjustCredits}
-                      className="bg-blue-700 hover:bg-blue-800 px-3 py-2 rounded-md text-sm font-medium text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
-                    >
-                      Apply
-                    </button>
                   </div>
+                  <div>
+                    <FieldLabel>{t('admin.credits.reason_label')}</FieldLabel>
+                    <textarea
+                      value={creditReason}
+                      onChange={(e) => setCreditReason(e.target.value)}
+                      rows={2}
+                      maxLength={300}
+                      placeholder={t('admin.credits.reason_placeholder')}
+                      className={`${textInput} resize-none`}
+                    />
+                    <p className={`text-[11px] mt-0.5 ${creditReason.length < 10 || creditReason.length > 300 ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {creditReason.length}/300
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={adjustCredits}
+                    disabled={creditReason.trim().length < 10}
+                    className="bg-blue-700 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 rounded-md text-sm font-medium text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+                  >
+                    {t('admin.credits.apply')}
+                  </button>
                 </div>
 
                 {/* Subscription override */}
@@ -1999,68 +2424,122 @@ const AdminPortal: React.FC = () => {
         )}
 
         {/* ── ADMINS ────────────────────────────────────────────────────── */}
-        {tab === 'admins' && (
-          <div className="max-w-xl space-y-5">
+        {tab === 'admins' && isSuper && (
+          <div className="max-w-2xl space-y-5">
             <Card className="p-5 space-y-4">
               <div>
-                <SectionHeading>Admin users</SectionHeading>
-                <p className="mt-1 text-xs text-gray-500">
-                  Admins can view all users, adjust credits, change tiers, manage API keys and
-                  quotas, and grant admin access. Every action is recorded in{' '}
-                  <code className="bg-gray-100 px-1 rounded">admin_audit_log</code>.
+                <SectionHeading>{t('admin.admins.title')}</SectionHeading>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t('admin.admins.subtitle')}
                 </p>
               </div>
 
-              {/* Add admin */}
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <FieldLabel htmlFor="new-admin">Add admin by email or UID</FieldLabel>
-                  <input
-                    id="new-admin"
-                    value={newAdmin}
-                    onChange={(e) => setNewAdmin(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addAdmin()}
-                    placeholder="person@company.com"
-                    className={textInput}
-                  />
+              {/* Invite form */}
+              <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <FieldLabel htmlFor="invite-email">{t('admin.admins.invite_label')}</FieldLabel>
+                    <input
+                      id="invite-email"
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => { setInviteEmail(e.target.value); setInviteFeedback(null); }}
+                      onKeyDown={(e) => e.key === 'Enter' && inviteAdmin()}
+                      placeholder={t('admin.admins.invite_placeholder')}
+                      className={textInput}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="invite-role">{t('admin.admins.invite_role')}</FieldLabel>
+                    <select
+                      id="invite-role"
+                      value={inviteRole}
+                      onChange={(e) => setInviteRole(e.target.value as 'admin' | 'reviewer')}
+                      className={textInput}
+                    >
+                      <option value="admin">{t('admin.role.admin')}</option>
+                      <option value="reviewer">{t('admin.role.reviewer')}</option>
+                    </select>
+                  </div>
                 </div>
                 <button
                   type="button"
-                  onClick={addAdmin}
-                  className="bg-emerald-700 hover:bg-emerald-800 px-3 py-2 rounded-md text-sm font-medium text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
+                  onClick={inviteAdmin}
+                  disabled={!inviteEmail.trim()}
+                  className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 rounded-md text-sm font-medium text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
                 >
-                  Add
+                  {t('admin.admins.invite_btn')}
                 </button>
+                {inviteFeedback?.ok && (
+                  <p className="text-xs text-emerald-700 flex items-center gap-1.5"><span>✓</span>{inviteFeedback.ok}</p>
+                )}
+                {inviteFeedback?.err && (
+                  <p className="text-xs text-red-600 flex items-center gap-1.5"><span>✕</span>{inviteFeedback.err}</p>
+                )}
               </div>
 
               {/* Admin list */}
               {admins.length === 0 ? (
-                <EmptyState message="No admins listed." />
+                <EmptyState message={t('admin.admins.empty')} />
               ) : (
-                <ul className="divide-y divide-gray-100">
+                <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                   {admins.map((a) => (
                     <li key={a.uid} className="flex items-center justify-between py-3 gap-3">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium flex items-center gap-2 flex-wrap">
                           <span>{a.email || a.display_name || '(no email)'}</span>
+                          {/* Role badge */}
+                          {a.role && (
+                            <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium ${
+                              a.role === 'super'
+                                ? 'bg-violet-50 text-violet-800 dark:bg-violet-900 dark:text-violet-200'
+                                : a.role === 'admin'
+                                ? 'bg-blue-50 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                            }`}>
+                              {t(`admin.role.${a.role}`)}
+                            </span>
+                          )}
                           {a.source === 'env' && (
-                            <span className="text-[10px] uppercase tracking-wider text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] uppercase tracking-wider text-amber-800 bg-amber-50 dark:bg-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded">
                               bootstrap
                             </span>
                           )}
+                          {a.status && a.status !== 'active' && (
+                            <span className="text-[10px] text-gray-400">{a.status}</span>
+                          )}
                         </p>
-                        <p className="text-[11px] font-mono text-gray-500 truncate">{a.uid}</p>
+                        <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate">{a.uid}</p>
+                        {a.invited_at && (
+                          <p className="text-[10px] text-gray-400">{t('admin.admins.invited_at')}: {a.invited_at.slice(0, 10)}</p>
+                        )}
                       </div>
                       {a.source === 'env' ? (
                         <span className="text-xs text-gray-400 shrink-0">env only</span>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => revokeAdmin(a.uid)}
-                          className="shrink-0 text-xs text-red-600 hover:text-red-800 transition-colors focus:outline-none focus:underline"
-                        >
-                          Revoke
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Role change dropdown (only for non-super non-env entries) */}
+                          {a.role !== 'super' && (
+                            <select
+                              value={a.role ?? 'admin'}
+                              onChange={(e) => changeAdminRole(a.uid, e.target.value as 'admin' | 'reviewer')}
+                              className="text-xs border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              aria-label={t('admin.admins.change_role')}
+                            >
+                              <option value="admin">{t('admin.role.admin')}</option>
+                              <option value="reviewer">{t('admin.role.reviewer')}</option>
+                            </select>
+                          )}
+                          {a.role !== 'super' && (
+                            <button
+                              type="button"
+                              onClick={() => removeAdminEntry(a.uid)}
+                              className="text-xs text-red-600 hover:text-red-800 dark:hover:text-red-400 transition-colors focus:outline-none focus:underline"
+                            >
+                              {t('admin.admins.remove_btn')}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </li>
                   ))}

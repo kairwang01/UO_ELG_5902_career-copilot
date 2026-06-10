@@ -33,6 +33,9 @@ export interface AdminUserRow {
 export const adminCheckAccess = () =>
   call<Record<string, never>, { admin: boolean; uid?: string }>('adminCheckAccess')({}).then((r) => r.data);
 
+export const adminWhoAmI = () =>
+  call<Record<string, never>, { role: 'super' | 'admin' | 'reviewer' }>('adminWhoAmI')({}).then((r) => r.data);
+
 export const adminGetDashboard = () =>
   call<Record<string, never>, AdminDashboard>('adminGetDashboard')({}).then((r) => r.data);
 
@@ -93,6 +96,10 @@ export interface AdminRow {
   display_name?: string | null;
   /** 'doc' = portal-managed (revocable); 'env' = server ADMIN_UIDS bootstrap. */
   source?: 'doc' | 'env';
+  /** New: role for role-aware admin system */
+  role?: 'super' | 'admin' | 'reviewer';
+  status?: string;
+  invited_at?: string | null;
 }
 
 export const adminSetAdmin = (args: { uid?: string; email?: string; makeAdmin: boolean }) =>
@@ -102,6 +109,20 @@ export const adminSetAdmin = (args: { uid?: string; email?: string; makeAdmin: b
 
 export const adminListAdmins = () =>
   call<Record<string, never>, { admins: AdminRow[] }>('adminListAdmins')({}).then((r) => r.data);
+
+/** Super-only: invite a new admin or reviewer by email. */
+export const adminInviteAdmin = (args: { email: string; role: 'admin' | 'reviewer' }) =>
+  call<typeof args, { uid: string; email: string; role: string; status: string; invited_at: string }>(
+    'adminInviteAdmin',
+  )(args).then((r) => r.data);
+
+/** Super-only: change the role of an existing admin. */
+export const adminSetAdminRole = (args: { uid: string; role: 'admin' | 'reviewer' }) =>
+  call<typeof args, { uid: string; role: string }>('adminSetAdminRole')(args).then((r) => r.data);
+
+/** Super-only: remove an admin/reviewer. */
+export const adminRemoveAdmin = (args: { uid: string }) =>
+  call<typeof args, { uid: string }>('adminRemoveAdmin')(args).then((r) => r.data);
 
 export interface AuditLogEntry {
   id: string;
@@ -126,17 +147,28 @@ export interface ModelEntry {
   /** Required for openai-compatible models without a builtin. Must be https. */
   base_url?: string;
   /**
-   * OpenAI-compatible API key.
+   * OpenAI-compatible API key (legacy single-key).
    * On a list response this is a masked preview like "ab12••••wxyz".
    * On upsert, sending an empty string keeps the stored key unchanged.
    */
   api_key?: string;
+  /**
+   * Multi-key pool. Masked from server on list responses.
+   * On upsert: existing saved keys are not echoed back; new entries are appended server-side.
+   */
+  api_keys?: string[];
+  /** Ordered list of model ids to fall back to when this model fails. */
+  fallbackChain?: string[];
+  /** Numeric routing priority (lower = higher priority). */
+  priority?: number;
   /** Platform-managed builtin — inherits key/base from platform_config/llm. */
   builtin?: 'kairllm' | 'deepseek';
   /** Model name forwarded to the provider. Empty string = provider default. */
   providerModel: string;
   minTier: 'free' | 'paid' | 'business';
   enabled: boolean;
+  /** Optional per-key health info if server includes it. */
+  health?: { keyIndex: number; ok: boolean; latencyMs?: number; checkedAt?: string }[];
 }
 
 export const adminListModels = () =>
@@ -158,7 +190,7 @@ export interface TestModelResult {
 }
 
 export type TestModelInput =
-  | { id: string }
+  | { id: string; keyIndex?: number }
   | {
       config: {
         provider: 'gemini' | 'openai-compatible';
@@ -198,3 +230,41 @@ export const adminResetPrompt = (key: string) =>
   call<{ key: string }, { key: string; override: null }>(
     'adminResetPrompt',
   )({ key }).then((r) => r.data);
+
+// ─── Prompt lifecycle (versioned) ─────────────────────────────────────────
+
+export interface PromptVersion {
+  id: string;
+  version: number;
+  status: 'draft' | 'published' | 'rolled_back';
+  content: string;
+  createdBy: string;
+  createdAt: string;
+  publishedBy?: string | null;
+  publishedAt?: string | null;
+  changeSummary?: string | null;
+}
+
+export const adminSavePromptDraft = (args: {
+  promptKey: string;
+  content: string;
+  changeSummary?: string;
+}) =>
+  call<typeof args, { versionId: string }>(
+    'adminSavePromptDraft',
+  )(args).then((r) => r.data);
+
+export const adminPublishPrompt = (args: { versionId: string }) =>
+  call<typeof args, { versionId: string; status: string }>(
+    'adminPublishPrompt',
+  )(args).then((r) => r.data);
+
+export const adminRollbackPrompt = (args: { versionId: string }) =>
+  call<typeof args, { versionId: string; status: string }>(
+    'adminRollbackPrompt',
+  )(args).then((r) => r.data);
+
+export const adminListPromptVersions = (args: { promptKey: string }) =>
+  call<typeof args, { versions: PromptVersion[] }>(
+    'adminListPromptVersions',
+  )(args).then((r) => r.data);
