@@ -199,7 +199,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   if (jobForFunnel) {
     return (
       <PortalAccountMenuProvider value={accountMenuProps}>
-        <div className={`flex h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
           <PortalSidebar
             currentPage={prevPage}
             onNavigate={navigate}
@@ -228,7 +228,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
   return (
     <PortalAccountMenuProvider value={accountMenuProps}>
-      <div className={`flex h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
         <PortalSidebar
           currentPage={currentPage}
           onNavigate={navigate}

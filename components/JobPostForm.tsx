@@ -268,7 +268,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         // Render as a plain page section — no backdrop or fixed positioning
         return (
             <>
-                <div className="p-6">
+                <div className="max-w-[1088px] mx-auto p-6">
                     <form id="job-post-form" onSubmit={handleSubmit} className="space-y-6">
                         {formBody}
                     </form>
