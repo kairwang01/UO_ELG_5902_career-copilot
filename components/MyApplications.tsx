@@ -2,8 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
-import { Briefcase, CheckCircle2, Circle, Search, Star } from 'lucide-react';
+import { Bell, Briefcase, CheckCircle2, Circle, Search, Star, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
+import {
+  subscribeNotifications,
+  markNotificationRead,
+  unreadCount,
+  type AppNotification,
+} from '../lib/notificationsData';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -263,6 +269,29 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState<FilterStatus>('All');
 
+  // ── Notifications state ───────────────────────────────────────────────────
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = subscribeNotifications(uid, setNotifications);
+    return () => unsub();
+  }, [uid]);
+
+  const handleMarkRead = (id: string) => {
+    if (!uid) return;
+    markNotificationRead(uid, id).catch(() => {/* best-effort */});
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const handleMarkAllRead = () => {
+    notifications.filter((n) => !n.read).forEach((n) => handleMarkRead(n.id));
+  };
+
+  const badge = unreadCount(notifications);
+
   useEffect(() => {
     if (!uid) return;
     const q = query(collection(firestoreDb, 'job_applications'), where('candidate_id', '==', uid));
@@ -332,13 +361,96 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
       {/* ── Header ── */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-          {t('applications_title')}
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {t('applications_subtitle')}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+            {t('applications_title')}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {t('applications_subtitle')}
+          </p>
+        </div>
+
+        {/* ── Notifications bell ── */}
+        <div className="relative flex-shrink-0 mt-1">
+          <button
+            onClick={() => setNotifOpen((v) => !v)}
+            className="relative p-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-700 transition-colors shadow-sm"
+            aria-label={t('notifications_bell_label')}
+          >
+            <Bell className="h-5 w-5" />
+            {badge > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 min-w-[1rem] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                {badge > 9 ? '9+' : badge}
+              </span>
+            )}
+          </button>
+
+          {/* Dropdown panel */}
+          {notifOpen && (
+            <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-30">
+              {/* Panel header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {t('notifications_panel_title')}
+                </span>
+                <div className="flex items-center gap-2">
+                  {badge > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      {t('notifications_mark_all_read')}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setNotifOpen(false)}
+                    className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-400 dark:text-slate-500"
+                    aria-label={t('notifications_close')}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Notification list */}
+              <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/60">
+                {notifications.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-xs text-gray-400 dark:text-slate-500">
+                    {t('notifications_empty')}
+                  </p>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      className={`flex items-start gap-3 px-4 py-3 transition-colors ${
+                        n.read
+                          ? 'bg-white dark:bg-slate-800'
+                          : 'bg-blue-50/50 dark:bg-blue-900/10'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">
+                          {n.job_title ?? t('notifications_unknown_job')}
+                        </p>
+                        <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
+                          {t('notifications_status_changed').replace('{status}', n.status ?? '')}
+                        </p>
+                      </div>
+                      {!n.read && (
+                        <button
+                          onClick={() => handleMarkRead(n.id)}
+                          className="flex-shrink-0 mt-0.5 h-2 w-2 rounded-full bg-blue-500 dark:bg-blue-400 hover:bg-blue-400 transition-colors"
+                          title={t('notifications_mark_read')}
+                        />
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Filter chips ── */}

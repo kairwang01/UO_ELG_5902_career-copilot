@@ -109,6 +109,8 @@ const STRINGS: Record<string, string> = {
   'admin.dashboard.model_routing_chain': 'Fallback chain',
   'admin.dashboard.model_routing_none': 'Not configured',
   'admin.access.reviewer_only': 'You have reviewer access. Only Dashboard and Audit Log are available.',
+  'admin_free_cap_help': 'Free-tier output-token ceiling (服务分级). Requests from free users will be capped at this many output tokens. Default 8192 = Gemini Flash native max (no artificial truncation). Lower this value to create a harder free/paid quality boundary.',
+  'admin.dashboard.model_routing_select': 'Change default model',
 };
 const t = (key: string) => STRINGS[key] ?? key;
 
@@ -207,6 +209,10 @@ const AdminPortal: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'reviewer'>('admin');
   const [inviteFeedback, setInviteFeedback] = useState<{ ok?: string; err?: string } | null>(null);
+
+  // Dashboard model routing inline selector state
+  const [defaultModelChanging, setDefaultModelChanging] = useState(false);
+  const [defaultModelToast, setDefaultModelToast] = useState<{ ok?: string; err?: string } | null>(null);
 
   useEffect(() => {
     data.auth.getSession().then(setSession);
@@ -393,11 +399,17 @@ const AdminPortal: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      const fmot = Number(quotas.free_max_output_tokens ?? 8192);
+      if (!Number.isInteger(fmot) || fmot < 256 || fmot > 32768) {
+        setError('Free-tier max output tokens must be an integer between 256 and 32768.');
+        return;
+      }
       const updated = await adminUpdateQuotas({
         daily_tool_run_limit: Number(quotas.daily_tool_run_limit ?? 0),
         daily_credit_spend_limit: Number(quotas.daily_credit_spend_limit ?? 0),
         per_user_daily_credit_limit: Number(quotas.per_user_daily_credit_limit ?? 0),
         enabled: quotas.enabled !== false,
+        free_max_output_tokens: fmot,
       });
       setQuotas(updated as Record<string, number | boolean>);
     } catch (e) {
@@ -774,20 +786,77 @@ const AdminPortal: React.FC = () => {
                       {t('admin.dashboard.model_routing_title')}
                     </p>
                     <div className="flex flex-wrap gap-6 items-start">
-                      {/* Default model */}
-                      <div className="min-w-[140px]">
+                      {/* Default model — selectable for super; read-only for admin/reviewer */}
+                      <div className="min-w-[180px]">
                         <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
                           {t('admin.dashboard.model_routing_default')}
                         </p>
-                        {defaultModelId ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                              {models.find((m) => m.id === defaultModelId)?.label ?? defaultModelId}
-                            </span>
-                          </span>
+                        {isSuper ? (
+                          <div className="space-y-1.5">
+                            <select
+                              value={defaultModelId ?? ''}
+                              disabled={defaultModelChanging}
+                              aria-label={t('admin.dashboard.model_routing_select')}
+                              onChange={async (e) => {
+                                const newId = e.target.value;
+                                if (!newId || newId === defaultModelId) return;
+                                if (!window.confirm(t('admin.set_default_confirm'))) return;
+                                setDefaultModelChanging(true);
+                                setDefaultModelToast(null);
+                                try {
+                                  const res = await adminSetDefaultModel(newId);
+                                  setDefaultModelId(res.defaultModelId);
+                                  setDefaultModelToast({ ok: t('admin.model.set_default_ok') });
+                                } catch (ex) {
+                                  setDefaultModelToast({ err: ex instanceof Error ? ex.message : 'Failed to set default model' });
+                                } finally {
+                                  setDefaultModelChanging(false);
+                                }
+                              }}
+                              className="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed min-w-[160px]"
+                            >
+                              {!defaultModelId && (
+                                <option value="" disabled>
+                                  {t('admin.dashboard.model_routing_none')}
+                                </option>
+                              )}
+                              {models.filter((m) => m.enabled).map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                            {defaultModelChanging && (
+                              <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                                <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin" />
+                                Saving…
+                              </span>
+                            )}
+                            {defaultModelToast?.ok && (
+                              <span className="text-[11px] text-emerald-700 flex items-center gap-1">
+                                <span aria-hidden="true">✓</span>
+                                {defaultModelToast.ok}
+                              </span>
+                            )}
+                            {defaultModelToast?.err && (
+                              <span className="text-[11px] text-red-600 flex items-center gap-1">
+                                <span aria-hidden="true">✕</span>
+                                {defaultModelToast.err}
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-sm text-gray-400">{t('admin.dashboard.model_routing_none')}</span>
+                          /* Read-only for admin/reviewer */
+                          defaultModelId ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                {models.find((m) => m.id === defaultModelId)?.label ?? defaultModelId}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">{t('admin.dashboard.model_routing_none')}</span>
+                          )
                         )}
                       </div>
 
@@ -1691,6 +1760,9 @@ const AdminPortal: React.FC = () => {
                             Status
                           </th>
                           <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Health
+                          </th>
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Default
                           </th>
                           <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
@@ -1773,6 +1845,26 @@ const AdminPortal: React.FC = () => {
                                 >
                                   {m.enabled ? 'enabled' : 'disabled'}
                                 </span>
+                              </td>
+
+                              {/* Key health dot — best-effort; absent when no health data */}
+                              <td className="px-5 py-3 whitespace-nowrap">
+                                {m.keyHealth ? (() => {
+                                  const h = m.keyHealth!;
+                                  const cooled = h.anyCooled;
+                                  const tip = cooled
+                                    ? `Cooling down until ${h.cooldownUntil ?? '?'}${h.lastErrorCode ? ` · last error: ${h.lastErrorCode}` : ''}${h.failureCount !== undefined ? ` · failures: ${h.failureCount}` : ''}`
+                                    : `OK${h.failureCount !== undefined ? ` · failures: ${h.failureCount}` : ''}${h.lastFailureAt ? ` · last failure: ${h.lastFailureAt.slice(0, 16).replace('T', ' ')}` : ''}`;
+                                  return (
+                                    <span
+                                      title={tip}
+                                      className={`inline-block w-2.5 h-2.5 rounded-full ${cooled ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                                      aria-label={cooled ? 'Key cooling' : 'Key healthy'}
+                                    />
+                                  );
+                                })() : (
+                                  <span className="text-gray-300 text-[11px]" aria-label="No health data">—</span>
+                                )}
                               </td>
 
                               {/* Default column — super only */}
@@ -2309,6 +2401,29 @@ const AdminPortal: React.FC = () => {
                     />
                   </div>
                 ))}
+
+                {/* Free-tier max output tokens */}
+                <div>
+                  <FieldLabel htmlFor="free_max_output_tokens">Free-tier max output tokens</FieldLabel>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-relaxed">
+                    {t('admin_free_cap_help')}
+                  </p>
+                  <input
+                    id="free_max_output_tokens"
+                    type="number"
+                    min={256}
+                    max={32768}
+                    step={256}
+                    value={Number(quotas.free_max_output_tokens ?? 8192)}
+                    onChange={(e) =>
+                      setQuotas((q) => ({ ...q, free_max_output_tokens: Number(e.target.value) }))
+                    }
+                    className={textInput}
+                  />
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Range: 256–32768. Default 8192 = no artificial truncation.
+                  </p>
+                </div>
               </div>
               <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer select-none">
                 <input

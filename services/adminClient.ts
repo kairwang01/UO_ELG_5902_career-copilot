@@ -60,6 +60,7 @@ export const adminUpdateQuotas = (payload: {
   daily_credit_spend_limit: number;
   per_user_daily_credit_limit: number;
   enabled: boolean;
+  free_max_output_tokens?: number;
 }) => call<typeof payload, Record<string, unknown>>('adminUpdateQuotas')(payload).then((r) => r.data);
 
 export const adminListUsers = (limit = 50, start_after_uid?: string) =>
@@ -169,6 +170,14 @@ export interface ModelEntry {
   enabled: boolean;
   /** Optional per-key health info if server includes it. */
   health?: { keyIndex: number; ok: boolean; latencyMs?: number; checkedAt?: string }[];
+  /** Lightweight key-pool health from platform_config/key_health (best-effort, may be absent). */
+  keyHealth?: {
+    failureCount?: number;
+    cooldownUntil?: string | null;
+    lastErrorCode?: string | null;
+    lastFailureAt?: string | null;
+    anyCooled?: boolean;
+  };
 }
 
 export const adminListModels = () =>
