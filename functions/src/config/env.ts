@@ -26,4 +26,5 @@ export {
   getPromptOverride,
   getAllPromptOverrides,
   getDefaultModelId,
+  getFreeMaxOutputTokens,
 } from "../admin/platformConfig";

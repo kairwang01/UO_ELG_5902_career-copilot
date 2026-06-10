@@ -47,6 +47,7 @@ import {
   getModelRegistry,
   registerDefaultModels,
   getDefaultModelId,
+  getFreeMaxOutputTokens,
 } from "../config/env";
 import { ModelEntry } from "../admin/schema";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
@@ -635,17 +636,19 @@ class FallbackProvider implements LLMProvider {
 class FreeTierOutputCapProvider implements LLMProvider {
   readonly name: string;
   private readonly inner: LLMProvider;
+  private readonly cap: number;
 
-  constructor(inner: LLMProvider) {
+  constructor(inner: LLMProvider, cap: number) {
     this.inner = inner;
     this.name = inner.name;
+    this.cap = cap;
   }
 
   async generate(req: LLMRequest): Promise<LLMResult> {
     // Only inject the cap when the caller did not already specify one.
     const cappedReq: LLMRequest =
       req.maxOutputTokens === undefined
-        ? { ...req, maxOutputTokens: 4096 }
+        ? { ...req, maxOutputTokens: this.cap }
         : req;
     return this.inner.generate(cappedReq);
   }
@@ -877,10 +880,14 @@ export async function resolveProvider(
   }
 
   // --- Feature C: service tiering — free-tier output cap ---
-  // Free-tier users get a hard 1024-token output cap injected at the provider
-  // boundary (服务分级). Paid/business callers pass through uncapped.
+  // Free-tier requests get an output-token ceiling (服务分级), admin-configurable
+  // via platform_config/quotas.free_max_output_tokens. Default 8192 = the model's
+  // native max, i.e. NO artificial truncation (a lower value previously cut large
+  // structured outputs — career roadmaps, formatted resumes — mid-JSON and broke
+  // those tools). The genuine free/paid quality gap is the model tier; admins can
+  // lower this knob for a harder boundary. Paid/business pass through uncapped.
   if (tier === "free") {
-    return new FreeTierOutputCapProvider(finalProvider);
+    return new FreeTierOutputCapProvider(finalProvider, getFreeMaxOutputTokens());
   }
 
   return finalProvider;

@@ -143,6 +143,19 @@ export function getDefaultModelId(): string | null {
 }
 
 /**
+ * Free-tier output-token ceiling (服务分级). Admin-configurable via
+ * platform_config/quotas.free_max_output_tokens. Default 8192 = Gemini Flash's
+ * native max (no artificial truncation — large structured outputs like career
+ * roadmaps / formatted resumes must never be cut mid-JSON). Returns the default
+ * when the cache is cold or the value is missing/invalid.
+ */
+export function getFreeMaxOutputTokens(): number {
+  const v = quotasCache?.free_max_output_tokens;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 256) return Math.floor(v);
+  return 8192;
+}
+
+/**
  * Returns the effective model registry (Firestore if non-empty, else defaults).
  * Requires ensurePlatformCaches() to have been called first (models.ts calls it
  * in resolveProvider; adminModels.ts calls it explicitly).

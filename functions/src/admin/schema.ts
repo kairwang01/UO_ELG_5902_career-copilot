@@ -112,6 +112,12 @@ export interface QuotasDoc {
   daily_credit_spend_limit?: number;
   /** Per-user cap on credits spent per UTC day (0 = unlimited). */
   per_user_daily_credit_limit?: number;
+  /**
+   * Free-tier output-token ceiling (服务分级). Default 8192 = Gemini Flash's
+   * native max, i.e. no artificial truncation — the genuine free/paid quality
+   * gap is the model tier. Admins may lower this for a harder boundary.
+   */
+  free_max_output_tokens?: number;
   enabled?: boolean;
   updated_at?: string;
   updated_by?: string;

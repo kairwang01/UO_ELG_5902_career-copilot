@@ -129,7 +129,15 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
     if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
     if (!result) return null;
 
-    const { summary, overallSkillGaps, roadmap, bridgeRoles } = result;
+    // Defensive defaults: even with the output-cap fix, a malformed/partial AI
+    // response must degrade to "shows what it has" rather than crashing the tool
+    // (a missing array would throw on .map and white-screen the panel).
+    const {
+      summary = '',
+      overallSkillGaps = [],
+      roadmap = [],
+      bridgeRoles = [],
+    } = result;
 
     return (
       <div className="space-y-8 animate-fade-in">
