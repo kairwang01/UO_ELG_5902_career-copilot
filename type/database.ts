@@ -210,10 +210,35 @@ export interface PlatformQuotas {
 }
 
 // 路径: /platform_config/access  — 管理员白名单
+// Sprint-3 新增：admins map 存储 RBAC 角色条目（reviewer / admin / super）。
+// 旧字段 admin_uids 作为 LEGACY 兼容字段保留（解析为 'admin' 角色）。
+// ADMIN_UIDS 环境变量引导的 UID 不存储于此；服务端解析为 'super'。
+export type AdminRole = "super" | "admin" | "reviewer";
+
+export interface AdminEntry {
+  role: AdminRole;
+  email?: string | null;
+  invited_by?: string | null;  // 邀请者 UID
+  invited_at?: string | null;  // ISO 字符串
+  status: "active" | "disabled";
+}
+
 export interface PlatformAccess {
+  /** LEGACY: 门户授予的管理员 UID 列表（解析为 'admin' 角色）。新入口请用 admins map。 */
   admin_uids?: string[];
+  /** Sprint-3 RBAC: uid → AdminEntry 映射。status=disabled 的条目等同于已撤销。 */
+  admins?: Record<string, AdminEntry>;
   updated_at?: string;
   updated_by?: string;
+}
+
+// 路径: /admin_daily_totals/{operatorUid}_{YYYYMMDD}
+// Sprint-3 A1 修复：追踪管理员每日积分调整总量，防止无上限地授予积分。
+// 每条文档对应一个操作员的一天。服务端在事务中读写，避免并发竞争。
+export interface AdminDailyTotalDocument {
+  operator_uid: string;
+  date: string;   // YYYYMMDD UTC
+  total: number;  // |delta| 绝对值累计（不区分加/减）
 }
 
 // 单条模型注册项 (platform_config/models.models[])

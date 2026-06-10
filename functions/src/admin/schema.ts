@@ -31,14 +31,22 @@ export interface ModelEntry {
    */
   base_url?: string;
   /**
-   * API key for openai-compatible providers.
+   * Single API key for openai-compatible providers (legacy, single-key).
    * Empty / omitted → fall back to the built-in key resolved via `builtin`.
    * NEVER returned raw to clients — always masked.
    */
   api_key?: string;
   /**
+   * Pool of API keys for openai-compatible providers (multi-key rotation).
+   * When present and non-empty, takes precedence over `api_key`.
+   * Resolution order: api_keys (if non-empty) → api_key → builtin platform key.
+   * NEVER returned raw to clients — always masked.
+   * Max 10 keys; each must be a non-empty string ≤ 200 chars.
+   */
+  api_keys?: string[];
+  /**
    * When set, inherits key + base_url from the named platform_config/llm entry
-   * when `api_key` / `base_url` on this entry are absent.
+   * when `api_key` / `api_keys` / `base_url` on this entry are absent.
    */
   builtin?: "kairllm" | "deepseek";
   /** Model name passed to the provider. "" = provider default. */
@@ -47,6 +55,19 @@ export interface ModelEntry {
   minTier: "free" | "paid" | "business";
   /** When false the model is hidden from pickers and cannot be resolved. */
   enabled: boolean;
+  /**
+   * Sort priority — higher number = sorted earlier in admin/picker lists.
+   * Optional; defaults to 0. Integer.
+   */
+  priority?: number;
+  /**
+   * Ordered list of model IDs to fall back to when this model's key pool is
+   * fully exhausted (availability-class errors only — 401/403/429/timeout/empty).
+   * Each entry must be an existing model ID in the registry. The user's tier is
+   * respected: chain entries the caller cannot access are skipped silently.
+   * At most 5 entries.
+   */
+  fallbackChain?: string[];
 }
 
 /** Firestore shape of platform_config/models. */
@@ -94,8 +115,14 @@ export interface QuotasDoc {
   updated_by?: string;
 }
 
+/** Append-only audit trail for per-operator daily credit-adjustment totals (A1 fix). */
+export const ADMIN_DAILY_TOTALS_COLLECTION = "admin_daily_totals";
+
 export interface AccessDoc {
+  /** LEGACY: portal-granted admin UIDs (resolved as role 'admin'). */
   admin_uids?: string[];
+  /** Sprint-3 RBAC: uid → AdminEntry map. */
+  admins?: Record<string, import("../admin/roles").AdminEntry>;
 }
 
 export interface UsageEventDoc {
