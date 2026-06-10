@@ -614,14 +614,18 @@ class FallbackProvider implements LLMProvider {
 }
 
 // ---------------------------------------------------------------------------
-// FreeTierOutputCapProvider — injects maxOutputTokens:1024 for free-tier (C)
+// FreeTierOutputCapProvider — injects maxOutputTokens:4096 for free-tier (C)
 // ---------------------------------------------------------------------------
 
 /**
  * Service-tiering wrapper (服务分级 — free/paid output-quality boundary).
  *
  * When a free-tier user's request arrives with maxOutputTokens undefined, this
- * wrapper injects maxOutputTokens: 1024 before delegating to the inner provider.
+ * wrapper injects maxOutputTokens: 4096 before delegating to the inner provider.
+ * (1024 proved too tight: large structured outputs — career roadmaps, formatted
+ * resumes, weekly summaries — truncated mid-JSON and failed to parse, bricking
+ * those tools for free users. 4096 keeps a real free/paid boundary while fitting
+ * every tool's full response; make the value admin-configurable later.)
  * Paid/business callers pass through unmodified (they may supply their own cap
  * or leave it undefined for the provider default).
  *
@@ -641,7 +645,7 @@ class FreeTierOutputCapProvider implements LLMProvider {
     // Only inject the cap when the caller did not already specify one.
     const cappedReq: LLMRequest =
       req.maxOutputTokens === undefined
-        ? { ...req, maxOutputTokens: 1024 }
+        ? { ...req, maxOutputTokens: 4096 }
         : req;
     return this.inner.generate(cappedReq);
   }

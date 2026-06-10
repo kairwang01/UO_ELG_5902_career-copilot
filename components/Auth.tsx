@@ -82,6 +82,10 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setSelectedPlan(mode === 'business' ? 'single_post' : 'free');
     setError(null);
     setMessage(null);
+    // Also reset the in-flight flag: switching views (e.g. Forgot password →
+    // back to Sign in) used to leave a stale loading=true behind, so the
+    // submit button stayed stuck on "Signing in…" forever.
+    setLoading(false);
   }, [mode, authView]);
 
   // Outside-click no longer closes the modal (QA E10), so give keyboard users
@@ -194,8 +198,16 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
 
     setLoading(true);
     setError(null);
-    await data.auth.signInWithGoogle();
-    // The browser will redirect, so setLoading(false) may not be reached.
+    // signInWithGoogle is a POPUP flow (not a redirect — the old comment was a
+    // Supabase-era leftover). If the user closes the popup, the promise resolves
+    // with an error and, previously, loading was never reset — the button stayed
+    // stuck on "Signing in…" until a full reload.
+    const { error } = await data.auth.signInWithGoogle();
+    if (error) {
+      setError(getAuthErrorMessage(error.message));
+    }
+    // On success the auth listener closes this modal; resetting is harmless.
+    setLoading(false);
   }
 
   const renderContent = () => {

@@ -239,13 +239,25 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           scores: chartData,
                 activities: activities.map((a) => a.tool_key),
         });
-        setWeeklySummary(summary);
-
-        await addDoc(collection(firestoreDb, 'users', userId, 'weekly_insights'), {
-          week_start_date: startOfWeek,
-          summary_text: summary,
-          created_at: serverTimestamp(),
-        });
+        // Guard: a truncated/unparseable AI response can yield summary === undefined.
+        // Persisting that crashed addDoc ("Unsupported field value: undefined") and
+        // the outer catch then masked ALL dashboard history behind the sample-data
+        // fallback. Only persist a real string; otherwise show the welcome copy.
+        if (typeof summary === 'string' && summary.trim().length > 0) {
+          setWeeklySummary(summary);
+          try {
+            await addDoc(collection(firestoreDb, 'users', userId, 'weekly_insights'), {
+              week_start_date: startOfWeek,
+              summary_text: summary,
+              created_at: serverTimestamp(),
+            });
+          } catch (persistErr) {
+            // Persistence is best-effort — never let it take down the dashboard.
+            console.error('weekly_insights persist failed:', persistErr);
+          }
+        } else {
+          setWeeklySummary(t('dashboard_welcome_summary'));
+        }
       } else {
         setWeeklySummary(t('dashboard_welcome_summary'));
       }
