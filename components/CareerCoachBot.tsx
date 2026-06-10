@@ -4,6 +4,7 @@ import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import { careerCoach } from '../services/aiClient';
 import Avatar from './Avatar';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface CareerCoachBotProps {
     isOpen: boolean;
@@ -105,6 +106,7 @@ const renderFormattedMessage = (text: string) => {
 
 
 const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, session, profile, resumeText, t }) => {
+    useModalBehavior(onClose, isOpen);
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -157,7 +159,7 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-50 p-0 sm:p-4" onClick={handleOverlayClick}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end justify-center z-50 p-0 sm:p-4" onClick={handleOverlayClick}>
             <div className={`bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] sm:max-h-[700px] animate-slide-in-up`} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">

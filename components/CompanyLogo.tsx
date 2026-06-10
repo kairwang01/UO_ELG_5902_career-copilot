@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { getAuth } from 'firebase/auth';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { app } from '../lib/firebaseClient';
+import { useToast } from './Toast';
 
 interface CompanyLogoProps {
   url: string | null;
@@ -10,6 +11,7 @@ interface CompanyLogoProps {
 }
 
 const CompanyLogo: React.FC<CompanyLogoProps> = ({ url, size, onUpload }) => {
+  const { addToast } = useToast();
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,7 +43,7 @@ const CompanyLogo: React.FC<CompanyLogoProps> = ({ url, size, onUpload }) => {
       setLogoUrl(downloadUrl);
       onUpload?.(downloadUrl);
     } catch (error) {
-      alert((error as Error).message);
+      addToast((error as Error).message, 'error');
     } finally {
       setUploading(false);
     }

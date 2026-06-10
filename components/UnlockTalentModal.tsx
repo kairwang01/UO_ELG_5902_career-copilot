@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { UserProfile } from '../types';
 import { ethers } from 'ethers';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -29,7 +30,9 @@ const TALENT_NFT_ABI = [
 const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnlock, onClose, onUnlocked, navigateToBusinessPricing, t }) => {
     const [isPaying, setIsPaying] = useState(false);
     const [unlockFee, setUnlockFee] = useState<string>('...');
-    
+    const [error, setError] = useState<string | null>(null);
+    useModalBehavior(onClose);
+
     React.useEffect(() => {
         const fetchUnlockFee = async () => {
             if (typeof (window as any).ethereum === 'undefined') {
@@ -61,11 +64,12 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnl
             return;
         }
         if (!candidate.nft_token_id) {
-            alert("Error: Candidate does not have a valid NFT token ID.");
+            setError('This candidate does not have a valid verification token yet.');
             return;
         }
 
         setIsPaying(true);
+        setError(null);
         try {
             const provider = new ethers.BrowserProvider((window as any).ethereum);
             const signer = await provider.getSigner();
@@ -78,12 +82,12 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnl
 
             onUnlocked(candidate);
 
-        } catch (error: any) {
-            if (error.code === 'ACTION_REJECTED') {
-                alert("Transaction rejected. Please approve the transaction in your wallet to unlock the profile.");
+        } catch (err: any) {
+            if (err.code === 'ACTION_REJECTED') {
+                setError('Transaction rejected. Approve the transaction in your wallet to unlock the profile.');
             } else {
-                console.error("Unlock transaction failed:", error);
-                alert("An error occurred during the transaction. Please check your wallet and try again.");
+                console.error("Unlock transaction failed:", err);
+                setError('The transaction failed. Check your wallet and try again.');
             }
         } finally {
             setIsPaying(false);
@@ -116,6 +120,9 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnl
                         </div>
                      )}
 
+                    {error && (
+                        <p className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3" role="alert">{error}</p>
+                    )}
                 </div>
                  <div className="p-4 border-t bg-gray-50 rounded-b-xl grid grid-cols-2 gap-3">
                     <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50">Cancel</button>

@@ -6,7 +6,6 @@ import { useMarketingI18n } from '../hooks/useMarketingI18n';
 
 interface SiteLayoutProps {
   children: React.ReactNode;
-  showBanner?: boolean;
   /** Stable identifier asserted by the QA harness (locale-independent). */
   pageId: string;
   /** Marketing routes expose the QA marker; /workspace omits it (isolated tool shell). */
@@ -15,11 +14,10 @@ interface SiteLayoutProps {
 
 export const SiteLayout: React.FC<SiteLayoutProps> = ({
   children,
-  showBanner = true,
   pageId,
   marketingShell = true,
 }) => {
-  const { t, isLoaded } = useMarketingI18n();
+  const { isLoaded } = useMarketingI18n();
 
   const shellAttrs = marketingShell
     ? { 'data-beta-app': 'true' as const, 'data-beta-page': pageId }
@@ -39,11 +37,6 @@ export const SiteLayout: React.FC<SiteLayoutProps> = ({
 
   return (
     <div {...shellAttrs} className="beta-root min-h-screen flex flex-col overflow-x-hidden">
-      {showBanner && (
-        <div className="bg-[var(--site-surface-muted)] border-b border-[var(--site-border)] text-center py-1.5 text-xs text-[var(--site-text-muted)]">
-          {t('site_banner')}
-        </div>
-      )}
       <SiteHeader />
       <main className="flex-1">{children}</main>
       <SiteFooter />

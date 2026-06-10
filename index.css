@@ -189,11 +189,30 @@ html.dark body {
   50% { filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.9)); }
 }
 
+@keyframes toast-slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
 .animate-slide-in-up { animation: slide-in-up 0.6s ease-out forwards; }
+.animate-slide-in-right { animation: toast-slide-in 0.3s ease-out forwards; }
 .animate-pulse-mic { animation: pulse-mic 1.5s ease-in-out infinite; }
 .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
 .animate-aurora { animation: aurora 20s infinite linear; }
 .animate-holographic-text { animation: holographic-text 5s infinite linear; }
 .animate-crystal-glow { animation: crystal-glow 2.5s ease-in-out infinite; }
 .static-crystal-glow { filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.7)); }
+
+/* Respect OS-level reduced-motion: collapse entrance/looping animations and
+   long transitions so content appears immediately without movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

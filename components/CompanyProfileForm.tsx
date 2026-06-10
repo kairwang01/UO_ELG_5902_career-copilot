@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { AppSession as Session } from '../lib/data';
 import { data } from '../lib/data';
 import CompanyLogo from './CompanyLogo';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 type CompanyProfileData = {
     company_name?: string | null;
@@ -19,6 +20,7 @@ interface CompanyProfileFormProps {
 }
 
 const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ session, existingProfile, onClose, onSave, t }) => {
+    useModalBehavior(onClose);
     const [loading, setLoading] = useState(false);
     const [companyName, setCompanyName] = useState('');
     const [companyWebsite, setCompanyWebsite] = useState('');

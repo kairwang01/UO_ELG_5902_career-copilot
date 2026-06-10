@@ -1,8 +1,0 @@
-{
-  "name": "Career CoPilot",
-  "description": "Upload your resume, get an instant score, practice interviews, map your career path, and negotiate offers — all backed by AI that actually helps.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
-}

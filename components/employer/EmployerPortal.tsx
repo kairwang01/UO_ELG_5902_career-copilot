@@ -21,6 +21,7 @@ import {
   type JobPosting,
   type JobPostingWithCount,
 } from '../../lib/recruitingData';
+import { useToast } from '../Toast';
 
 interface KpiData {
   activeJobs: number;
@@ -68,6 +69,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
   // For edit-job flow: which job to edit, back to which page
   const [jobToEdit, setJobToEdit] = useState<JobPostingWithCount | null>(null);
+  const { addToast } = useToast();
   // For applicant funnel
   const [jobForFunnel, setJobForFunnel] = useState<JobPosting | null>(null);
   // Previous page before entering post-job/funnel views
@@ -148,6 +150,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   };
 
   const handlePostJobSaved = async () => {
+    addToast(jobToEdit ? 'Job updated.' : 'Job posted — it is now visible to candidates.', 'success');
     await fetchData();
     setJobToEdit(null);
     navigate('job-listings');

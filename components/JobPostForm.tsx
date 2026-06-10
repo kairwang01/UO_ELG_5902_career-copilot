@@ -4,6 +4,7 @@ import { generateJobDescription, analyzeSalary, checkInclusivity, formatJobDescr
 import type { InclusivitySuggestion, UserProfile } from '../types';
 import { saveJobPosting, type JobPosting } from '../lib/recruitingData';
 import { renderFormattedText } from './tools/ToolUtils';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface JobPostFormProps {
     session: Session;
@@ -56,6 +57,7 @@ const InclusivityModal: React.FC<{ suggestions: InclusivitySuggestion[]; onClose
 
 
 const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, onPostCreated, existingJob, t, embedded = false }) => {
+    useModalBehavior(onClose, !embedded);
     // Main form state
     const [jobTitle, setJobTitle] = useState('');
     const [location, setLocation] = useState('');

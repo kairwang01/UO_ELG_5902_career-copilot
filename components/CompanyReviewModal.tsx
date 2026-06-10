@@ -15,6 +15,7 @@
 import React, { useState } from "react";
 import { Star, X } from "lucide-react";
 import { useToast } from "./Toast";
+import { useModalBehavior } from "../hooks/useModalBehavior";
 import { submitCompanyReview } from "../lib/companyReviewsData";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -86,6 +87,7 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [verifyError, setVerifyError] = useState(false);
+  useModalBehavior(onClose);
 
   const charCount = text.trim().length;
   const canSubmit = rating >= 1 && charCount >= 20 && charCount <= 2000 && !submitting;
@@ -120,7 +122,7 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   return (
     /* Backdrop */
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
       aria-label={t("review_modal_title")}

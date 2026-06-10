@@ -12,10 +12,10 @@ import { firebaseFunctions, firestoreDb } from './lib/firebaseClient';
 import { data, type AppSession as Session } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
 import { useLocalization } from './hooks/useLocalization';
-import { ToastProvider } from './components/Toast';
-import { CreditsProvider, useCredits } from './contexts/CreditsContext';
-import { ApiStatusProvider, useApiStatus } from './contexts/ApiStatusContext';
-import { SettingsProvider, useSettings } from './contexts/SettingsContext';
+import { ToastProvider, useToast } from './components/Toast';
+import { useCredits } from './contexts/CreditsContext';
+import { useApiStatus } from './contexts/ApiStatusContext';
+import { useSettings } from './contexts/SettingsContext';
 import ApiStatusBanner from './components/ApiStatusBanner';
 import CreditModal from './components/modals/CreditModal';
 import { INITIAL_USER_CREDITS, TOOL_CREDIT_COSTS } from './config/credits';
@@ -29,7 +29,6 @@ import LoadingSpinner from './components/LoadingSpinner';
 import StagedLoader from './components/StagedLoader';
 import Auth from './components/Auth';
 import Account from './components/Account';
-import DevModeModal from './components/DevModeModal';
 import Dashboard from './components/dashboard/Dashboard';
 import {
   CareerPlanPage,
@@ -59,6 +58,24 @@ interface AppContentProps {
   siteShell?: boolean;
   entry?: 'workspace' | 'portal';
 }
+
+type DashboardView =
+  | 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications'
+  | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
+
+// Readable breadcrumb labels for the workspace header (mirrors Sidebar labels).
+const DASHBOARD_VIEW_LABELS: Record<DashboardView, string> = {
+  dashboard: 'Dashboard',
+  toolkit: 'Toolkit',
+  resume: 'Resume',
+  jobs: 'Jobs',
+  applications: 'Applications',
+  interview: 'Interview',
+  plan: 'Plan',
+  portfolio: 'Showcase',
+  account: 'Account',
+  credentials: 'Identity & Wallet',
+};
 
 const buildLocalProfile = (
   userId: string,
@@ -103,11 +120,10 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const [error, setError] = useState<string | null>(null);
   const [market, setMarket] = useState<string>(DEFAULT_MARKET);
   const [isRedirecting, setIsRedirecting] = useState<boolean>(false);
-  const [isDevModeOpen, setIsDevModeOpen] = useState(false);
   const [isUpdatingResume, setIsUpdatingResume] = useState(false);
   const [showHomePageOverride, setShowHomePageOverride] = useState(false);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
-  const [dashboardView, setDashboardView] = useState<'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials'>('dashboard');
+  const [dashboardView, setDashboardView] = useState<DashboardView>('dashboard');
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -116,7 +132,8 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const roleStateKeyRef = useRef<string | null>(null);
 
   const { credits, setCredits, deductCredits } = useCredits();
-  const { isAIMode, toggleAIMode } = useSettings();
+  const { addToast } = useToast();
+  const { isAIMode } = useSettings();
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const analysisCost = TOOL_CREDIT_COSTS['resume-analysis'];
 
@@ -244,10 +261,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
         setProfile(p);
         setResumeText(p.role === 'candidate' ? p.resume_text || '' : '');
 
-        let userCredits = p.credits || 0;
-        if (user.email === 'abhishek.ip@gmail.com' && userCredits < 5000) {
-          userCredits = 5000;
-        }
+        const userCredits = p.credits || 0;
         setCredits(userCredits);
 
         const pendingPlan = sessionStorage.getItem('pending_plan');
@@ -288,7 +302,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
       } else {
         // Profile not found — onUserCreated trigger may still be in flight.
         // Retry after 1.5s before giving up.
-        console.log("Profile not found, retrying in 1.5s...");
         await new Promise(r => setTimeout(r, 1500));
         const { data: retryData } = await data.profiles.get(user.id);
         if (retryData) {
@@ -405,29 +418,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
       await getProfile();
     } catch (error) {
       console.error('Error setting business plan:', (error as Error).message);
-      alert(`Failed to set plan: ${(error as Error).message}`);
-    }
-  };
-  
-  const handleOpenDevMode = () => {
-    if (!session) {
-      alert("Please sign in to use Dev Mode.");
-      return;
-    }
-    setIsDevModeOpen(true);
-  };
-
-  const handleSetPlanForDev = async (planKey: string): Promise<boolean> => {
-    if (!session) return false;
-    try {
-      const setSubscriptionStatus = httpsCallable(firebaseFunctions, 'setSubscriptionStatus');
-      await setSubscriptionStatus({ planKey });
-      await getProfile();
-      return true;
-    } catch (error) {
-      console.error("Error setting dev plan:", (error as Error).message);
-      alert(`Failed to set plan: ${(error as Error).message}`);
-      return false;
+      addToast(`Failed to set plan: ${(error as Error).message}`, 'error');
     }
   };
 
@@ -469,7 +460,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
         if (_event === 'SIGNED_IN') {
           const urlParams = new URLSearchParams(window.location.search);
           if (urlParams.get('payment_success') === 'true') {
-            alert("Payment successful! Your plan has been upgraded.");
+            addToast('Payment successful — your plan has been upgraded.', 'success');
             window.history.replaceState({}, document.title, window.location.pathname);
           }
           setView('home');
@@ -527,7 +518,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     const handleStripeRedirect = () => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('payment_cancelled') === 'true') {
-            alert('Your payment was cancelled. You can try again anytime from the pricing section.');
+            addToast('Payment cancelled. You can try again anytime from the pricing page.', 'info');
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     };
@@ -580,8 +571,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
 
 
   const userPlan = profile?.subscription_status || 'free';
-
-  const handleScrollToUpload = () => uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
 
   const performAnalysis = async () => {
     if (!resumeText.trim() && (!resumeImages || resumeImages.length === 0)) {
@@ -987,7 +976,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
             <ApiStatusBanner />
             <div className="flex items-center gap-3 ml-auto">
               <span className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 hidden sm:block">
-                {dashboardView}
+                {DASHBOARD_VIEW_LABELS[dashboardView]}
               </span>
               <AccountMenu
                 profile={profile}
@@ -1089,10 +1078,8 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     : `min-h-screen w-full font-sans bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200 ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
   return (
-    <ToastProvider>
       <div className={rootClass}>
         {isRedirecting && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4 animate-fade-in"><div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-8 text-center flex flex-col items-center"><h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Finalizing Your Upgrade!</h3><p className="mt-2 text-gray-600 dark:text-gray-300">To activate your new plan, we're opening our secure payment page.</p><div className="mt-6 w-12 h-12 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div></div></div>}
-        {isDevModeOpen && session && <DevModeModal session={session} profile={profile} onClose={() => setIsDevModeOpen(false)} onSetPlan={handleSetPlanForDev} />}
         <CreditModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} onConfirm={() => { setIsCreditModalOpen(false); performAnalysis(); }} onNavigateToPricing={navigateToPricing} cost={analysisCost} currentCredits={credits} />
         
         {isWorkspaceSessionLoading ? (
@@ -1106,7 +1093,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
         ) : showUnsupportedRole ? (
             renderRoleFallback()
         ) : siteShell ? (
-            <SiteLayout showBanner={false} pageId={isPortalEntry ? 'portal' : 'workspace'} marketingShell={false}>
+            <SiteLayout pageId={isPortalEntry ? 'portal' : 'workspace'} marketingShell={false}>
               {renderWorkspaceBody()}
             </SiteLayout>
         ) : (
@@ -1125,7 +1112,6 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
         {isAIMode && <button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white w-16 h-16 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 z-40 flex items-center justify-center" aria-label="Open AI Career Coach"><svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></button>}
         {isAIMode && isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} />}
       </div>
-    </ToastProvider>
   );
 };
 
@@ -1134,14 +1120,12 @@ interface AppWrapperProps {
   entry?: 'workspace' | 'portal';
 }
 
+// Api/Credits/Settings providers come from SiteApp (the only mount point), so the
+// workspace shares one state instance with the marketing shell instead of shadowing it.
 const AppWrapper: React.FC<AppWrapperProps> = ({ siteShell, entry }) => (
-    <ApiStatusProvider>
-        <CreditsProvider>
-            <SettingsProvider>
-                <AppContent siteShell={siteShell} entry={entry} />
-            </SettingsProvider>
-        </CreditsProvider>
-    </ApiStatusProvider>
+    <ToastProvider>
+        <AppContent siteShell={siteShell} entry={entry} />
+    </ToastProvider>
 );
 
 export default AppWrapper;

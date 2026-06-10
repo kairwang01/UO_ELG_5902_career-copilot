@@ -295,7 +295,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex flex-col items-center justify-center z-[100] p-4 animate-fade-in">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-[100] p-4 animate-fade-in">
       <div className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-md p-8 space-y-4 relative">
         <button 
           onClick={onClose}

@@ -28,10 +28,10 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = Math.random().toString(36).substr(2, 9);
+    const id = Math.random().toString(36).slice(2, 11);
     setToasts((prev) => [...prev, { id, type, message }]);
 
-    // Auto-remove after 3 seconds
+    // Auto-dismiss after 4 seconds
     setTimeout(() => {
       removeToast(id);
     }, 4000);
@@ -66,13 +66,6 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           </div>
         ))}
       </div>
-      <style>{`
-        @keyframes slide-in-right {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        .animate-slide-in-right { animation: slide-in-right 0.3s ease-out forwards; }
-      `}</style>
     </ToastContext.Provider>
   );
 };

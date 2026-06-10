@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useModalBehavior } from '../../hooks/useModalBehavior';
 
 interface CreditModalProps {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface CreditModalProps {
 }
 
 const CreditModal: React.FC<CreditModalProps> = ({ isOpen, onClose, onConfirm, onNavigateToPricing, cost, currentCredits }) => {
+  useModalBehavior(onClose, isOpen);
+
   if (!isOpen) return null;
 
   const hasEnoughCredits = currentCredits >= cost;

@@ -26,10 +26,6 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
       return false;
     }
 
-    if (session.user?.email === 'abhishek.ip@gmail.com') {
-      return true;
-    }
-
     const newCredits = credits - amount;
     if (newCredits < 0) return false;
 

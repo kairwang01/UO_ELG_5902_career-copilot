@@ -4,6 +4,7 @@ import type { ProfessionalEmailResult, UserProfile } from '../types';
 import LoadingSpinner from './LoadingSpinner';
 import { DEFAULT_MARKET } from '../config';
 import { useToast } from './Toast';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -19,6 +20,7 @@ interface OutreachModalProps {
 }
 
 const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription, employerProfile, onClose, t }) => {
+    useModalBehavior(onClose);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<ProfessionalEmailResult | null>(null);
@@ -62,7 +64,7 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
     };
 
     return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in" onClick={handleOverlayClick}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in" onClick={handleOverlayClick}>
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <div className="p-4 border-b dark:border-slate-700">
                     <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Draft Outreach Message for Candidate #{candidate.index + 1}</h3>

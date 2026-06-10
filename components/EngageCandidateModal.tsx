@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { UserProfile } from '../types';
 import ResumePreview from './ResumePreview';
 import OutreachModal from './OutreachModal';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -18,7 +19,9 @@ interface EngageCandidateModalProps {
 
 const EngageCandidateModal: React.FC<EngageCandidateModalProps> = ({ candidate, jobDescription, employerProfile, onClose, t }) => {
     const [isOutreachModalOpen, setIsOutreachModalOpen] = useState(false);
-    
+    // While the nested OutreachModal is open, Escape should close that layer, not this one.
+    useModalBehavior(onClose, !isOutreachModalOpen);
+
     const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) {
             onClose();
