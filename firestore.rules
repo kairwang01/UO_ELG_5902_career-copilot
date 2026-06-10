@@ -526,6 +526,15 @@ service cloud.firestore {
          resource.data.employer_id == request.auth.uid);
     }
 
+    // ---- company_reviews/{id} --------------------------------------------
+    // id format: `${employerId}_${candidateUid}`.
+    // Writes are server-only (Admin SDK via createCompanyReview callable).
+    // Any signed-in user may read (no PII — author_uid is never shown in UI).
+    match /company_reviews/{id} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // platform_config, usage_events, credit_ledger — and everything else — are
     // server-only (Admin SDK). Clients must use admin* Cloud Functions; no
     // direct reads/writes.

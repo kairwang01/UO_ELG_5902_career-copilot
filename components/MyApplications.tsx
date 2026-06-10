@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
-import { Briefcase, CheckCircle2, Circle, Search } from 'lucide-react';
+import { Briefcase, CheckCircle2, Circle, Search, Star } from 'lucide-react';
+import CompanyReviewModal from './CompanyReviewModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,7 @@ type AppStatus = 'Applied' | 'Interviewing' | 'Rejected' | 'Hired';
 interface ApplicationRow {
   id: string;
   job_title: string;
+  employer_id?: string;
   status: AppStatus;
   application_date?: { toMillis?: () => number; toDate?: () => Date };
   compatibility_score?: number | null;
@@ -163,6 +165,8 @@ interface CardProps {
 
 const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
   const isRejected = app.status === 'Rejected';
+  const isHired = app.status === 'Hired';
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   return (
     <div
@@ -201,6 +205,19 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
       {/* 3-step stepper */}
       <Stepper status={app.status} t={t} />
 
+      {/* Hired: review company CTA */}
+      {isHired && app.employer_id && (
+        <div className="mt-3 flex items-center justify-end">
+          <button
+            onClick={() => setReviewOpen(true)}
+            className="flex items-center gap-1 text-[10px] font-semibold text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 rounded-lg px-2 py-1 transition-colors"
+          >
+            <Star className="h-3 w-3" />
+            {t('review_company_button')}
+          </button>
+        </div>
+      )}
+
       {/* Rejected: process-ended label + find-similar CTA */}
       {isRejected && (
         <div className="mt-3 flex items-center justify-between gap-2">
@@ -215,6 +232,17 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
             {t('applications_find_similar')}
           </button>
         </div>
+      )}
+
+      {/* Review modal */}
+      {reviewOpen && app.employer_id && (
+        <CompanyReviewModal
+          employerId={app.employer_id}
+          companyLabel={t('review_company_generic')}
+          t={t}
+          onClose={() => setReviewOpen(false)}
+          onSubmitted={() => setReviewOpen(false)}
+        />
       )}
     </div>
   );

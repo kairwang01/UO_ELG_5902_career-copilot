@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Briefcase,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   MapPin,
   Search,
   SlidersHorizontal,
+  Star,
 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -14,6 +16,11 @@ import { listAllActiveJobPostings } from '../lib/recruitingData';
 import type { JobPosting } from '../lib/recruitingData';
 import type { AppSession as Session } from '../lib/data';
 import { useToast } from './Toast';
+import {
+  listCompanyReviews,
+  aggregateRating,
+  type CompanyReview,
+} from '../lib/companyReviewsData';
 
 interface BrowseJobsProps {
   session: Session | null;
@@ -63,6 +70,15 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   const [sortOrder, setSortOrder] = useState<'newest' | 'title_az'>('newest');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // ── employer reviews cache: Record<employerId, {avg, count, reviews}> ─────
+  // Keyed by employer_id, not job id. Populated lazily when a card expands.
+  type ReviewCache = Record<string, { avg: number; count: number; reviews: CompanyReview[] }>;
+  const [reviewCache, setReviewCache] = useState<ReviewCache>({});
+  const reviewCacheRef = useRef<ReviewCache>({});
+  const [reviewsExpanded, setReviewsExpanded] = useState<Record<string, boolean>>({});
+  // Track which employer ids are already being fetched to avoid duplicate requests.
+  const fetchingReviews = useRef<Set<string>>(new Set());
+
   // ── debounce keyword ──────────────────────────────────────────────────────
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleKeywordChange = (value: string) => {
@@ -111,6 +127,35 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
     })();
     return () => { cancelled = true; };
   }, [sessionUserId]);
+
+  // ── lazy-load reviews when a card expands ────────────────────────────────
+  // `reviewCache` is intentionally read via ref to avoid re-triggering this effect
+  // on every cache write (Rule 5 — never add unstable deps that cause re-fires).
+  useEffect(() => {
+    if (!expandedId) return;
+    const job = jobs.find((j) => j.id === expandedId);
+    const eid = job?.employer_id;
+    if (!eid) return;
+    if (reviewCacheRef.current[eid] !== undefined) return;  // already loaded
+    if (fetchingReviews.current.has(eid)) return;           // already in-flight
+    fetchingReviews.current.add(eid);
+    (async () => {
+      try {
+        const reviews = await listCompanyReviews(eid);
+        const agg = aggregateRating(reviews);
+        const entry = { ...agg, reviews };
+        reviewCacheRef.current = { ...reviewCacheRef.current, [eid]: entry };
+        setReviewCache((prev) => ({ ...prev, [eid]: entry }));
+      } catch {
+        // non-fatal — silently skip; card just won't show a rating chip
+        const entry = { avg: 0, count: 0, reviews: [] };
+        reviewCacheRef.current = { ...reviewCacheRef.current, [eid]: entry };
+        setReviewCache((prev) => ({ ...prev, [eid]: entry }));
+      } finally {
+        fetchingReviews.current.delete(eid);
+      }
+    })();
+  }, [expandedId, jobs]);
 
   // ── distinct locations ────────────────────────────────────────────────────
   const locations = useMemo(() => {
@@ -285,6 +330,11 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             const isApplied = appliedJobs.has(job.id);
             const isApplying = applyingId === job.id;
 
+            const eid = job.employer_id;
+            const employerReviews = eid ? (reviewCache[eid] ?? null) : null;
+            const showRatingChip = employerReviews && employerReviews.count > 0;
+            const reviewsOpen = eid ? (reviewsExpanded[eid] ?? false) : false;
+
             return (
               <article
                 key={job.id}
@@ -298,9 +348,18 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-slate-900 dark:text-slate-100 leading-snug">
-                        {job.title}
-                      </h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-slate-900 dark:text-slate-100 leading-snug">
+                          {job.title}
+                        </h3>
+                        {/* Rating chip — shown when employer has reviews */}
+                        {showRatingChip && (
+                          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-full px-2 py-0.5 whitespace-nowrap">
+                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            {employerReviews!.avg.toFixed(1)}&nbsp;({employerReviews!.count})
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         {job.location && (
                           <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
@@ -360,6 +419,70 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                             : t('browse_jobs_apply')}
                       </button>
                     </div>
+
+                    {/* ── Reviews section ── */}
+                    {employerReviews && employerReviews.count > 0 && (
+                      <div className="mt-5 border-t border-slate-100 dark:border-slate-700 pt-4">
+                        {/* Collapsible header */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!eid) return;
+                            setReviewsExpanded((prev) => ({ ...prev, [eid]: !prev[eid] }));
+                          }}
+                          className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+                        >
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          {t('browse_jobs_reviews_section')}
+                          <span className="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">
+                            {employerReviews.avg.toFixed(1)} / 5 &middot; {employerReviews.count}
+                          </span>
+                          {reviewsOpen
+                            ? <ChevronUp className="h-3.5 w-3.5 ml-auto text-slate-400" />
+                            : <ChevronRight className="h-3.5 w-3.5 ml-auto text-slate-400" />
+                          }
+                        </button>
+
+                        {reviewsOpen && (
+                          <div className="mt-3 space-y-3">
+                            {employerReviews.reviews.slice(0, 3).map((rv, idx) => (
+                              <div
+                                key={idx}
+                                className="rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-3 py-3"
+                              >
+                                {/* Stars row */}
+                                <div className="flex items-center gap-1 mb-1.5">
+                                  {[1, 2, 3, 4, 5].map((s) => (
+                                    <Star
+                                      key={s}
+                                      className={`h-3.5 w-3.5 ${
+                                        s <= rv.rating
+                                          ? 'fill-yellow-400 text-yellow-400'
+                                          : 'fill-none text-slate-300 dark:text-slate-600'
+                                      }`}
+                                    />
+                                  ))}
+                                  {rv.verified && (
+                                    <span className="ml-2 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-full px-2 py-0.5">
+                                      {t('review_verified_badge')}
+                                    </span>
+                                  )}
+                                  {rv.created_at && (
+                                    <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500">
+                                      {new Date(rv.created_at).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                                  {rv.text}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </article>
