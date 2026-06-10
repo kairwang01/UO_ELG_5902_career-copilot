@@ -172,7 +172,15 @@ export interface ModelEntry {
 }
 
 export const adminListModels = () =>
-  call<Record<string, never>, { models: ModelEntry[] }>('adminListModels')({}).then((r) => r.data);
+  call<Record<string, never>, { models: ModelEntry[]; defaultModelId: string | null }>(
+    'adminListModels',
+  )({}).then((r) => r.data);
+
+/** Super-only: set the platform default model for auto-routing. */
+export const adminSetDefaultModel = (id: string) =>
+  call<{ id: string }, { ok: true; defaultModelId: string }>(
+    'adminSetDefaultModel',
+  )({ id }).then((r) => r.data);
 
 export const adminUpsertModel = (model: ModelEntry) =>
   call<{ model: ModelEntry }, { models: ModelEntry[] }>('adminUpsertModel')({ model }).then(

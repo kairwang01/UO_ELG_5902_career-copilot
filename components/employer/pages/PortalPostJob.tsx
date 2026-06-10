@@ -30,7 +30,7 @@ export function PortalPostJob({
 }: PortalPostJobProps) {
   return (
     <>
-      <PortalTopBar title={existingJob ? 'Edit Job Posting' : 'Post a Job'} darkMode={darkMode} />
+      <PortalTopBar title={existingJob ? t('portal_title_edit_job') : t('portal_nav_post_job')} darkMode={darkMode} />
       <JobPostForm
         session={session}
         profile={profile}

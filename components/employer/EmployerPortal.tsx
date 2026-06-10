@@ -168,16 +168,16 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
   const getPageTitle = () => {
     switch (currentPage) {
-      case 'dashboard': return 'Dashboard';
-      case 'post-job': return jobToEdit ? 'Edit Job Posting' : 'Post a Job';
-      case 'job-listings': return 'My Job Listings';
-      case 'talent-pool': return 'Discover Talent';
-      case 'shortlist': return 'Shortlist';
-      case 'agency-hub': return 'Agency Hub';
-      case 'company-profile': return 'Organization Profile';
-      case 'account-settings': return 'Account Settings';
-      case 'billing': return 'Billing & Plan';
-      default: return 'Dashboard';
+      case 'dashboard': return t('portal_nav_dashboard');
+      case 'post-job': return jobToEdit ? t('portal_title_edit_job') : t('portal_nav_post_job');
+      case 'job-listings': return t('portal_nav_job_listings');
+      case 'talent-pool': return t('portal_nav_discover');
+      case 'shortlist': return t('portal_nav_shortlist');
+      case 'agency-hub': return t('portal_nav_agency_hub');
+      case 'company-profile': return t('portal_nav_org_profile');
+      case 'account-settings': return t('portal_nav_account');
+      case 'billing': return t('portal_nav_billing');
+      default: return t('portal_nav_dashboard');
     }
   };
 
@@ -209,7 +209,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
             t={t}
           />
           <main className="flex-1 overflow-y-auto">
-            <PortalTopBar title={`Applicants — ${jobForFunnel.title}`} darkMode={darkMode} />
+            <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
             <div className="max-w-[1088px] mx-auto p-8">
               <ApplicantFunnel
                 job={jobForFunnel}
@@ -248,6 +248,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               darkMode={darkMode}
               onNavigate={navigate}
               companyName={profile.company_name || ''}
+              t={t}
             />
           )}
 
@@ -273,6 +274,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               onEditJob={handleEditJob}
               onViewApplicants={handleViewApplicants}
               onNavigate={navigate}
+              t={t}
             />
           )}
 
@@ -295,7 +297,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
           {currentPage === 'agency-hub' && (
             <>
-              <PortalTopBar title="Agency Hub" darkMode={darkMode} />
+              <PortalTopBar title={t('portal_nav_agency_hub')} darkMode={darkMode} />
               <div className={`max-w-[1088px] mx-auto p-8 ${darkMode ? 'text-white' : ''}`}>
                 <AgencyHub session={session} profile={profile} t={t} />
               </div>

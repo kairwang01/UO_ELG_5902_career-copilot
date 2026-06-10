@@ -36,6 +36,7 @@ import {
   adminSavePromptDraft,
   adminSetAdmin,
   adminSetAdminRole,
+  adminSetDefaultModel,
   adminSetSubscription,
   adminTestModel,
   adminUpdateLlmConfig,
@@ -98,6 +99,15 @@ const STRINGS: Record<string, string> = {
   'admin.model.priority_hint': 'Lower = higher priority. Leave blank for default.',
   'admin.model.test_key': 'Test',
   'admin.model.masked_keys': 'Saved keys (masked)',
+  'admin.model.default_badge': 'Default',
+  'admin.model.set_default_btn': 'Set as default',
+  'admin.set_default_confirm': 'Set this model as the platform routing default? All auto-routed requests will use it.',
+  'admin.model.set_default_ok': 'Default model updated.',
+  'admin.dashboard.model_routing_title': 'Model Routing / 模型路由',
+  'admin.dashboard.model_routing_default': 'Default model',
+  'admin.dashboard.model_routing_enabled': 'Enabled models',
+  'admin.dashboard.model_routing_chain': 'Fallback chain',
+  'admin.dashboard.model_routing_none': 'Not configured',
   'admin.access.reviewer_only': 'You have reviewer access. Only Dashboard and Audit Log are available.',
 };
 const t = (key: string) => STRINGS[key] ?? key;
@@ -141,6 +151,8 @@ const AdminPortal: React.FC = () => {
   // models tab
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
+  const [setDefaultFeedback, setSetDefaultFeedback] = useState<{ ok?: string; err?: string } | null>(null);
   // null = list view; 'new' = blank add form; ModelEntry = edit form
   const [modelForm, setModelForm] = useState<ModelEntry | 'new' | null>(null);
   const [modelSaving, setModelSaving] = useState(false);
@@ -302,6 +314,7 @@ const AdminPortal: React.FC = () => {
     try {
       const res = await adminListModels();
       setModels(res.models);
+      setDefaultModelId(res.defaultModelId ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load models');
     } finally {
@@ -338,7 +351,7 @@ const AdminPortal: React.FC = () => {
 
   useEffect(() => {
     if (!isAdmin) return;
-    if (tab === 'dashboard') loadDashboard();
+    if (tab === 'dashboard') { loadDashboard(); loadModels(); }
     if (tab === 'ai') { loadLlm(); loadModels(); }
     if (tab === 'prompts') loadPrompts();
     if (tab === 'quotas') loadQuotas();
@@ -612,6 +625,18 @@ const AdminPortal: React.FC = () => {
     }
   };
 
+  const setModelAsDefault = async (id: string) => {
+    if (!window.confirm(t('admin.set_default_confirm'))) return;
+    setSetDefaultFeedback(null);
+    try {
+      const res = await adminSetDefaultModel(id);
+      setDefaultModelId(res.defaultModelId);
+      setSetDefaultFeedback({ ok: t('admin.model.set_default_ok') });
+    } catch (e) {
+      setSetDefaultFeedback({ err: e instanceof Error ? e.message : 'Failed to set default model' });
+    }
+  };
+
   // ── auth gates ────────────────────────────────────────────────────────────
 
   if (!session) {
@@ -652,7 +677,7 @@ const AdminPortal: React.FC = () => {
   const tabs = allTabs.filter((t) => t.visible).map(({ id, label }) => ({ id, label }));
 
   const refreshForTab = () => {
-    if (tab === 'dashboard') loadDashboard();
+    if (tab === 'dashboard') { loadDashboard(); loadModels(); }
     else if (tab === 'ai') { loadLlm(); loadModels(); }
     else if (tab === 'prompts') loadPrompts();
     else if (tab === 'quotas') loadQuotas();
@@ -719,14 +744,14 @@ const AdminPortal: React.FC = () => {
                     {
                       label: 'Quotas',
                       value: dashboard.quotas?.enabled === false ? 'Off' : 'Enforced',
-                      accent: dashboard.quotas?.enabled === false ? 'text-amber-400' : 'text-emerald-700',
+                      accent: dashboard.quotas?.enabled === false ? 'text-amber-400' : 'text-emerald-700 dark:text-emerald-400',
                     },
                   ].map((c) => (
                     <Card key={c.label} className="p-5">
-                      <p className="text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                      <p className="text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                         {c.label}
                       </p>
-                      <p className={`text-2xl font-bold mt-1.5 tabular-nums ${c.accent ?? ''}`}>
+                      <p className={`text-2xl font-bold mt-1.5 tabular-nums text-gray-900 dark:text-gray-100 ${c.accent ?? ''}`}>
                         {c.value}
                       </p>
                     </Card>
@@ -742,9 +767,74 @@ const AdminPortal: React.FC = () => {
                   </p>
                 )}
 
+                {/* Model Routing status card */}
+                {modelsLoaded && (
+                  <Card className="p-5">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">
+                      {t('admin.dashboard.model_routing_title')}
+                    </p>
+                    <div className="flex flex-wrap gap-6 items-start">
+                      {/* Default model */}
+                      <div className="min-w-[140px]">
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
+                          {t('admin.dashboard.model_routing_default')}
+                        </p>
+                        {defaultModelId ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              {models.find((m) => m.id === defaultModelId)?.label ?? defaultModelId}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">{t('admin.dashboard.model_routing_none')}</span>
+                        )}
+                      </div>
+
+                      {/* Enabled models count */}
+                      <div className="min-w-[120px]">
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
+                          {t('admin.dashboard.model_routing_enabled')}
+                        </p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
+                          {models.filter((m) => m.enabled).length}
+                          <span className="font-normal text-gray-400 text-xs"> / {models.length}</span>
+                        </p>
+                      </div>
+
+                      {/* Fallback chain for the default model */}
+                      {defaultModelId && (() => {
+                        const defaultModel = models.find((m) => m.id === defaultModelId);
+                        const chain = defaultModel?.fallbackChain ?? [];
+                        if (chain.length === 0) return null;
+                        return (
+                          <div>
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
+                              {t('admin.dashboard.model_routing_chain')}
+                            </p>
+                            <div className="flex items-center flex-wrap gap-1 text-xs">
+                              <span className="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-medium">
+                                {defaultModel?.label ?? defaultModelId}
+                              </span>
+                              {chain.map((chainId) => (
+                                <React.Fragment key={chainId}>
+                                  <span className="text-gray-400" aria-hidden="true">→</span>
+                                  <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded font-mono">
+                                    {models.find((m) => m.id === chainId)?.label ?? chainId}
+                                  </span>
+                                </React.Fragment>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </Card>
+                )}
+
                 {/* 7-day breakdown */}
                 <Card>
-                  <div className="px-5 py-4 border-b border-gray-200">
+                  <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
                     <SectionHeading>7-day usage by tool</SectionHeading>
                   </div>
                   <div className="overflow-x-auto">
@@ -753,25 +843,25 @@ const AdminPortal: React.FC = () => {
                     ) : (
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-left border-b border-gray-200">
-                            <th className="px-5 py-3 text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                          <tr className="text-left border-b border-gray-200 dark:border-gray-700">
+                            <th className="px-5 py-3 text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                               Tool
                             </th>
-                            <th className="px-5 py-3 text-[11px] font-medium tracking-wide text-gray-500 uppercase text-right">
+                            <th className="px-5 py-3 text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase text-right">
                               Runs
                             </th>
-                            <th className="px-5 py-3 text-[11px] font-medium tracking-wide text-gray-500 uppercase text-right">
+                            <th className="px-5 py-3 text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase text-right">
                               Credits
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                           {Object.entries(dashboard.week_tool_breakdown).map(
                             ([tool, stats]: [string, { runs: number; credits: number }]) => (
-                              <tr key={tool} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-5 py-3 font-mono text-xs text-gray-700">{tool}</td>
-                                <td className="px-5 py-3 text-right tabular-nums">{stats.runs}</td>
-                                <td className="px-5 py-3 text-right tabular-nums text-gray-600">
+                              <tr key={tool} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <td className="px-5 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">{tool}</td>
+                                <td className="px-5 py-3 text-right tabular-nums text-gray-800 dark:text-gray-200">{stats.runs}</td>
+                                <td className="px-5 py-3 text-right tabular-nums text-gray-600 dark:text-gray-400">
                                   {stats.credits}
                                 </td>
                               </tr>
@@ -785,27 +875,27 @@ const AdminPortal: React.FC = () => {
 
                 {/* Recent events */}
                 <Card>
-                  <div className="px-5 py-4 border-b border-gray-200">
+                  <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
                     <SectionHeading>Recent events</SectionHeading>
                   </div>
                   <div className="p-4">
                     {dashboard.recent_events.length === 0 ? (
                       <EmptyState message="No recent events." />
                     ) : (
-                      <ul className="text-[11px] font-mono space-y-1 text-gray-600 max-h-52 overflow-y-auto">
+                      <ul className="text-[11px] font-mono space-y-1 text-gray-600 dark:text-gray-400 max-h-52 overflow-y-auto">
                         {dashboard.recent_events.map((ev) => (
                           <li
                             key={String(ev.id)}
-                            className="flex gap-2 py-0.5 border-b border-gray-200/40 last:border-0"
+                            className="flex gap-2 py-0.5 border-b border-gray-200/40 dark:border-gray-700/40 last:border-0"
                           >
-                            <span className="text-gray-500 shrink-0">
+                            <span className="text-gray-500 dark:text-gray-500 shrink-0">
                               {String(ev.created_at).slice(0, 19).replace('T', ' ')}
                             </span>
-                            <span className="text-gray-500 shrink-0">
+                            <span className="text-gray-500 dark:text-gray-500 shrink-0">
                               {String(ev.uid).slice(0, 8)}…
                             </span>
-                            <span className="text-blue-600 shrink-0">{String(ev.tool)}</span>
-                            <span className="ml-auto text-gray-500">{String(ev.credit_cost)} cr</span>
+                            <span className="text-blue-600 dark:text-blue-400 shrink-0">{String(ev.tool)}</span>
+                            <span className="ml-auto text-gray-500 dark:text-gray-500">{String(ev.credit_cost)} cr</span>
                           </li>
                         ))}
                       </ul>
@@ -1535,7 +1625,7 @@ const AdminPortal: React.FC = () => {
 
               {/* ── MODEL LIST TABLE ──────────────────────────────────────── */}
               <Card>
-                <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+                <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
                   <SectionHeading>Configured models</SectionHeading>
                   <button
                     type="button"
@@ -1545,6 +1635,30 @@ const AdminPortal: React.FC = () => {
                     Refresh
                   </button>
                 </div>
+                {setDefaultFeedback?.ok && (
+                  <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400">
+                    <span aria-hidden="true">✓</span>
+                    {setDefaultFeedback.ok}
+                    <button
+                      type="button"
+                      onClick={() => setSetDefaultFeedback(null)}
+                      className="ml-auto text-emerald-600 hover:text-emerald-800 focus:outline-none"
+                      aria-label="Dismiss"
+                    >✕</button>
+                  </div>
+                )}
+                {setDefaultFeedback?.err && (
+                  <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+                    <span aria-hidden="true">✕</span>
+                    {setDefaultFeedback.err}
+                    <button
+                      type="button"
+                      onClick={() => setSetDefaultFeedback(null)}
+                      className="ml-auto text-red-600 hover:text-red-800 focus:outline-none"
+                      aria-label="Dismiss"
+                    >✕</button>
+                  </div>
+                )}
 
                 {!modelsLoaded ? (
                   <div className="flex items-center gap-2 px-5 py-8 text-sm text-gray-500">
@@ -1557,26 +1671,29 @@ const AdminPortal: React.FC = () => {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Label / id
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Provider
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Model name
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Tier
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Key
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Status
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Default
+                          </th>
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Connectivity
                           </th>
                           <th className="px-5 py-3" />
@@ -1650,12 +1767,34 @@ const AdminPortal: React.FC = () => {
                                 <span
                                   className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded ${
                                     m.enabled
-                                      ? 'bg-emerald-50 text-emerald-800'
-                                      : 'bg-gray-100 text-gray-500'
+                                      ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                      : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
                                   }`}
                                 >
                                   {m.enabled ? 'enabled' : 'disabled'}
                                 </span>
+                              </td>
+
+                              {/* Default column — super only */}
+                              <td className="px-5 py-3 whitespace-nowrap">
+                                {m.id === defaultModelId ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700">
+                                    <span aria-hidden="true">★</span>
+                                    {t('admin.model.default_badge')}
+                                  </span>
+                                ) : (
+                                  isSuper && (
+                                    <button
+                                      type="button"
+                                      disabled={!m.enabled}
+                                      onClick={() => setModelAsDefault(m.id)}
+                                      className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 transition-colors focus:outline-none focus:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                                      title={!m.enabled ? 'Model must be enabled to set as default' : ''}
+                                    >
+                                      {t('admin.model.set_default_btn')}
+                                    </button>
+                                  )
+                                )}
                               </td>
 
                               {/* Connectivity column */}

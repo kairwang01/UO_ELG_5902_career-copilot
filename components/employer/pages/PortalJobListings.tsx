@@ -25,6 +25,7 @@ interface PortalJobListingsProps {
   onEditJob: (job: JobPostingWithCount) => void;
   onViewApplicants: (job: JobPostingWithCount) => void;
   onNavigate: (page: PortalPage) => void;
+  t?: (key: string) => string;
 }
 
 function StatCard({
@@ -59,7 +60,9 @@ export function PortalJobListings({
   onEditJob,
   onViewApplicants,
   onNavigate,
+  t: tProp,
 }: PortalJobListingsProps) {
+  const t = tProp ?? ((k: string) => k);
   const dm = darkMode;
   const [showExpired, setShowExpired] = useState(false);
   const [showAllActive, setShowAllActive] = useState(false);
@@ -68,7 +71,7 @@ export function PortalJobListings({
   const closedJobs = jobPostings.filter((j) => !j.is_active);
   const displayedActive = showAllActive ? activeJobs : activeJobs.slice(0, 5);
 
-  const statusLabel = (job: JobPostingWithCount) => (job.is_active ? 'Active' : 'Closed');
+  const statusLabel = (job: JobPostingWithCount) => (job.is_active ? t('portal_status_active') : t('portal_status_closed'));
   const statusStyle = (job: JobPostingWithCount) =>
     job.is_active
       ? 'bg-teal-50 text-teal-800 border-teal-200'
@@ -95,7 +98,7 @@ export function PortalJobListings({
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
-              Posted {new Date(job.created_at).toLocaleDateString()}
+              {t('employer_dashboard_posted_on')} {new Date(job.created_at).toLocaleDateString()}
             </span>
           </div>
         </div>
@@ -106,7 +109,7 @@ export function PortalJobListings({
               {job.applicant_count}
             </div>
             <div className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-600'} group-hover:text-[#1d4ed8] group-hover:underline transition-colors`}>
-              Applicants
+              {t('employer_dashboard_applicants_label')}
             </div>
           </button>
 
@@ -118,7 +121,7 @@ export function PortalJobListings({
               }`}
             >
               <Edit className="w-4 h-4" />
-              Edit
+              {t('employer_dashboard_edit_button')}
             </button>
             <span className={`px-3 py-1 rounded-full text-xs font-medium border text-center ${statusStyle(job)}`}>
               {statusLabel(job)}
@@ -131,7 +134,7 @@ export function PortalJobListings({
 
   return (
     <>
-      <PortalTopBar title="My Job Listings" darkMode={dm} />
+      <PortalTopBar title={t('portal_nav_job_listings')} darkMode={dm} />
       <div className="max-w-[1088px] mx-auto p-8">
 
         {loading && <p className={dm ? 'text-gray-400' : 'text-gray-500'}>Loading…</p>}
@@ -140,15 +143,15 @@ export function PortalJobListings({
         {/* Stats — real data for first 3; remaining 3 columns don't exist yet, show 0 */}
         {!loading && (
           <div className="mb-8">
-            <h2 className={`text-base font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>Quick Stats</h2>
+            <h2 className={`text-base font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_listings_quick_stats')}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <StatCard title="Active Job Posts" value={kpiData.activeJobs} Icon={Briefcase} darkMode={dm} />
-              <StatCard title="Total Applicants" value={kpiData.totalApplicants} Icon={Users} darkMode={dm} />
-              <StatCard title="New Applicants (7d)" value={kpiData.newApplicants} Icon={TrendingUp} darkMode={dm} />
+              <StatCard title={t('portal_kpi_active_posts')} value={kpiData.activeJobs} Icon={Briefcase} darkMode={dm} />
+              <StatCard title={t('kpi_total_applicants')} value={kpiData.totalApplicants} Icon={Users} darkMode={dm} />
+              <StatCard title={t('portal_kpi_new_applicants_7d')} value={kpiData.newApplicants} Icon={TrendingUp} darkMode={dm} />
               {/* These columns don't exist in the DB yet — show 0 as placeholder */}
-              <StatCard title="Interviews Scheduled (7d)" value={0} Icon={UserCheck} darkMode={dm} />
-              <StatCard title="Offers Sent" value={0} Icon={CheckCircle} darkMode={dm} />
-              <StatCard title="Offers Accepted" value={0} Icon={ThumbsUp} darkMode={dm} />
+              <StatCard title={t('portal_listings_interviews_scheduled')} value={0} Icon={UserCheck} darkMode={dm} />
+              <StatCard title={t('portal_listings_offers_sent')} value={0} Icon={CheckCircle} darkMode={dm} />
+              <StatCard title={t('portal_listings_offers_accepted')} value={0} Icon={ThumbsUp} darkMode={dm} />
             </div>
           </div>
         )}
@@ -158,7 +161,7 @@ export function PortalJobListings({
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className={`text-base font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>
-                Active &amp; Recent Postings
+                {t('portal_listings_active_recent')}
               </h2>
               <span className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
                 {activeJobs.length} job{activeJobs.length !== 1 ? 's' : ''}
@@ -167,12 +170,12 @@ export function PortalJobListings({
 
             {activeJobs.length === 0 ? (
               <div className="text-center py-12">
-                <p className={`text-sm mb-4 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>No active postings.</p>
+                <p className={`text-sm mb-4 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_listings_no_active')}</p>
                 <button
                   onClick={() => onNavigate('post-job')}
                   className="px-5 py-2 bg-[#1d4ed8] text-white rounded-lg text-sm font-medium hover:bg-[#1a45c9] transition-colors"
                 >
-                  Post a Job
+                  {t('portal_nav_post_job')}
                 </button>
               </div>
             ) : (
@@ -188,7 +191,7 @@ export function PortalJobListings({
                   dm ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {showAllActive ? 'Show Less' : `Show ${activeJobs.length - 5} More`}
+                {showAllActive ? t('portal_listings_show_less') : t('portal_listings_show_more').replace('{n}', String(activeJobs.length - 5))}
                 {showAllActive ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
             )}
@@ -206,7 +209,7 @@ export function PortalJobListings({
             >
               <div className="flex items-center gap-3">
                 <h2 className={`text-base font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>
-                  Expired Job Postings
+                  {t('portal_listings_expired')}
                 </h2>
                 <span className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>({closedJobs.length})</span>
               </div>
