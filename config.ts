@@ -7,13 +7,12 @@ export const SUPPORTED_MARKETS = [
   'Canada',
   'United States',
   'United Kingdom',
-  'Australia',
-  'Japan',
-  'Vietnam',
   'Germany',
   'France',
+  'Japan',
+  'Vietnam',
   'Singapore',
-  'United Arab Emirates',
+  'Australia',
 ];
 
 // NOTE: These are placeholder test links. Replace them with your actual Stripe links.

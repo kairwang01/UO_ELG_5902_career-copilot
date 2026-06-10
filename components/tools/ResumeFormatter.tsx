@@ -1,12 +1,24 @@
 
 import React, { useState } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Info } from 'lucide-react';
 import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { DownloadButtons, renderFormattedText } from './ToolUtils';
 import { SUPPORTED_MARKETS } from '../../config';
+
+const MARKET_HINT_KEY: Record<string, string> = {
+  'Canada':         'resume_market_hint_canada',
+  'United States':  'resume_market_hint_united_states',
+  'United Kingdom': 'resume_market_hint_united_kingdom',
+  'Germany':        'resume_market_hint_germany',
+  'France':         'resume_market_hint_france',
+  'Japan':          'resume_market_hint_japan',
+  'Vietnam':        'resume_market_hint_vietnam',
+  'Singapore':      'resume_market_hint_singapore',
+  'Australia':      'resume_market_hint_australia',
+};
 
 interface ResumeFormatterProps {
   resumeText: string;
@@ -51,6 +63,12 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
         >
           {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
+        {MARKET_HINT_KEY[targetMarket] && (
+          <div className="mt-2 flex items-start gap-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2">
+            <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500 dark:text-blue-400" aria-hidden="true" />
+            <p className="text-xs text-blue-700 dark:text-blue-300">{t(MARKET_HINT_KEY[targetMarket])}</p>
+          </div>
+        )}
       </div>
 
       <div className="relative flex items-start">

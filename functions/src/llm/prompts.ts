@@ -227,6 +227,24 @@ export const PROMPT_TEMPLATES: Record<string, string> = {
         {{resumeText}}
 
         Produce only the final, localized document text.
+
+        --- COUNTRY FORMAT RULES ---
+        Apply the following country-specific conventions when {{marketName}} matches:
+
+        **United States / Canada:** 1–2 page reverse-chronological resume. Omit photo, age, and marital status. Open each bullet with a strong action verb. Quantify achievements wherever possible (%, $, headcount). Include a dedicated Skills section. ATS-friendly plain section headers.
+
+        **United Kingdom:** 2-page CV format. Open with a 'Personal Statement' (3–4 lines). No photo. Use British spelling (e.g. "organised", "programme"). Reverse-chronological work history.
+
+        **Germany:** Lebenslauf — tabular/structured CV layout. Include a professional passport-style photo (top-right). Personal details block: full name, date and place of birth, nationality, marital status. End with handwritten-style signature line and date. Formal, concise register. List education before work experience if recently graduated.
+
+        **France:** CV, 1 page preferred (2 max for senior profiles). Photo common (top-right). Include 'État civil' block: name, date/place of birth, nationality. Formal register. Reverse-chronological. Hobbies/interests section acceptable.
+
+        **Japan:** 履歴書 (rirekisho) structure. Standardised personal-data header including photo box. Education and work history in strict chronological order (oldest first) in table format. Include 志望動機 (motivation statement) section. Use polite humble register (丁寧語/謙譲語). Append a 職務経歴書-style achievements summary for mid-senior candidates. Dates in Japanese era or YYYY/MM format.
+
+        **Vietnam:** 1–2 pages. Photo common. Personal details (DOB, gender, address) accepted. Emphasise certifications, technical skills, and English proficiency level explicitly (e.g. "IELTS 6.5"). Reverse-chronological.
+
+        **Singapore / Australia:** Western-style professional resume. No photo. 2–3 pages acceptable (AU). Include a work-rights / visa status line when the candidate is not a citizen or permanent resident. Reverse-chronological. ATS-friendly formatting.
+        --- END COUNTRY FORMAT RULES ---
       `,
 
   calculateCompatibility: `
