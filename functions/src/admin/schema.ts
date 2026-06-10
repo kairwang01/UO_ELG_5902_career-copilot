@@ -118,6 +118,14 @@ export interface QuotasDoc {
    * gap is the model tier. Admins may lower this for a harder boundary.
    */
   free_max_output_tokens?: number;
+  /**
+   * Mock-interview gate (post-MVP tier decision is a config flip, not a deploy):
+   * mi_min_tier: who may RUN the timed simulation ('paid' default).
+   * mi_report_unlock_credits: price for a non-included tier to unlock the full
+   * report (deliberately expensive — the anchor that makes upgrading look good).
+   */
+  mi_min_tier?: "free" | "paid";
+  mi_report_unlock_credits?: number;
   enabled?: boolean;
   updated_at?: string;
   updated_by?: string;

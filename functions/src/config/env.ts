@@ -27,4 +27,6 @@ export {
   getAllPromptOverrides,
   getDefaultModelId,
   getFreeMaxOutputTokens,
+  getMockInterviewMinTier,
+  getMiReportUnlockCredits,
 } from "../admin/platformConfig";

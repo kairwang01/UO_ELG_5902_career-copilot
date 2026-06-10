@@ -316,6 +316,25 @@ export const adminUpdateQuotasFunction = onCall({ invoker: "public" }, async (re
     patch.free_max_output_tokens = v;
   }
 
+  // Mock-interview gate: which tier may run the simulation (post-MVP decision knob).
+  if (data.mi_min_tier !== undefined && data.mi_min_tier !== null) {
+    if (data.mi_min_tier !== "free" && data.mi_min_tier !== "paid") {
+      throw new HttpsError("invalid-argument", 'mi_min_tier must be "free" or "paid".');
+    }
+    patch.mi_min_tier = data.mi_min_tier;
+  }
+  // Report unlock price for non-included tiers (0 = free unlock).
+  if (data.mi_report_unlock_credits !== undefined && data.mi_report_unlock_credits !== null) {
+    const v = Number(data.mi_report_unlock_credits);
+    if (!Number.isInteger(v) || v < 0 || v > 100000) {
+      throw new HttpsError(
+        "invalid-argument",
+        "mi_report_unlock_credits must be an integer between 0 and 100000."
+      );
+    }
+    patch.mi_report_unlock_credits = v;
+  }
+
   await db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.quotas).set(patch, { merge: true });
   await refreshPlatformCaches();
   await logAdminAction({

@@ -155,6 +155,18 @@ export function getFreeMaxOutputTokens(): number {
   return 8192;
 }
 
+/** Minimum tier allowed to run the timed mock-interview simulation (default: paid). */
+export function getMockInterviewMinTier(): "free" | "paid" {
+  return quotasCache?.mi_min_tier === "free" ? "free" : "paid";
+}
+
+/** Credit price for a non-included tier to unlock a finished interview report (default: 500). */
+export function getMiReportUnlockCredits(): number {
+  const v = quotasCache?.mi_report_unlock_credits;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.floor(v);
+  return 500;
+}
+
 /**
  * Returns the effective model registry (Firestore if non-empty, else defaults).
  * Requires ensurePlatformCaches() to have been called first (models.ts calls it

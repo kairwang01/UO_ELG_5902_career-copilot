@@ -25,18 +25,33 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
+import * as admin from "firebase-admin";
 import { requireAuth } from "../middleware/auth";
-import { resolveProvider } from "../llm/models";
+import { resolveProvider, tierFromSubscription } from "../llm/models";
 import { deductCredits, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
-import { ensurePlatformCaches } from "../config/env";
+import {
+  ensurePlatformCaches,
+  getMockInterviewMinTier,
+  getMiReportUnlockCredits,
+} from "../config/env";
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
+
+/** users/{uid}/interview_reports — server-only storage for locked session
+ *  reports (no firestore.rules block needed: default-deny keeps clients out;
+ *  access is exclusively through this callable). */
+const REPORTS_SUBCOLLECTION = "interview_reports";
 
 // ---------------------------------------------------------------------------
 // Request / Response types
 // ---------------------------------------------------------------------------
 
-type MockInterviewMode = "generate" | "evaluate" | "evaluate_session";
+type MockInterviewMode = "generate" | "evaluate" | "evaluate_session" | "unlock_report";
 
 interface MockInterviewRequest {
   mode: MockInterviewMode;
@@ -49,6 +64,8 @@ interface MockInterviewRequest {
   answer?: string;
   // evaluate_session mode: the full timed-interview transcript
   qa?: Array<{ question: string; answer: string }>;
+  // unlock_report mode
+  reportId?: string;
 }
 
 interface InterviewQuestion {
@@ -135,10 +152,10 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
   const data = request.data as MockInterviewRequest;
   const modelId = (request.data as { model?: string })?.model;
 
-  if (!data.mode || !["generate", "evaluate", "evaluate_session"].includes(data.mode)) {
+  if (!data.mode || !["generate", "evaluate", "evaluate_session", "unlock_report"].includes(data.mode)) {
     throw new HttpsError(
       "invalid-argument",
-      'mode must be "generate", "evaluate" or "evaluate_session".'
+      'mode must be "generate", "evaluate", "evaluate_session" or "unlock_report".'
     );
   }
 
@@ -158,7 +175,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     if (!data.answer?.trim()) {
       throw new HttpsError("invalid-argument", "answer is required for evaluate mode.");
     }
-  } else {
+  } else if (data.mode === "evaluate_session") {
     // evaluate_session: a bounded, well-formed transcript
     if (!Array.isArray(data.qa) || data.qa.length === 0 || data.qa.length > 20) {
       throw new HttpsError("invalid-argument", "qa must be a non-empty array of up to 20 {question, answer} items.");
@@ -171,10 +188,32 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
         throw new HttpsError("invalid-argument", "qa item too long.");
       }
     }
+  } else {
+    // unlock_report
+    if (typeof data.reportId !== "string" || !data.reportId.trim() || data.reportId.length > 128) {
+      throw new HttpsError("invalid-argument", "reportId is required for unlock_report mode.");
+    }
   }
 
-  // Warm the cache so an admin prompt override applies even on a cold instance.
+  // Warm the cache so admin prompt/quota overrides apply even on a cold instance.
   await ensurePlatformCaches();
+
+  // ── Tier gate (服务分级 — the simulation is a paid feature by default; the
+  //    post-MVP "which tier" decision is platform_config/quotas.mi_min_tier,
+  //    a config flip rather than a deploy). Applies to BOTH generate and
+  //    evaluate_session so the report generation can't be farmed via the API.
+  if (data.mode === "generate" || data.mode === "evaluate_session") {
+    if (getMockInterviewMinTier() === "paid") {
+      const userSnap = await db.collection("users").doc(uid).get();
+      const tier = tierFromSubscription(userSnap.data()?.subscription_status as string | undefined);
+      if (tier !== "paid") {
+        throw new HttpsError(
+          "permission-denied",
+          "MI_PAID_ONLY: The timed mock interview is available on paid plans. Upgrade to unlock it."
+        );
+      }
+    }
+  }
 
   if (data.mode === "generate") {
     // Charge ONCE per interview session — at question generation, not per answer
@@ -216,7 +255,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     });
 
     return result.raw as EvaluateResult;
-  } else {
+  } else if (data.mode === "evaluate_session") {
     // evaluate_session — holistic end-of-interview report. Free within the
     // session: the single mock-interview charge happened at generate time.
     const jobContextBlock = data.jobDescription ? `Job Context:\n${data.jobDescription}\n\n` : "";
@@ -238,6 +277,61 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       responseSchema: SESSION_EVAL_SCHEMA,
     });
 
-    return result.raw;
+    const report = result.raw as Record<string, unknown>;
+
+    // ── Report entitlement (the monetization point). Paid tiers get the full
+    //    report included. Other tiers (reachable only once mi_min_tier is
+    //    flipped to 'free' post-MVP) get a TEASER: the report is persisted
+    //    server-side and a locked envelope returns the overall score + one
+    //    strength — the verdict and full breakdown sit behind an expensive
+    //    credit unlock (the upsell anchor: upgrading looks cheap next to it).
+    const entSnap = await db.collection("users").doc(uid).get();
+    const entTier = tierFromSubscription(entSnap.data()?.subscription_status as string | undefined);
+    if (entTier === "paid") {
+      return { locked: false, ...report };
+    }
+
+    const unlockCredits = getMiReportUnlockCredits();
+    const docRef = await db
+      .collection("users").doc(uid)
+      .collection(REPORTS_SUBCOLLECTION)
+      .add({
+        report,
+        unlocked: false,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    const strengths = Array.isArray(report.strengths) ? (report.strengths as string[]) : [];
+    const perQuestion = Array.isArray(report.perQuestion) ? report.perQuestion : [];
+    return {
+      locked: true,
+      reportId: docRef.id,
+      unlockCredits,
+      preview: {
+        overallScore: typeof report.overallScore === "number" ? report.overallScore : 0,
+        firstStrength: strengths[0] ?? "",
+        perQuestionCount: perQuestion.length,
+      },
+    };
+  } else {
+    // unlock_report — a non-included user pays the (steep) one-time price for
+    // a stored report. Idempotent: an already-unlocked report returns free.
+    const reportRef = db
+      .collection("users").doc(uid)
+      .collection(REPORTS_SUBCOLLECTION)
+      .doc(data.reportId!.trim());
+    const snap = await reportRef.get();
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "Report not found.");
+    }
+    const stored = snap.data() as { report: Record<string, unknown>; unlocked?: boolean };
+    if (!stored.unlocked) {
+      const price = getMiReportUnlockCredits();
+      if (price > 0) {
+        await deductCredits(uid, price, "mock-interview-report-unlock");
+      }
+      await reportRef.update({ unlocked: true, unlocked_at: admin.firestore.FieldValue.serverTimestamp() });
+    }
+    return { locked: false, ...stored.report };
   }
 });
