@@ -1398,5 +1398,15 @@
   "mi_report_breakdown": "Question-by-question breakdown",
   "mi_report_your_answer": "Your answer",
   "mi_no_answer": "(no answer)",
-  "mi_practice_again": "Practice again"
+  "mi_practice_again": "Practice again",
+  "mi_paid_only_title": "Timed Mock Interview is a premium feature",
+  "mi_paid_only_desc": "The full interview room — virtual interviewer, real timed pacing, and the hiring-verdict report — is included with paid plans. Configure everything above, then upgrade to walk in.",
+  "mi_paid_only_cta": "View plans & upgrade",
+  "mi_locked_title": "Your interview is scored — the full report is locked",
+  "mi_locked_desc": "The detailed report covers your hiring verdict, strengths, an improvement checklist and feedback on all {n} questions.",
+  "mi_unlock_button": "Unlock full report — {n} credits",
+  "mi_unlocking": "Unlocking…",
+  "mi_locked_upgrade_cta": "Or upgrade — reports are included in every paid plan",
+  "mi_export_pdf": "Export PDF",
+  "mi_report_summary_h": "Summary"
 }

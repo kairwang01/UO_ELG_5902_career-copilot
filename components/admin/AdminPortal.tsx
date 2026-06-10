@@ -2424,6 +2424,43 @@ const AdminPortal: React.FC = () => {
                     Range: 256–32768. Default 8192 = no artificial truncation.
                   </p>
                 </div>
+
+                {/* Mock-interview gate (post-MVP tier decision lives here, not in code) */}
+                <div>
+                  <FieldLabel htmlFor="mi_min_tier">Mock interview — minimum tier</FieldLabel>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-relaxed">
+                    Who can run the timed simulation. Default: paid only. Flip to free to activate
+                    the locked-report upsell funnel (free users then pay the unlock price below).
+                  </p>
+                  <select
+                    id="mi_min_tier"
+                    value={(quotas as { mi_min_tier?: string }).mi_min_tier === 'free' ? 'free' : 'paid'}
+                    onChange={(e) => setQuotas((q) => ({ ...q, mi_min_tier: e.target.value as 'free' | 'paid' }))}
+                    className={textInput}
+                  >
+                    <option value="paid">Paid plans only (default)</option>
+                    <option value="free">All users (free included)</option>
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel htmlFor="mi_report_unlock_credits">Mock interview — report unlock price (credits)</FieldLabel>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-relaxed">
+                    What a non-paid user pays to unlock a finished report. Keep it expensive — it is
+                    the anchor that makes upgrading look like the better deal. 0 = free unlock.
+                  </p>
+                  <input
+                    id="mi_report_unlock_credits"
+                    type="number"
+                    min={0}
+                    max={100000}
+                    step={50}
+                    value={Number((quotas as { mi_report_unlock_credits?: number }).mi_report_unlock_credits ?? 500)}
+                    onChange={(e) =>
+                      setQuotas((q) => ({ ...q, mi_report_unlock_credits: Number(e.target.value) }))
+                    }
+                    className={textInput}
+                  />
+                </div>
               </div>
               <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer select-none">
                 <input

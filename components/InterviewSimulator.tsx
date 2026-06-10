@@ -18,14 +18,20 @@ import {
     Mic,
     AlertTriangle,
     Award,
+    Crown,
+    Lock,
+    Printer,
 } from 'lucide-react';
 import {
     generateInterviewQuestions,
     evaluateInterviewSession,
+    unlockInterviewReport,
     type InterviewQuestion,
     type InterviewSessionReport,
+    type LockedSessionReport,
 } from '../services/aiClient';
 import type { AppSession as Session } from '../lib/data';
+import type { UserProfile } from '../types';
 import StagedLoader from './StagedLoader';
 import { useRecentApplications } from '../hooks/useRecentApplications';
 import { listAllActiveJobPostings, type JobPosting } from '../lib/recruitingData';
@@ -38,7 +44,13 @@ interface InterviewSimulatorProps {
   onClose: () => void;
   t: (key: string) => string;
   session: Session | null;
+  profile: UserProfile | null;
+  navigateToPricing?: () => void;
 }
+
+// Client-side mirror of the server's tierFromSubscription paid set — UX only;
+// the real gate is enforced in the mockInterview callable (MI_PAID_ONLY).
+const PAID_STATUSES = new Set(['essentials', 'accelerator', 'executive']);
 
 // Check for SpeechRecognition API
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -172,7 +184,8 @@ const SAMPLE = {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, onClose, t, session }) => {
+const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, onClose, t, session, profile, navigateToPricing }) => {
+    const isPaid = PAID_STATUSES.has(profile?.subscription_status ?? '');
     const [stage, setStage] = useState<'setup' | 'loading' | 'interviewing' | 'evaluating' | 'report'>('setup');
     const [showDisclaimer, setShowDisclaimer] = useState(false);
     const [disclaimerChecked, setDisclaimerChecked] = useState(false);
@@ -209,6 +222,8 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const submittingRef = useRef(false);
     const [avatarSpeaking, setAvatarSpeaking] = useState(false);
     const [report, setReport] = useState<InterviewSessionReport | null>(null);
+    const [lockedReport, setLockedReport] = useState<LockedSessionReport | null>(null);
+    const [unlocking, setUnlocking] = useState(false);
     const [openBreakdown, setOpenBreakdown] = useState<number | null>(null);
 
     const [error, setError] = useState<string | null>(null);
@@ -421,14 +436,63 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const finishAndEvaluate = async (qa: { question: string; answer: string }[]) => {
         setStage('evaluating');
         try {
-            const rep = await evaluateInterviewSession(qa, assembleContext(), resumeText);
-            setReport(rep);
+            const res = await evaluateInterviewSession(qa, assembleContext(), resumeText);
+            if (res.locked) {
+                setLockedReport(res);
+                setReport(null);
+            } else {
+                const { locked: _locked, ...rep } = res;
+                setReport(rep as InterviewSessionReport);
+                setLockedReport(null);
+            }
             setStage('report');
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to evaluate the interview.");
             setReport(null);
+            setLockedReport(null);
             setStage('report'); // report stage renders the error + retry
         }
+    };
+
+    const handleUnlock = async () => {
+        if (!lockedReport || unlocking) return;
+        setUnlocking(true);
+        setError(null);
+        try {
+            const res = await unlockInterviewReport(lockedReport.reportId);
+            const { locked: _locked, ...rep } = res;
+            setReport(rep as InterviewSessionReport);
+            setLockedReport(null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unlock failed.');
+        } finally {
+            setUnlocking(false);
+        }
+    };
+
+    /** Dependency-free PDF: open a minimal printable document and trigger the
+     *  browser's print-to-PDF. Only reachable from the full (entitled/unlocked)
+     *  report view. */
+    const exportPdf = (rep: InterviewSessionReport) => {
+        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const verdictMeta = VERDICT_META[rep.verdict?.toLowerCase?.() ?? ''];
+        const verdictLabel = verdictMeta ? t(verdictMeta.labelKey) : rep.verdict;
+        const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(t('mi_report_title'))}</title>
+<style>body{font-family:-apple-system,'Segoe UI',sans-serif;color:#1e293b;max-width:760px;margin:32px auto;padding:0 24px;line-height:1.55}
+h1{font-size:22px}h2{font-size:15px;margin-top:24px;border-bottom:1px solid #e2e8f0;padding-bottom:4px}
+.score{font-size:40px;font-weight:800}.verdict{display:inline-block;padding:4px 12px;border-radius:999px;background:#eef2ff;font-weight:700}
+.q{margin:14px 0;padding:10px 14px;border-left:3px solid #6366f1;background:#f8fafc}.muted{color:#64748b;font-size:13px}</style></head><body>
+<h1>${esc(t('mi_report_title'))} — ${esc(jobTitle)}</h1>
+<p><span class="score">${Math.round(rep.overallScore)}</span><span class="muted">/100</span>&nbsp;&nbsp;<span class="verdict">${esc(verdictLabel)}</span></p>
+<h2>${esc(t('mi_report_summary_h'))}</h2><p>${esc(rep.summary)}</p>
+<h2>${esc(t('mi_report_strengths'))}</h2><ul>${rep.strengths.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>
+<h2>${esc(t('mi_report_improvements'))}</h2><ul>${rep.improvements.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>
+<h2>${esc(t('mi_report_breakdown'))}</h2>
+${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round(pq.score)}/100):</strong> ${esc(pq.question)}<br/><span class="muted">${esc(t('mi_report_your_answer'))}: ${esc(answersRef.current[i]?.trim() || t('mi_no_answer'))}</span><br/>${esc(pq.feedback)}</div>`).join('')}
+<p class="muted">${esc(t('mi_disclaimer_p2'))}</p>
+<script>window.onload=()=>setTimeout(()=>window.print(),200)</script></body></html>`;
+        const w = window.open('', '_blank');
+        if (w) { w.document.write(html); w.document.close(); }
     };
 
     const submitAnswer = () => {
@@ -473,6 +537,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         answersRef.current = [];
         submittingRef.current = false;
         setReport(null);
+        setLockedReport(null);
         setOpenBreakdown(null);
         setError(null);
     };
@@ -641,6 +706,72 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
 
     // ── Final report ──────────────────────────────────────────────────────────
     if (stage === 'report') {
+        // LOCKED teaser (non-included tier): score visible, everything else
+        // behind the unlock — with the upgrade CTA framed as the better deal.
+        if (lockedReport) {
+            return (
+                <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-6 sm:p-8 animate-fade-in space-y-6">
+                    <div className="flex flex-col items-center text-center gap-3">
+                        <div className="relative h-28 w-28">
+                            <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
+                                <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-gray-200 dark:stroke-slate-700" strokeWidth="3.5" />
+                                <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-violet-500" strokeWidth="3.5" strokeLinecap="round"
+                                    strokeDasharray={`${Math.max(0, Math.min(100, lockedReport.preview.overallScore))} 100`} />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-3xl font-bold text-gray-800 dark:text-gray-100">{Math.round(lockedReport.preview.overallScore)}</span>
+                                <span className="text-[10px] text-gray-400 dark:text-slate-500">/100</span>
+                            </div>
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t('mi_locked_title')}</h3>
+                        {lockedReport.preview.firstStrength && (
+                            <p className="text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-4 py-2 max-w-md">
+                                ✓ {lockedReport.preview.firstStrength}
+                            </p>
+                        )}
+                        <p className="text-sm text-gray-500 dark:text-slate-400 max-w-md">
+                            {t('mi_locked_desc').replace('{n}', String(lockedReport.preview.perQuestionCount))}
+                        </p>
+                    </div>
+
+                    {/* blurred fake content under a lock */}
+                    <div className="relative">
+                        <div className="space-y-3 blur-sm select-none pointer-events-none" aria-hidden="true">
+                            <div className="h-16 rounded-xl bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/40" />
+                            <div className="h-24 rounded-xl bg-gray-100 dark:bg-slate-700/40" />
+                            <div className="h-16 rounded-xl bg-violet-50 dark:bg-violet-900/15" />
+                        </div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                            <Lock className="h-8 w-8 text-gray-400 dark:text-slate-500" />
+                            <button
+                                type="button"
+                                onClick={handleUnlock}
+                                disabled={unlocking}
+                                className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-bold rounded-lg shadow-lg"
+                            >
+                                {unlocking ? t('mi_unlocking') : t('mi_unlock_button').replace('{n}', String(lockedReport.unlockCredits))}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={navigateToPricing ?? onClose}
+                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-600 dark:text-amber-400 hover:underline"
+                            >
+                                <Crown className="h-4 w-4" />
+                                {t('mi_locked_upgrade_cta')}
+                            </button>
+                        </div>
+                    </div>
+
+                    {error && <p className="text-sm text-center text-red-600 dark:text-red-400">{error}</p>}
+
+                    <div className="flex justify-center">
+                        <button type="button" onClick={handleRestart} className="text-sm text-gray-400 dark:text-slate-500 hover:underline">
+                            {t('mi_practice_again')}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
         if (!report) {
             return (
                 <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-8 animate-fade-in text-center space-y-4">
@@ -746,6 +877,14 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                    <button
+                        type="button"
+                        onClick={() => exportPdf(report)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-lg"
+                    >
+                        <Printer className="h-4 w-4" />
+                        {t('mi_export_pdf')}
+                    </button>
                     <DownloadButtons textContent={formatReportForDownload(report)} baseFilename={`interview_report_${jobTitle.replace(/\s+/g, '_') || 'session'}`} />
                     <button
                         type="button"
@@ -1128,9 +1267,29 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                         </div>
                     )}
 
-                    <button type="submit" className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg text-base shadow-lg shadow-blue-700/20">
-                        {t('tool_mock_interview_start_button')}
-                    </button>
+                    {isPaid ? (
+                        <button type="submit" className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg text-base shadow-lg shadow-blue-700/20">
+                            {t('tool_mock_interview_start_button')}
+                        </button>
+                    ) : (
+                        /* Paid gate — the form stays fully explorable (desire first),
+                           the action is where the upgrade happens. Server enforces
+                           the same gate (MI_PAID_ONLY), this is just the UX. */
+                        <div className="rounded-xl border-2 border-amber-300 dark:border-amber-700/60 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/15 dark:to-orange-900/10 p-5 text-center space-y-3">
+                            <p className="font-bold text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2">
+                                <Crown className="h-5 w-5 text-amber-500" />
+                                {t('mi_paid_only_title')}
+                            </p>
+                            <p className="text-sm text-gray-600 dark:text-slate-300 max-w-md mx-auto">{t('mi_paid_only_desc')}</p>
+                            <button
+                                type="button"
+                                onClick={navigateToPricing ?? onClose}
+                                className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow-lg shadow-amber-500/25"
+                            >
+                                {t('mi_paid_only_cta')}
+                            </button>
+                        </div>
+                    )}
 
                     {/* FAQ — positioning (why not a generic chatbot) */}
                     <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">

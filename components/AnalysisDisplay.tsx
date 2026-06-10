@@ -174,11 +174,13 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                         <div className="flex-1 overflow-y-auto p-6 md:p-10 bg-gray-50/30 dark:bg-slate-900/10">
                             <div className="max-w-4xl mx-auto">
                                 {activeTool === 'mock-interview' ? (
-                                        <InterviewSimulator 
-                                            resumeText={resumeText} 
-                                            market={market} 
-                                            onClose={() => setActiveTool(null)} 
+                                        <InterviewSimulator
+                                            resumeText={resumeText}
+                                            market={market}
+                                            onClose={() => setActiveTool(null)}
                                             session={session}
+                                            profile={profile}
+                                            navigateToPricing={navigateToPricing}
                                             t={t}
                                         />
                                 ) : (

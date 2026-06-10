@@ -1398,5 +1398,15 @@
   "mi_report_breakdown": "逐题分析",
   "mi_report_your_answer": "你的回答",
   "mi_no_answer": "（未作答）",
-  "mi_practice_again": "再练一场"
+  "mi_practice_again": "再练一场",
+  "mi_paid_only_title": "限时模拟面试为付费会员专享",
+  "mi_paid_only_desc": "完整面试间——虚拟面试官、真实计时节奏、录用评级报告——均包含在付费方案中。上方配置随时可填,升级后即可入场。",
+  "mi_paid_only_cta": "查看会员方案并升级",
+  "mi_locked_title": "你的面试已完成评分——完整报告待解锁",
+  "mi_locked_desc": "完整报告包含录用评级、亮点、改进清单与全部 {n} 道题的逐题点评。",
+  "mi_unlock_button": "解锁完整报告 — {n} 学分",
+  "mi_unlocking": "解锁中…",
+  "mi_locked_upgrade_cta": "或直接升级——付费方案均已包含报告",
+  "mi_export_pdf": "导出 PDF",
+  "mi_report_summary_h": "总体评价"
 }

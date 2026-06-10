@@ -125,14 +125,32 @@ export interface InterviewSessionReport {
   perQuestion: { question: string; score: number; feedback: string }[];
 }
 
-/** Holistic end-of-interview report over the full timed transcript (free within the session — charged at generate). */
+/** Teaser returned to non-included tiers: full report is stored server-side behind a credit unlock. */
+export interface LockedSessionReport {
+  locked: true;
+  reportId: string;
+  unlockCredits: number;
+  preview: { overallScore: number; firstStrength: string; perQuestionCount: number };
+}
+
+export type SessionEvalResult = ({ locked: false } & InterviewSessionReport) | LockedSessionReport;
+
+/** Holistic end-of-interview report over the full timed transcript (free within the session — charged at generate).
+ *  Paid tiers receive the full report (locked:false); other tiers receive a locked teaser envelope. */
 export const evaluateInterviewSession = async (
   qa: { question: string; answer: string }[],
   jobDescription: string,
   resumeText: string,
-): Promise<InterviewSessionReport> => {
-  const fn = httpsCallable<any, InterviewSessionReport>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
+): Promise<SessionEvalResult> => {
+  const fn = httpsCallable<any, SessionEvalResult>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
   const res = await fn({ mode: 'evaluate_session', qa, jobDescription, resumeText, model: currentModelId });
+  return res.data;
+};
+
+/** Pays the one-time unlock price for a stored locked report (idempotent for already-unlocked reports). */
+export const unlockInterviewReport = async (reportId: string): Promise<{ locked: false } & InterviewSessionReport> => {
+  const fn = httpsCallable<any, { locked: false } & InterviewSessionReport>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
+  const res = await fn({ mode: 'unlock_report', reportId });
   return res.data;
 };
 
