@@ -50,12 +50,27 @@ export const SiteMobileNav: React.FC = () => {
               {t('site_cta_post_job')}
             </Link>
           )}
-          <Link to={SITE_ROUTES.pricing} className={linkClass} onClick={() => setOpen(false)}>
-            {t('site_nav_pricing')}
-          </Link>
-          <Link to={SITE_ROUTES.employers} className={linkClass} onClick={() => setOpen(false)}>
-            {t('site_nav_for_employers')}
-          </Link>
+          {/* Pricing is surface-aware: business plans live on the business page. */}
+          {isEmployerSurface ? (
+            <a href={`${SITE_ROUTES.employers}#pricing`} className={linkClass} onClick={() => setOpen(false)}>
+              {t('site_nav_pricing')}
+            </a>
+          ) : (
+            <Link to={SITE_ROUTES.pricing} className={linkClass} onClick={() => setOpen(false)}>
+              {t('site_nav_pricing')}
+            </Link>
+          )}
+          {/* ONE audience switch per surface (no self-referential "Business"
+              item while already on the business surface). */}
+          {isEmployerSurface ? (
+            <Link to={SITE_ROUTES.home} className={`${linkClass} font-semibold`} onClick={() => setOpen(false)}>
+              {t('site_switch_jobseekers')} →
+            </Link>
+          ) : (
+            <Link to={SITE_ROUTES.employers} className={`${linkClass} font-semibold`} onClick={() => setOpen(false)}>
+              {t('site_switch_business')} →
+            </Link>
+          )}
           {session ? (
             <>
               {isAdmin && (
@@ -68,14 +83,14 @@ export const SiteMobileNav: React.FC = () => {
                 className={linkClass}
                 onClick={() => setOpen(false)}
               >
-                {isBusiness ? 'Business Portal' : 'Want to join our business program?'}
+                {isBusiness ? t('site_nav_business_portal') : t('site_nav_join_business')}
               </Link>
               <Link
                 to={workspaceHref}
                 className="block rounded-[var(--site-radius)] bg-[var(--site-action)] px-3 py-3 text-center text-sm font-semibold text-white mt-3"
                 onClick={() => setOpen(false)}
               >
-                Workspace
+                {t('site_nav_workspace')}
               </Link>
             </>
           ) : (

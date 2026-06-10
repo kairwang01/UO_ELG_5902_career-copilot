@@ -19,11 +19,20 @@ export const SiteHeader: React.FC = () => {
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--site-border)] bg-[var(--site-surface)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--site-surface)]/85">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-[72px] flex items-center justify-between gap-4">
+        {/* Audience lockup: the logo itself says WHICH surface you are on, so the
+            nav never needs a self-referential "Business" item (the old nav showed
+            "Business" while already ON the business surface — confusing). The
+            logo keeps you on your current surface. */}
         <Link
-          to={SITE_ROUTES.home}
-          className="text-base sm:text-lg font-semibold text-[var(--site-text)] tracking-tight truncate shrink-0"
+          to={isEmployerSurface ? SITE_ROUTES.employers : SITE_ROUTES.home}
+          className="flex items-center text-base sm:text-lg font-semibold text-[var(--site-text)] tracking-tight truncate shrink-0"
         >
           Career CoPilot
+          {isEmployerSurface && (
+            <span className="ml-2 rounded-md bg-[var(--site-action)]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--site-action)]">
+              {t('site_badge_business')}
+            </span>
+          )}
         </Link>
 
         <nav className="hidden lg:flex items-center gap-7 text-sm font-medium">
@@ -40,24 +49,26 @@ export const SiteHeader: React.FC = () => {
               {t('site_cta_post_job')}
             </Link>
           )}
-          <Link to={SITE_ROUTES.pricing} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-            {t('site_nav_pricing')}
-          </Link>
-          <Link
-            to={SITE_ROUTES.employers}
-            className={
-              isEmployerSurface
-                ? 'text-[var(--site-text)]'
-                : 'text-[var(--site-text-muted)] hover:text-[var(--site-text)]'
-            }
-          >
-            {t('site_nav_for_employers')}
-          </Link>
-          {/* Symmetric cross-link: the business surface previously had no way back
-              to the job-seeker side except the logo (team-flagged nav gap). */}
-          {isEmployerSurface && (
+          {/* Pricing is surface-aware: business plans live on the business page. */}
+          {isEmployerSurface ? (
+            <a href={`${SITE_ROUTES.employers}#pricing`} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+              {t('site_nav_pricing')}
+            </a>
+          ) : (
+            <Link to={SITE_ROUTES.pricing} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+              {t('site_nav_pricing')}
+            </Link>
+          )}
+          {/* ONE audience switch per surface, visually separated from content nav —
+              switching audience is a mode change, not another page. */}
+          <span className="h-4 w-px bg-[var(--site-border)]" aria-hidden="true" />
+          {isEmployerSurface ? (
             <Link to={SITE_ROUTES.home} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-              {t('site_nav_for_jobseekers')}
+              {t('site_switch_jobseekers')} →
+            </Link>
+          ) : (
+            <Link to={SITE_ROUTES.employers} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+              {t('site_switch_business')} →
             </Link>
           )}
         </nav>
@@ -81,21 +92,21 @@ export const SiteHeader: React.FC = () => {
                   to={SITE_ROUTES.portal}
                   className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
                 >
-                  Business Portal
+                  {t('site_nav_business_portal')}
                 </Link>
               ) : (
                 <Link
                   to={SITE_ROUTES.employers}
                   className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
                 >
-                  Want to join our business program?
+                  {t('site_nav_join_business')}
                 </Link>
               )}
               <Link
                 to={workspaceHref}
                 className="hidden sm:inline-flex min-h-[40px] items-center justify-center rounded-[var(--site-radius)] bg-[var(--site-action)] px-4 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)] whitespace-nowrap"
               >
-                Workspace
+                {t('site_nav_workspace')}
               </Link>
             </>
           ) : (

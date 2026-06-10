@@ -1435,5 +1435,11 @@
   "site_fs4_desc": "A live timeline for every application — and an in-app notification the moment an employer moves you forward. No more guessing games.",
   "site_fs4_b1": "Applied → Interviewing → Decision timeline on every application",
   "site_fs4_b2": "Instant in-app notifications on status changes",
-  "site_fs4_b3": "Rejected? One click finds similar open roles"
+  "site_fs4_b3": "Rejected? One click finds similar open roles",
+  "site_badge_business": "Business",
+  "site_switch_business": "For business",
+  "site_switch_jobseekers": "For job seekers",
+  "site_nav_workspace": "Workspace",
+  "site_nav_business_portal": "Business Portal",
+  "site_nav_join_business": "Join the business program"
 }

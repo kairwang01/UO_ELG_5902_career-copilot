@@ -1435,5 +1435,11 @@
   "site_fs4_desc": "每份申请都有实时进度时间线——雇主一推进流程,站内通知立刻送达。不再苦等猜测。",
   "site_fs4_b1": "每份申请的「已投递 → 面试中 → 结果」时间线",
   "site_fs4_b2": "状态变更即时站内通知",
-  "site_fs4_b3": "被拒?一键查找相似在招职位"
+  "site_fs4_b3": "被拒?一键查找相似在招职位",
+  "site_badge_business": "企业版",
+  "site_switch_business": "企业招聘",
+  "site_switch_jobseekers": "我要求职",
+  "site_nav_workspace": "工作台",
+  "site_nav_business_portal": "企业门户",
+  "site_nav_join_business": "加入企业版"
 }
