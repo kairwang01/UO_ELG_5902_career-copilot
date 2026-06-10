@@ -186,6 +186,15 @@ export const getCandidateProfilesByIds = async (candidateIds: string[]): Promise
     .map((snap) => mapUserProfile(snap.id, snap.data()));
 };
 
+export const listAllActiveJobPostings = async (): Promise<JobPosting[]> => {
+  const activeQuery = query(
+    collection(firestoreDb, 'job_postings'),
+    where('is_active', '==', true),
+  );
+  const snap = await getDocs(activeQuery);
+  return sortByCreatedDesc(snap.docs.map((jobDoc) => mapJobPosting(jobDoc.id, jobDoc.data())));
+};
+
 export const listCandidateProfilesWithResume = async (limitCount = 50): Promise<UserProfile[]> => {
   const candidatesQuery = query(
     collection(firestoreDb, 'users'),

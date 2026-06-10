@@ -816,6 +816,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
                 onViewChange={setDashboardView}
+                session={session}
               />
             </div>
         )}

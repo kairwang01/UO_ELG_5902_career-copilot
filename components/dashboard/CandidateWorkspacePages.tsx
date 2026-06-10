@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import ResumePreview from '../ResumePreview';
 import CareerGoalsPanel from '../CareerGoalsPanel';
+import BrowseJobs from '../BrowseJobs';
 import { sampleReport } from '../../marketing/mock/sampleReport';
 import { interviewFeedback } from '../../marketing/mock/interviewFeedback';
 import { careerPathPlan } from '../../marketing/mock/careerPath';
+import type { AppSession as Session } from '../../lib/data';
 
 type WorkspaceView = 'dashboard' | 'resume' | 'jobs' | 'interview' | 'plan' | 'toolkit';
 
@@ -25,6 +27,7 @@ interface WorkspacePageProps {
   onUploadResume: () => void;
   onOpenTool: (tool: string) => void;
   onViewChange: (view: WorkspaceView) => void;
+  session?: Session | null;
 }
 
 const jobMatches = [
@@ -311,7 +314,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   );
 };
 
-export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool }) => {
+export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, session }) => {
   const [sort, setSort] = useState<'priority' | 'score'>('priority');
   const hasResume = resumeText.trim().length > 0;
   const sortedJobs = useMemo(
@@ -322,6 +325,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
   return (
     <div className="space-y-6">
       <CareerGoalsPanel t={t} />
+      <BrowseJobs session={session ?? null} t={t} />
       <PageHeader
         label="Job match"
         title="Matches ranked by evidence, not just keywords"
