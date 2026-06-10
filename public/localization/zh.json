@@ -957,5 +957,14 @@
   "goals_active_banner": "按您的求职意向搜索：",
   "job_card_why_fit": "为什么我适合这个职位？",
   "job_card_intro_message": "发送问候消息",
-  "job_card_uses_credits": "消耗积分"
+  "job_card_uses_credits": "消耗积分",
+  "account_model_managed": "AI 模型由平台统一管理。",
+  "talent_select_posted_job": "从已发布职位中选择",
+  "talent_select_posted_job_placeholder": "— 选择一个已发布职位自动填写 —",
+  "talent_no_posted_jobs": "暂无活跃职位发布，请在下方粘贴职位描述。",
+  "org_company_size": "公司规模",
+  "org_industry": "行业",
+  "org_industry_ph": "例如：软件 / 金融科技 / 教育",
+  "org_founded_year": "成立年份",
+  "ai_model_label": "AI 模型"
 }

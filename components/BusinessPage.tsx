@@ -168,7 +168,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Hero */}
       <main className="max-w-[1088px] mx-auto px-6 py-16 md:py-24">
-        <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6 text-gray-900 dark:text-gray-100">
+        <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold leading-tight mb-6 text-gray-900 dark:text-gray-100 break-words">
           {t('business_page_hero_title_part1')}{' '}
           <span className="text-[#1D4ED8]">{t('business_page_hero_title_part2')}</span>{t('business_page_hero_title_part3')}
         </h1>
@@ -178,13 +178,13 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         <div className="flex flex-wrap gap-4">
           <button
             onClick={handlePostJob}
-            className="bg-[#1D4ED8] text-white px-8 py-3 rounded-md hover:bg-[#1e40af] transition-colors font-medium"
+            className="w-full sm:w-auto bg-[#1D4ED8] text-white px-8 py-3 rounded-md hover:bg-[#1e40af] transition-colors font-medium"
           >
             {t('employer_dashboard_post_job_button')}
           </button>
           <button
             onClick={handleDiscoverTalent}
-            className="border border-gray-300 text-gray-700 px-8 py-3 rounded-md hover:border-gray-400 transition-colors font-medium dark:border-slate-600 dark:text-gray-300 dark:hover:border-slate-500"
+            className="w-full sm:w-auto border border-gray-300 text-gray-700 px-8 py-3 rounded-md hover:border-gray-400 transition-colors font-medium dark:border-slate-600 dark:text-gray-300 dark:hover:border-slate-500"
           >
             {t('employer_dashboard_tab_discover')}
           </button>
