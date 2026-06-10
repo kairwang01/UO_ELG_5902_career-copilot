@@ -104,7 +104,7 @@ const EVALUATE_SCHEMA = {
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const mockInterviewFunction = onCall(async (request) => {
+export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
   const uid = requireAuth(request);
   const data = request.data as MockInterviewRequest;
   const modelId = (request.data as { model?: string })?.model;

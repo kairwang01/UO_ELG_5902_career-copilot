@@ -257,6 +257,27 @@ function isAvailabilityError(err: unknown): boolean {
     return true;
   // Gemini: status 429 embedded in error name
   if (msg.includes("429") || msg.includes("401") || msg.includes("403")) return true;
+  // Dead/invalid API keys and exhausted key pools. Gemini reports a bad key as
+  // HTTP 400 "API key not valid" (NOT 401!), and RotatingKeyProvider throws
+  // "All API keys ... are unavailable" when the pool is empty/cooled — neither
+  // matched the patterns above, so the fallback chain silently never engaged
+  // (live audit 2026-06-10: a dead default model 500'd every tool instead of
+  // hopping to the healthy fallback). All of these mean "this model cannot
+  // serve right now", which is exactly what the chain exists for.
+  if (
+    msg.includes("api key not valid") ||
+    msg.includes("api_key_invalid") ||
+    msg.includes("invalid api key") ||
+    msg.includes("incorrect api key") ||
+    msg.includes("api key expired") ||
+    msg.includes("all api keys") ||
+    msg.includes("unavailable") ||
+    msg.includes("enotfound") ||
+    msg.includes("econnrefused") ||
+    msg.includes("econnreset") ||
+    msg.includes("fetch failed")
+  )
+    return true;
   return false;
 }
 
@@ -609,7 +630,16 @@ class FallbackProvider implements LLMProvider {
           );
         }
       }
-      throw lastErr;
+      // Whole chain exhausted — log the technical detail server-side, but throw
+      // ONE clear, key-free message users and support can act on (instead of
+      // whatever internal error the last provider happened to raise).
+      console.error(
+        `[fallback-chain] All models exhausted (primary "${this.name}" + ${this.fallbacks.length} fallbacks). ` +
+          `Last error: ${(lastErr as Error)?.message?.slice(0, 160)}`
+      );
+      throw new Error(
+        "All configured AI models are currently unavailable. Please try again in a few minutes — if this persists, an administrator needs to check the API keys in the admin console."
+      );
     }
   }
 }

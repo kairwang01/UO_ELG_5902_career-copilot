@@ -88,7 +88,7 @@ const ANALYSIS_SCHEMA = {
 // ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
-export const analyzeResumeFunction = onCall(async (request) => {
+export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
   // Step 1: Verify authentication
   // requireAuth throws HttpsError("unauthenticated") if the caller is not signed in.
   const uid = requireAuth(request);

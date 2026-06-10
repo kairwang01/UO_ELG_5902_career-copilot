@@ -122,7 +122,7 @@ const CAREER_PATH_SCHEMA = {
 // Cloud Function
 // ---------------------------------------------------------------------------
 
-export const generateCareerPathFunction = onCall(async (request) => {
+export const generateCareerPathFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
   const uid = requireAuth(request);
 
   const data = request.data as GenerateCareerPathRequest;

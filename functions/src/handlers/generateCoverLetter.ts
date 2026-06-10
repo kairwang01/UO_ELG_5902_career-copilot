@@ -36,7 +36,7 @@ const COVER_LETTER_SCHEMA = {
   required: ["letter"],
 };
 
-export const generateCoverLetterFunction = onCall(async (request) => {
+export const generateCoverLetterFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
   const uid = requireAuth(request);
 
   const data = request.data as GenerateCoverLetterRequest;

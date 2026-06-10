@@ -73,7 +73,9 @@ function addNotice(data: unknown, notice: string | undefined): unknown {
   return { ...(data as Record<string, unknown>), notice };
 }
 
-export const aiProxyFunction = onCall({ invoker: "public" }, async (request) => {
+// timeoutSeconds 180: free community routers (KairLLM auto) take 60-90s on the
+// heaviest structured tools; the global 60s default 504'd them mid-generation.
+export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
   const uid = requireAuth(request);
 
   const { tool, payload, model } = (request.data ?? {}) as AiProxyRequest;
@@ -129,6 +131,12 @@ export const aiProxyFunction = onCall({ invoker: "public" }, async (request) => 
   } catch (err) {
     // The model call failed AFTER charging — refund so users aren't billed for nothing.
     if (spec.creditKey) await refundCredits(uid, cost);
-    throw err;
+    if (err instanceof HttpsError) throw err;
+    // A plain Error thrown to the callable layer reaches the client as a blank
+    // "INTERNAL" with no message (live audit: every tool failure looked identical
+    // and undiagnosable). Surface the provider's message — they are key-free by
+    // construction (RotatingKeyProvider/FallbackProvider never include secrets).
+    const msg = err instanceof Error && err.message ? err.message : "AI generation failed. Please try again.";
+    throw new HttpsError("unavailable", msg);
   }
 });

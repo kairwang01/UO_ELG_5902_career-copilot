@@ -50,13 +50,17 @@ export const TOOL_CREDIT_COSTS: Record<string, number> = {
   "opportunity-finder": 50,
   "linkedin-optimizer": 20,
   "cover-letter": 20,
-  "mock-interview": 150,
+  // Pricing rule: every tool must be affordable on a fresh account's initial
+  // grant (INITIAL_CREDITS = 100), so new users can try the full toolbox.
+  // mock-interview was 150 and website-builder 250 — new free users could
+  // literally never use them (live audit 2026-06-10).
+  "mock-interview": 50,
   "career-path": 100,
   "agile-coach": 25,
   "salary-negotiation": 75,
   "english-pro": 15,
   "email-crafter": 5,
-  "website-builder": 250,
+  "website-builder": 90,
   "networking-assistant": 40,
   "performance-review-prep": 40,
   "skill-learning-plan": 50,

@@ -57,8 +57,17 @@ export class OpenAICompatibleProvider implements LLMProvider {
         })),
       ];
     } else if (req.responseSchema) {
-      // Nudge the model toward strict JSON (no schema translation needed).
-      userContent = `${req.prompt}\n\nRespond with ONLY a single valid JSON value. No prose, no markdown fences.`;
+      // Embed the ACTUAL schema in the prompt. Gemini enforces responseSchema
+      // natively, but OpenAI-compatible gateways (KairLLM auto-router etc.) do
+      // not — a bare "respond with JSON" nudge let models invent their own
+      // property names (live audit 2026-06-10: formattedText came back as
+      // resume_localization, compatibilityScore as compatibility_score — every
+      // structured tool returned 200 yet the UI couldn't parse it).
+      userContent =
+        `${req.prompt}\n\nIMPORTANT: Respond with ONLY a single valid JSON value that conforms EXACTLY to the ` +
+        `following JSON Schema. Use EXACTLY these property names (same spelling and casing), the same nesting, ` +
+        `no extra keys, no missing required keys, no prose, no markdown fences:\n` +
+        `${JSON.stringify(req.responseSchema)}`;
     } else {
       userContent = req.prompt;
     }
@@ -79,7 +88,10 @@ export class OpenAICompatibleProvider implements LLMProvider {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
+      // Free community routers (KairLLM auto) regularly take 60-90s for large
+      // structured outputs — 60s aborted convertResumeFormat/findOpportunities
+      // mid-flight. The callable layer enforces its own deadline above this.
+      signal: AbortSignal.timeout(150_000),
     });
 
     if (!resp.ok) {
