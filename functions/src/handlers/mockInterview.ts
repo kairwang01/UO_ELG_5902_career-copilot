@@ -36,7 +36,7 @@ import { ensurePlatformCaches } from "../config/env";
 // Request / Response types
 // ---------------------------------------------------------------------------
 
-type MockInterviewMode = "generate" | "evaluate";
+type MockInterviewMode = "generate" | "evaluate" | "evaluate_session";
 
 interface MockInterviewRequest {
   mode: MockInterviewMode;
@@ -47,6 +47,8 @@ interface MockInterviewRequest {
   // evaluate mode
   question?: string;
   answer?: string;
+  // evaluate_session mode: the full timed-interview transcript
+  qa?: Array<{ question: string; answer: string }>;
 }
 
 interface InterviewQuestion {
@@ -100,6 +102,30 @@ const EVALUATE_SCHEMA = {
   required: ["score", "strengths", "improvements", "modelAnswer"],
 };
 
+const SESSION_EVAL_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    overallScore: { type: Type.NUMBER },
+    verdict:      { type: Type.STRING }, // "Strong Hire" | "Hire" | "Leaning Hire" | "Leaning No Hire" | "No Hire"
+    summary:      { type: Type.STRING },
+    strengths:    { type: Type.ARRAY, items: { type: Type.STRING } },
+    improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+    perQuestion: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          question: { type: Type.STRING },
+          score:    { type: Type.NUMBER },
+          feedback: { type: Type.STRING },
+        },
+        required: ["question", "score", "feedback"],
+      },
+    },
+  },
+  required: ["overallScore", "verdict", "summary", "strengths", "improvements", "perQuestion"],
+};
+
 // ---------------------------------------------------------------------------
 // Cloud Function
 // ---------------------------------------------------------------------------
@@ -109,15 +135,15 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
   const data = request.data as MockInterviewRequest;
   const modelId = (request.data as { model?: string })?.model;
 
-  if (!data.mode || !["generate", "evaluate"].includes(data.mode)) {
+  if (!data.mode || !["generate", "evaluate", "evaluate_session"].includes(data.mode)) {
     throw new HttpsError(
       "invalid-argument",
-      'mode must be "generate" or "evaluate".'
+      'mode must be "generate", "evaluate" or "evaluate_session".'
     );
   }
 
   // Validate the per-mode required fields BEFORE charging, so a malformed request
-  // never burns the (150) mock-interview credits.
+  // never burns the mock-interview credits.
   if (data.mode === "generate") {
     if (!data.resumeText?.trim()) {
       throw new HttpsError("invalid-argument", "resumeText is required for generate mode.");
@@ -125,12 +151,25 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     if (!data.jobDescription?.trim()) {
       throw new HttpsError("invalid-argument", "jobDescription is required for generate mode.");
     }
-  } else {
+  } else if (data.mode === "evaluate") {
     if (!data.question?.trim()) {
       throw new HttpsError("invalid-argument", "question is required for evaluate mode.");
     }
     if (!data.answer?.trim()) {
       throw new HttpsError("invalid-argument", "answer is required for evaluate mode.");
+    }
+  } else {
+    // evaluate_session: a bounded, well-formed transcript
+    if (!Array.isArray(data.qa) || data.qa.length === 0 || data.qa.length > 20) {
+      throw new HttpsError("invalid-argument", "qa must be a non-empty array of up to 20 {question, answer} items.");
+    }
+    for (const item of data.qa) {
+      if (typeof item?.question !== "string" || !item.question.trim() || typeof item?.answer !== "string") {
+        throw new HttpsError("invalid-argument", "Each qa item needs a question string and an answer string.");
+      }
+      if (item.question.length > 2000 || item.answer.length > 8000) {
+        throw new HttpsError("invalid-argument", "qa item too long.");
+      }
     }
   }
 
@@ -161,7 +200,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       throw err;
     }
 
-  } else {
+  } else if (data.mode === "evaluate") {
     // evaluate mode (required fields already validated above, before charging)
     const jobContextBlock = data.jobDescription ? `Job Context:\n${data.jobDescription}\n\n` : "";
     const prompt = buildPrompt("handler_mock_interview_eval", {
@@ -177,5 +216,28 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     });
 
     return result.raw as EvaluateResult;
+  } else {
+    // evaluate_session — holistic end-of-interview report. Free within the
+    // session: the single mock-interview charge happened at generate time.
+    const jobContextBlock = data.jobDescription ? `Job Context:\n${data.jobDescription}\n\n` : "";
+    const resumeBlock = data.resumeText?.trim() ? `Candidate Resume:\n${data.resumeText}\n\n` : "";
+    const transcript = (data.qa as Array<{ question: string; answer: string }>)
+      .map((item, i) =>
+        `Q${i + 1}: ${item.question}\nA${i + 1}: ${item.answer.trim() || "(no answer — the candidate skipped this question)"}`)
+      .join("\n\n");
+
+    const prompt = buildPrompt("handler_mock_interview_session_eval", {
+      jobContextBlock,
+      resumeBlock,
+      transcript,
+    });
+
+    const provider = await resolveProvider(uid, modelId);
+    const result = await provider.generate({
+      prompt,
+      responseSchema: SESSION_EVAL_SCHEMA,
+    });
+
+    return result.raw;
   }
 });
