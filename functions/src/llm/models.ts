@@ -46,6 +46,7 @@ import {
   getDeepseekBaseUrl,
   getModelRegistry,
   registerDefaultModels,
+  getDefaultModelId,
 } from "../config/env";
 import { ModelEntry } from "../admin/schema";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
@@ -613,6 +614,40 @@ class FallbackProvider implements LLMProvider {
 }
 
 // ---------------------------------------------------------------------------
+// FreeTierOutputCapProvider — injects maxOutputTokens:1024 for free-tier (C)
+// ---------------------------------------------------------------------------
+
+/**
+ * Service-tiering wrapper (服务分级 — free/paid output-quality boundary).
+ *
+ * When a free-tier user's request arrives with maxOutputTokens undefined, this
+ * wrapper injects maxOutputTokens: 1024 before delegating to the inner provider.
+ * Paid/business callers pass through unmodified (they may supply their own cap
+ * or leave it undefined for the provider default).
+ *
+ * Admins can deepen the gap later via per-tier prompt variants without touching
+ * provider code — the token cap is the enforceable output boundary.
+ */
+class FreeTierOutputCapProvider implements LLMProvider {
+  readonly name: string;
+  private readonly inner: LLMProvider;
+
+  constructor(inner: LLMProvider) {
+    this.inner = inner;
+    this.name = inner.name;
+  }
+
+  async generate(req: LLMRequest): Promise<LLMResult> {
+    // Only inject the cap when the caller did not already specify one.
+    const cappedReq: LLMRequest =
+      req.maxOutputTokens === undefined
+        ? { ...req, maxOutputTokens: 1024 }
+        : req;
+    return this.inner.generate(cappedReq);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // buildProvider — public entry point (with key-pool rotation support)
 // ---------------------------------------------------------------------------
 
@@ -759,48 +794,90 @@ export async function resolveProvider(
   const allowedWithAuto =
     tier === "paid" && autoOption ? [...allowed, autoOption] : allowed;
 
-  // Absolute fallback: first enabled entry in the registry, then hardcoded gemini.
+  // --- Feature A: admin-configured default model ---
+  // Prefer the admin-set default when it exists in the registry, is enabled,
+  // and the user's tier is allowed to use it.
+  const adminDefaultId = getDefaultModelId();
+  const adminDefaultEntry =
+    adminDefaultId
+      ? allowedWithAuto.find((m) => m.id === adminDefaultId && m.enabled)
+      : undefined;
+
+  // Absolute fallback: admin default (if valid) > hardcoded DEFAULT_MODEL_ID > first enabled.
   const absoluteFallback =
+    adminDefaultEntry ??
     registry.find((m) => m.id === DEFAULT_MODEL_ID && m.enabled) ??
     registry.find((m) => m.enabled) ??
     DEFAULT_MODELS[0]; // always gemini
 
   const chosen =
     allowedWithAuto.find((m) => m.id === requestedModelId) ??
+    adminDefaultEntry ??
     allowed.find((m) => m.id === DEFAULT_MODEL_ID) ??
     absoluteFallback;
 
   // Build the primary provider (with key-pool rotation)
   const primary = buildProvider(chosen);
 
-  // Attach fallback chain if defined
-  if (chosen.fallbackChain && chosen.fallbackChain.length > 0) {
+  // --- Feature B: implicit availability auto-fallback ---
+  // Build a FallbackProvider even when the chosen entry has no explicit
+  // fallbackChain, using other enabled+tier-allowed models (excluding the
+  // primary) sorted by (priority ?? 999) then registry order, capped at 3.
+  const buildFallbackList = (
+    explicitChain: string[] | undefined
+  ): Array<{ modelId: string; provider: LLMProvider }> => {
     const fallbacks: Array<{ modelId: string; provider: LLMProvider }> = [];
 
-    for (const chainId of chosen.fallbackChain) {
-      // Find the entry in the registry
-      const chainEntry = registry.find((m) => m.id === chainId && m.enabled);
-      if (!chainEntry) {
-        console.warn(
-          `[fallback-chain] Chain entry "${chainId}" not found or disabled. Skipping.`
-        );
-        continue;
+    if (explicitChain && explicitChain.length > 0) {
+      // Explicit chain: respect the admin-defined order, apply tier check.
+      for (const chainId of explicitChain) {
+        const chainEntry = registry.find((m) => m.id === chainId && m.enabled);
+        if (!chainEntry) {
+          console.warn(
+            `[fallback-chain] Chain entry "${chainId}" not found or disabled. Skipping.`
+          );
+          continue;
+        }
+        if (!allowedWithAuto.some((m) => m.id === chainId)) {
+          console.warn(
+            `[fallback-chain] Chain entry "${chainId}" exceeds user tier. Skipping.`
+          );
+          continue;
+        }
+        fallbacks.push({ modelId: chainId, provider: buildProvider(chainEntry) });
       }
-      // Tier check: skip entries the user's tier cannot access
-      const userAllowed = [...allowedWithAuto];
-      if (!userAllowed.some((m) => m.id === chainId)) {
-        console.warn(
-          `[fallback-chain] Chain entry "${chainId}" exceeds user tier. Skipping.`
-        );
-        continue;
-      }
-      fallbacks.push({ modelId: chainId, provider: buildProvider(chainEntry) });
+      return fallbacks;
     }
 
-    if (fallbacks.length > 0) {
-      return new FallbackProvider(primary, chosen.id, fallbacks);
+    // Implicit chain: other enabled models accessible to the user's tier,
+    // sorted by (priority ?? 999) ascending then registry order, capped at 3.
+    const candidates = allowedWithAuto
+      .filter((m) => m.id !== chosen.id && m.enabled)
+      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+      .slice(0, 3);
+
+    for (const entry of candidates) {
+      fallbacks.push({ modelId: entry.id, provider: buildProvider(entry) });
     }
+    return fallbacks;
+  };
+
+  const fallbacks = buildFallbackList(chosen.fallbackChain);
+
+  // Wrap with FallbackProvider when at least one fallback is available.
+  let finalProvider: LLMProvider;
+  if (fallbacks.length > 0) {
+    finalProvider = new FallbackProvider(primary, chosen.id, fallbacks);
+  } else {
+    finalProvider = primary;
   }
 
-  return primary;
+  // --- Feature C: service tiering — free-tier output cap ---
+  // Free-tier users get a hard 1024-token output cap injected at the provider
+  // boundary (服务分级). Paid/business callers pass through uncapped.
+  if (tier === "free") {
+    return new FreeTierOutputCapProvider(finalProvider);
+  }
+
+  return finalProvider;
 }

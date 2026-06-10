@@ -25,4 +25,5 @@ export {
   registerDefaultModels,
   getPromptOverride,
   getAllPromptOverrides,
+  getDefaultModelId,
 } from "../admin/platformConfig";

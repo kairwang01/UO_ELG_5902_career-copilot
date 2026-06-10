@@ -70,6 +70,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     const body: Record<string, unknown> = { model: this.model, messages };
     if (req.responseSchema) body.response_format = { type: "json_object" };
     if (req.temperature !== undefined) body.temperature = req.temperature;
+    if (req.maxOutputTokens !== undefined) body.max_tokens = req.maxOutputTokens;
 
     const resp = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",

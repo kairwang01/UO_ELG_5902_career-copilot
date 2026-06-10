@@ -16,7 +16,7 @@ import { onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requireAuth } from "../middleware/auth";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
-import { ensurePlatformCaches } from "../config/env";
+import { ensurePlatformCaches, getDefaultModelId } from "../config/env";
 import {
   tierFromSubscription,
   isBusinessUser,
@@ -48,15 +48,23 @@ export const listModelsFunction = onCall({ invoker: "public" }, async (request) 
   //   business    → gemini + kairllm + custom
   //   paid+biz    → gemini + kairllm + deepseek + custom
   //   (auto alias is hidden from all listings)
-  const models = modelsForTier(tier, business).map(({ id, label, minTier }) => ({
+  const allowedModels = modelsForTier(tier, business);
+  const models = allowedModels.map(({ id, label, minTier }) => ({
     id,
     label,
     minTier,
   }));
 
+  // Determine effective default: admin-configured if valid for this user's tier,
+  // otherwise fall back to the hardcoded DEFAULT_MODEL_ID.
+  const adminDefault = getDefaultModelId();
+  const adminDefaultAllowed =
+    adminDefault && allowedModels.some((m) => m.id === adminDefault && m.enabled !== false);
+  const effectiveDefaultModelId = adminDefaultAllowed ? adminDefault : DEFAULT_MODEL_ID;
+
   return {
     tier,
-    defaultModelId: DEFAULT_MODEL_ID,
+    defaultModelId: effectiveDefaultModelId,
     models,
     // Optional UI hint — not a security gate (that's enforced in resolveProvider).
     isBusiness: business,

@@ -31,6 +31,8 @@ import {
 } from "../admin/schema";
 import {
   ensurePlatformCaches,
+  getDefaultModelId,
+  getModelRegistry,
   getModelRegistryMasked,
   refreshPlatformCaches,
 } from "../admin/platformConfig";
@@ -231,7 +233,11 @@ function validateChainReferences(
 export const adminListModelsFunction = onCall({ invoker: "public" }, async (request) => {
   await requireRole(request, "admin");
   await ensurePlatformCaches();
-  return { models: getModelRegistryMasked() };
+  return {
+    models: getModelRegistryMasked(),
+    // Include the admin-configured default so the UI can render the badge.
+    defaultModelId: getDefaultModelId() ?? DEFAULT_MODEL_ID,
+  };
 });
 
 // ---------------------------------------------------------------------------
@@ -375,4 +381,56 @@ export const adminDeleteModelFunction = onCall({ invoker: "public" }, async (req
   });
 
   return { models: getModelRegistryMasked() };
+});
+
+// ---------------------------------------------------------------------------
+// adminSetDefaultModel  (requires 'super' — changes the global default model)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sets the admin-configured default model for all users.
+ *
+ * The supplied id must exist in the current registry and be enabled.
+ * Writes default_model_id into platform_config/models (merge), busts the cache,
+ * and audit-logs the change.
+ *
+ * resolveProvider() and listModels both read this via getDefaultModelId() on the
+ * next request (within one TTL cycle — ≤60 s).
+ *
+ * Role requirement: 'super'.
+ */
+export const adminSetDefaultModelFunction = onCall({ invoker: "public" }, async (request) => {
+  const { uid: adminUid } = await requireRole(request, "super");
+  const data = (request.data ?? {}) as { id?: unknown };
+
+  const id = typeof data.id === "string" ? data.id.trim() : "";
+  if (!id) throw new HttpsError("invalid-argument", "id is required.");
+
+  await ensurePlatformCaches();
+  const registry = getModelRegistry();
+
+  // Validate: id must exist in the registry and be enabled.
+  const entry = registry.find((m) => m.id === id);
+  if (!entry) {
+    throw new HttpsError("not-found", `Model "${id}" not found in the registry.`);
+  }
+  if (!entry.enabled) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Model "${id}" is disabled and cannot be set as the default.`
+    );
+  }
+
+  // Write default_model_id into the models doc (merge — preserves the models array).
+  const ref = db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.models);
+  await ref.set({ default_model_id: id } as Partial<ModelsDoc>, { merge: true });
+  await refreshPlatformCaches();
+
+  await logAdminAction({
+    admin_uid: adminUid,
+    action: "set_default_model",
+    details: { id },
+  });
+
+  return { ok: true, defaultModelId: id };
 });

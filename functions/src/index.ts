@@ -57,6 +57,8 @@ export { getBusinessLlmConfigFunction as getBusinessLlmConfig } from "./handlers
 export { adminListModelsFunction       as adminListModels      } from "./handlers/adminModels";
 export { adminUpsertModelFunction      as adminUpsertModel     } from "./handlers/adminModels";
 export { adminDeleteModelFunction      as adminDeleteModel     } from "./handlers/adminModels";
+export { adminSetDefaultModelFunction  as adminSetDefaultModel } from "./handlers/adminModels";
+export { createCompanyReviewFunction   as createCompanyReview  } from "./handlers/companyReviews";
 export { adminGetPromptsFunction            as adminGetPrompts           } from "./handlers/adminPrompts";
 export { adminUpdatePromptFunction          as adminUpdatePrompt         } from "./handlers/adminPrompts";
 export { adminResetPromptFunction           as adminResetPrompt          } from "./handlers/adminPrompts";

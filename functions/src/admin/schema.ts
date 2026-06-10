@@ -73,6 +73,8 @@ export interface ModelEntry {
 /** Firestore shape of platform_config/models. */
 export interface ModelsDoc {
   models?: ModelEntry[];
+  /** Admin-configured default model id. When set, overrides the hardcoded DEFAULT_MODEL_ID. */
+  default_model_id?: string;
 }
 
 export const USAGE_EVENTS_COLLECTION = "usage_events";

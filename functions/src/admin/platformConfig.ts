@@ -130,6 +130,19 @@ export function registerDefaultModels(defaults: ModelEntry[]): void {
 }
 
 /**
+ * Returns the admin-configured default model id from the platform_config/models
+ * doc, or null if none is set.
+ *
+ * The same cache TTL as getModelRegistry() applies — ensurePlatformCaches() must
+ * have been called first (resolveProvider() and listModels both do this).
+ */
+export function getDefaultModelId(): string | null {
+  const id = modelsCache?.default_model_id;
+  if (typeof id === "string" && id.trim() !== "") return id.trim();
+  return null;
+}
+
+/**
  * Returns the effective model registry (Firestore if non-empty, else defaults).
  * Requires ensurePlatformCaches() to have been called first (models.ts calls it
  * in resolveProvider; adminModels.ts calls it explicitly).

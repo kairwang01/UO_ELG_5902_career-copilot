@@ -126,6 +126,9 @@ export class GeminiProvider implements LLMProvider {
     if (req.temperature !== undefined) {
       config.temperature = req.temperature;
     }
+    if (req.maxOutputTokens !== undefined) {
+      config.maxOutputTokens = req.maxOutputTokens;
+    }
 
     const generateWithModel = (model: string) =>
       this.ai.models.generateContent({
