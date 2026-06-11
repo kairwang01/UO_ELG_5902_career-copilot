@@ -713,7 +713,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   };
 
   const renderDashboard = () => (
-    <div className="flex flex-col gap-6 animate-slide-in-up">
+    // key replays the entrance animation on every view switch — quick fade keeps
+    // navigation feeling responsive instead of content snapping in place.
+    <div key={dashboardView} className="flex flex-col gap-6 animate-view-fade">
         {dashboardView === 'dashboard' && (
             <div id="dashboard-panel">
               <Dashboard
@@ -974,7 +976,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           </div>
         )}
         <div className="flex-1 flex flex-col h-screen overflow-hidden">
-          <header className="h-16 bg-[var(--site-surface)] border-b border-[var(--site-border)] flex items-center justify-between px-4 sm:px-8 shrink-0">
+          <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-8 shrink-0">
             <button
               type="button"
               onClick={() => setIsMobileNavOpen(true)}
@@ -1001,7 +1003,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               />
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto bg-[var(--site-surface-muted)] p-6 md:p-10">
+          <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10">
             <div className="max-w-6xl mx-auto">
               {(isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                 <div className="mt-4 animate-slide-in-up">

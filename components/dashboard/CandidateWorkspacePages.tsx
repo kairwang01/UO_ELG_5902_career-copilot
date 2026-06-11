@@ -99,10 +99,10 @@ const StatusPill: React.FC<{ tone: 'ready' | 'gap' | 'risk' | 'neutral'; childre
   children,
 }) => {
   const styles = {
-    ready: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    gap: 'border-amber-200 bg-amber-50 text-amber-700',
-    risk: 'border-red-200 bg-red-50 text-red-700',
-    neutral: 'border-slate-200 bg-slate-50 text-slate-600',
+    ready: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/30 dark:text-emerald-300',
+    gap: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-300',
+    risk: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/50 dark:bg-red-900/30 dark:text-red-300',
+    neutral: 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 text-slate-600 dark:text-slate-600 dark:border-slate-700 dark:bg-slate-800/60',
   };
 
   return <span className={`rounded border px-2 py-1 text-xs font-semibold ${styles[tone]}`}>{children}</span>;
@@ -114,11 +114,11 @@ const Panel: React.FC<{ title: string; description?: string; children: React.Rea
   children,
   action,
 }) => (
-  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+  <section className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
-        {description && <p className="mt-1 text-sm leading-relaxed text-slate-600">{description}</p>}
+        <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{title}</h3>
+        {description && <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{description}</p>}
       </div>
       {action}
     </div>
@@ -134,15 +134,15 @@ const PageHeader: React.FC<{
   primaryLabel: string;
   onPrimary: () => void;
 }> = ({ label, title, description, icon: Icon, primaryLabel, onPrimary }) => (
-  <div className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+  <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 sm:p-6 shadow-sm">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0">
-        <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
+        <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
           <Icon className="h-4 w-4" />
           {label}
         </div>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{title}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">{description}</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">{title}</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">{description}</p>
       </div>
       <button
         type="button"
@@ -162,12 +162,12 @@ const EmptyWorkbenchState: React.FC<{
   buttonLabel: string;
   onClick: () => void;
 }> = ({ title, description, buttonLabel, onClick }) => (
-  <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
-    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700">
+  <div className="rounded-lg border border-dashed border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-8 text-center">
+    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-300">
       <FileText className="h-5 w-5" />
     </div>
-    <h3 className="mt-4 text-lg font-semibold text-slate-950">{title}</h3>
-    <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-slate-600">{description}</p>
+    <h3 className="mt-4 text-lg font-semibold text-slate-950 dark:text-slate-100">{title}</h3>
+    <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">{description}</p>
     <button
       type="button"
       onClick={onClick}
@@ -186,12 +186,12 @@ const ScoreBlock: React.FC<{ label: string; value: number; tone?: 'ready' | 'gap
   const bar = tone === 'risk' ? 'bg-red-600' : tone === 'gap' ? 'bg-amber-500' : 'bg-emerald-600';
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-slate-700">{label}</span>
-        <span className="text-lg font-semibold text-slate-950">{value}</span>
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+        <span className="text-lg font-semibold text-slate-950 dark:text-slate-100">{value}</span>
       </div>
-      <div className="mt-3 h-2 rounded-full bg-white">
+      <div className="mt-3 h-2 rounded-full bg-white dark:bg-slate-700">
         <div className={`h-2 rounded-full ${bar}`} style={{ width: `${value}%` }} />
       </div>
     </div>
@@ -237,7 +237,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
                 <ScoreBlock label="ATS readiness" value={sampleReport.atsReadiness} />
                 <ScoreBlock label="Target role fit" value={sampleReport.roleFit} tone="gap" />
               </div>
-              <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900">
+              <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-200">
                 Next action: {sampleReport.nextAction}
               </div>
             </Panel>
@@ -245,23 +245,23 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
             <Panel title="ATS risks and keyword gaps">
               <div className="grid gap-4 lg:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700">ATS risks</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">ATS risks</p>
                   <div className="space-y-2">
                     {sampleReport.issues
                       .filter((issue) => issue.severity !== 'ready')
                       .map((issue) => (
-                        <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
                           <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm font-medium text-slate-950">{issue.issue}</p>
+                            <p className="text-sm font-medium text-slate-950 dark:text-slate-100">{issue.issue}</p>
                             <StatusPill tone={issue.severity === 'risk' ? 'risk' : 'gap'}>{issue.severity}</StatusPill>
                           </div>
-                          <p className="mt-2 text-sm leading-relaxed text-slate-600">{issue.fix}</p>
+                          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.fix}</p>
                         </div>
                       ))}
                   </div>
                 </div>
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">Missing keywords</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">Missing keywords</p>
                   <div className="flex flex-wrap gap-2">
                     {sampleReport.missingKeywords.map((keyword) => (
                       <StatusPill key={keyword} tone="gap">
@@ -269,7 +269,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
                       </StatusPill>
                     ))}
                   </div>
-                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-emerald-700">Matched signals</p>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Matched signals</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {sampleReport.matchedKeywords.slice(0, 5).map((keyword) => (
                       <StatusPill key={keyword} tone="ready">
@@ -287,17 +287,17 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
             >
               <div className="space-y-3">
                 {sampleReport.issues.slice(0, 3).map((issue) => (
-                  <div key={issue.id} className="rounded-lg border border-slate-200 bg-white p-4">
-                    <p className="font-medium text-slate-950">{issue.issue}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-600">{issue.whyItMatters}</p>
-                    <p className="mt-2 text-sm font-medium text-slate-800">Fix: {issue.fix}</p>
+                  <div key={issue.id} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
+                    <p className="font-medium text-slate-950 dark:text-slate-100">{issue.issue}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.whyItMatters}</p>
+                    <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-200">Fix: {issue.fix}</p>
                   </div>
                 ))}
               </div>
               <button
                 type="button"
                 onClick={() => onOpenTool('resume-formatter')}
-                className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-800"
+                className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
               >
                 Open resume formatter
                 <ArrowRight className="h-4 w-4" />
@@ -324,8 +324,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
 
   return (
     <div className="space-y-6">
-      <CareerGoalsPanel t={t} />
-      <BrowseJobs session={session ?? null} t={t} />
+      {/* Page intro first, then goals, the live job feed, and the match deep-dives. */}
       <PageHeader
         label="Job match"
         title="Matches ranked by evidence, not just keywords"
@@ -334,6 +333,8 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
         primaryLabel={hasResume ? 'Find more matches' : 'Upload resume'}
         onPrimary={() => (hasResume ? onOpenTool('opportunity-finder') : onUploadResume())}
       />
+      <CareerGoalsPanel t={t} />
+      <BrowseJobs session={session ?? null} t={t} />
 
       {!hasResume ? (
         <EmptyWorkbenchState
@@ -350,7 +351,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                 type="button"
                 onClick={() => setSort('priority')}
                 className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
-                  sort === 'priority' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-700'
+                  sort === 'priority' ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300'
                 }`}
               >
                 <ListFilter className="h-4 w-4" />
@@ -360,28 +361,28 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                 type="button"
                 onClick={() => setSort('score')}
                 className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
-                  sort === 'score' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-700'
+                  sort === 'score' ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300'
                 }`}
               >
                 <Target className="h-4 w-4" />
                 Match score
               </button>
             </div>
-            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3 text-sm text-slate-600 dark:text-slate-400">
               Priority uses score, missing required skills, and whether your resume has clear evidence.
             </div>
           </Panel>
 
           <div className="space-y-4">
             {sortedJobs.map((job) => (
-              <article key={job.id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <article key={job.id} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-slate-950">{job.title}</h3>
+                      <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{job.title}</h3>
                       <StatusPill tone={job.score >= 80 ? 'ready' : 'gap'}>{job.score}% match</StatusPill>
                     </div>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                       {job.company} · {job.location}
                     </p>
                   </div>
@@ -389,12 +390,12 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                 </div>
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resume evidence</p>
-                    <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-700">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">Resume evidence</p>
+                    <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                       {job.evidence.map((item) => (
                         <li key={item} className="flex gap-2">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                           <span>{item}</span>
                         </li>
                       ))}
@@ -402,7 +403,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Skill gaps</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">Skill gaps</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {job.gaps.map((gap) => (
                           <StatusPill key={gap} tone="gap">
@@ -414,9 +415,9 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                     <table className="w-full text-sm">
                       <tbody>
                         {job.requirements.map((req) => (
-                          <tr key={req.label} className="border-t border-slate-200">
-                            <td className="py-2 pr-2 text-slate-700">{req.label}</td>
-                            <td className={`py-2 text-right font-medium ${req.met ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          <tr key={req.label} className="border-t border-slate-200 dark:border-slate-700">
+                            <td className="py-2 pr-2 text-slate-700 dark:text-slate-300">{req.label}</td>
+                            <td className={`py-2 text-right font-medium ${req.met ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
                               {req.met ? 'Met' : 'Gap'}
                             </td>
                           </tr>
@@ -469,7 +470,7 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
                   type="button"
                   onClick={() => setQuestion(item)}
                   className={`w-full rounded-lg border p-3 text-left text-sm font-medium transition ${
-                    question === item ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                    question === item ? 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                   }`}
                 >
                   {item}
@@ -479,14 +480,14 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
           </Panel>
 
           <Panel title="Answer workspace" description="Draft the answer in STAR form, then compare it to the feedback model.">
-            <label htmlFor="practice-answer" className="text-sm font-medium text-slate-800">
+            <label htmlFor="practice-answer" className="text-sm font-medium text-slate-800 dark:text-slate-200">
               Your answer
             </label>
             <textarea
               id="practice-answer"
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
-              className="mt-2 min-h-[150px] w-full rounded-lg border border-slate-200 bg-white p-3 text-sm leading-relaxed text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="mt-2 min-h-[150px] w-full rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-3 text-sm leading-relaxed text-slate-900 dark:text-slate-100 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
             />
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {[
@@ -495,25 +496,25 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
                 ['Action', interviewFeedback.starFeedback.action],
                 ['Result', interviewFeedback.starFeedback.result],
               ].map(([label, detail]) => (
-                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-sm font-semibold text-blue-700">{label}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-600">{detail}</p>
+                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
+                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">{label}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{detail}</p>
                 </div>
               ))}
             </div>
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
               <span className="font-semibold">Improve next: </span>
               {interviewFeedback.starFeedback.missing}
             </div>
-            <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+            <div className="mt-4 rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-slate-700">Clarity score</span>
-                <span className="text-lg font-semibold text-slate-950">{interviewFeedback.clarityScore}</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Clarity score</span>
+                <span className="text-lg font-semibold text-slate-950 dark:text-slate-100">{interviewFeedback.clarityScore}</span>
               </div>
-              <div className="mt-3 h-2 rounded-full bg-slate-100">
+              <div className="mt-3 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
                 <div className="h-2 rounded-full bg-amber-500" style={{ width: `${interviewFeedback.clarityScore}%` }} />
               </div>
-              <p className="mt-3 text-sm text-slate-600">Next drill: {interviewFeedback.nextDrill}</p>
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">Next drill: {interviewFeedback.nextDrill}</p>
             </div>
           </Panel>
         </div>
@@ -555,25 +556,25 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
                         step.status === 'done'
                           ? 'bg-emerald-600'
                           : step.status === 'in_progress'
-                            ? 'bg-blue-700 ring-4 ring-blue-100'
-                            : 'bg-slate-300'
+                            ? 'bg-blue-700 ring-4 ring-blue-100 dark:ring-blue-900/50'
+                            : 'bg-slate-300 dark:bg-slate-600'
                       }`}
                     />
-                    {index < careerPathPlan.timeline.length - 1 && <div className="my-1 min-h-10 w-px flex-1 bg-slate-200" />}
+                    {index < careerPathPlan.timeline.length - 1 && <div className="my-1 min-h-10 w-px flex-1 bg-slate-200 dark:bg-slate-700" />}
                   </div>
                   <div className="pb-5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-slate-950">{step.label}</p>
+                      <p className="font-medium text-slate-950 dark:text-slate-100">{step.label}</p>
                       <StatusPill tone={step.status === 'done' ? 'ready' : step.status === 'in_progress' ? 'neutral' : 'gap'}>
                         {step.status.replace('_', ' ')}
                       </StatusPill>
                     </div>
-                    {step.detail && <p className="mt-1 text-sm text-slate-600">{step.detail}</p>}
+                    {step.detail && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{step.detail}</p>}
                   </div>
                 </div>
               ))}
             </div>
-            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-200">
               Recommended bridge role: <span className="font-semibold">{careerPathPlan.bridgeRole}</span>
             </div>
           </Panel>
@@ -582,12 +583,12 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
             <Panel title="Skill gaps" description="Gap progress is used to shape learning and portfolio tasks.">
               <div className="grid gap-3 sm:grid-cols-2">
                 {careerPathPlan.skillGaps.map((gap) => (
-                  <div key={gap.skill} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div key={gap.skill} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm font-medium text-slate-900">{gap.skill}</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{gap.skill}</p>
                       <StatusPill tone={gap.priority === 'high' ? 'gap' : 'neutral'}>{gap.priority}</StatusPill>
                     </div>
-                    <div className="mt-3 h-2 rounded-full bg-white">
+                    <div className="mt-3 h-2 rounded-full bg-white dark:bg-slate-700">
                       <div className="h-2 rounded-full bg-blue-700" style={{ width: `${gap.progress}%` }} />
                     </div>
                   </div>
@@ -598,19 +599,19 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
             <Panel title="Four-week action plan" description="A concrete operating cadence for resume, projects, practice, and applications.">
               <div className="grid gap-3 sm:grid-cols-2">
                 {careerPathPlan.fourWeekPlan.map((week) => (
-                  <div key={week.week} className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div key={week.week} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium text-slate-950">
+                      <p className="font-medium text-slate-950 dark:text-slate-100">
                         Week {week.week}: {week.focus}
                       </p>
                       <StatusPill tone={week.status === 'done' ? 'ready' : week.status === 'in_progress' ? 'neutral' : 'gap'}>
                         {week.status.replace('_', ' ')}
                       </StatusPill>
                     </div>
-                    <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-600">
+                    <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                       {week.tasks.map((task) => (
                         <li key={task} className="flex gap-2">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-600" />
                           <span>{task}</span>
                         </li>
                       ))}
@@ -627,9 +628,9 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
                   ['Learning', 'Complete one roadmap prioritization exercise and one user interview synthesis.'],
                   ['Applications', 'Apply to 5 bridge roles after resume title and evidence edits.'],
                 ].map(([title, detail]) => (
-                  <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-medium text-slate-950">{title}</p>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600">{detail}</p>
+                  <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
+                    <p className="font-medium text-slate-950 dark:text-slate-100">{title}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{detail}</p>
                   </div>
                 ))}
               </div>

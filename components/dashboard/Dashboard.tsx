@@ -84,7 +84,7 @@ const ProgressLine: React.FC<{ value: number; tone?: 'ready' | 'gap' | 'risk' }>
     tone === 'risk' ? 'bg-red-600' : tone === 'gap' ? 'bg-amber-500' : 'bg-emerald-600';
 
   return (
-    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+    <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
       <div className={`h-full rounded-full ${toneClass}`} style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
     </div>
   );
@@ -98,24 +98,24 @@ const MetricCard: React.FC<{
   tone?: 'blue' | 'green' | 'amber' | 'slate';
 }> = ({ label, value, helper, icon: Icon, tone = 'blue' }) => {
   const tones = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-100',
-    green: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    amber: 'bg-amber-50 text-amber-700 border-amber-100',
-    slate: 'bg-slate-50 text-slate-700 border-slate-200',
+    blue: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50',
+    green: 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800/50',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50',
+    slate: 'bg-slate-50 text-slate-700 dark:text-slate-300 border-slate-200 dark:bg-slate-800/60 dark:border-slate-700',
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-          <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-500">{label}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{value}</p>
         </div>
         <div className={`rounded-lg border p-2.5 ${tones[tone]}`}>
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="mt-3 text-sm leading-relaxed text-slate-600">{helper}</p>
+      <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{helper}</p>
     </div>
   );
 };
@@ -128,21 +128,21 @@ const PriorityItem: React.FC<{
 }> = ({ title, detail, status, onClick }) => {
   const tone =
     status === 'High'
-      ? 'border-red-200 bg-red-50 text-red-700'
+      ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/50 dark:bg-red-900/30 dark:text-red-300'
       : status === 'Medium'
-        ? 'border-amber-200 bg-amber-50 text-amber-700'
-        : 'border-emerald-200 bg-emerald-50 text-emerald-700';
+        ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-300'
+        : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/30 dark:text-emerald-300';
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-blue-200 hover:bg-blue-50/30"
+      className="w-full rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4 text-left transition hover:border-blue-200 hover:bg-blue-50/30 dark:hover:border-blue-800 dark:hover:bg-blue-900/20"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium text-slate-950">{title}</p>
-          <p className="mt-1 text-sm leading-relaxed text-slate-600">{detail}</p>
+          <p className="font-medium text-slate-950 dark:text-slate-100">{title}</p>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{detail}</p>
         </div>
         <span className={`shrink-0 rounded border px-2 py-1 text-[11px] font-semibold ${tone}`}>{status}</span>
       </div>
@@ -323,15 +323,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+    <div className="space-y-6">
+      <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-blue-700">Today&apos;s search workbench</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+            <p className="text-sm font-medium text-blue-700 dark:text-blue-400">Today&apos;s search workbench</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
               Welcome back, {firstName}
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
               Keep the search moving through a simple loop: fix the resume evidence, compare fit, practice the likely interview, then update the plan.
             </p>
           </div>
@@ -345,7 +345,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           </button>
         </div>
         {error && (
-          <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>Live history is unavailable, so sample readiness data is shown. {error}</span>
           </div>
@@ -384,28 +384,28 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-950">Readiness trend</h3>
-              <p className="text-sm text-slate-600">Track whether resume changes are improving role readiness before applying.</p>
+              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Readiness trend</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Track whether resume changes are improving role readiness before applying.</p>
             </div>
-            {loading && <span className="text-xs font-medium text-slate-500">Loading history...</span>}
+            {loading && <span className="text-xs font-medium text-slate-500 dark:text-slate-500">Loading history...</span>}
           </div>
           <div className="h-64 overflow-hidden">
             <Chart data={displayScores} width={620} height={250} t={t} />
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-950">Current skill evidence</h3>
-          <p className="mt-1 text-sm text-slate-600">Strongest signals to carry into job matching and interviews.</p>
+        <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
+          <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Current skill evidence</h3>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Strongest signals to carry into job matching and interviews.</p>
           <div className="mt-5 space-y-4">
             {skills.slice(0, 4).map((skill, index) => (
               <div key={skill} className="space-y-2">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium text-slate-800">{skill}</span>
-                  <span className="text-xs text-slate-500">{82 - index * 9}%</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{skill}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-500">{82 - index * 9}%</span>
                 </div>
                 <ProgressLine value={82 - index * 9} tone={index > 1 ? 'gap' : 'ready'} />
               </div>
@@ -415,13 +415,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-slate-950">Priority queue</h3>
-              <p className="text-sm text-slate-600">Work items ranked by impact on applications this week.</p>
+              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Priority queue</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Work items ranked by impact on applications this week.</p>
             </div>
-            <Target className="h-5 w-5 text-blue-700" />
+            <Target className="h-5 w-5 text-blue-700 dark:text-blue-400" />
           </div>
           <div className="space-y-3">
             {priorities.map((item) => (
@@ -437,37 +437,37 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-1">
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-950">Best match to review</h3>
-                <p className="mt-1 text-sm text-slate-600">Technical Product Owner · B2B SaaS</p>
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Best match to review</h3>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Technical Product Owner · B2B SaaS</p>
               </div>
-              <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-700">
+              <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/30 dark:text-emerald-300">
                 84%
               </span>
             </div>
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3 text-sm text-slate-700 dark:text-slate-300">
               Evidence: led billing workflow redesign, prioritized backlog with engineering and design, reduced support tickets.
             </div>
             <button
               type="button"
               onClick={() => onNavigate?.('jobs')}
-              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-800"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
             >
               Open job matches
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
             <div className="flex items-start gap-3">
-              <div className="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-700">
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-300">
                 <MessageSquare className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-950">Next interview drill</h3>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Next interview drill</h3>
+                <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                   Practice stakeholder prioritization and add one measurable Result line.
                 </p>
               </div>
@@ -475,7 +475,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
             <button
               type="button"
               onClick={() => onNavigate?.('interview')}
-              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-800"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
             >
               Open practice room
               <ArrowRight className="h-4 w-4" />
@@ -485,17 +485,17 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-blue-700" />
-            <h3 className="text-lg font-semibold text-slate-950">Weekly coaching summary</h3>
+            <TrendingUp className="h-5 w-5 text-blue-700 dark:text-blue-400" />
+            <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Weekly coaching summary</h3>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-slate-700">{weeklySummary}</p>
+          <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{weeklySummary}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {['Resume evidence', 'Bridge applications', 'Interview result line'].map((label, index) => (
-              <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                  <CheckCircle2 className={`h-4 w-4 ${index === 0 ? 'text-emerald-600' : 'text-slate-400'}`} />
+              <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+                  <CheckCircle2 className={`h-4 w-4 ${index === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-600'}`} />
                   {label}
                 </div>
               </div>
@@ -503,8 +503,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-950">Recent activity</h3>
+        <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
+          <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Recent activity</h3>
           <div className="mt-4 space-y-3">
             {(activityFeed.length > 0
               ? activityFeed
@@ -514,9 +514,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
                   { type: 'Career Plan', details: 'Weekly plan starts with role target selection' },
                 ]
             ).map((item) => (
-              <div key={`${item.type}-${item.details}`} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-medium text-slate-900">{item.type}</p>
-                <p className="mt-1 text-sm text-slate-600">{item.details}</p>
+              <div key={`${item.type}-${item.details}`} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.type}</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{item.details}</p>
               </div>
             ))}
           </div>

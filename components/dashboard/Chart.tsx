@@ -16,14 +16,15 @@ interface ChartProps {
 const Chart: React.FC<ChartProps> = ({ data, height = 250, t }) => {
   if (!data || data.length < 2) {
     return (
-        <div style={{ height }} className="flex items-center justify-center bg-gray-100 rounded-lg text-gray-500 w-full">
+        <div style={{ height }} className="flex items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-lg text-gray-500 dark:text-slate-400 w-full">
             {t('chart_no_data')}
         </div>
     );
   }
 
   return (
-    <div className="w-full font-sans" style={{ height }}>
+    // text color drives the CartesianGrid stroke (currentColor) for dark-mode support
+    <div className="w-full font-sans text-gray-200 dark:text-slate-700" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
@@ -37,7 +38,7 @@ const Chart: React.FC<ChartProps> = ({ data, height = 250, t }) => {
           </defs>
           <XAxis dataKey="label" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} dy={10} />
           <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} dx={-10} />
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" />
           <Tooltip 
             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
             itemStyle={{ color: '#1f2937', fontWeight: 'bold' }}
