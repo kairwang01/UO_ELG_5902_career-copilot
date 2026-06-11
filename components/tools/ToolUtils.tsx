@@ -1,5 +1,58 @@
 import React, { useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { Packer, Document, Paragraph, TextRun, HeadingLevel } from 'docx';
+
+/** Shared error box so every tool surfaces failures with the same look. */
+export const ToolError: React.FC<{ message: string; onRetry?: () => void; retryLabel?: string }> = ({ message, onRetry, retryLabel = 'Try again' }) => (
+  <div role="alert" className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 animate-panel-expand">
+    <p className="text-sm text-red-700 dark:text-red-300">{message}</p>
+    {onRetry && (
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 underline underline-offset-2 hover:text-red-900 dark:hover:text-red-200"
+      >
+        {retryLabel}
+      </button>
+    )}
+  </div>
+);
+
+/** Copy-to-clipboard with inline "copied" confirmation. */
+export const CopyButton: React.FC<{ text: string; label?: string; copiedLabel?: string; className?: string }> = ({
+  text,
+  label = 'Copy',
+  copiedLabel = 'Copied',
+  className = '',
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable (permissions/insecure context) — leave the label as-is.
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-live="polite"
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors ${
+        copied
+          ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+          : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'
+      } ${className}`}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? copiedLabel : label}
+    </button>
+  );
+};
 
 export const renderFormattedText = (text: string) => {
     const lines = text.split('\n');
@@ -212,12 +265,12 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
 
   return (
     <div className="relative">
-      <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 flex items-center gap-2">
+      <button onClick={() => setIsMenuOpen(!isMenuOpen)} aria-haspopup="menu" aria-expanded={isMenuOpen} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 transition-colors flex items-center gap-2">
         Download
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
       </button>
       {isMenuOpen && (
-        <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 ring-1 ring-black/5 dark:ring-white/10 z-20">
+        <div role="menu" className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 ring-1 ring-black/5 dark:ring-white/10 z-20 animate-fade-scale">
           <button onClick={downloadTxt} className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700">as TXT</button>
           <button onClick={downloadPdf} className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700">as PDF</button>
           <button onClick={downloadDocx} className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700">as DOCX</button>

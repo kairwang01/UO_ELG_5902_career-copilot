@@ -383,7 +383,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         )}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {searchStages.map((stage) => {
           const Icon = stage.icon;
           return (

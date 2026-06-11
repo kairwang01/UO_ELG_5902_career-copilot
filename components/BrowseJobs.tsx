@@ -227,7 +227,8 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             value={rawKeyword}
             onChange={(e) => handleKeywordChange(e.target.value)}
             placeholder={t('browse_jobs_search_ph')}
-            className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 pl-9 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition"
+            disabled={loading}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 pl-9 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
           />
         </div>
 
@@ -240,7 +241,8 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             value={locationFilter}
             onChange={(e) => setLocationFilter(e.target.value)}
             aria-label={t('browse_jobs_all_locations')}
-            className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition"
+            disabled={loading}
+            className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
           >
             <option value="all">{t('browse_jobs_all_locations')}</option>
             {locations.map((loc) => (
@@ -254,7 +256,8 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
               type="checkbox"
               checked={hasSalaryFilter}
               onChange={(e) => setHasSalaryFilter(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+              disabled={loading}
+              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-wait"
             />
             {t('browse_jobs_has_salary')}
           </label>
@@ -264,7 +267,8 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value as 'newest' | 'title_az')}
             aria-label="Sort job postings"
-            className="ml-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition"
+            disabled={loading}
+            className="ml-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
           >
             <option value="newest">{t('browse_jobs_sort_newest')}</option>
             <option value="title_az">{t('browse_jobs_sort_az')}</option>
@@ -387,20 +391,24 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                             {job.location}
                           </span>
                         )}
-                        {job.salary_range && (
-                          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full whitespace-nowrap">
-                            {job.salary_range}
-                          </span>
-                        )}
                         <span className="text-xs text-slate-400 dark:text-slate-500">
                           {postedLabel(job.created_at, t)}
                         </span>
                       </div>
                     </div>
-                    {isExpanded
-                      ? <ChevronUp className="h-4 w-4 mt-1 shrink-0 text-slate-400 dark:text-slate-500" />
-                      : <ChevronDown className="h-4 w-4 mt-1 shrink-0 text-slate-400 dark:text-slate-500" />
-                    }
+                    {/* Salary sits top-right next to the chevron — the first thing a
+                        candidate scans for on a job card. */}
+                    <div className="flex items-center gap-3 shrink-0">
+                      {job.salary_range && (
+                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                          {job.salary_range}
+                        </span>
+                      )}
+                      {isExpanded
+                        ? <ChevronUp className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                        : <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                      }
+                    </div>
                   </div>
 
                   {/* description preview (3-line clamp) — hidden when expanded */}
@@ -433,6 +441,9 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                               : 'bg-blue-700 dark:bg-blue-600 text-white hover:bg-blue-800 dark:hover:bg-blue-700'
                         }`}
                       >
+                        {isApplying && (
+                          <svg className="mr-2 h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                        )}
                         {isApplied
                           ? t('browse_jobs_applied')
                           : isApplying
@@ -440,6 +451,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                             : t('browse_jobs_apply')}
                       </button>
                     </div>
+
+                    {/* Reviews still loading for this employer — placeholder keeps the
+                        card height stable instead of the section popping in. */}
+                    {eid && employerReviews === null && (
+                      <div className="mt-5 border-t border-slate-100 dark:border-slate-700 pt-4">
+                        <div className="h-4 w-40 animate-pulse rounded bg-slate-100 dark:bg-slate-700" />
+                      </div>
+                    )}
 
                     {/* ── Reviews section ── */}
                     {employerReviews && employerReviews.count > 0 && (

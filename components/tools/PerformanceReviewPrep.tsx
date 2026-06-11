@@ -121,7 +121,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
 
       {/* (e) ERROR RETRY */}
       {error && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-3 flex items-start gap-3">
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-4 flex items-start gap-3 animate-panel-expand">
           <p className="text-sm text-red-700 dark:text-red-400 flex-1">{error}</p>
           <button
             type="button"

@@ -61,18 +61,18 @@ type DashboardView =
   | 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications'
   | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
 
-// Readable breadcrumb labels for the workspace header (mirrors Sidebar labels).
-const DASHBOARD_VIEW_LABELS: Record<DashboardView, string> = {
-  dashboard: 'Dashboard',
-  toolkit: 'Toolkit',
-  resume: 'Resume',
-  jobs: 'Jobs',
-  applications: 'Applications',
-  interview: 'Interview',
-  plan: 'Plan',
-  portfolio: 'Showcase',
-  account: 'Account',
-  credentials: 'Identity & Wallet',
+// Breadcrumb i18n keys for the workspace header (mirrors Sidebar labels).
+const DASHBOARD_VIEW_LABEL_KEYS: Record<DashboardView, string> = {
+  dashboard: 'ws_nav_dashboard',
+  toolkit: 'ws_nav_toolkit',
+  resume: 'ws_nav_resume',
+  jobs: 'ws_nav_jobs',
+  applications: 'ws_nav_applications',
+  interview: 'ws_nav_interview',
+  plan: 'ws_nav_plan',
+  portfolio: 'ws_nav_portfolio',
+  account: 'ws_nav_account',
+  credentials: 'ws_nav_credentials',
 };
 
 const buildLocalProfile = (
@@ -1006,7 +1006,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             <ApiStatusBanner />
             <div className="flex items-center gap-3 ml-auto">
               <span className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 hidden sm:block">
-                {DASHBOARD_VIEW_LABELS[dashboardView]}
+                {t(DASHBOARD_VIEW_LABEL_KEYS[dashboardView])}
               </span>
               <AccountMenu
                 profile={profile}

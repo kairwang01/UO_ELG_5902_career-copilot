@@ -144,7 +144,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
     ].join('\n');
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         {/* (d) RESULT ACTIONS — download + start-over */}
         <div className="flex flex-wrap justify-between items-center gap-3">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_salary_negotiator_results_title')}</h4>

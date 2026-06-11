@@ -56,14 +56,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(false);
 
   const workspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'resume', label: 'Resume', icon: FileText },
-    { id: 'jobs', label: 'Jobs', icon: Briefcase },
-    { id: 'applications', label: 'Applications', icon: ClipboardList },
-    { id: 'interview', label: 'Interview', icon: MessageSquare },
-    { id: 'plan', label: 'Plan', icon: CalendarCheck },
-    { id: 'portfolio', label: 'Showcase', icon: Globe },
-    { id: 'credentials', label: 'Identity & Wallet', icon: ShieldCheck },
+    { id: 'dashboard', label: t('ws_nav_dashboard'), icon: LayoutDashboard },
+    { id: 'resume', label: t('ws_nav_resume'), icon: FileText },
+    { id: 'jobs', label: t('ws_nav_jobs'), icon: Briefcase },
+    { id: 'applications', label: t('ws_nav_applications'), icon: ClipboardList },
+    { id: 'interview', label: t('ws_nav_interview'), icon: MessageSquare },
+    { id: 'plan', label: t('ws_nav_plan'), icon: CalendarCheck },
+    { id: 'portfolio', label: t('ws_nav_portfolio'), icon: Globe },
+    { id: 'credentials', label: t('ws_nav_credentials'), icon: ShieldCheck },
   ];
 
   // Turn a raw subscription_status (e.g. "pending_essentials") into a readable label.
@@ -99,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         {/* Workspace Section */}
         <div className="space-y-1">
-            <h3 className="px-4 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-2">Workspace</h3>
+            <h3 className="px-4 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-2">{t('ws_section_workspace')}</h3>
             {workspaceItems.map((item) => {
                 const isActive = activeView === item.id;
                 return (
@@ -127,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* AI Toolkit Section */}
         <div className="space-y-1">
             <div className="flex items-center justify-between px-4 mb-2">
-                <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Assisted Tools <span className="text-gray-300 dark:text-slate-600">· {ALL_TOOLS_CONFIG.length}</span></h3>
+                <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">{t('ws_section_tools')} <span className="text-gray-300 dark:text-slate-600">· {ALL_TOOLS_CONFIG.length}</span></h3>
                 <button 
                     onClick={() => setIsToolkitExpanded(!isToolkitExpanded)}
                     aria-expanded={isToolkitExpanded}
@@ -150,7 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 }`}
             >
                 <Wrench className={`h-4.5 w-4.5 transition-transform group-hover:scale-110 ${activeView === 'toolkit' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`} />
-                <span className="flex-1 text-left">Browse all tools</span>
+                <span className="flex-1 text-left">{t('ws_browse_all_tools')}</span>
                 <ChevronRight className="h-3.5 w-3.5 opacity-50" />
             </button>
 
@@ -194,7 +194,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <CreditCard className="h-4 w-4" />
             </div>
             <div>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase">Credits</p>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase">{t('ws_credits_label')}</p>
                 <p className="text-xs font-bold text-gray-900 dark:text-white tracking-tight">
                     {credits.toLocaleString()} CR
                 </p>

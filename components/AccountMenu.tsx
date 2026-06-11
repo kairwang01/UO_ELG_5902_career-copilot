@@ -29,7 +29,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
   onToggleTheme,
   onAccount,
   onSignOut,
-  // t is received but reserved for future i18n use
+  t,
 }) => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,7 +113,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
       {/* Dropdown panel */}
       {open && (
         <div
-          className={`absolute right-0 top-full mt-2 w-64 rounded-2xl border shadow-xl z-50 overflow-hidden ${
+          className={`absolute right-0 top-full mt-2 w-64 rounded-2xl border shadow-xl z-50 overflow-hidden animate-fade-scale ${
             isDark
               ? 'bg-slate-900 border-slate-700 shadow-black/40'
               : 'bg-white border-gray-200 shadow-gray-200/80'
@@ -160,7 +160,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
               }`}
             >
               <Settings className="h-4 w-4 flex-shrink-0 text-gray-400" />
-              Account Settings
+              {t('menu_account_settings')}
             </button>
 
             {/* Theme toggle */}
@@ -178,7 +178,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
               ) : (
                 <Moon className="h-4 w-4 flex-shrink-0 text-gray-400" />
               )}
-              {isDark ? 'Light Mode' : 'Dark Mode'}
+              {isDark ? t('menu_light_mode') : t('menu_dark_mode')}
             </button>
           </div>
 
@@ -197,7 +197,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
               }`}
             >
               <LogOut className="h-4 w-4 flex-shrink-0" />
-              Sign Out
+              {t('menu_sign_out')}
             </button>
           </div>
         </div>

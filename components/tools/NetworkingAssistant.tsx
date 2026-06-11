@@ -4,7 +4,7 @@ import { generateNetworkingStrategy } from '../../services/aiClient';
 import type { NetworkingStrategyResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { CopyButton, DownloadButtons } from './ToolUtils';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 
 interface NetworkingAssistantProps {
@@ -128,7 +128,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
 
       {/* (e) ERROR RETRY */}
       {error && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-3 flex items-start gap-3">
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-4 flex items-start gap-3 animate-panel-expand">
           <p className="text-sm text-red-700 dark:text-red-400 flex-1">{error}</p>
           <button
             type="submit"
@@ -162,7 +162,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
 
     const { strategySummary, contactSuggestions } = result;
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         {/* (d) RESULT ACTIONS */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_networking_assistant_results_title').replace('{company}', targetCompany).replace('{location}', targetLocation)}</h4>
@@ -202,13 +202,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
                             value={suggestion.outreachMessage}
                             className="w-full h-48 mt-2 text-sm p-2 bg-white dark:bg-slate-800 rounded-md border-gray-300 dark:border-slate-600 dark:text-gray-300 font-mono"
                         />
-                        <button
-                            type="button"
-                            onClick={() => navigator.clipboard.writeText(suggestion.outreachMessage)}
-                            className="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                            {t('tool_networking_assistant_copy_button')}
-                        </button>
+                        <CopyButton text={suggestion.outreachMessage} label={t('tool_networking_assistant_copy_button')} className="mt-2" />
                     </div>
                 </div>
              </details>

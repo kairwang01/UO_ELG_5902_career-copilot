@@ -6,6 +6,7 @@ import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useToast } from '../Toast';
+import { ToolError } from './ToolUtils';
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -507,6 +508,9 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   ]);
   
   const [headshotStep, setHeadshotStep] = useState<'initial' | 'camera' | 'photo_uploaded' | 'generating' | 'generated' | 'final_selected'>('initial');
+  // Headshot failures get their own state so the message shows next to the
+  // headshot card instead of at the bottom of the long details form.
+  const [headshotError, setHeadshotError] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<HeadshotImage | null>(null);
   const [generatedImages, setGeneratedImages] = useState<HeadshotImage[]>([]);
   const [selectedHeadshot, setSelectedHeadshot] = useState<HeadshotImage | null>(null);
@@ -600,21 +604,21 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
 
   const handleGenerateHeadshots = async () => {
     if (!isAIMode) {
-        setError("AI Avatar Generation requires AI Mode to be enabled.");
+        setHeadshotError("AI Avatar Generation requires AI Mode to be enabled.");
         return;
     }
     if (!uploadedImage) {
-      setError("Please provide a photo first.");
+      setHeadshotError("Please provide a photo first.");
       return;
     }
     setHeadshotStep('generating');
-    setError(null);
+    setHeadshotError(null);
     try {
         const results = await generateProfessionalHeadshot(uploadedImage.data);
         setGeneratedImages(results.map(imgData => ({ mimeType: 'image/jpeg', data: imgData })));
         setHeadshotStep('generated');
     } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to generate avatars. The image might not be suitable.');
+        setHeadshotError(err instanceof Error ? err.message : 'Failed to generate avatars. The image might not be suitable.');
         setHeadshotStep('photo_uploaded');
     }
   };
@@ -626,9 +630,9 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         const resizedImage = await resizeImage(file, 800);
         setUploadedImage(resizedImage);
         setHeadshotStep('photo_uploaded');
-        setError(null);
+        setHeadshotError(null);
     } catch (err) {
-        setError("Failed to process image. Please try another one.");
+        setHeadshotError("Failed to process image. Please try another one.");
         console.error(err);
     }
   };
@@ -638,10 +642,10 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       setCameraStream(stream);
       setHeadshotStep('camera');
-      setError(null);
+      setHeadshotError(null);
     } catch (err) {
       console.error("Camera Error:", err);
-      setError("Could not access camera. Please check permissions and ensure you're on a secure (HTTPS) connection.");
+      setHeadshotError("Could not access camera. Please check permissions and ensure you're on a secure (HTTPS) connection.");
     }
   };
 
@@ -688,6 +692,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
 
   const resetHeadshotFlow = () => {
     setHeadshotStep('initial');
+    setHeadshotError(null);
     setUploadedImage(null);
     setGeneratedImages([]);
     setSelectedHeadshot(null);
@@ -883,6 +888,11 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             <div>
                 <h4 className="font-bold text-xl text-gray-900 dark:text-gray-100 mb-4">{t('tool_portfolio_step2_title')}</h4>
                 <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
+                    {headshotError && (
+                        <div role="alert" className="mb-4 rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-300 animate-panel-expand">
+                            {headshotError}
+                        </div>
+                    )}
                     {renderHeadshotGenerator()}
                 </div>
             </div>
@@ -954,7 +964,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   };
 
   const renderResult = () => {
-    if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
+    if (error) return <ToolError message={error} onRetry={() => { setError(null); setCurrentStep('details'); }} retryLabel="Back to details" />;
     if (!result || !previewTheme) return null;
     
     const { htmlContent } = result;

@@ -29,8 +29,6 @@
   --destructive-foreground: #ffffff;
   --border: rgba(0, 0, 0, 0.1);
   --input: transparent;
-  --input-background: #f3f3f5;
-  --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
   --ring: oklch(0.708 0 0);
@@ -95,7 +93,6 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
-  --color-input-background: var(--input-background);
   --color-ring: var(--ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -235,7 +232,6 @@ html.dark body {
 .animate-aurora { animation: aurora 20s infinite linear; }
 .animate-holographic-text { animation: holographic-text 5s infinite linear; }
 .animate-crystal-glow { animation: crystal-glow 2.5s ease-in-out infinite; }
-.static-crystal-glow { filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.7)); }
 
 /* Candidate workspace primitives. These keep repeated app surfaces aligned
    without introducing another component dependency layer. */
@@ -246,13 +242,6 @@ html.dark body {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
-.workspace-card-muted {
-  border: 1px solid rgb(226 232 240);
-  border-radius: 0.75rem;
-  background: rgb(248 250 252);
-}
-
-.workspace-button-primary,
 .workspace-button-secondary,
 .workspace-button-ghost {
   min-height: 2.625rem;
@@ -265,16 +254,6 @@ html.dark body {
     color 160ms ease,
     box-shadow 160ms ease,
     transform 160ms ease;
-}
-
-.workspace-button-primary {
-  background: #1d4ed8;
-  color: #ffffff;
-  box-shadow: 0 1px 2px rgba(29, 78, 216, 0.18);
-}
-
-.workspace-button-primary:hover {
-  background: #1e40af;
 }
 
 .workspace-button-secondary {
@@ -298,14 +277,12 @@ html.dark body {
   color: rgb(15 23 42);
 }
 
-.workspace-button-primary:focus-visible,
 .workspace-button-secondary:focus-visible,
 .workspace-button-ghost:focus-visible {
   outline: 2px solid rgb(37 99 235);
   outline-offset: 2px;
 }
 
-.workspace-button-primary:disabled,
 .workspace-button-secondary:disabled {
   cursor: not-allowed;
   opacity: 0.58;
@@ -315,11 +292,6 @@ html.dark .workspace-card {
   border-color: rgb(30 41 59);
   background: rgb(15 23 42);
   box-shadow: none;
-}
-
-html.dark .workspace-card-muted {
-  border-color: rgb(51 65 85);
-  background: rgba(30, 41, 59, 0.6);
 }
 
 html.dark .workspace-button-secondary {

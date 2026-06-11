@@ -110,7 +110,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
     ).join('\n\n');
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fade-in">
         {/* (d) RESULT ACTIONS — download + new search */}
         <div className="flex flex-wrap justify-between items-center gap-3">
           <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_event_scout_results_title').replace('{count}', String(filteredEvents.length))}</h4>

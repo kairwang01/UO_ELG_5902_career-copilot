@@ -237,7 +237,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     if (!result) return apiStatus !== 'online' ? renderFallback() : renderInput();
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fade-in">
         <div className="flex justify-between items-center">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_cover_letter_results_title')}</h4>
           <DownloadButtons textContent={editableResult} baseFilename="cover_letter" />

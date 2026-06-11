@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Copy, Info, Search } from 'lucide-react';
+import { Info, Search } from 'lucide-react';
 import { findOpportunities, calculateCompatibility, generateProfessionalEmail } from '../../services/aiClient';
 import type { OpportunityResult, Opportunity } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { app as firebaseApp, firebaseFunctions } from '../../lib/firebaseClient';
-import { renderFormattedText } from './ToolUtils';
+import { CopyButton, renderFormattedText, ToolError } from './ToolUtils';
 import { loadJobPreferences, preferencesToPromptBlock, prefsSummaryLine } from '../../hooks/useJobPreferences';
 
 interface OpportunityFinderProps {
@@ -205,7 +205,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   }, [resumeText, market, introCache, introLoading, addToast]);
 
   if (loading) return <StagedLoader title="Finding opportunities" steps={["Reading your resume…","Searching live job postings…","Matching & ranking roles…","Building search strategies…"]} onCancel={cancel} icon={<Search />} accent="fuchsia" />;
-  if (error) return <div className="text-red-600 bg-red-100 p-4 rounded-lg">{error}</div>;
+  if (error) return <ToolError message={error} onRetry={() => runTool()} retryLabel={t('tool_opportunity_finder_search_again')} />;
   // No result yet (e.g. the user cancelled the auto-fetch) — offer a graceful retry
   // instead of a blank screen, since this tool has no input form to fall back to.
   if (!result) return (
@@ -246,7 +246,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in">
       <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_opportunity_finder_results_title')}</h4>
 
       {activePrefs && (
@@ -342,17 +342,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                           <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 p-3 text-sm">
                             <p className="font-semibold text-gray-800 dark:text-gray-200 mb-1">{introCache[job.url].subject}</p>
                             <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{introCache[job.url].body}</p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const text = `Subject: ${introCache[job.url].subject}\n\n${introCache[job.url].body}`;
-                                navigator.clipboard.writeText(text).then(() => addToast('Copied', 'success')).catch(() => addToast('Copy failed', 'error'));
-                              }}
-                              className="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              <Copy className="h-3 w-3" />
-                              Copy
-                            </button>
+                            <CopyButton text={`Subject: ${introCache[job.url].subject}\n\n${introCache[job.url].body}`} className="mt-2" />
                           </div>
                         )}
 
