@@ -370,11 +370,11 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         </div>
                     </div>
                     <div>
-                        <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Day Streak</h3>
-                        <p className="text-gray-600 dark:text-gray-300">Keep practicing daily to build your streak!</p>
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100">{t('tool_english_pro_streak_title')}</h3>
+                        <p className="text-gray-600 dark:text-gray-300">{t('tool_english_pro_streak_desc')}</p>
                     </div>
                 </div>
-                {dailyGoalComplete && <p className="text-green-600 font-semibold mt-3">Daily practice goal complete.</p>}
+                {dailyGoalComplete && <p className="text-green-600 font-semibold mt-3">{t('tool_english_pro_daily_complete')}</p>}
             </div>
 
             <div className="space-y-3">
@@ -387,20 +387,20 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button onClick={() => setPracticeMode('written')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">Written Practice</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Write professional emails and get instant feedback on grammar, tone, and vocabulary.</p>
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_written_title')}</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_english_pro_written_desc')}</p>
                 </button>
                  <button onClick={() => setPracticeMode('spoken')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">Spoken Practice</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Practice speaking on professional topics and get analyzed for clarity, pacing, and filler words.</p>
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_spoken_title')}</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_english_pro_spoken_desc')}</p>
                 </button>
                  <button onClick={() => setPracticeMode('reading')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">Reading Practice</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Test your comprehension with AI-generated passages and questions or practice vocabulary with flashcards.</p>
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_reading_title')}</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_english_pro_reading_desc')}</p>
                 </button>
                  <button onClick={() => setPracticeMode('listening')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">Listening Practice</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Listen to short audio clips and transcribe them to test your listening accuracy.</p>
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_listening_title')}</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_english_pro_listening_desc')}</p>
                 </button>
             </div>
         </div>

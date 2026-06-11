@@ -146,7 +146,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
   const renderResult = () => {
     if (!result) return null;
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         {/* (d) RESULT ACTIONS */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_perf_review_results_title')}</h4>

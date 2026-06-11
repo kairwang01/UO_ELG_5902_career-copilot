@@ -128,7 +128,7 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
   const renderResult = () => {
     if (!result) return null;
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         {/* (d) RESULT ACTIONS */}
         <div className="flex items-center justify-between">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_skill_planner_results_title').replace('{skill}', result.skill)}</h4>

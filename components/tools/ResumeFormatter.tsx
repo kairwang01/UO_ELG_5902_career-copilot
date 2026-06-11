@@ -65,8 +65,8 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
       </div>
 
       <div>
-        <label htmlFor="target-market" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Market</label>
-        <p className="text-xs text-gray-500 dark:text-gray-400">The AI will adapt the format, language, and ATS standards for this country.</p>
+        <label htmlFor="target-market" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_resume_formatter_target_market_label')}</label>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{t('tool_resume_formatter_target_market_desc')}</p>
         <select
           id="target-market"
           value={targetMarket}
@@ -154,17 +154,17 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
 
     const { formattedText } = result;
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fade-in">
         {/* (d) DownloadButtons already present; "format for another market" button already present — preserved */}
         <div className="flex justify-between items-center">
-          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} for {targetMarket}</h4>
+          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} {t('tool_resume_formatter_results_for').replace('{market}', targetMarket)}</h4>
           <DownloadButtons textContent={formattedText} baseFilename={`${targetMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
         </div>
         <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 max-h-96 overflow-y-auto font-serif text-sm dark:text-gray-300">
           {renderFormattedText(formattedText)}
         </div>
         <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300">
-            &larr; Localize for Another Market
+            &larr; {t('tool_resume_formatter_localize_again')}
         </button>
       </div>
     );

@@ -296,7 +296,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
 
     const { subject } = result;
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fade-in">
         <div className="flex justify-between items-center">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_email_crafter_results_title')}</h4>
           <DownloadButtons textContent={`Subject: ${subject}\n\n${editableResult}`} baseFilename="email_draft" />

@@ -46,6 +46,13 @@ function stepIndexForStatus(status: AppStatus): number {
   return 2;
 }
 
+const STATUS_LABEL_KEYS: Record<AppStatus, string> = {
+  Applied: 'applications_status_applied',
+  Interviewing: 'applications_status_interviewing',
+  Hired: 'applications_status_hired',
+  Rejected: 'applications_status_rejected',
+};
+
 const STATUS_CHIP_CLASSES: Record<AppStatus, string> = {
   Applied:
     'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -196,13 +203,13 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
           <span
             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_CHIP_CLASSES[app.status]}`}
           >
-            {app.status}
+            {t(STATUS_LABEL_KEYS[app.status])}
           </span>
 
           {/* Match % badge */}
           {app.compatibility_score != null && (
             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-              Match {app.compatibility_score}%
+              {t('applications_match')} {app.compatibility_score}%
             </span>
           )}
         </div>

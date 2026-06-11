@@ -200,7 +200,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
             <p className="font-semibold mb-1">{t('tool_salary_negotiator_sources')}:</p>
             <ul className="list-disc list-inside">
               {groundingChunks.filter((chunk: any) => chunk.web).map((chunk: any, i: number) => (
-                <li key={i}><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600">{chunk.web.title}</a></li>
+                <li key={i}><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">{chunk.web.title}</a></li>
               ))}
             </ul>
           </div>
