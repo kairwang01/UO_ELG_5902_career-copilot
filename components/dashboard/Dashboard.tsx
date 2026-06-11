@@ -59,20 +59,6 @@ const toolMetadataMap: { [key: string]: { nameKey: string } } = {
   default: { nameKey: 'dashboard_tool_usage' },
 };
 
-const fallbackScores: ChartDataPoint[] = [
-  { label: 'May 12', value: 58 },
-  { label: 'May 19', value: 64 },
-  { label: 'May 26', value: 71 },
-  { label: 'Jun 2', value: 76 },
-];
-
-const fallbackSkillKeys = [
-  'dashboard_skill_product_discovery',
-  'dashboard_skill_stakeholder_alignment',
-  'dashboard_skill_roadmap_prioritization',
-  'dashboard_skill_ats_formatting',
-];
-
 const formatCopy = (template: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce((copy, [key, value]) => copy.replaceAll(`{${key}}`, String(value)), template);
 
@@ -136,6 +122,34 @@ const MetricCard: React.FC<{
   );
 };
 
+const DashboardEmptyPanel: React.FC<{
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  actionLabel: string;
+  onAction?: () => void;
+}> = ({ icon: Icon, title, description, actionLabel, onAction }) => (
+  <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center dark:border-slate-700 dark:bg-slate-800/40 animate-panel-expand">
+    <div className="max-w-sm">
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-300">
+        <Icon className="h-5 w-5" />
+      </div>
+      <h4 className="mt-4 text-base font-semibold text-slate-950 dark:text-slate-100">{title}</h4>
+      <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{description}</p>
+      {onAction && (
+        <button
+          type="button"
+          onClick={onAction}
+          className="mt-5 inline-flex min-h-[38px] items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+        >
+          {actionLabel}
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  </div>
+);
+
 const PriorityItem: React.FC<{
   title: string;
   detail: string;
@@ -173,6 +187,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
   const [scoreData, setScoreData] = useState<ChartDataPoint[]>([]);
   const [weeklySummary, setWeeklySummary] = useState<string>('');
   const [topSkills, setTopSkills] = useState<string[]>([]);
+  const [priorityFixCount, setPriorityFixCount] = useState<number | null>(null);
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
   const { applications, loading: applicationsLoading } = useRecentApplications(session);
 
@@ -181,6 +196,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       setLoading(false);
       setScoreData([]);
       setTopSkills([]);
+      setPriorityFixCount(null);
       setActivityFeed([]);
       setWeeklySummary(t('dashboard_welcome_summary'));
       return;
@@ -220,6 +236,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         unavailableSections.push(t('dashboard_section_readiness_history'));
         setScoreData([]);
         setTopSkills([]);
+        setPriorityFixCount(null);
       }
 
       const chartData = analyses.map((a) => ({
@@ -232,7 +249,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         const latestAnalysis = analyses[analyses.length - 1];
         if (Array.isArray(latestAnalysis.keywords)) {
           setTopSkills(latestAnalysis.keywords.slice(0, 5));
+        } else {
+          setTopSkills([]);
         }
+        setPriorityFixCount(
+          Array.isArray(latestAnalysis.improvements) ? latestAnalysis.improvements.length : null,
+        );
+      } else {
+        setTopSkills([]);
+        setPriorityFixCount(null);
       }
 
       if (activitiesResult.status === 'fulfilled') {
@@ -326,12 +351,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  const displayScores = scoreData.length > 0 ? scoreData : fallbackScores;
-  const latestScore = displayScores[displayScores.length - 1]?.value ?? (hasResume ? 72 : 0);
-  const readinessScore = hasResume ? latestScore : 0;
-  const skills = topSkills.length > 0 ? topSkills : fallbackSkillKeys.map((key) => t(key));
+  const hasReadinessHistory = scoreData.length > 0;
+  const latestScore = hasReadinessHistory ? scoreData[scoreData.length - 1]?.value ?? null : null;
+  const hasSkillSignals = topSkills.length > 0;
   const firstName = profile?.full_name?.split(' ')[0] || t('dashboard_user_fallback');
-  const nextCtaLabel = hasResume ? t('dashboard_review_priority_fixes') : t('ws_upload_resume');
+  const nextCtaLabel = hasReadinessHistory
+    ? t('dashboard_review_priority_fixes')
+    : hasResume ? t('dashboard_readiness_empty_cta') : t('ws_upload_resume');
   const applicationPulse = applications.reduce(
     (counts, app) => {
       const status = app.status.toLowerCase();
@@ -486,22 +512,34 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label={t('dashboard_metric_resume_readiness')}
-          value={hasResume ? `${readinessScore}` : '--'}
-          helper={hasResume ? t('dashboard_metric_resume_readiness_ready') : t('dashboard_metric_resume_readiness_empty')}
+          value={latestScore !== null ? `${latestScore}` : '--'}
+          helper={
+            latestScore !== null
+              ? t('dashboard_metric_resume_readiness_ready')
+              : hasResume ? t('dashboard_metric_resume_readiness_pending') : t('dashboard_metric_resume_readiness_empty')
+          }
           icon={FileText}
           tone="blue"
         />
         <MetricCard
           label={t('dashboard_metric_priority_fixes')}
-          value={hasResume ? '4' : '--'}
-          helper={hasResume ? t('dashboard_metric_priority_fixes_ready') : t('dashboard_metric_priority_fixes_empty')}
+          value={priorityFixCount !== null ? `${priorityFixCount}` : '--'}
+          helper={
+            priorityFixCount !== null
+              ? t('dashboard_metric_priority_fixes_ready')
+              : hasResume ? t('dashboard_metric_priority_fixes_pending') : t('dashboard_metric_priority_fixes_empty')
+          }
           icon={ListChecks}
           tone="amber"
         />
         <MetricCard
           label={t('dashboard_metric_matched_roles')}
-          value={hasResume ? '12' : '--'}
-          helper={hasResume ? t('dashboard_metric_matched_roles_ready') : t('dashboard_metric_matched_roles_empty')}
+          value={hasSkillSignals ? t('dashboard_metric_roles_ready_value') : '--'}
+          helper={
+            hasSkillSignals
+              ? t('dashboard_metric_matched_roles_ready')
+              : hasResume ? t('dashboard_metric_matched_roles_pending') : t('dashboard_metric_matched_roles_empty')
+          }
           icon={Briefcase}
           tone="green"
         />
@@ -532,25 +570,47 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
             </div>
             {loading && <span className="text-xs font-medium text-slate-500 dark:text-slate-500">{t('dashboard_loading_history')}</span>}
           </div>
-          <div className="h-64 min-w-0 overflow-hidden">
-            <Chart data={displayScores} width={620} height={250} t={t} />
-          </div>
+          {hasReadinessHistory ? (
+            <div className="h-64 min-w-0 overflow-hidden">
+              <Chart data={scoreData} width={620} height={250} t={t} />
+            </div>
+          ) : (
+            <DashboardEmptyPanel
+              icon={FileText}
+              title={t('dashboard_readiness_empty_title')}
+              description={hasResume ? t('dashboard_readiness_empty_desc_with_resume') : t('dashboard_readiness_empty_desc')}
+              actionLabel={hasResume ? t('dashboard_readiness_empty_cta') : t('ws_upload_resume')}
+              onAction={() => onNavigate?.('resume')}
+            />
+          )}
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
           <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_current_skill_title')}</h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{t('dashboard_current_skill_desc')}</p>
-          <div className="mt-5 space-y-4">
-            {skills.slice(0, 4).map((skill, index) => (
-              <div key={skill} className="space-y-2">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{skill}</span>
-                  <span className="text-xs text-slate-500 dark:text-slate-500">{82 - index * 9}%</span>
+          {hasSkillSignals ? (
+            <div className="mt-5 space-y-4">
+              {topSkills.slice(0, 4).map((skill, index) => (
+                <div key={skill} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{skill}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-500">{82 - index * 9}%</span>
+                  </div>
+                  <ProgressLine value={82 - index * 9} tone={index > 1 ? 'gap' : 'ready'} />
                 </div>
-                <ProgressLine value={82 - index * 9} tone={index > 1 ? 'gap' : 'ready'} />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5">
+              <DashboardEmptyPanel
+                icon={Target}
+                title={t('dashboard_skill_empty_title')}
+                description={hasResume ? t('dashboard_skill_empty_desc_with_resume') : t('dashboard_skill_empty_desc')}
+                actionLabel={hasResume ? t('dashboard_skill_empty_cta') : t('ws_upload_resume')}
+                onAction={() => onNavigate?.('resume')}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -666,20 +726,25 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
 
         <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
           <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_recent_activity_title')}</h3>
-          <div className="mt-4 space-y-3">
-            {(activityFeed.length > 0
-              ? activityFeed
-              : [
-                  { type: t('dashboard_activity_resume_analysis'), details: hasResume ? t('dashboard_activity_resume_ready') : t('dashboard_activity_resume_waiting') },
-                  { type: t('dashboard_activity_job_match'), details: t('dashboard_activity_job_match_ready') },
-                  { type: t('dashboard_activity_career_plan'), details: t('dashboard_activity_career_plan_ready') },
-                ]
-            ).map((item) => (
-              <div key={`${item.type}-${item.details}`} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.type}</p>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{item.details}</p>
+          <div className="mt-4">
+            {activityFeed.length > 0 ? (
+              <div className="space-y-3">
+                {activityFeed.map((item) => (
+                  <div key={`${item.type}-${item.details}`} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.type}</p>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{item.details}</p>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <DashboardEmptyPanel
+                icon={ClipboardList}
+                title={t('dashboard_activity_empty_title')}
+                description={hasResume ? t('dashboard_activity_empty_desc_with_resume') : t('dashboard_activity_empty_desc')}
+                actionLabel={hasResume ? t('dashboard_activity_empty_cta') : t('ws_upload_resume')}
+                onAction={() => onNavigate?.(hasResume ? 'jobs' : 'resume')}
+              />
+            )}
           </div>
         </div>
       </div>
