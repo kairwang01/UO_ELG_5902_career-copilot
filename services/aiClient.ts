@@ -50,7 +50,7 @@ export function formatCallableError(err: unknown): string {
     detailsStr.includes('resource_exhausted');
 
   if (isQuota) {
-    return 'The selected AI model is rate-limited or out of quota. Wait ~30s and retry, or switch models in the picker (top-right). Admins can verify the model’s API key & billing in Admin → AI.';
+    return 'The platform AI service is temporarily rate-limited or out of quota. Wait ~30s and retry. Business admins can verify the configured model key and billing in Admin.';
   }
   if (code === 'functions/unauthenticated') {
     return 'Please sign in to use AI features.';
@@ -62,7 +62,7 @@ export function formatCallableError(err: unknown): string {
     return message || 'User profile not found. Sign out and sign back in.';
   }
   if (code === 'functions/internal' && (lower === 'internal' || message === 'INTERNAL')) {
-    return 'AI request failed on the server. Try switching the model in the picker (top-right) and retry in ~30s, or ask an admin to verify the selected model’s API key in Admin → AI.';
+    return 'AI request failed on the server. Retry in ~30s. Business admins can verify the configured model key in Admin.';
   }
   return message || 'An error occurred while calling the AI service.';
 }

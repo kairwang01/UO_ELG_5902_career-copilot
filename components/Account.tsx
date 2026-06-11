@@ -513,7 +513,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
 
         {/* API Access Section */}
         <div className="space-y-6 mt-10">
-            <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">API Access</h2>
+            <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">{t('account_api_access_title')}</h2>
             <ApiKeyManager session={session} onViewDocs={() => onSetView('api_docs')} />
         </div>
 

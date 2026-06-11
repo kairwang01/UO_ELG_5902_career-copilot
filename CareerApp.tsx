@@ -1017,7 +1017,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               {isUpdatingResume && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                 <div className="mt-4 animate-slide-in-up">
                   <div className="text-center mb-10">
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Resume Laboratory</h2>
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('dashboard_resume_lab_title')}</h2>
                     <p className="text-gray-600 dark:text-gray-400">{resumeText ? t('dashboard_update_prompt') : t('dashboard_new_user_prompt')}</p>
                   </div>
                   <div id="upload-section" ref={uploadSectionRef} className="scroll-mt-20">
@@ -1056,12 +1056,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         <StagedLoader
           icon={<BarChart3 />}
           accent="blue"
-          title="Analyzing your resume"
+          title={t('analysis_loader_title')}
           steps={[
-            'Submitting…',
-            'Reading your experience…',
-            `Analyzing against the ${market} market…`,
-            'Scoring & writing feedback…',
+            t('analysis_loader_step_submit'),
+            t('analysis_loader_step_reading'),
+            t('analysis_loader_step_market').replace('{market}', market),
+            t('analysis_loader_step_scoring'),
           ]}
           intervalMs={2200}
         />
@@ -1080,7 +1080,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         if (!isCandidate) return renderRoleFallback();
         return renderDashboard();
     }
-    if (!isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600">Loading...</p></div>; }
+    if (!isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600">{t('app_loading')}</p></div>; }
     return renderAppEntry();
   };
 

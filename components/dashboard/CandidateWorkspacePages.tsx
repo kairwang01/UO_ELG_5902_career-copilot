@@ -328,11 +328,11 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
     <div className="space-y-6">
       {/* Page intro first, then goals, the live job feed, and the match deep-dives. */}
       <PageHeader
-        label="Job match"
-        title="Matches ranked by evidence, not just keywords"
-        description="Compare fit score, match reason, missing skills, resume evidence, and application priority before spending time on a role."
+        label={t('ws_job_match_label')}
+        title={t('ws_job_match_title')}
+        description={t('ws_job_match_desc')}
         icon={Briefcase}
-        primaryLabel={hasResume ? 'Find more matches' : 'Upload resume'}
+        primaryLabel={hasResume ? t('ws_job_match_find_more') : t('ws_upload_resume')}
         onPrimary={() => (hasResume ? onOpenTool('opportunity-finder') : onUploadResume())}
       />
       <CareerGoalsPanel t={t} />
@@ -340,14 +340,14 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
 
       {!hasResume ? (
         <EmptyWorkbenchState
-          title="Upload a resume to rank jobs against your experience"
-          description="The match view needs your resume to explain why a job is strong, which gaps matter, and whether to apply now or later."
-          buttonLabel="Upload resume"
+          title={t('ws_job_match_empty_title')}
+          description={t('ws_job_match_empty_desc')}
+          buttonLabel={t('ws_upload_resume')}
           onClick={onUploadResume}
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[240px_1fr]">
-          <Panel title="Screening controls" description="Sort the same jobs by apply priority or raw match score.">
+          <Panel title={t('ws_job_match_controls_title')} description={t('ws_job_match_controls_desc')}>
             <div className="space-y-2">
               <button
                 type="button"
@@ -358,7 +358,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                 }`}
               >
                 <ListFilter className="h-4 w-4" />
-                Apply priority
+                {t('ws_job_match_sort_priority')}
               </button>
               <button
                 type="button"
@@ -369,11 +369,11 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                 }`}
               >
                 <Target className="h-4 w-4" />
-                Match score
+                {t('ws_job_match_sort_score')}
               </button>
             </div>
             <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              Priority combines match score, missing required skills, and whether your resume has proof strong enough to start a recruiter conversation.
+              {t('ws_job_match_priority_note')}
             </div>
           </Panel>
 
@@ -384,7 +384,9 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{job.title}</h3>
-                      <StatusPill tone={job.score >= 80 ? 'ready' : 'gap'}>{job.score}% match</StatusPill>
+                      <StatusPill tone={job.score >= 80 ? 'ready' : 'gap'}>
+                        {t('ws_job_match_score_badge').replace('{score}', String(job.score))}
+                      </StatusPill>
                     </div>
                     <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                       {job.company} · {job.location}
@@ -395,7 +397,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                   <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">Resume evidence</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">{t('ws_job_match_evidence')}</p>
                     <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                       {job.evidence.map((item) => (
                         <li key={item} className="flex gap-2">
@@ -407,7 +409,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">Skill gaps</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('ws_job_match_skill_gaps')}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {job.gaps.map((gap) => (
                           <StatusPill key={gap} tone="gap">
@@ -422,7 +424,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                           <tr key={req.label} className="border-t border-slate-200 dark:border-slate-700">
                             <td className="py-2 pr-2 text-slate-700 dark:text-slate-300">{req.label}</td>
                             <td className={`py-2 text-right font-medium ${req.met ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                              {req.met ? 'Met' : 'Gap'}
+                              {req.met ? t('ws_job_match_requirement_met') : t('ws_job_match_requirement_gap')}
                             </td>
                           </tr>
                         ))}
@@ -432,7 +434,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                 </div>
                 <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Next step: turn this match into a focused application packet.
+                    {t('ws_job_match_next_step')}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <button
