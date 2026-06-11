@@ -8,6 +8,7 @@ interface FunnelDataPoint {
 
 interface FunnelChartProps {
     data: FunnelDataPoint[];
+    t?: (key: string) => string;
 }
 
 /**
@@ -20,9 +21,16 @@ interface FunnelChartProps {
  * the top of the funnel; the connector between bars shows stage-to-stage
  * conversion.
  */
-const FunnelChart: React.FC<FunnelChartProps> = ({ data }) => {
+function formatTranslation(template: string, values: Record<string, string | number>): string {
+    return Object.entries(values).reduce(
+        (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
+        template,
+    );
+}
+
+const FunnelChart: React.FC<FunnelChartProps> = ({ data, t }) => {
     if (!data || data.length === 0) {
-        return <div className="text-center p-4 text-gray-500 dark:text-gray-400">No data available for funnel.</div>;
+        return <div className="text-center p-4 text-gray-500 dark:text-gray-400">{t?.('funnel_empty') ?? 'No funnel data available.'}</div>;
     }
 
     const colors = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
@@ -41,7 +49,11 @@ const FunnelChart: React.FC<FunnelChartProps> = ({ data }) => {
                     <div key={stage}>
                         {index > 0 && (
                             <div className="py-2 pl-1 text-xs font-medium text-gray-400 dark:text-gray-500">
-                                <span>{conversionRate !== null ? `${conversionRate}% from previous stage` : 'no prior applicants'}</span>
+                                <span>
+                                    {conversionRate !== null
+                                        ? formatTranslation(t?.('funnel_conversion_from_previous') ?? '{rate}% from previous stage', { rate: conversionRate })
+                                        : t?.('funnel_conversion_no_prior') ?? 'No prior applicants'}
+                                </span>
                             </div>
                         )}
 
