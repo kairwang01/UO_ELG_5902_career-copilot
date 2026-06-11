@@ -156,7 +156,6 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
       // 3) Optional birthday → local until the profile schema gains a field.
       if (birthday) saveBirthdayLocal(uid, birthday);
 
-      markOnboardingDone(uid);
       setPhase('done');
     } catch {
       setSaveError(true);
@@ -174,10 +173,13 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
 
   const primaryBtn =
     'inline-flex min-h-[46px] w-full items-center justify-center rounded-xl bg-blue-700 px-5 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900/50';
-  const secondaryBtn =
-    'inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300';
   const inputCls =
     'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40';
+
+  const enterWorkspace = () => {
+    markOnboardingDone(uid);
+    onComplete({ skipped: false, resumeText: resumeSource ? resumeDraft : undefined });
+  };
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-slate-50 dark:bg-slate-950 overflow-y-auto">
@@ -474,7 +476,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
               <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500 dark:text-slate-400">{t('ob_done_desc')}</p>
               <button
                 type="button"
-                onClick={() => onComplete({ skipped: false, resumeText: resumeSource ? resumeDraft : undefined })}
+                onClick={enterWorkspace}
                 className={`${primaryBtn} mt-8 max-w-xs`}
               >
                 {t('ob_enter_workspace')}

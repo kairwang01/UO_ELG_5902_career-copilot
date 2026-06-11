@@ -261,7 +261,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
               }
             } else {
-              console.error('Failed to auto-save resume text:', error.message);
+              if (!resumeSaveWarningShownRef.current) {
+                resumeSaveWarningShownRef.current = true;
+                addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
+              }
             }
           }
         } catch (err) {
@@ -272,7 +275,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
             }
           } else {
-            console.error('Error in auto-save resume text effect:', message);
+            if (!resumeSaveWarningShownRef.current) {
+              resumeSaveWarningShownRef.current = true;
+              addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
+            }
           }
         }
       }, 1500);
@@ -333,7 +339,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             setCredits(refreshed.credits || userCredits);
           }
         } catch (planErr) {
-          console.error('Failed to apply pending plan/role:', (planErr as Error).message);
+          addToast(`Could not apply your selected plan yet: ${(planErr as Error).message}`, 'error');
         }
       };
 
@@ -386,13 +392,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           await applyProfile(fallbackProfile);
         }
       }
-    } catch (error) {
-      console.error('Error in getProfile:', (error as Error).message);
+    } catch {
       setError("Could not load your profile. Please try again later.");
     } finally {
         setIsProfileLoaded(true);
     }
-  }, [session, setCredits]);
+  }, [session, setCredits, addToast]);
 
   // Employers render in their own dashboard shell (see the employer branch in the
   // main layout), so no default-view redirect is needed here.
@@ -457,7 +462,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       await setSubscriptionStatus({ planKey: `pending_biz_${planKey}` });
       await getProfile();
     } catch (error) {
-      console.error('Error setting business plan:', (error as Error).message);
       addToast(`Failed to set plan: ${(error as Error).message}`, 'error');
     }
   };
@@ -525,10 +529,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         setProfile(p);
         if (typeof p.credits === 'number') setCredits(p.credits);
       },
-      (err) => { console.error('profile listener error:', err); }
+      () => {
+        addToast('Profile updates are temporarily unavailable. Refresh if account details look stale.', 'info');
+      }
     );
     return () => unsub();
-  }, [session?.user?.id, setCredits]);
+  }, [session?.user?.id, setCredits, addToast]);
 
   useEffect(() => {
     if (!session || (session && isProfileLoaded && !isCandidate)) {
@@ -635,8 +641,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               improvements: result.improvements,
               keywords: result.keywords,
             });
-        } catch (dbError) {
-            console.error("Error saving analysis to Firestore:", (dbError as Error).message);
+        } catch {
+            addToast('Analysis finished, but the activity history could not be updated.', 'info');
         }
       }
       
