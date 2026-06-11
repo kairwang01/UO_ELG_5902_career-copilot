@@ -259,7 +259,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           {renderMobileNavDrawer(prevPage)}
           <main ref={mainRef} className="flex-1 overflow-y-auto">
             <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
-            <div className="max-w-[1088px] mx-auto p-8 animate-view-fade">
+            <div className="mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8">
               <ApplicantFunnel
                 job={jobForFunnel}
                 onBack={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
@@ -347,7 +347,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           {currentPage === 'agency-hub' && (
             <>
               <PortalTopBar title={t('portal_nav_agency_hub')} darkMode={darkMode} />
-              <div className={`max-w-[1088px] mx-auto p-8 animate-view-fade ${darkMode ? 'text-white' : ''}`}>
+              <div className={`mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8 ${darkMode ? 'text-white' : ''}`}>
                 <AgencyHub session={session} profile={profile} t={t} />
               </div>
             </>

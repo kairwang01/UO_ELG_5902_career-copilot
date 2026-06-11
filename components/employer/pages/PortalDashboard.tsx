@@ -59,7 +59,7 @@ function KpiCard({
 }) {
   return (
     <div
-      className={`rounded-xl border p-5 flex items-center gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+      className={`flex min-h-[112px] items-center gap-4 rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5 ${
         darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       }`}
     >
@@ -67,10 +67,10 @@ function KpiCard({
         <Icon className="w-6 h-6 text-[#1d4ed8]" />
       </div>
       <div className="min-w-0">
-        <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'} ${loading ? 'animate-pulse' : ''}`}>
+        <p className={`text-2xl font-bold leading-tight ${darkMode ? 'text-white' : 'text-gray-900'} ${loading ? 'animate-pulse' : ''}`}>
           {loading ? '—' : value}
         </p>
-        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{title}</p>
+        <p className={`text-sm leading-5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{title}</p>
       </div>
     </div>
   );
@@ -292,7 +292,7 @@ export function PortalDashboard({
   return (
     <>
       <PortalTopBar title={t('portal_nav_dashboard')} darkMode={dm} />
-      <div className="max-w-[1088px] mx-auto p-8 animate-view-fade">
+      <div className="mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8">
         <div className="mb-8">
           <p className={`text-lg font-medium ${dm ? 'text-white' : 'text-gray-900'}`}>
             {companyName
@@ -305,12 +305,12 @@ export function PortalDashboard({
         </div>
 
         {/* KPIs — real data from EmployerDashboard.fetchDashboardData */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
           <KpiCard title={t('portal_kpi_active_posts')} value={activeJobs.toString()} Icon={Briefcase} darkMode={dm} loading={loading} />
           <KpiCard title={t('kpi_total_applicants')} value={totalApplicants.toString()} Icon={Users} darkMode={dm} loading={loading} />
           <KpiCard title={t('portal_kpi_new_applicants_7d')} value={newApplicants.toString()} Icon={TrendingUp} darkMode={dm} loading={loading} />
           <div
-            className={`rounded-xl border p-5 flex items-center gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+            className={`flex min-h-[112px] items-center gap-4 rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5 ${
               dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             }`}
           >
@@ -329,7 +329,7 @@ export function PortalDashboard({
           </div>
         </div>
 
-        <div className={`rounded-xl border p-6 mb-8 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+        <div className={`mb-8 rounded-xl border p-4 sm:p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className={`text-base font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_pipeline_title')}</h2>
@@ -361,7 +361,7 @@ export function PortalDashboard({
         </div>
 
         {/* Quick actions */}
-        <div className={`rounded-xl border p-6 mb-8 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+        <div className={`mb-8 rounded-xl border p-4 sm:p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <h2 className={`text-base font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_dashboard_quick_actions')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {quickActions.map(({ page, title, description, Icon, primary }) => (
@@ -397,9 +397,9 @@ export function PortalDashboard({
         </div>
 
         {/* Job Overview + Action Required — lg:col-span-2 + 1 layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
           {/* Job Overview — derived from live jobPostings */}
-          <div className={`lg:col-span-2 rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          <div className={`rounded-xl border p-4 sm:p-6 lg:col-span-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <h2 className={`text-lg font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_dashboard_job_overview')}</h2>
             {jobPostings.length === 0 ? (
               <p className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_dashboard_no_postings')}</p>
@@ -444,25 +444,26 @@ export function PortalDashboard({
           </div>
 
           {/* Action Required — data-aware prompts wired to navigation */}
-          <div className={`rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          <div className={`rounded-xl border p-4 sm:p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <h2 className={`text-lg font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_dashboard_action_required')}</h2>
             <div className="space-y-3">
               {priorityActions.map(({ msg, page, action, Icon }) => (
                 <div
                   key={page}
-                  className={`flex items-center justify-between gap-3 p-4 rounded-lg border ${
+                  className={`flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${
                     dm ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-white'
                   }`}
                 >
-                  <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${dm ? 'bg-gray-800 text-blue-300' : 'bg-blue-50 text-[#1d4ed8]'}`}>
                       <Icon className="h-4 w-4" />
                     </span>
-                    <p className={`text-sm ${dm ? 'text-gray-200' : 'text-gray-900'}`}>{msg}</p>
+                    <p className={`min-w-0 text-sm leading-6 ${dm ? 'text-gray-200' : 'text-gray-900'}`}>{msg}</p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => onNavigate(page)}
-                    className="flex flex-shrink-0 items-center gap-1 text-sm text-[#1d4ed8] font-medium"
+                    className="inline-flex min-h-9 w-full flex-shrink-0 items-center justify-center gap-1 rounded-lg border border-blue-100 px-3 py-1.5 text-sm font-semibold text-[#1d4ed8] transition-colors hover:bg-blue-50 sm:w-auto dark:border-blue-900/50 dark:hover:bg-blue-950/30"
                   >
                     {action}
                     <ChevronRight className="w-4 h-4" />
@@ -474,7 +475,7 @@ export function PortalDashboard({
         </div>
 
         {/* Recent job postings — real data */}
-        <div className={`rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+        <div className={`rounded-xl border p-4 sm:p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <h2 className={`text-base font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>
             {t('portal_dashboard_recent_postings')}
           </h2>
@@ -522,9 +523,9 @@ export function PortalDashboard({
               }`}
             >
               <div className="min-w-0">
-                <p className={`font-semibold text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>{job.title}</p>
+                <p className={`break-words text-sm font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>{job.title}</p>
                 <p className={`text-xs mt-0.5 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {job.location} &bull; {t('employer_dashboard_posted_on')} {new Date(job.created_at).toLocaleDateString()}
+                  {job.location || t('talent_location_remote')} &bull; {t('employer_dashboard_posted_on')} {new Date(job.created_at).toLocaleDateString()}
                 </p>
               </div>
               <div className="flex items-center justify-between gap-4 sm:justify-end">
