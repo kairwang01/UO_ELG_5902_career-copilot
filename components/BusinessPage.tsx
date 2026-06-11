@@ -7,6 +7,7 @@ import BusinessSignInModal from './business/BusinessSignInModal';
 import BusinessSignUpModal from './business/BusinessSignUpModal';
 import BusinessForgotPasswordModal from './business/BusinessForgotPasswordModal';
 import type { PortalPage } from './employer/EmployerPortal';
+import { businessPlanDefs, type BusinessPlanId } from './business/businessPlans';
 
 interface BusinessPageProps {
   session: Session | null;
@@ -22,67 +23,6 @@ interface BusinessPageProps {
   // When undefined (prop not wired), hydration guard is skipped (legacy behaviour).
   authHydrated?: boolean;
 }
-
-// Business plans matching the prototype design — static ids/prices/periods only;
-// names and features are resolved via t() inside the component.
-const businessPlanDefs = [
-  {
-    id: 'free',
-    nameKey: 'business_page_plan_free_name',
-    price: '$0',
-    period: '/ month',
-    highlight: null,
-    featured: false,
-    featureKeys: [
-      'business_page_plan_free_feature_1',
-      'business_page_plan_free_feature_2',
-      'business_page_plan_free_feature_3',
-      'business_page_plan_free_feature_4',
-    ],
-  },
-  {
-    id: 'starter',
-    nameKey: 'site_plan_emp_starter_name',
-    price: '$79',
-    period: '/ month',
-    highlight: 'popular',
-    featured: true,
-    featureKeys: [
-      'business_page_plan_starter_feature_1',
-      'business_page_plan_starter_feature_2',
-      'business_page_plan_starter_feature_3',
-      'site_plan_emp_starter_f4',
-    ],
-  },
-  {
-    id: 'growth',
-    nameKey: 'site_plan_emp_growth_name',
-    price: '$199',
-    period: '/ month',
-    highlight: null,
-    featured: false,
-    featureKeys: [
-      'business_page_plan_growth_feature_1',
-      'business_page_plan_growth_feature_2',
-      'business_page_plan_growth_feature_3',
-      'site_plan_emp_growth_f4',
-    ],
-  },
-  {
-    id: 'pro',
-    nameKey: 'business_page_plan_pro_name',
-    price: '$499',
-    period: '/ month',
-    highlight: null,
-    featured: false,
-    featureKeys: [
-      'business_page_plan_pro_feature_1',
-      'business_page_plan_pro_feature_2',
-      'business_page_plan_pro_feature_3',
-      'site_plan_emp_team_f4',
-    ],
-  },
-];
 
 type ModalState = 'none' | 'signin' | 'signup' | 'forgot';
 
@@ -100,6 +40,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const [modal, setModal] = React.useState<ModalState>('none');
+  const [signupPlan, setSignupPlan] = React.useState<BusinessPlanId>('starter');
 
   const handlePostJob = () => {
     if (session && onEnterPortal) {
@@ -107,6 +48,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     } else if (session) {
       onBack();
     } else {
+      setSignupPlan('starter');
       setModal('signup');
     }
   };
@@ -117,6 +59,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     } else if (session) {
       onBack();
     } else {
+      setSignupPlan('starter');
       setModal('signup');
     }
   };
@@ -177,12 +120,14 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         </p>
         <div className="flex flex-wrap gap-4">
           <button
+            type="button"
             onClick={handlePostJob}
             className="w-full sm:w-auto bg-[#1D4ED8] text-white px-8 py-3 rounded-md hover:bg-[#1e40af] transition-colors font-medium"
           >
             {t('employer_dashboard_post_job_button')}
           </button>
           <button
+            type="button"
             onClick={handleDiscoverTalent}
             className="w-full sm:w-auto border border-gray-300 text-gray-700 px-8 py-3 rounded-md hover:border-gray-400 transition-colors font-medium dark:border-slate-600 dark:text-gray-300 dark:hover:border-slate-500"
           >
@@ -290,10 +235,10 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
 
                 <div className="flex items-end gap-1 mb-1">
                   <span className={`text-5xl font-bold leading-none ${plan.featured ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
-                    {plan.price}
+                    ${plan.price}
                   </span>
                   <span className={`mb-1 ${plan.featured ? 'text-gray-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {plan.period}
+                    {t('site_pricing_per_month')}
                   </span>
                 </div>
 
@@ -318,10 +263,12 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                 </ul>
 
                 <button
+                  type="button"
                   onClick={() => {
                     if (session) {
                       onSelectBusinessPlan(plan.id);
                     } else {
+                      setSignupPlan(plan.id);
                       setModal('signup');
                     }
                   }}
@@ -345,18 +292,21 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         onOpenChange={(open) => setModal(open ? 'signin' : 'none')}
         onSwitchToSignUp={() => setModal('signup')}
         onSwitchToForgotPassword={() => setModal('forgot')}
+        t={t}
       />
       <BusinessSignUpModal
         isOpen={modal === 'signup'}
         onOpenChange={(open) => setModal(open ? 'signup' : 'none')}
         onSwitchToSignIn={() => setModal('signin')}
         onSignedUp={refreshProfile}
+        initialPlan={signupPlan}
         t={t}
       />
       <BusinessForgotPasswordModal
         isOpen={modal === 'forgot'}
         onOpenChange={(open) => setModal(open ? 'forgot' : 'none')}
         onSwitchToSignIn={() => setModal('signin')}
+        t={t}
       />
     </div>
   );
