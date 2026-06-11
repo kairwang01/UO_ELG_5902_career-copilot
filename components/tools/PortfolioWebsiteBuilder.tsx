@@ -161,7 +161,7 @@ const HTML_TEMPLATE = `
             <div class="about-content">
                 <div class="about-text">
                     <!-- BIO -->
-                    <a href="#" class="btn">Download Resume</a>
+                    <!-- PROFILE CTA -->
                 </div>
             </div>
         </div>
@@ -392,10 +392,17 @@ const escapeHtml = (unsafe: string | null | undefined): string => {
 
 const escapeAttr = (unsafe: string | null | undefined): string => {
     if (!unsafe) return '';
-    // Only escape quotes for attribute contexts
-    return unsafe.replace(/"/g, "&quot;");
+    return escapeHtml(unsafe);
 };
 
+const normalizeExternalUrl = (unsafe: string | null | undefined): string => {
+    const value = unsafe?.trim();
+    if (!value) return '';
+    if (/^(javascript|data|vbscript):/i.test(value)) return '';
+    if (/^(https?:|mailto:|tel:)/i.test(value)) return value;
+    if (/^(www\.|[a-z0-9.-]+\.[a-z]{2,})(\/.*)?$/i.test(value)) return `https://${value}`;
+    return '';
+};
 
 const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): string => {
     let html = HTML_TEMPLATE;
@@ -409,16 +416,13 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     const escapedBio = escapeHtml(branding.bio);
     html = html.replace('<!-- BIO -->', `<p>${escapedBio.replace(/\n/g, '</p><p>')}</p>`);
 
-    // Update Download Resume link to point to LinkedIn
-    if (content.socials?.linkedin) {
-        html = html.replace(
-            '<a href="#" class="btn">Download Resume</a>',
-            `<a href="${escapeAttr(content.socials.linkedin)}" target="_blank" rel="noopener noreferrer" class="btn">View Profile on LinkedIn</a>`
-        );
-    } else {
-        // If no LinkedIn, hide the button
-        html = html.replace('<a href="#" class="btn">Download Resume</a>', '');
-    }
+    const linkedinUrl = normalizeExternalUrl(content.socials?.linkedin);
+    html = html.replace(
+        '<!-- PROFILE CTA -->',
+        linkedinUrl
+            ? `<a href="${escapeAttr(linkedinUrl)}" target="_blank" rel="noopener noreferrer" class="btn">View Profile on LinkedIn</a>`
+            : ''
+    );
 
     html = html.replace('<!-- EMAIL -->', escapeHtml(content.contactEmail || 'N/A'));
     html = html.replace('<a href="mailto:email@example.com" class="btn">Send Message</a>', `<a href="mailto:${escapeAttr(content.contactEmail)}" class="btn">Send Message</a>`);
@@ -432,10 +436,12 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     html = html.replace('alt="Profile Image"', `alt="${escapeAttr(`Profile image of ${content.fullName}`)}"`);
 
     // Social Icons
+    const githubUrl = normalizeExternalUrl(content.socials?.github);
+    const twitterUrl = normalizeExternalUrl(content.socials?.twitter);
     const socialIconsHtml = `
-        ${content.socials?.linkedin ? `<a href="${escapeAttr(content.socials.linkedin)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-linkedin-in"></i></a>` : ''}
-        ${content.socials?.github ? `<a href="${escapeAttr(content.socials.github)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-github"></i></a>` : ''}
-        ${content.socials?.twitter ? `<a href="${escapeAttr(content.socials.twitter)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-twitter"></i></a>` : ''}
+        ${linkedinUrl ? `<a href="${escapeAttr(linkedinUrl)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-linkedin-in"></i></a>` : ''}
+        ${githubUrl ? `<a href="${escapeAttr(githubUrl)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-github"></i></a>` : ''}
+        ${twitterUrl ? `<a href="${escapeAttr(twitterUrl)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-twitter"></i></a>` : ''}
     `;
     html = html.replace('<!-- SOCIAL ICONS - HERO -->', socialIconsHtml);
     html = html.replace('<!-- SOCIAL ICONS - FOOTER -->', socialIconsHtml);
@@ -465,9 +471,12 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     const projectsHtml = projects.map(p => {
         const projectImageSrc = p.image ? `data:${p.image.mimeType};base64,${p.image.data}` : `https://placehold.co/600x400/2563eb/f8fafc?text=${encodeURIComponent(p.title)}`;
         const categorySlug = escapeAttr(p.category?.toLowerCase().trim().replace(/\s+/g, '-')) || 'web';
+        const projectUrl = normalizeExternalUrl(p.url);
+        const projectHref = projectUrl || '#portfolio';
+        const projectTarget = projectUrl ? ' target="_blank" rel="noopener noreferrer"' : '';
         return `
             <div class="portfolio-item" data-category="${categorySlug}">
-                <a href="${escapeAttr(p.url)}" target="_blank" rel="noopener noreferrer" class="portfolio-overlay">
+                <a href="${escapeAttr(projectHref)}"${projectTarget} class="portfolio-overlay">
                     <h3>${escapeHtml(p.title)}</h3>
                     <p>${escapeHtml(p.description.substring(0, 100))}</p>
                 </a>

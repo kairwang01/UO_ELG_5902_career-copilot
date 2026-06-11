@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Check, ChevronDown, Copy, Download, FileText, Loader2, Printer } from 'lucide-react';
 import { Packer, Document, Paragraph, TextRun, HeadingLevel } from 'docx';
 
 /** Shared error box so every tool surfaces failures with the same look. */
@@ -104,23 +104,79 @@ export const renderFormattedText = (text: string) => {
     return elements;
 };
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const sanitizeFilename = (value: string) =>
+  value
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'career-copilot-export';
+
 export const DownloadButtons: React.FC<{ textContent: string; baseFilename: string }> = ({ textContent, baseFilename }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDocxExporting, setIsDocxExporting] = useState(false);
+  const [status, setStatus] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const safeBaseFilename = sanitizeFilename(baseFilename);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMenuOpen]);
+
+  useEffect(() => {
+    if (!status) return;
+    const timer = window.setTimeout(() => setStatus(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
 
   const downloadTxt = () => {
-    const cleanedText = textContent
+    try {
+      const cleanedText = textContent
         .replace(/\*\*(.*?)\*\*/g, '$1')
         .replace(/^#+\s/gm, '')
         .replace(/(\r\n|\n|\r)/gm, "\r\n");
-    const element = document.createElement("a");
-    // Prepend BOM for UTF-8 compatibility, especially on Windows
-    const file = new Blob(['\uFEFF' + cleanedText], {type: 'text/plain;charset=utf-8'});
-    element.href = URL.createObjectURL(file);
-    element.download = `${baseFilename}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    element.remove();
-    setIsMenuOpen(false);
+      const element = document.createElement("a");
+      // Prepend BOM for UTF-8 compatibility, especially on Windows.
+      const file = new Blob(['\uFEFF' + cleanedText], {type: 'text/plain;charset=utf-8'});
+      const url = URL.createObjectURL(file);
+      element.href = url;
+      element.download = `${safeBaseFilename}.txt`;
+      document.body.appendChild(element);
+      element.click();
+      element.remove();
+      URL.revokeObjectURL(url);
+      setStatus({ tone: 'success', message: 'TXT export started.' });
+    } catch {
+      setStatus({ tone: 'error', message: 'TXT export failed. Please try again.' });
+    } finally {
+      setIsMenuOpen(false);
+    }
   };
 
   const downloadPdf = () => {
@@ -129,7 +185,8 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
         let html = '';
         let inList = false;
 
-        const processLine = (line: string) => line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        const processLine = (line: string) =>
+          escapeHtml(line).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
         lines.forEach(line => {
             const trimmedLine = line.trim();
@@ -163,7 +220,7 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-        alert("Could not open print window. Please check your browser's pop-up blocker settings.");
+        setStatus({ tone: 'error', message: 'PDF export was blocked. Allow pop-ups for this site and try again.' });
         setIsMenuOpen(false);
         return;
     }
@@ -172,7 +229,7 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
     printWindow.document.write(`
       <html>
         <head>
-          <title>${baseFilename}</title>
+          <title>${escapeHtml(safeBaseFilename)}</title>
           <style>
             @media print {
               @page { size: A4; margin: 2cm; }
@@ -201,9 +258,10 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
             printWindow.focus();
             printWindow.print();
             printWindow.close();
+            setStatus({ tone: 'success', message: 'PDF print dialog opened.' });
         } catch (e) {
             console.error("Printing failed:", e);
-            alert("An error occurred while trying to print. Please try again.");
+            setStatus({ tone: 'error', message: 'PDF export failed. Please try again.' });
             printWindow.close();
         }
     }, 250);
@@ -212,68 +270,109 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
   };
 
   const downloadDocx = async () => {
-    const paragraphs: Paragraph[] = textContent.split('\n').map(line => {
-      if (line.startsWith('# ')) {
-        return new Paragraph({ text: line.substring(2), heading: HeadingLevel.HEADING_1 });
-      }
-      if (line.startsWith('## ')) {
-        return new Paragraph({ text: line.substring(3), heading: HeadingLevel.HEADING_2 });
-      }
-      if (line.startsWith('* ') || line.startsWith('- ')) {
-        return new Paragraph({ text: line.substring(2).trim(), bullet: { level: 0 } });
-      }
-      
-      const children = line.split(/(\*\*.*?\*\*)/g).filter(Boolean).map(part => {
-        const isBold = part.startsWith('**') && part.endsWith('**');
-        const text = isBold ? part.slice(2, -2) : part;
-        // Use Arial for better unicode support
-        return new TextRun({ text, bold: isBold, font: "Arial", size: 22 });
+    setIsDocxExporting(true);
+    setIsMenuOpen(false);
+
+    try {
+      const paragraphs: Paragraph[] = textContent.split('\n').map(line => {
+        if (line.startsWith('# ')) {
+          return new Paragraph({ text: line.substring(2), heading: HeadingLevel.HEADING_1 });
+        }
+        if (line.startsWith('## ')) {
+          return new Paragraph({ text: line.substring(3), heading: HeadingLevel.HEADING_2 });
+        }
+        if (line.startsWith('* ') || line.startsWith('- ')) {
+          return new Paragraph({ text: line.substring(2).trim(), bullet: { level: 0 } });
+        }
+
+        const children = line.split(/(\*\*.*?\*\*)/g).filter(Boolean).map(part => {
+          const isBold = part.startsWith('**') && part.endsWith('**');
+          const text = isBold ? part.slice(2, -2) : part;
+          // Use Arial for better unicode support.
+          return new TextRun({ text, bold: isBold, font: "Arial", size: 22 });
+        });
+
+        return new Paragraph({ children, spacing: { after: 100 } });
       });
 
-      return new Paragraph({ children, spacing: { after: 100 } });
-    });
-
-    const doc = new Document({
-      styles: {
-        default: {
-          document: {
-            run: {
-              font: "Arial",
-              size: 22, // 11pt
+      const doc = new Document({
+        styles: {
+          default: {
+            document: {
+              run: {
+                font: "Arial",
+                size: 22, // 11pt
+              },
             },
           },
+          paragraphStyles: [
+            { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", run: { font: "Arial", size: 28, bold: true }, paragraph: { spacing: { before: 240, after: 120 } } },
+            { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", run: { font: "Arial", size: 24, bold: true }, paragraph: { spacing: { before: 200, after: 100 } } },
+          ],
         },
-        paragraphStyles: [
-          { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", run: { font: "Arial", size: 28, bold: true }, paragraph: { spacing: { before: 240, after: 120 } } },
-          { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", run: { font: "Arial", size: 24, bold: true }, paragraph: { spacing: { before: 200, after: 100 } } },
-        ],
-      },
-      sections: [{ children: paragraphs }]
-    });
-    
-    const blob = await Packer.toBlob(doc);
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${baseFilename}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    setIsMenuOpen(false);
+        sections: [{ children: paragraphs }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeBaseFilename}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      setStatus({ tone: 'success', message: 'DOCX export started.' });
+    } catch {
+      setStatus({ tone: 'error', message: 'DOCX export failed. Please try again.' });
+    } finally {
+      setIsDocxExporting(false);
+    }
   };
 
   return (
-    <div className="relative">
-      <button onClick={() => setIsMenuOpen(!isMenuOpen)} aria-haspopup="menu" aria-expanded={isMenuOpen} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 transition-colors flex items-center gap-2">
+    <div className="relative inline-flex flex-col items-end gap-2" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setIsMenuOpen((open) => !open)}
+        aria-haspopup="menu"
+        aria-expanded={isMenuOpen}
+        disabled={!textContent.trim() || isDocxExporting}
+        className="inline-flex items-center gap-2 rounded-lg bg-gray-800 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-700 dark:hover:bg-slate-600"
+      >
+        {isDocxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         Download
-        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        <ChevronDown className={`h-4 w-4 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
       </button>
       {isMenuOpen && (
-        <div role="menu" className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 ring-1 ring-black/5 dark:ring-white/10 z-20 animate-fade-scale">
-          <button onClick={downloadTxt} className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700">as TXT</button>
-          <button onClick={downloadPdf} className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700">as PDF</button>
-          <button onClick={downloadDocx} className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700">as DOCX</button>
+        <div role="menu" className="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 animate-fade-scale dark:bg-slate-800 dark:ring-white/10">
+          <button type="button" role="menuitem" onClick={downloadTxt} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-slate-700">
+            <FileText className="h-4 w-4 text-gray-400" />
+            Export as TXT
+          </button>
+          <button type="button" role="menuitem" onClick={downloadPdf} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-slate-700">
+            <Printer className="h-4 w-4 text-gray-400" />
+            Print as PDF
+          </button>
+          <button type="button" role="menuitem" onClick={downloadDocx} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-slate-700">
+            <Download className="h-4 w-4 text-gray-400" />
+            Export as DOCX
+          </button>
+        </div>
+      )}
+      {status && (
+        <div
+          role={status.tone === 'error' ? 'alert' : 'status'}
+          className={`w-64 rounded-lg border px-3 py-2 text-left text-xs shadow-sm animate-fade-scale ${
+            status.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300'
+          }`}
+        >
+          <span className="flex items-start gap-2">
+            {status.tone === 'error' ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+            <span>{status.message}</span>
+          </span>
         </div>
       )}
     </div>
