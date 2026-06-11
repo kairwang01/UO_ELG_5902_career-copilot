@@ -960,7 +960,6 @@
   "admin.role.super": "Super",
   "admin.set_default_confirm": "Définir ce modèle comme routage par défaut de la plateforme ? Toutes les requêtes auto-routées l'utiliseront.",
   "admin_free_cap_help": "Plafond de tokens de sortie pour le niveau gratuit. Les requêtes des utilisateurs gratuits seront plafonnées à ce nombre de tokens de sortie. Valeur par défaut 8192 = max natif de Gemini Flash. Réduisez cette valeur pour créer une frontière plus marquée entre gratuit et payant.",
-  "ai_model_label": "Modèle IA",
   "applications_empty_cta": "Trouver des offres",
   "applications_empty_desc": "Commencez à postuler et votre progression apparaîtra ici.",
   "applications_empty_title": "Aucune candidature pour le moment",
@@ -2541,5 +2540,18 @@
   "agency_results_no_attention_title": "Aucun fichier à vérifier",
   "agency_results_no_attention_desc": "Les erreurs et éléments à relancer apparaîtront ici si un fichier ne peut pas être traité.",
   "agency_results_waiting_title": "File prête à lancer",
-  "agency_results_waiting_desc": "Lancez les fichiers en attente pour créer scores candidats et livrables client."
+  "agency_results_waiting_desc": "Lancez les fichiers en attente pour créer scores candidats et livrables client.",
+  "talent_command_title": "Pilotage du sourcing",
+  "talent_command_desc": "Choisissez un poste publié, évaluez la qualité des correspondances, puis sauvegardez ou contactez les candidats sans perdre le contexte.",
+  "talent_command_context_manual": "Brief de poste manuel",
+  "talent_command_context_missing": "Brief de poste requis",
+  "talent_command_metric_roles": "Postes actifs",
+  "talent_command_metric_verified": "Vérifiés",
+  "talent_command_metric_matches": "Matches",
+  "talent_command_metric_saved": "Sauvegardés",
+  "talent_command_next_action": "Prochaine action :",
+  "talent_command_run_search": "Lancer le matching",
+  "talent_command_add_role": "Ajouter le brief",
+  "talent_more_jobs_in_select": "{n} autre(s) poste(s) disponibles dans la liste.",
+  "talent_refine_brief": "Affiner le brief"
 }

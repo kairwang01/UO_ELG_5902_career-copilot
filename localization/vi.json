@@ -1048,7 +1048,6 @@
   "org_industry": "Ngành",
   "org_industry_ph": "vd: Phần mềm / FinTech / Giáo dục",
   "org_founded_year": "Năm thành lập",
-  "ai_model_label": "Model AI",
   "admin.role.super": "Super",
   "admin.role.admin": "Admin",
   "admin.role.reviewer": "Reviewer",
@@ -2541,5 +2540,18 @@
   "agency_results_no_attention_title": "Không có tệp cần xử lý",
   "agency_results_no_attention_desc": "Lỗi và mục cần thử lại sẽ xuất hiện ở đây khi tệp không thể xử lý.",
   "agency_results_waiting_title": "Hàng đợi đã sẵn sàng",
-  "agency_results_waiting_desc": "Chạy các tệp đang chờ để tạo điểm ứng viên và tài liệu bàn giao khách hàng."
+  "agency_results_waiting_desc": "Chạy các tệp đang chờ để tạo điểm ứng viên và tài liệu bàn giao khách hàng.",
+  "talent_command_title": "Điều phối tìm ứng viên",
+  "talent_command_desc": "Chọn vị trí đã đăng, xem chất lượng ghép nối, rồi lưu hoặc liên hệ ứng viên mà không mất ngữ cảnh.",
+  "talent_command_context_manual": "Mô tả vai trò thủ công",
+  "talent_command_context_missing": "Cần mô tả vai trò",
+  "talent_command_metric_roles": "Vai trò mở",
+  "talent_command_metric_verified": "Đã xác thực",
+  "talent_command_metric_matches": "Phù hợp",
+  "talent_command_metric_saved": "Đã lưu",
+  "talent_command_next_action": "Bước tiếp theo:",
+  "talent_command_run_search": "Chạy ghép nối",
+  "talent_command_add_role": "Thêm mô tả vai trò",
+  "talent_more_jobs_in_select": "Còn {n} vai trò trong danh sách thả xuống.",
+  "talent_refine_brief": "Chỉnh mô tả vai trò"
 }

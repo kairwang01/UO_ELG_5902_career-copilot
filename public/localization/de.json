@@ -1048,7 +1048,6 @@
   "org_industry": "Branche",
   "org_industry_ph": "z. B. Software / FinTech / Bildung",
   "org_founded_year": "Gründungsjahr",
-  "ai_model_label": "AI Model",
   "admin.role.super": "Super",
   "admin.role.admin": "Admin",
   "admin.role.reviewer": "Reviewer",
@@ -2541,5 +2540,18 @@
   "agency_results_no_attention_title": "Keine Dateien benötigen Aufmerksamkeit",
   "agency_results_no_attention_desc": "Fehler und Wiederholungen erscheinen hier, wenn eine Datei nicht verarbeitet werden kann.",
   "agency_results_waiting_title": "Warteschlange bereit",
-  "agency_results_waiting_desc": "Starten Sie die ausstehenden Dateien, um Bewertungen und Kundenunterlagen zu erstellen."
+  "agency_results_waiting_desc": "Starten Sie die ausstehenden Dateien, um Bewertungen und Kundenunterlagen zu erstellen.",
+  "talent_command_title": "Talent-Sourcing-Steuerung",
+  "talent_command_desc": "Wählen Sie eine veröffentlichte Rolle, prüfen Sie die Match-Qualität und speichern oder kontaktieren Sie Kandidaten im gleichen Kontext.",
+  "talent_command_context_manual": "Manueller Rollenbrief",
+  "talent_command_context_missing": "Rollenbrief erforderlich",
+  "talent_command_metric_roles": "Aktive Rollen",
+  "talent_command_metric_verified": "Verifiziert",
+  "talent_command_metric_matches": "Matches",
+  "talent_command_metric_saved": "Gespeichert",
+  "talent_command_next_action": "Nächster Schritt:",
+  "talent_command_run_search": "Matching starten",
+  "talent_command_add_role": "Rollenbrief hinzufügen",
+  "talent_more_jobs_in_select": "{n} weitere Rolle(n) im Dropdown verfügbar.",
+  "talent_refine_brief": "Rollenbrief verfeinern"
 }

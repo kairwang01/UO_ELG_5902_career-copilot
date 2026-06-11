@@ -959,7 +959,6 @@
   "admin.role.super": "スーパー管理者",
   "admin.set_default_confirm": "このモデルをプラットフォームのルーティングデフォルトに設定しますか？すべての自動ルーティングリクエストがこのモデルを使用します。",
   "admin_free_cap_help": "無料枠の出力トークン上限。無料ユーザーのリクエストはこのトークン数で制限されます。デフォルト8192 = Gemini Flash標準最大値。この値を下げると無料/有料の品質境界がより明確になります。",
-  "ai_model_label": "AIモデル",
   "applications_empty_cta": "求人を探す",
   "applications_empty_desc": "応募を始めると、進捗がここに表示されます。",
   "applications_empty_title": "まだ応募がありません",
@@ -2541,5 +2540,18 @@
   "agency_results_no_attention_title": "対応が必要なファイルはありません",
   "agency_results_no_attention_desc": "処理できないファイルがある場合、エラーと再試行項目がここに表示されます。",
   "agency_results_waiting_title": "キューを実行できます",
-  "agency_results_waiting_desc": "待機中のファイルを実行して、候補者スコアとクライアント向け資料を作成します。"
+  "agency_results_waiting_desc": "待機中のファイルを実行して、候補者スコアとクライアント向け資料を作成します。",
+  "talent_command_title": "人材ソーシング管理",
+  "talent_command_desc": "公開済み求人を選び、マッチ品質を確認し、文脈を保ったまま候補者を保存または連絡できます。",
+  "talent_command_context_manual": "手動の募集要項",
+  "talent_command_context_missing": "募集要項が必要",
+  "talent_command_metric_roles": "有効求人",
+  "talent_command_metric_verified": "認証済み",
+  "talent_command_metric_matches": "マッチ",
+  "talent_command_metric_saved": "保存済み",
+  "talent_command_next_action": "次の操作:",
+  "talent_command_run_search": "マッチング検索を実行",
+  "talent_command_add_role": "募集要項を追加",
+  "talent_more_jobs_in_select": "ドロップダウンに他 {n} 件の求人があります。",
+  "talent_refine_brief": "募集要項を調整"
 }

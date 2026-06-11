@@ -84,6 +84,15 @@ const buildPostedJobBrief = (job: JobPosting, t: TranslationFn): string => {
     return parts.join('\n');
 };
 
+const formatTranslation = (
+    template: string,
+    values: Record<string, string | number>,
+) =>
+    Object.entries(values).reduce(
+        (text, [key, value]) => text.split(`{${key}}`).join(String(value)),
+        template,
+    );
+
 const formatPostedDate = (value: string | null | undefined): string => {
     if (!value) return '';
     const date = new Date(value);
@@ -108,6 +117,130 @@ function VerifiedTalentSkeleton() {
                 </div>
             ))}
         </div>
+    );
+}
+
+interface TalentCommandCenterProps {
+    t: TranslationFn;
+    hasJobDescription: boolean;
+    selectedJobTitle?: string;
+    postedJobsCount: number;
+    verifiedCount: number;
+    savedCount: number;
+    searchLoading: boolean;
+    regularResultsCount: number | null;
+    onPrimaryAction: () => void;
+    onOpenShortlist?: () => void;
+}
+
+function TalentCommandCenter({
+    t,
+    hasJobDescription,
+    selectedJobTitle,
+    postedJobsCount,
+    verifiedCount,
+    savedCount,
+    searchLoading,
+    regularResultsCount,
+    onPrimaryAction,
+    onOpenShortlist,
+}: TalentCommandCenterProps) {
+    const contextLabel =
+        selectedJobTitle ||
+        (hasJobDescription
+            ? t('talent_command_context_manual')
+            : t('talent_command_context_missing'));
+    const primaryLabel = searchLoading
+        ? t('talent_searching')
+        : hasJobDescription
+            ? t('talent_command_run_search')
+            : t('talent_command_add_role');
+    const PrimaryIcon = searchLoading ? Loader2 : hasJobDescription ? Search : Briefcase;
+    const metrics = [
+        {
+            label: t('talent_command_metric_roles'),
+            value: postedJobsCount,
+            tone: 'bg-white text-gray-900 dark:bg-slate-900 dark:text-gray-100',
+        },
+        {
+            label: t('talent_command_metric_verified'),
+            value: verifiedCount,
+            tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
+        },
+        {
+            label: t('talent_command_metric_matches'),
+            value: regularResultsCount ?? '-',
+            tone: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
+        },
+        {
+            label: t('talent_command_metric_saved'),
+            value: savedCount,
+            tone: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200',
+        },
+    ];
+
+    return (
+        <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                            {t('talent_command_title')}
+                        </p>
+                        <span className="max-w-full truncate rounded-full border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:border-gray-700 dark:text-gray-300">
+                            {contextLabel}
+                        </span>
+                    </div>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-400">
+                        {t('talent_command_desc')}
+                    </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[420px]">
+                    {metrics.map((metric) => (
+                        <div
+                            key={metric.label}
+                            className={`rounded-xl border border-gray-200 px-3 py-2 text-center dark:border-gray-700 ${metric.tone}`}
+                        >
+                            <p className="text-xl font-bold">{metric.value}</p>
+                            <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide opacity-75">
+                                {metric.label}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
+                        {t('talent_command_next_action')}
+                    </span>{' '}
+                    {primaryLabel}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    {savedCount > 0 && onOpenShortlist && (
+                        <button
+                            type="button"
+                            onClick={onOpenShortlist}
+                            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                        >
+                            {t('talent_open_shortlist')}
+                            <ArrowRight className="h-4 w-4" />
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onPrimaryAction}
+                        disabled={searchLoading}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-wait disabled:bg-blue-400"
+                    >
+                        <PrimaryIcon className={`h-4 w-4 ${searchLoading ? 'animate-spin' : ''}`} />
+                        {primaryLabel}
+                    </button>
+                </div>
+            </div>
+        </section>
     );
 }
 
@@ -147,7 +280,7 @@ function CandidateMatchCard({
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                         <p className={`font-bold ${titleClass}`}>
-                            {t('talent_candidate_label').replace('{n}', String(index + 1))}
+                            {formatTranslation(t('talent_candidate_label'), { n: index + 1 })}
                         </p>
                         {verified && (
                             <span className="rounded-full border border-green-500/40 bg-green-600/30 px-2 py-0.5 text-[11px] font-semibold text-green-100">
@@ -298,6 +431,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
     const verifiedRequestIdRef = useRef(0);
     const appliedInitialJobIdRef = useRef<string | null>(null);
+    const searchFormRef = useRef<HTMLFormElement>(null);
+    const roleBriefRef = useRef<HTMLTextAreaElement>(null);
 
     const { addToast } = useSharedToast();
     const usesExternalJobs = Array.isArray(postedJobsProp);
@@ -314,6 +449,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     const selectedPostedDate = selectedPostedJob ? formatPostedDate(selectedPostedJob.created_at) : '';
     const selectedBriefEdited = !!selectedPostedJob && jobDescription.trim() !== selectedPostedJobBrief.trim();
     const hasJobDescription = jobDescription.trim().length > 0;
+    const regularResultsCount = regularResults ? regularResults.length : null;
+    const visiblePostedJobs = postedJobs.slice(0, 4);
+    const hiddenPostedJobsCount = Math.max(0, postedJobs.length - visiblePostedJobs.length);
     const flowSteps = [
         {
             title: t('talent_flow_select_job_title'),
@@ -416,6 +554,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         e.preventDefault();
         if (!hasJobDescription) {
             setSearchError(t('talent_jd_required'));
+            roleBriefRef.current?.focus();
             return;
         }
         setSearchLoading(true);
@@ -483,6 +622,15 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
 
     const paidBusinessStatuses = new Set(['single_post', 'job_pack', 'starter', 'growth', 'pro']);
     const canUnlock = paidBusinessStatuses.has(profile.subscription_status ?? '');
+    const handleCommandPrimaryAction = () => {
+        if (searchLoading) return;
+        if (!hasJobDescription) {
+            roleBriefRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            roleBriefRef.current?.focus();
+            return;
+        }
+        searchFormRef.current?.requestSubmit();
+    };
 
     return (
         <div className="p-0 sm:p-4 animate-fade-in">
@@ -500,6 +648,19 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                     </div>
                 ))}
             </div>
+
+            <TalentCommandCenter
+                t={t}
+                hasJobDescription={hasJobDescription}
+                selectedJobTitle={selectedPostedJob?.title}
+                postedJobsCount={postedJobs.length}
+                verifiedCount={verifiedResults.length}
+                savedCount={savedIds.size}
+                searchLoading={searchLoading}
+                regularResultsCount={regularResultsCount}
+                onPrimaryAction={handleCommandPrimaryAction}
+                onOpenShortlist={onOpenShortlist}
+            />
 
             {/* Verified Talent Section */}
             <div className="p-5 sm:p-6 bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-xl text-white shadow-lg mb-8" aria-live="polite">
@@ -563,7 +724,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                             <div>
                                 <p className="text-sm font-semibold text-blue-950 dark:text-blue-100">{t('talent_shortlist_next_title')}</p>
                                 <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
-                                    {t('talent_shortlist_next_desc').replace('{n}', String(savedIds.size))}
+                                    {formatTranslation(t('talent_shortlist_next_desc'), { n: savedIds.size })}
                                 </p>
                             </div>
                         </div>
@@ -579,7 +740,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                 </div>
             )}
 
-            <form onSubmit={handleSearch} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <form ref={searchFormRef} onSubmit={handleSearch} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('discover_regular_title')}</h2>
@@ -588,7 +749,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                     {jobsLoaded && postedJobs.length > 0 && (
                         <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
                             <Briefcase className="h-3.5 w-3.5" />
-                            {t('talent_active_jobs_count').replace('{n}', String(postedJobs.length))}
+                            {formatTranslation(t('talent_active_jobs_count'), { n: postedJobs.length })}
                         </span>
                     )}
                 </div>
@@ -618,8 +779,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('talent_select_posted_job')}
                         </label>
-                        <div className="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3" role="radiogroup" aria-label={t('talent_select_posted_job')}>
-                            {postedJobs.slice(0, 6).map((job) => {
+                        <div className="mb-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={t('talent_select_posted_job')}>
+                            {visiblePostedJobs.map((job) => {
                                 const selected = selectedJobId === job.id;
                                 return (
                                     <button
@@ -654,6 +815,11 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                                 );
                             })}
                         </div>
+                        {hiddenPostedJobsCount > 0 && (
+                            <p className="mb-3 text-xs font-medium text-gray-500 dark:text-gray-400">
+                                {formatTranslation(t('talent_more_jobs_in_select'), { n: hiddenPostedJobsCount })}
+                            </p>
+                        )}
                         <select
                             value={selectedJobId}
                             onChange={(e) => handleSelectPostedJob(e.target.value)}
@@ -747,6 +913,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                     </div>
                 )}
                 <textarea
+                    ref={roleBriefRef}
                     value={jobDescription}
                     onChange={(e) => {
                         setJobDescription(e.target.value);
@@ -767,7 +934,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                                 ? t('talent_search_manual_ready_hint')
                                 : t('talent_search_disabled_hint')}
                     </span>
-                    <span>{t('talent_jd_length').replace('{n}', String(jobDescription.trim().length))}</span>
+                    <span>{formatTranslation(t('talent_jd_length'), { n: jobDescription.trim().length })}</span>
                 </div>
                  {searchError && <div role="alert" className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm">{searchError}</div>}
                  <button type="submit" disabled={searchLoading || !hasJobDescription} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-8 py-3 font-bold text-white shadow-md transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400 sm:w-auto">
@@ -786,27 +953,49 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
             {regularResults && (
                 <div className="mt-8 animate-panel-expand" aria-live="polite">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
-                        {regularResults.length > 0 ? t('talent_found_matches').replace('{n}', String(regularResults.length)) : t('talent_no_matches')}
+                        {regularResults.length > 0 ? formatTranslation(t('talent_found_matches'), { n: regularResults.length }) : t('talent_no_matches')}
                     </h3>
                     {regularResults.length === 0 ? (
                         <div className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
                             <p className="text-sm text-gray-600 dark:text-gray-400">{t('talent_results_empty_desc')}</p>
+                            <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        roleBriefRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        roleBriefRef.current?.focus();
+                                    }}
+                                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+                                >
+                                    {t('talent_refine_brief')}
+                                </button>
+                                {onPostJob && (
+                                    <button
+                                        type="button"
+                                        onClick={onPostJob}
+                                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-800"
+                                    >
+                                        <PlusCircle className="h-4 w-4" />
+                                        {t('talent_post_job_first_button')}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     ) : (
-                    <div className="space-y-4">
-                        {regularResults.map((candidate, index) => (
-                            <CandidateMatchCard
-                                key={candidate.id}
-                                candidate={candidate}
-                                index={index}
-                                variant="regular"
-                                t={t}
-                                saved={savedIds.has(candidate.id)}
-                                saving={savingIds.has(candidate.id)}
-                                onSave={handleSaveToShortlist}
-                            />
-                        ))}
-                    </div>
+                        <div className="space-y-4">
+                            {regularResults.map((candidate, index) => (
+                                <CandidateMatchCard
+                                    key={candidate.id}
+                                    candidate={candidate}
+                                    index={index}
+                                    variant="regular"
+                                    t={t}
+                                    saved={savedIds.has(candidate.id)}
+                                    saving={savingIds.has(candidate.id)}
+                                    onSave={handleSaveToShortlist}
+                                />
+                            ))}
+                        </div>
                     )}
                 </div>
             )}

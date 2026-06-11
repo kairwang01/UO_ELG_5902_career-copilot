@@ -80,6 +80,12 @@ service cloud.firestore {
         data[field] is timestamp;
     }
 
+    function optionalBool(data, field) {
+      return !hasField(data, field) ||
+        data[field] == null ||
+        data[field] is bool;
+    }
+
     function unchanged(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
     }
@@ -129,6 +135,10 @@ service cloud.firestore {
           "english_pro_streak",
           "english_pro_last_practice",
           "wallet_address",
+          "nft_minted",
+          "nft_staked",
+          "nft_token_id",
+          "nft_earnings",
           "custom_provider",
           "credits",
           "created_at",
@@ -158,6 +168,13 @@ service cloud.firestore {
         optionalNumber(data, "english_pro_streak", 0, 100000) &&
         optionalTimestamp(data, "english_pro_last_practice") &&
         optionalString(data, "wallet_address", 128) &&
+        // Proof-of-Talent credential state (experimental Web3 module). Written
+        // by the client during wallet sync — booleans, token id and accrued
+        // testnet rewards only; never balances that grant product value.
+        optionalBool(data, "nft_minted") &&
+        optionalBool(data, "nft_staked") &&
+        optionalNumber(data, "nft_token_id", 0, 1000000000) &&
+        optionalNumber(data, "nft_earnings", 0, 1000000) &&
         // Server-only (set via setBusinessLlmConfig callable / Admin SDK). Allowed to
         // exist on the doc as a map; client writes are pinned via unchanged() below.
         (!hasField(data, "custom_provider") || data.custom_provider is map);

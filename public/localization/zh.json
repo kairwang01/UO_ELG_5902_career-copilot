@@ -1078,7 +1078,6 @@
   "org_industry": "行业",
   "org_industry_ph": "例如：软件 / 金融科技 / 教育",
   "org_founded_year": "成立年份",
-  "ai_model_label": "AI 模型",
   "admin.role.super": "超级管理员",
   "admin.role.admin": "管理员",
   "admin.role.reviewer": "审阅员",
@@ -2541,5 +2540,18 @@
   "agency_results_no_attention_title": "暂无需处理文件",
   "agency_results_no_attention_desc": "如果文件无法处理，错误和重试项会出现在这里。",
   "agency_results_waiting_title": "队列可以运行",
-  "agency_results_waiting_desc": "运行待处理文件，生成候选人评分和客户交付材料。"
+  "agency_results_waiting_desc": "运行待处理文件，生成候选人评分和客户交付材料。",
+  "talent_command_title": "人才发现控制台",
+  "talent_command_desc": "选择已发布岗位，查看匹配质量，再保存或联系候选人，过程上下文保持一致。",
+  "talent_command_context_manual": "手动岗位说明",
+  "talent_command_context_missing": "需要岗位说明",
+  "talent_command_metric_roles": "有效岗位",
+  "talent_command_metric_verified": "认证人才",
+  "talent_command_metric_matches": "匹配结果",
+  "talent_command_metric_saved": "已保存",
+  "talent_command_next_action": "下一步：",
+  "talent_command_run_search": "运行匹配搜索",
+  "talent_command_add_role": "添加岗位说明",
+  "talent_more_jobs_in_select": "下拉列表中还有 {n} 个岗位。",
+  "talent_refine_brief": "调整岗位说明"
 }

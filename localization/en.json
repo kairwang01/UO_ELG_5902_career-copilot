@@ -1078,7 +1078,6 @@
   "org_industry": "Industry",
   "org_industry_ph": "e.g. Software / FinTech / Education",
   "org_founded_year": "Founded Year",
-  "ai_model_label": "AI Model",
   "admin.role.super": "Super",
   "admin.role.admin": "Admin",
   "admin.role.reviewer": "Reviewer",
@@ -2541,5 +2540,18 @@
   "agency_results_no_attention_title": "No files need attention",
   "agency_results_no_attention_desc": "Errors and retry items will appear here when a file cannot be processed.",
   "agency_results_waiting_title": "Queue ready to run",
-  "agency_results_waiting_desc": "Run the pending files to create scored candidates and client handoff assets."
+  "agency_results_waiting_desc": "Run the pending files to create scored candidates and client handoff assets.",
+  "talent_command_title": "Talent sourcing control",
+  "talent_command_desc": "Pick a posted role, review match quality, then save or engage candidates without losing context.",
+  "talent_command_context_manual": "Manual role brief",
+  "talent_command_context_missing": "Role brief needed",
+  "talent_command_metric_roles": "Active roles",
+  "talent_command_metric_verified": "Verified",
+  "talent_command_metric_matches": "Matches",
+  "talent_command_metric_saved": "Saved",
+  "talent_command_next_action": "Next action:",
+  "talent_command_run_search": "Run matching search",
+  "talent_command_add_role": "Add role brief",
+  "talent_more_jobs_in_select": "{n} more role(s) available in the dropdown.",
+  "talent_refine_brief": "Refine role brief"
 }
