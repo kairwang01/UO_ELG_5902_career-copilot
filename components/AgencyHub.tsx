@@ -62,14 +62,22 @@ interface AgencyFilterCounts {
   error: number;
 }
 
-const ACCEPTED_RESUME_TYPES = ".pdf,.docx,.txt,.png,.jpg";
+const ACCEPTED_RESUME_TYPES = ".pdf,.docx,.txt,.png,.jpg,.jpeg";
+const ACCEPTED_RESUME_EXTENSIONS = new Set([
+  "pdf",
+  "docx",
+  "txt",
+  "png",
+  "jpg",
+  "jpeg",
+]);
 
 const formatTranslation = (
   template: string,
   values: Record<string, string | number>,
 ) =>
   Object.entries(values).reduce(
-    (text, [key, value]) => text.replace(`{${key}}`, String(value)),
+    (text, [key, value]) => text.split(`{${key}}`).join(String(value)),
     template,
   );
 
@@ -77,6 +85,14 @@ const createFileId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2, 11);
+
+const getFileExtension = (fileName: string) => {
+  const parts = fileName.toLowerCase().split(".");
+  return parts.length > 1 ? parts.pop() || "" : "";
+};
+
+const isAcceptedResumeFile = (file: File) =>
+  ACCEPTED_RESUME_EXTENSIONS.has(getFileExtension(file.name));
 
 const buildPostedJobBrief = (job: JobPosting, t: TranslationFn) => {
   const sections = [
@@ -501,6 +517,142 @@ const AgencyWorkflowPanel: React.FC<{
         </div>
       </div>
     </div>
+  );
+};
+
+const AgencyCommandCenter: React.FC<{
+  mode: "general" | "matching";
+  files: BulkAnalysisItem[];
+  pendingAnalysisCount: number;
+  completedCount: number;
+  errorCount: number;
+  hasJobDescription: boolean;
+  selectedJobTitle?: string;
+  market: string;
+  isAnalyzing: boolean;
+  canRunAnalysis: boolean;
+  onPrimaryAction: () => void;
+  t: TranslationFn;
+}> = ({
+  mode,
+  files,
+  pendingAnalysisCount,
+  completedCount,
+  errorCount,
+  hasJobDescription,
+  selectedJobTitle,
+  market,
+  isAnalyzing,
+  canRunAnalysis,
+  onPrimaryAction,
+  t,
+}) => {
+  const needsBrief = mode === "matching" && !hasJobDescription;
+  const needsFiles = files.length === 0;
+  const primaryDisabled =
+    isAnalyzing ||
+    (!needsBrief && !needsFiles && pendingAnalysisCount > 0 && !canRunAnalysis);
+  const primaryLabel = isAnalyzing
+    ? t("agency_command_processing")
+    : needsBrief
+      ? t("agency_command_add_brief")
+      : needsFiles
+        ? t("agency_command_upload_resumes")
+        : pendingAnalysisCount > 0
+          ? t("agency_command_run_queue")
+          : t("agency_command_review_results");
+  const primaryIcon = isAnalyzing
+    ? Loader2
+    : needsBrief
+      ? BriefcaseBusiness
+      : needsFiles
+        ? CloudUpload
+        : pendingAnalysisCount > 0
+          ? BarChart3
+          : CheckCircle2;
+  const PrimaryIcon = primaryIcon;
+  const helperText =
+    mode === "matching"
+      ? t("agency_command_desc_matching")
+      : t("agency_command_desc_general");
+  const contextLabel =
+    mode === "matching"
+      ? selectedJobTitle || t("agency_workflow_custom_brief")
+      : market;
+
+  const metrics = [
+    {
+      label: t("agency_command_files_metric"),
+      value: files.length,
+      tone: "bg-white text-gray-900 dark:bg-slate-900 dark:text-gray-100",
+    },
+    {
+      label: t("agency_command_pending_metric"),
+      value: pendingAnalysisCount,
+      tone: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300",
+    },
+    {
+      label: t("agency_command_completed_metric"),
+      value: completedCount,
+      tone: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300",
+    },
+    {
+      label: t("agency_command_attention_metric"),
+      value: errorCount,
+      tone: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200",
+    },
+  ];
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-5">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+              {t("agency_command_title")}
+            </p>
+            <span className="rounded-full border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:border-slate-700 dark:text-gray-300">
+              {contextLabel}
+            </span>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-400">
+            {helperText}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[420px]">
+          {metrics.map((metric) => (
+            <div
+              key={metric.label}
+              className={`rounded-xl border border-gray-200 px-3 py-2 text-center dark:border-slate-700 ${metric.tone}`}
+            >
+              <p className="text-xl font-bold">{metric.value}</p>
+              <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide opacity-75">
+                {metric.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+          <span className="font-semibold text-gray-900 dark:text-gray-100">
+            {t("agency_command_next_action")}
+          </span>{" "}
+          {primaryLabel}
+        </p>
+        <button
+          type="button"
+          onClick={onPrimaryAction}
+          disabled={primaryDisabled}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600 dark:disabled:bg-slate-700 dark:disabled:text-gray-400"
+        >
+          <PrimaryIcon className={`h-4 w-4 ${isAnalyzing ? "animate-spin" : ""}`} />
+          {primaryLabel}
+        </button>
+      </div>
+    </section>
   );
 };
 
@@ -1329,6 +1481,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [jobsFetchError, setJobsFetchError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const jdPanelRef = useRef<HTMLDivElement>(null);
 
   const fetchInternalJobs = useCallback(async () => {
     setIsLoadingJobs(true);
@@ -1394,7 +1547,21 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   }, []);
 
   const processNewFiles = useCallback((newFileList: FileList | File[]) => {
-    const newItems: QueuedBulkAnalysisItem[] = Array.from(newFileList).map(
+    const incomingFiles = Array.from(newFileList);
+    const acceptedFiles = incomingFiles.filter(isAcceptedResumeFile);
+    const rejectedCount = incomingFiles.length - acceptedFiles.length;
+
+    if (rejectedCount > 0) {
+      addToast(
+        formatTranslation(t("agency_files_rejected"), {
+          count: rejectedCount,
+          types: ACCEPTED_RESUME_TYPES,
+        }),
+        "error",
+      );
+    }
+
+    const newItems: QueuedBulkAnalysisItem[] = acceptedFiles.map(
       (file) => ({
         id: createFileId(),
         fileName: file.name,
@@ -1675,10 +1842,33 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const pendingAnalysisCount = files.filter(
     (file) => file.status === "queued" || file.status === "error",
   ).length;
+  const completedCount = counts.complete;
+  const errorCount = counts.error;
   const canRunAnalysis =
     !isAnalyzing &&
     pendingAnalysisCount > 0 &&
     !(mode === "matching" && !hasJobDescription);
+  const handleCommandPrimaryAction = () => {
+    if (isAnalyzing) return;
+    if (mode === "matching" && !hasJobDescription) {
+      setJdSource(internalJobs.length > 0 ? "select" : "paste");
+      requestAnimationFrame(() => {
+        jdPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return;
+    }
+    if (files.length === 0) {
+      fileInputRef.current?.click();
+      return;
+    }
+    if (pendingAnalysisCount > 0 && canRunAnalysis) {
+      void runBulkAnalysis();
+      return;
+    }
+    if (completedCount > 0) {
+      setCurrentFilter("complete");
+    }
+  };
 
   const activeHeader =
     mode === "general"
@@ -1798,6 +1988,21 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         </div>
       </div>
 
+      <AgencyCommandCenter
+        mode={mode}
+        files={files}
+        pendingAnalysisCount={pendingAnalysisCount}
+        completedCount={completedCount}
+        errorCount={errorCount}
+        hasJobDescription={hasJobDescription}
+        selectedJobTitle={selectedInternalJob?.title}
+        market={market}
+        isAnalyzing={isAnalyzing}
+        canRunAnalysis={canRunAnalysis}
+        onPrimaryAction={handleCommandPrimaryAction}
+        t={t}
+      />
+
       {/* Main Container */}
       <div className="bg-gray-50 dark:bg-slate-900/50 p-2 rounded-2xl">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
@@ -1828,7 +2033,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
           <div className="p-6 space-y-6">
             {/* JD Input for Matching Mode */}
             {mode === "matching" && (
-              <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-6 animate-fade-in">
+              <div ref={jdPanelRef} className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-6 animate-fade-in scroll-mt-6">
                 <label className="block text-sm font-bold text-blue-900 dark:text-blue-100 mb-3">
                   {t("agency_jd_step_label")}
                 </label>
