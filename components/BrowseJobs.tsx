@@ -37,12 +37,27 @@ interface BrowseJobsProps {
   t: (key: string) => string;
 }
 
-const QUICK_SEARCH_KEYS = [
-  'browse_jobs_quick_software',
-  'browse_jobs_quick_product',
-  'browse_jobs_quick_data',
-  'browse_jobs_quick_marketing',
-  'browse_jobs_quick_remote',
+const QUICK_SEARCHES = [
+  {
+    labelKey: 'browse_jobs_quick_software',
+    aliases: ['software', 'developer', 'engineer', 'frontend', 'backend', 'full stack'],
+  },
+  {
+    labelKey: 'browse_jobs_quick_product',
+    aliases: ['product', 'product manager', 'product owner'],
+  },
+  {
+    labelKey: 'browse_jobs_quick_data',
+    aliases: ['data', 'analytics', 'analyst', 'scientist'],
+  },
+  {
+    labelKey: 'browse_jobs_quick_marketing',
+    aliases: ['marketing', 'growth', 'content', 'social media'],
+  },
+  {
+    labelKey: 'browse_jobs_quick_remote',
+    aliases: ['remote', 'remotely', 'work from home', 'wfh'],
+  },
 ] as const;
 
 type WorkModeFilter = 'all' | 'remote' | 'hybrid' | 'onsite';
@@ -272,9 +287,21 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
     return Array.from(seen).sort();
   }, [jobs]);
 
+  const quickSearchAliasMap = useMemo(() => {
+    const aliases = new Map<string, readonly string[]>();
+    QUICK_SEARCHES.forEach((search) => {
+      const normalizedAliases = search.aliases.map(normalizeFilterText);
+      aliases.set(normalizeFilterText(t(search.labelKey)), normalizedAliases);
+      normalizedAliases.forEach((alias) => aliases.set(alias, normalizedAliases));
+    });
+    return aliases;
+  }, [t]);
+
   // ── filtered + sorted results ─────────────────────────────────────────────
   const filtered = useMemo(() => {
-    const keywordTokens = tokenizeSearch(keyword);
+    const normalizedKeyword = normalizeFilterText(keyword);
+    const quickSearchAliases = quickSearchAliasMap.get(normalizedKeyword);
+    const keywordTokens = quickSearchAliases ? [] : tokenizeSearch(keyword);
     return jobs
       .filter((j) => {
         const searchable = [
@@ -285,6 +312,12 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           j.description,
         ].filter(Boolean).join(' ');
         const normalizedSearchable = normalizeFilterText(searchable);
+        if (
+          quickSearchAliases &&
+          !quickSearchAliases.some((alias) => normalizedSearchable.includes(alias))
+        ) {
+          return false;
+        }
         if (
           keywordTokens.length > 0 &&
           !keywordTokens.every((token) => normalizedSearchable.includes(token))
@@ -301,7 +334,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
         // newest: already sorted by created_at desc from fetch; resort to be safe
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
-  }, [jobs, keyword, locationFilter, workModeFilter, hasSalaryFilter, sortOrder]);
+  }, [jobs, keyword, quickSearchAliasMap, locationFilter, workModeFilter, hasSalaryFilter, sortOrder]);
   const hasActiveFilters = keyword !== '' || locationFilter !== 'all' || workModeFilter !== 'all' || hasSalaryFilter || sortOrder !== 'newest';
   const hasSavedGoals = hasFilterablePreferences(prefs);
   const goalKeyword = buildGoalKeyword(prefs);
@@ -385,15 +418,20 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
             {t('browse_jobs_popular_searches')}
           </span>
-          {QUICK_SEARCH_KEYS.map((key) => {
-            const label = t(key);
-            const active = normalizeFilterText(keyword) === normalizeFilterText(label);
+          {QUICK_SEARCHES.map(({ labelKey, aliases }) => {
+            const label = t(labelKey);
+            const normalizedKeyword = normalizeFilterText(keyword);
+            const active =
+              normalizedKeyword === normalizeFilterText(label) ||
+              aliases.some((alias) => normalizedKeyword === normalizeFilterText(alias));
             return (
               <button
-                key={key}
+                key={labelKey}
                 type="button"
                 onClick={() => commitKeyword(label)}
                 disabled={loading}
+                aria-pressed={active}
+                aria-label={t('browse_jobs_quick_search_aria').replace('{label}', label)}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
                   active
                     ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300'
@@ -529,7 +567,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
 
       {/* result count */}
       {!loading && !fetchError && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p aria-live="polite" className="text-sm text-slate-500 dark:text-slate-400">
           {filtered.length === 0
             ? t('browse_jobs_no_results')
             : t('browse_jobs_result_count').replace('{n}', String(filtered.length))}
@@ -602,6 +640,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             const workMode = deriveWorkMode(job);
 
             const eid = job.employer_id;
+            const reviewsId = eid ? `job-reviews-${job.id}` : undefined;
             const employerReviews = eid ? (reviewCache[eid] ?? null) : null;
             const showRatingChip = employerReviews && employerReviews.count > 0;
             const reviewsOpen = eid ? (reviewsExpanded[eid] ?? false) : false;
@@ -622,6 +661,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                   onClick={() => setExpandedId(isExpanded ? null : job.id)}
                   aria-expanded={isExpanded}
                   aria-controls={detailsId}
+                  aria-label={t('browse_jobs_toggle_details_aria').replace('{title}', job.title)}
                   className="w-full text-left px-5 py-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -746,6 +786,11 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                         disabled={isApplied || isApplying}
                         onClick={() => handleApply(job.id)}
                         aria-busy={isApplying}
+                        aria-label={
+                          isApplied
+                            ? t('browse_jobs_applied_aria').replace('{title}', job.title)
+                            : t('browse_jobs_apply_aria').replace('{title}', job.title)
+                        }
                         className={`inline-flex min-h-[38px] shrink-0 items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition ${
                           isApplied
                             ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 cursor-default'
@@ -784,6 +829,8 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                             if (!eid) return;
                             setReviewsExpanded((prev) => ({ ...prev, [eid]: !prev[eid] }));
                           }}
+                          aria-expanded={reviewsOpen}
+                          aria-controls={reviewsId}
                           className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
                         >
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -798,7 +845,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                         </button>
 
                         {reviewsOpen && (
-                          <div className="mt-3 space-y-3">
+                          <div id={reviewsId} className="mt-3 space-y-3">
                             {employerReviews.reviews.slice(0, 3).map((rv, idx) => (
                               <div
                                 key={idx}
