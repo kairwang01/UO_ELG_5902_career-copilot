@@ -19,6 +19,7 @@ interface UploadSectionProps {
   market: string;
   setMarket: (market: string) => void;
   t: (key: string) => string;
+  variant?: 'site' | 'workspace';
 }
 
 const InputMethodButton: React.FC<{
@@ -30,6 +31,7 @@ const InputMethodButton: React.FC<{
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold rounded-[var(--site-radius)] transition-all border ${
         active
           ? 'bg-[var(--site-action)] text-white border-[var(--site-action)]'
@@ -225,14 +227,27 @@ const UploadSection: React.FC<UploadSectionProps> = ({
           )}
             {activeTab === 'upload' && (
                 <div className="w-full animate-fade-in">
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".txt,.png,.jpg,.jpeg,.pdf,.docx" />
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".txt,.png,.jpg,.jpeg,.pdf,.docx"
+                      aria-label="Upload resume file"
+                    />
                     {resumeImages && resumeImages.length > 0 ? (
                          <div className="text-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl">
                             <p className="text-green-700 dark:text-green-400 font-semibold">{resumeImages.length > 1 ? `${resumeImages.length} pages ready!` : 'Image ready!'}</p>
                             <button type="button" onClick={() => fileInputRef.current?.click()} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">Change file</button>
                          </div>
                     ) : (
-                        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isParsing} className="w-full text-center p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-500 rounded-xl transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isParsing}
+                          aria-busy={isParsing}
+                          className="w-full rounded-xl border-2 border-dashed border-gray-300 p-8 text-center transition-colors hover:border-blue-500 disabled:cursor-wait disabled:opacity-60 dark:border-gray-600"
+                        >
                            <p className="mt-2 font-semibold">{isParsing ? "Processing..." : "Click to upload a file"}</p>
                         </button>
                     )}
@@ -247,12 +262,14 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                         value={urlInput}
                         onChange={(e) => { setUrlInput(e.target.value); setError(null); }}
                         disabled={isUrlProcessing}
+                        aria-label="Resume URL"
                     />
                     <button
                         type="button"
                         onClick={handleUrlImport}
                         disabled={isUrlProcessing || !urlInput.trim() || !isAIMode}
-                        className="w-full bg-gray-700 hover:bg-gray-800 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-xl"
+                        aria-busy={isUrlProcessing}
+                        className="w-full rounded-xl bg-gray-700 px-6 py-3 font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
                         title={!isAIMode ? "Requires AI Mode to be enabled" : ""}
                     >
                         {isUrlProcessing ? "Importing..." : "Import from URL"}
@@ -281,7 +298,8 @@ const UploadSection: React.FC<UploadSectionProps> = ({
             <button
               type="submit"
               disabled={analysisButtonDisabled || !isAIMode}
-              className="w-full max-w-xs flex items-center justify-center bg-[var(--site-action)] hover:bg-[var(--site-action-hover)] disabled:opacity-50 text-white font-semibold py-3.5 px-6 rounded-[var(--site-radius)] transition-all mx-auto"
+              aria-disabled={analysisButtonDisabled || !isAIMode}
+              className="w-full max-w-xs flex items-center justify-center bg-[var(--site-action)] hover:bg-[var(--site-action-hover)] disabled:cursor-not-allowed disabled:opacity-50 text-white font-semibold py-3.5 px-6 rounded-[var(--site-radius)] transition-all mx-auto"
             >
               {isLoading ? "Analyzing..." : t('upload_button_analyze')}
             </button>

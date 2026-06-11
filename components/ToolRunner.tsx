@@ -51,7 +51,19 @@ const ToolRunner: React.FC<ToolRunnerProps> = ({ tool, ...props }) => {
   const ActiveTool = toolMap[tool];
 
   if (!ActiveTool) {
-      return <div className="text-red-600 bg-red-100 p-4 rounded-lg">Tool "{tool}" not found.</div>;
+      return (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+          <p className="font-semibold">This tool is not available in the current workspace.</p>
+          <p className="mt-1 text-sm">Return to the toolkit and choose another action.</p>
+          <button
+            type="button"
+            onClick={props.onClose}
+            className="mt-4 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-800"
+          >
+            Back to toolkit
+          </button>
+        </div>
+      );
   }
 
   return (

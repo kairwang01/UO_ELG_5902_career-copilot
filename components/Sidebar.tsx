@@ -109,6 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             onViewChange(item.id);
                             onToolSelect(null);
                         }}
+                        aria-current={isActive ? 'page' : undefined}
                         className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
                         isActive
                             ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50'
@@ -129,6 +130,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Assisted Tools <span className="text-gray-300 dark:text-slate-600">· {ALL_TOOLS_CONFIG.length}</span></h3>
                 <button 
                     onClick={() => setIsToolkitExpanded(!isToolkitExpanded)}
+                    aria-expanded={isToolkitExpanded}
+                    aria-controls="sidebar-tool-list"
+                    aria-label={isToolkitExpanded ? 'Collapse assisted tools' : 'Expand assisted tools'}
                     className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                     <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform duration-200 ${isToolkitExpanded ? 'rotate-180' : ''}`} />
@@ -151,7 +155,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             {isToolkitExpanded && (
-                <div className="space-y-0.5 animate-fade-in">
+                <div id="sidebar-tool-list" className="space-y-0.5 animate-panel-expand">
                     {ALL_TOOLS_CONFIG.map((tool) => {
                         const isToolActive = activeTool === tool.key;
 

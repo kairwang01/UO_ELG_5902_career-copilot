@@ -129,6 +129,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // Deep-link target page for the employer hiring portal
   const [portalInitialPage, setPortalInitialPage] = useState<PortalPage>('dashboard');
   const roleStateKeyRef = useRef<string | null>(null);
+  const resumeSaveWarningShownRef = useRef(false);
 
   const { credits, setCredits, deductCredits } = useCredits();
   const { addToast } = useToast();
@@ -229,10 +230,25 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         try {
           const { error } = await data.profiles.update(session.user.id, { resume_text: resumeText });
           if (error) {
-            console.error('Failed to auto-save resume text:', error.message);
+            if (/permission|insufficient/i.test(error.message)) {
+              if (!resumeSaveWarningShownRef.current) {
+                resumeSaveWarningShownRef.current = true;
+                addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
+              }
+            } else {
+              console.error('Failed to auto-save resume text:', error.message);
+            }
           }
         } catch (err) {
-          console.error('Error in auto-save resume text effect:', (err as Error).message);
+          const message = (err as Error).message;
+          if (/permission|insufficient/i.test(message)) {
+            if (!resumeSaveWarningShownRef.current) {
+              resumeSaveWarningShownRef.current = true;
+              addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
+            }
+          } else {
+            console.error('Error in auto-save resume text effect:', message);
+          }
         }
       }, 1500);
 
@@ -240,7 +256,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         clearTimeout(handler);
       };
     }
-  }, [resumeText, session, isProfileLoaded, profile?.role]);
+  }, [resumeText, session, isProfileLoaded, profile?.role, addToast]);
 
 
   const getProfile = useCallback(async () => {

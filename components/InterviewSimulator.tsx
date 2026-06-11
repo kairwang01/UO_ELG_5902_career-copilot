@@ -228,6 +228,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
 
     const [error, setError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
+    const [confirmEndEarly, setConfirmEndEarly] = useState(false);
     const recognitionRef = useRef<any>(null);
     const answerBoxRef = useRef<HTMLTextAreaElement>(null);
 
@@ -498,6 +499,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
     const submitAnswer = () => {
         if (submittingRef.current) return;
         submittingRef.current = true;
+        setConfirmEndEarly(false);
         stopListening();
         cancelSpeech();
 
@@ -517,7 +519,6 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
     };
 
     const endInterviewEarly = () => {
-        if (!window.confirm(t('mi_end_confirm'))) return;
         stopListening();
         cancelSpeech();
         // Count the current draft, mark the rest unanswered, evaluate what we have.
@@ -540,6 +541,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
         setLockedReport(null);
         setOpenBreakdown(null);
         setError(null);
+        setConfirmEndEarly(false);
     };
 
     const formatReportForDownload = (rep: InterviewSessionReport): string => {
@@ -634,13 +636,37 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                             />
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={endInterviewEarly}
-                        className="mt-auto text-xs text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 underline"
-                    >
-                        {t('mi_end_interview')}
-                    </button>
+                    <div className="mt-auto">
+                        {!confirmEndEarly ? (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmEndEarly(true)}
+                                className="text-xs text-gray-400 underline transition hover:text-red-600 dark:text-slate-500 dark:hover:text-red-400"
+                            >
+                                {t('mi_end_interview')}
+                            </button>
+                        ) : (
+                            <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3 text-left dark:border-red-900/50 dark:bg-red-950/30 animate-panel-expand">
+                                <p className="text-xs leading-relaxed text-red-700 dark:text-red-300">{t('mi_end_confirm')}</p>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={endInterviewEarly}
+                                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700"
+                                    >
+                                        {t('mi_end_interview')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setConfirmEndEarly(false)}
+                                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/50"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Right: question + answer area */}

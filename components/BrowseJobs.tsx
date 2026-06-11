@@ -217,8 +217,12 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm space-y-3">
         {/* search bar */}
         <div className="relative">
+          <label htmlFor="browse-jobs-search" className="sr-only">
+            {t('browse_jobs_search_ph')}
+          </label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
           <input
+            id="browse-jobs-search"
             type="text"
             value={rawKeyword}
             onChange={(e) => handleKeywordChange(e.target.value)}
@@ -235,6 +239,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           <select
             value={locationFilter}
             onChange={(e) => setLocationFilter(e.target.value)}
+            aria-label={t('browse_jobs_all_locations')}
             className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition"
           >
             <option value="all">{t('browse_jobs_all_locations')}</option>
@@ -258,6 +263,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           <select
             value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value as 'newest' | 'title_az')}
+            aria-label="Sort job postings"
             className="ml-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition"
           >
             <option value="newest">{t('browse_jobs_sort_newest')}</option>
@@ -329,6 +335,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             const isExpanded = expandedId === job.id;
             const isApplied = appliedJobs.has(job.id);
             const isApplying = applyingId === job.id;
+            const detailsId = `job-details-${job.id}`;
 
             const eid = job.employer_id;
             const employerReviews = eid ? (reviewCache[eid] ?? null) : null;
@@ -344,6 +351,8 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                 <button
                   type="button"
                   onClick={() => setExpandedId(isExpanded ? null : job.id)}
+                  aria-expanded={isExpanded}
+                  aria-controls={detailsId}
                   className="w-full text-left px-5 py-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -363,6 +372,11 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                           <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-full px-2 py-0.5 whitespace-nowrap">
                             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
                             {employerReviews!.avg.toFixed(1)}&nbsp;({employerReviews!.count})
+                          </span>
+                        )}
+                        {isApplied && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            {t('browse_jobs_applied')}
                           </span>
                         )}
                       </div>
@@ -399,7 +413,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
 
                 {/* expanded content */}
                 {isExpanded && (
-                  <div className="border-t border-slate-100 dark:border-slate-700 px-5 pb-5 pt-4">
+                  <div id={detailsId} className="animate-panel-expand border-t border-slate-100 dark:border-slate-700 px-5 pb-5 pt-4">
                     {job.description && (
                       <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line">
                         {job.description}
@@ -410,6 +424,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                         type="button"
                         disabled={isApplied || isApplying}
                         onClick={() => handleApply(job.id)}
+                        aria-busy={isApplying}
                         className={`inline-flex min-h-[38px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition ${
                           isApplied
                             ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 cursor-default'

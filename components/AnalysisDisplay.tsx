@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Wrench } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowLeft, CheckCircle2, FileText, LockKeyhole, Search, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import type { AnalysisResult, UserProfile } from '../types';
 import ToolRunner from './ToolRunner';
 import InterviewSimulator from './InterviewSimulator';
@@ -112,16 +112,94 @@ const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; res
   );
 };
 
+type ToolGroupId = 'recommended' | 'resume' | 'jobs' | 'practice' | 'growth';
+
+const TOOL_GROUPS: { id: ToolGroupId; label: string; helper: string; keys: string[] }[] = [
+  {
+    id: 'recommended',
+    label: 'Recommended',
+    helper: 'Best next steps for a complete job-search loop.',
+    keys: ['resume-formatter', 'opportunity-finder', 'cover-letter', 'mock-interview'],
+  },
+  {
+    id: 'resume',
+    label: 'Resume & profile',
+    helper: 'Tighten evidence before matching and outreach.',
+    keys: ['resume-formatter', 'linkedin-optimizer'],
+  },
+  {
+    id: 'jobs',
+    label: 'Jobs & outreach',
+    helper: 'Find roles, prepare messages, and move conversations forward.',
+    keys: ['opportunity-finder', 'cover-letter', 'email-crafter', 'networking-assistant', 'industry-event-scout'],
+  },
+  {
+    id: 'practice',
+    label: 'Interview',
+    helper: 'Prepare answers, negotiation, and English delivery.',
+    keys: ['mock-interview', 'english-pro', 'salary-negotiation'],
+  },
+  {
+    id: 'growth',
+    label: 'Career growth',
+    helper: 'Plan the role path, learning, review prep, and agile habits.',
+    keys: ['career-path', 'skill-learning-plan', 'performance-review-prep', 'agile-coach'],
+  },
+];
+
+const TOOL_PHASE_LABELS: Record<string, string> = {
+  'resume-formatter': 'Resume',
+  'linkedin-optimizer': 'Profile',
+  'opportunity-finder': 'Matching',
+  'cover-letter': 'Application',
+  'email-crafter': 'Outreach',
+  'networking-assistant': 'Outreach',
+  'industry-event-scout': 'Networking',
+  'mock-interview': 'Interview',
+  'english-pro': 'Interview',
+  'salary-negotiation': 'Offer',
+  'career-path': 'Planning',
+  'skill-learning-plan': 'Learning',
+  'performance-review-prep': 'Growth',
+  'agile-coach': 'Growth',
+};
+
+const formatPlanLabel = (planKey: string | undefined): string => {
+  if (!planKey) return 'Free';
+  const plan = ALL_PLANS[planKey];
+  if (plan) return plan.name;
+  return planKey.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
 
 const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, resumeText, userPlan, market, navigateToPricing, session, profile, refreshProfile, onApplyImprovements, activeTool, setActiveTool, onContinueToToolkit }) => {
   const [toolInput, setToolInput] = useState<string>('');
   const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
+  const [toolGroup, setToolGroup] = useState<ToolGroupId>('recommended');
+  const [toolQuery, setToolQuery] = useState('');
   const userPlanLevel = PLAN_HIERARCHY[userPlan] ?? 0;
   const isHighestPlan = userPlanLevel === PLAN_HIERARCHY.executive;
   const { isAIMode } = useSettings();
 
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizationError, setOptimizationError] = useState<string | null>(null);
+  const [confirmingApply, setConfirmingApply] = useState(false);
+
+  const selectedToolGroup = TOOL_GROUPS.find((group) => group.id === toolGroup) ?? TOOL_GROUPS[0];
+  const filteredTools = useMemo(() => {
+    const query = toolQuery.trim().toLowerCase();
+    return ALL_TOOLS_CONFIG.filter((tool) => {
+      const isInGroup = selectedToolGroup.keys.includes(tool.key);
+      if (!isInGroup) return false;
+      if (!query) return true;
+
+      const titleKey = `tool_${tool.key.replace(/-/g, '_')}_title`;
+      const descKey = `tool_${tool.key.replace(/-/g, '_')}_desc`;
+      const title = t(titleKey);
+      const desc = t(descKey);
+      return [tool.key, title, desc].some((value) => value.toLowerCase().includes(query));
+    });
+  }, [selectedToolGroup, toolQuery, t]);
 
   const openTool = (tool: string, input: string = '') => {
     if (input) setToolInput(input);
@@ -131,14 +209,12 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
   
   const handleApplySuggestions = async () => {
     if (!result) return;
-    if (!window.confirm(t('confirm_apply_improvements'))) {
-        return;
-    }
     setIsOptimizing(true);
     setOptimizationError(null);
     try {
       const { updatedResumeText } = await applyResumeImprovements(resumeText, result.improvements);
       onApplyImprovements(updatedResumeText);
+      setConfirmingApply(false);
     } catch (err) {
       setOptimizationError(err instanceof Error ? err.message : 'Failed to apply improvements.');
     } finally {
@@ -150,33 +226,39 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
   // CAREER STUDIO WORKSPACE LAYOUT (NO RESULT)
   // -----------------------------------------------------------
   if (!result) {
-      const toolTitle = activeTool ? t(`tool_${activeTool.replace(/-/g, '_')}_title`) : 'AI Career Toolkit';
+      const toolTitle = activeTool ? t(`tool_${activeTool.replace(/-/g, '_')}_title`) : 'Career toolkit';
 
       return (
           <>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 min-h-[75vh] flex flex-col overflow-hidden">
+            <div className="workspace-card min-h-[75vh] flex flex-col overflow-hidden">
                 {activeTool ? (
                     <>
                         {/* Top Bar for Tool */}
-                        <div className="h-16 bg-gray-50 dark:bg-slate-800/80 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-6 shrink-0 z-20">
-                            <div className="flex items-center gap-3">
+                        <div className="min-h-16 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-3 px-4 py-3 shrink-0 z-20 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                            <div className="flex min-w-0 items-center gap-3">
                                 <button 
                                     onClick={() => setActiveTool(null)}
-                                    className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500"
+                                    className="workspace-button-ghost inline-flex h-9 w-9 shrink-0 items-center justify-center"
+                                    aria-label="Back to tool library"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                    <ArrowLeft className="h-5 w-5" />
                                 </button>
-                                <h2 className="font-bold text-lg text-gray-800 dark:text-gray-100">{toolTitle}</h2>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
+                                    Assisted tool
+                                  </p>
+                                  <h2 className="truncate text-lg font-semibold text-slate-900 dark:text-slate-100">{toolTitle}</h2>
+                                </div>
                             </div>
                             <button 
                                 onClick={() => setIsReferenceModalOpen(true)} 
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-md border transition-colors bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-300 text-sm font-medium"
+                                className="workspace-button-secondary inline-flex items-center justify-center gap-2 px-3 py-2"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                <FileText className="h-4 w-4" />
                                 Resume Reference
                             </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-6 md:p-10 bg-gray-50/30 dark:bg-slate-900/10">
+                        <div className="flex-1 overflow-y-auto bg-slate-50/70 p-4 dark:bg-slate-950/40 sm:p-6 md:p-10">
                             <div className="max-w-4xl mx-auto">
                                 {activeTool === 'mock-interview' ? (
                                         <InterviewSimulator
@@ -206,42 +288,162 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                         </div>
                     </>
                 ) : (
-                    <div className="flex-1 overflow-y-auto p-6 md:p-10 bg-gradient-to-br from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
-                        <div className="max-w-5xl mx-auto">
-                            <div className="text-center mb-8">
-                                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-4 mx-auto text-blue-600 dark:text-blue-400">
-                                    <Wrench className="h-8 w-8" />
+                    <div className="flex-1 overflow-y-auto bg-gradient-to-br from-slate-50 to-white p-4 dark:from-slate-950 dark:to-slate-900 sm:p-6 md:p-8">
+                        <div className="mx-auto max-w-6xl">
+                            <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_320px]">
+                              <div className="workspace-card p-5 sm:p-6">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
+                                      <Wrench className="h-4 w-4" />
+                                      Career toolkit
+                                    </div>
+                                    <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+                                      Choose the next action, not another dashboard
+                                    </h2>
+                                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                                      Tools are grouped around the search flow: resume evidence, job matching, outreach, interview practice, and growth planning.
+                                    </p>
+                                  </div>
+                                  <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+                                    {isHighestPlan ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <LockKeyhole className="h-4 w-4 text-slate-400" />}
+                                    {isHighestPlan ? 'All tools included' : `${formatPlanLabel(userPlan)} plan`}
+                                  </div>
                                 </div>
-                                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2 tracking-tight">Professional AI Toolkit</h2>
-                                <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
-                                    Pick a tool to get started — each one tailors its results to your resume and target market.
+
+                                <div className="mt-5 grid gap-3 sm:grid-cols-4">
+                                  {[
+                                    ['Resume', 'Fix evidence'],
+                                    ['Match', 'Rank roles'],
+                                    ['Outreach', 'Prepare message'],
+                                    ['Interview', 'Practice answer'],
+                                  ].map(([label, helper]) => (
+                                    <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{label}</p>
+                                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{helper}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="workspace-card p-5">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                  <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                  Resume context
+                                </div>
+                                <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                                  Each tool reads the resume text currently in this workspace. Review it before generating application or interview material.
                                 </p>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsReferenceModalOpen(true)}
+                                  className="workspace-button-secondary mt-4 inline-flex w-full items-center justify-center gap-2 px-3 py-2"
+                                >
+                                  <FileText className="h-4 w-4" />
+                                  Review resume
+                                </button>
+                              </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {ALL_TOOLS_CONFIG.map((tool) => {
+
+                            <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_280px]">
+                              <div className="flex gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 dark:border-slate-800 dark:bg-slate-900">
+                                {TOOL_GROUPS.map((group) => (
+                                  <button
+                                    key={group.id}
+                                    type="button"
+                                    aria-pressed={toolGroup === group.id}
+                                    onClick={() => setToolGroup(group.id)}
+                                    className={`shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                                      toolGroup === group.id
+                                        ? 'bg-blue-700 text-white shadow-sm'
+                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    {group.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <label className="relative block">
+                                <span className="sr-only">Search tools in this group</span>
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <input
+                                  type="search"
+                                  value={toolQuery}
+                                  onChange={(event) => setToolQuery(event.target.value)}
+                                  placeholder="Search this group"
+                                  className="h-full min-h-[46px] w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-blue-900/40"
+                                />
+                              </label>
+                            </div>
+
+                            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                              <div>
+                                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{selectedToolGroup.label}</h3>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">{selectedToolGroup.helper}</p>
+                              </div>
+                              <p className="text-xs font-medium text-slate-500 dark:text-slate-500">
+                                {filteredTools.length} of {selectedToolGroup.keys.length} tools
+                              </p>
+                            </div>
+
+                            {filteredTools.length === 0 ? (
+                              <div className="workspace-card p-8 text-center">
+                                <Search className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
+                                <h3 className="mt-3 text-base font-semibold text-slate-900 dark:text-slate-100">No tools match that search</h3>
+                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Clear the search or switch groups to continue.</p>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                {filteredTools.map((tool) => {
                                     const titleKey = `tool_${tool.key.replace(/-/g, '_')}_title`;
                                     const descKey = `tool_${tool.key.replace(/-/g, '_')}_desc`;
                                     const desc = t(descKey);
+                                    const requiredPlan = TOOL_ACCESS[tool.key];
+                                    const isIncluded = hasAccess(userPlan, requiredPlan);
+                                    const isRecommended = TOOL_GROUPS[0].keys.includes(tool.key);
                                     return (
                                         <button
                                             key={tool.key}
                                             type="button"
-                                            onClick={() => setActiveTool(tool.key)}
-                                            className="group text-left p-5 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                            onClick={() => openTool(tool.key)}
+                                            className="group workspace-card flex min-h-[184px] flex-col p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:border-blue-800"
+                                            aria-label={`Open ${t(titleKey)}`}
                                         >
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 transition-transform group-hover:scale-105">
                                                     {React.cloneElement(tool.icon, { className: 'h-5 w-5' })}
                                                 </div>
-                                                <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-snug">{t(titleKey)}</h3>
+                                                <div>
+                                                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                                                    {TOOL_PHASE_LABELS[tool.key] ?? 'Tool'}
+                                                  </span>
+                                                  <h3 className="mt-0.5 text-sm font-semibold leading-snug text-slate-900 dark:text-white">{t(titleKey)}</h3>
+                                                </div>
+                                              </div>
+                                              {isRecommended && (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                  <Sparkles className="h-3 w-3" />
+                                                  Next
+                                                </span>
+                                              )}
                                             </div>
                                             {desc && desc !== descKey && (
-                                                <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed line-clamp-2">{desc}</p>
+                                                <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-500 line-clamp-3 dark:text-slate-400">{desc}</p>
                                             )}
+                                            <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+                                              <span className={`text-xs font-semibold ${isIncluded ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                                                {isIncluded ? 'Included' : `Plan: ${formatPlanLabel(requiredPlan)}`}
+                                              </span>
+                                              <span className="text-sm font-semibold text-blue-700 transition group-hover:translate-x-0.5 dark:text-blue-400">
+                                                Open
+                                              </span>
+                                            </div>
                                         </button>
                                     );
                                 })}
-                            </div>
+                              </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -283,16 +485,49 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
           <p className="text-gray-600 dark:text-gray-300 mt-2 text-lg">{result.summary}</p>
         </div>
 
-        <div className="mb-8 p-6 bg-gradient-to-r from-blue-700 to-indigo-800 rounded-2xl text-white text-center shadow-lg transform hover:scale-[1.02] transition-transform duration-300">
-            <h3 className="font-bold text-xl drop-shadow-md">Want to improve faster?</h3>
-            <p className="text-sm text-blue-200 mt-1 max-w-lg mx-auto">Let our AI agent rewrite your resume and apply all these suggestions for you with a single click.</p>
-            <button 
-              onClick={handleApplySuggestions}
-              disabled={isOptimizing}
-              className="mt-4 px-6 py-2.5 bg-white text-blue-700 font-bold rounded-full shadow-md hover:bg-gray-100 transition-all duration-300 transform hover:scale-105 disabled:opacity-70 disabled:cursor-wait"
-            >
-              {isOptimizing ? 'Optimizing...' : 'Apply All Suggestions'}
-            </button>
+        <div className="mb-8 rounded-2xl border border-blue-200 bg-blue-700 p-5 text-white shadow-sm dark:border-blue-800 dark:bg-blue-950 sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <h3 className="text-xl font-semibold">Apply the recommended resume edits</h3>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-blue-100">
+                  This will generate an updated resume draft from the improvement list and replace the current workspace text after completion.
+                </p>
+              </div>
+              {!confirmingApply ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingApply(true)}
+                  disabled={isOptimizing}
+                  className="inline-flex min-h-[42px] items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-70"
+                >
+                  Review before applying
+                </button>
+              ) : (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={handleApplySuggestions}
+                    disabled={isOptimizing}
+                    className="inline-flex min-h-[42px] items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {isOptimizing ? 'Applying...' : 'Apply edits'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingApply(false)}
+                    disabled={isOptimizing}
+                    className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-white/30 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+            {confirmingApply && (
+              <div className="mt-4 rounded-lg border border-white/20 bg-white/10 p-3 text-sm leading-relaxed text-blue-50 animate-panel-expand">
+                Your original resume is still in the workspace until the updated draft is returned. If the generation fails, nothing is replaced.
+              </div>
+            )}
             {optimizationError && <p className="text-xs text-red-300 mt-2">{optimizationError}</p>}
         </div>
         

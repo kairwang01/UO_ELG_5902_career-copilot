@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   FileText,
   ListFilter,
+  Mail,
   MessageSquare,
+  Send,
   Target,
 } from 'lucide-react';
 import ResumePreview from '../ResumePreview';
@@ -102,7 +104,7 @@ const StatusPill: React.FC<{ tone: 'ready' | 'gap' | 'risk' | 'neutral'; childre
     ready: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/30 dark:text-emerald-300',
     gap: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-300',
     risk: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/50 dark:bg-red-900/30 dark:text-red-300',
-    neutral: 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 text-slate-600 dark:text-slate-600 dark:border-slate-700 dark:bg-slate-800/60',
+    neutral: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300',
   };
 
   return <span className={`rounded border px-2 py-1 text-xs font-semibold ${styles[tone]}`}>{children}</span>;
@@ -345,10 +347,11 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[240px_1fr]">
-          <Panel title="Filters" description="Basic controls for MVP sorting.">
+          <Panel title="Screening controls" description="Sort the same jobs by apply priority or raw match score.">
             <div className="space-y-2">
               <button
                 type="button"
+                aria-pressed={sort === 'priority'}
                 onClick={() => setSort('priority')}
                 className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
                   sort === 'priority' ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300'
@@ -359,6 +362,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
               </button>
               <button
                 type="button"
+                aria-pressed={sort === 'score'}
                 onClick={() => setSort('score')}
                 className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
                   sort === 'score' ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300'
@@ -368,8 +372,8 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                 Match score
               </button>
             </div>
-            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3 text-sm text-slate-600 dark:text-slate-400">
-              Priority uses score, missing required skills, and whether your resume has clear evidence.
+            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              Priority combines match score, missing required skills, and whether your resume has proof strong enough to start a recruiter conversation.
             </div>
           </Panel>
 
@@ -424,6 +428,29 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Next step: turn this match into a focused application packet.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onOpenTool('cover-letter')}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+                    >
+                      <Mail className="h-4 w-4" />
+                      Draft cover letter
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenTool('email-crafter')}
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+                    >
+                      <Send className="h-4 w-4" />
+                      Prepare outreach
+                    </button>
                   </div>
                 </div>
               </article>
@@ -534,7 +561,7 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
         description="Plan the bridge role, skill gaps, learning path, project proof, application rhythm, and next milestone."
         icon={CalendarCheck}
         primaryLabel={hasResume ? 'Generate updated plan' : 'Upload resume'}
-        onPrimary={() => (hasResume ? onOpenTool('career-path-planner') : onUploadResume())}
+        onPrimary={() => (hasResume ? onOpenTool('career-path') : onUploadResume())}
       />
 
       {!hasResume ? (

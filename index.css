@@ -173,6 +173,14 @@ html.dark body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes panel-expand {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-scale {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
 @keyframes pulse-mic {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.2); opacity: 0.7; }
@@ -202,6 +210,8 @@ html.dark body {
 .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
 .animate-slide-in-up { animation: slide-in-up 0.6s ease-out forwards; }
 .animate-view-fade { animation: view-fade 0.28s ease-out both; }
+.animate-panel-expand { animation: panel-expand 0.18s ease-out both; }
+.animate-fade-scale { animation: fade-scale 0.2s ease-out both; }
 .animate-slide-in-right { animation: toast-slide-in 0.3s ease-out forwards; }
 .animate-pulse-mic { animation: pulse-mic 1.5s ease-in-out infinite; }
 .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
@@ -209,6 +219,112 @@ html.dark body {
 .animate-holographic-text { animation: holographic-text 5s infinite linear; }
 .animate-crystal-glow { animation: crystal-glow 2.5s ease-in-out infinite; }
 .static-crystal-glow { filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.7)); }
+
+/* Candidate workspace primitives. These keep repeated app surfaces aligned
+   without introducing another component dependency layer. */
+.workspace-card {
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.workspace-card-muted {
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.75rem;
+  background: rgb(248 250 252);
+}
+
+.workspace-button-primary,
+.workspace-button-secondary,
+.workspace-button-ghost {
+  min-height: 2.625rem;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 650;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.workspace-button-primary {
+  background: #1d4ed8;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(29, 78, 216, 0.18);
+}
+
+.workspace-button-primary:hover {
+  background: #1e40af;
+}
+
+.workspace-button-secondary {
+  border: 1px solid rgb(203 213 225);
+  background: #ffffff;
+  color: rgb(30 41 59);
+}
+
+.workspace-button-secondary:hover {
+  border-color: rgb(147 197 253);
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+
+.workspace-button-ghost {
+  color: rgb(71 85 105);
+}
+
+.workspace-button-ghost:hover {
+  background: rgb(241 245 249);
+  color: rgb(15 23 42);
+}
+
+.workspace-button-primary:focus-visible,
+.workspace-button-secondary:focus-visible,
+.workspace-button-ghost:focus-visible {
+  outline: 2px solid rgb(37 99 235);
+  outline-offset: 2px;
+}
+
+.workspace-button-primary:disabled,
+.workspace-button-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+html.dark .workspace-card {
+  border-color: rgb(30 41 59);
+  background: rgb(15 23 42);
+  box-shadow: none;
+}
+
+html.dark .workspace-card-muted {
+  border-color: rgb(51 65 85);
+  background: rgba(30, 41, 59, 0.6);
+}
+
+html.dark .workspace-button-secondary {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42);
+  color: rgb(226 232 240);
+}
+
+html.dark .workspace-button-secondary:hover {
+  border-color: rgb(30 64 175);
+  background: rgba(30, 64, 175, 0.25);
+  color: rgb(191 219 254);
+}
+
+html.dark .workspace-button-ghost {
+  color: rgb(203 213 225);
+}
+
+html.dark .workspace-button-ghost:hover {
+  background: rgb(30 41 59);
+  color: #ffffff;
+}
 
 /* Respect OS-level reduced-motion: collapse entrance/looping animations and
    long transitions so content appears immediately without movement. */

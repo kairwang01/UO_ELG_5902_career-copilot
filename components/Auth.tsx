@@ -6,6 +6,7 @@ import { firebaseAuth } from '@/lib/firebaseClient';
 import { ALL_PLANS, BUSINESS_PLANS } from '@/config';
 import type { Plan } from '@/types';
 import { X } from 'lucide-react';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface AuthProps {
   onClose: () => void;
@@ -73,6 +74,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string>(mode === 'business' ? 'single_post' : 'free');
+  useModalBehavior(onClose, true);
 
   useEffect(() => {
     setAuthView(initialView);
@@ -87,16 +89,6 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     // submit button stayed stuck on "Signing in…" forever.
     setLoading(false);
   }, [mode, authView]);
-
-  // Outside-click no longer closes the modal (QA E10), so give keyboard users
-  // Escape as the explicit close.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -296,7 +288,11 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-[100] p-4 animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-md p-8 space-y-4 relative">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-md p-8 space-y-4 relative animate-fade-scale"
+      >
         <button 
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"

@@ -55,7 +55,7 @@ const toolMetadataMap: { [key: string]: { name: string } } = {
   'mock-interview': { name: 'Mock Interview' },
   'resume-analysis': { name: 'Resume Analysis' },
   'opportunity-finder': { name: 'Opportunity Finder' },
-  'career-path-planner': { name: 'Career Path Planner' },
+  'career-path': { name: 'Career Path Planner' },
   default: { name: 'Tool Usage' },
 };
 
@@ -322,6 +322,37 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         },
       ];
 
+  const searchStages = [
+    {
+      label: 'Resume evidence',
+      helper: hasResume ? 'Baseline ready' : 'Upload first',
+      icon: FileText,
+      view: 'resume' as const,
+      tone: hasResume ? 'ready' : 'gap',
+    },
+    {
+      label: 'Job matching',
+      helper: hasResume ? 'Review fit reasons' : 'Needs resume',
+      icon: Briefcase,
+      view: 'jobs' as const,
+      tone: hasResume ? 'ready' : 'gap',
+    },
+    {
+      label: 'Interview practice',
+      helper: hasResume ? 'Prepare STAR answers' : 'Tailored later',
+      icon: MessageSquare,
+      view: 'interview' as const,
+      tone: hasResume ? 'neutral' : 'gap',
+    },
+    {
+      label: 'Weekly plan',
+      helper: 'Keep momentum visible',
+      icon: CalendarCheck,
+      view: 'plan' as const,
+      tone: 'neutral',
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 sm:p-6 shadow-sm">
@@ -352,7 +383,37 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        {searchStages.map((stage) => {
+          const Icon = stage.icon;
+          return (
+            <button
+              key={stage.label}
+              type="button"
+              onClick={() => onNavigate?.(stage.view)}
+              className="rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-200 hover:bg-blue-50/30 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800 dark:hover:bg-blue-900/20"
+            >
+              <div className="flex items-center gap-2">
+                <div className={`rounded-lg border p-2 ${
+                  stage.tone === 'ready'
+                    ? 'border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/30 dark:text-emerald-300'
+                    : stage.tone === 'gap'
+                      ? 'border-amber-100 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-300'
+                      : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                }`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-950 dark:text-slate-100">{stage.label}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-500">{stage.helper}</p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
         <MetricCard
           label="Resume readiness"
           value={hasResume ? `${readinessScore}` : '--'}
@@ -374,13 +435,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           icon={Briefcase}
           tone="green"
         />
-        <MetricCard
-          label="This week"
-          value={hasResume ? '5 tasks' : 'Start'}
-          helper={hasResume ? 'Two resume edits, two applications, one practice.' : 'Create the first weekly plan.'}
-          icon={CalendarCheck}
-          tone="slate"
-        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
@@ -392,7 +446,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
             </div>
             {loading && <span className="text-xs font-medium text-slate-500 dark:text-slate-500">Loading history...</span>}
           </div>
-          <div className="h-64 overflow-hidden">
+          <div className="h-64 min-w-0 overflow-hidden">
             <Chart data={displayScores} width={620} height={250} t={t} />
           </div>
         </div>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import React, { useEffect, useRef, useState } from 'react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 interface ChartDataPoint {
   label: string;
@@ -14,6 +14,23 @@ interface ChartProps {
 }
 
 const Chart: React.FC<ChartProps> = ({ data, height = 250, t }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    const update = () => {
+      setChartWidth(Math.floor(node.getBoundingClientRect().width));
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   if (!data || data.length < 2) {
     return (
         <div style={{ height }} className="flex items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-lg text-gray-500 dark:text-slate-400 w-full">
@@ -24,9 +41,13 @@ const Chart: React.FC<ChartProps> = ({ data, height = 250, t }) => {
 
   return (
     // text color drives the CartesianGrid stroke (currentColor) for dark-mode support
-    <div className="w-full font-sans text-gray-200 dark:text-slate-700" style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <div ref={containerRef} className="w-full min-w-0 font-sans text-gray-200 dark:text-slate-700" style={{ height, minHeight: height }}>
+      {chartWidth <= 0 ? (
+        <div className="h-full w-full animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" aria-hidden="true" />
+      ) : (
         <AreaChart
+          width={chartWidth}
+          height={height}
           data={data}
           margin={{ top: 20, right: 20, left: 0, bottom: 0 }}
         >
@@ -45,7 +66,7 @@ const Chart: React.FC<ChartProps> = ({ data, height = 250, t }) => {
           />
           <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorValue)" />
         </AreaChart>
-      </ResponsiveContainer>
+      )}
     </div>
   );
 };

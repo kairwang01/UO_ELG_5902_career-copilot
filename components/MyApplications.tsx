@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
@@ -272,6 +272,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   // ── Notifications state ───────────────────────────────────────────────────
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const notificationMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!uid) return;
@@ -291,6 +292,17 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   };
 
   const badge = unreadCount(notifications);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (notificationMenuRef.current && !notificationMenuRef.current.contains(event.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [notifOpen]);
 
   useEffect(() => {
     if (!uid) return;
@@ -372,11 +384,13 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
         </div>
 
         {/* ── Notifications bell ── */}
-        <div className="relative flex-shrink-0 mt-1">
+        <div ref={notificationMenuRef} className="relative flex-shrink-0 mt-1">
           <button
             onClick={() => setNotifOpen((v) => !v)}
             className="relative p-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-700 transition-colors shadow-sm"
             aria-label={t('notifications_bell_label')}
+            aria-haspopup="menu"
+            aria-expanded={notifOpen}
           >
             <Bell className="h-5 w-5" />
             {badge > 0 && (
@@ -388,7 +402,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
 
           {/* Dropdown panel */}
           {notifOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-30">
+            <div role="menu" className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-30 animate-fade-scale">
               {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -442,6 +456,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
                           onClick={() => handleMarkRead(n.id)}
                           className="flex-shrink-0 mt-0.5 h-2 w-2 rounded-full bg-blue-500 dark:bg-blue-400 hover:bg-blue-400 transition-colors"
                           title={t('notifications_mark_read')}
+                          aria-label={t('notifications_mark_read')}
                         />
                       )}
                     </div>
@@ -506,8 +521,16 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
         </div>
       ) : visible.length === 0 ? (
         /* Filtered-to-zero state */
-        <div className="text-center py-12 text-gray-400 dark:text-slate-500 text-sm">
-          {t('applications_filter_empty')}
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-12 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          <p>{t('applications_filter_empty')}</p>
+          <button
+            type="button"
+            onClick={onFindSimilar}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+          >
+            <Search className="h-4 w-4" />
+            {t('applications_empty_cta')}
+          </button>
         </div>
       ) : (
         /* ── Application cards ── */

@@ -24,10 +24,21 @@ const CreditModal: React.FC<CreditModalProps> = ({ isOpen, onClose, onConfirm, o
     }
   };
 
+  const handleNavigateToPricing = () => {
+    onClose();
+    onNavigateToPricing?.();
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[90] p-4 animate-fade-in" onClick={handleOverlayClick}>
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={e => e.stopPropagation()}>
-        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="credit-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-6 text-center animate-fade-scale"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 id="credit-modal-title" className="text-xl font-bold text-gray-800 dark:text-gray-100">
           {hasEnoughCredits ? 'Confirm Action' : 'Insufficient Credits'}
         </h3>
         
@@ -48,7 +59,7 @@ const CreditModal: React.FC<CreditModalProps> = ({ isOpen, onClose, onConfirm, o
               Confirm & Use Credits
             </button>
           ) : (
-            <button onClick={onNavigateToPricing} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700">
+            <button onClick={handleNavigateToPricing} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700">
               Buy More Credits
             </button>
           )}
