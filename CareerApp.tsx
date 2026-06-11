@@ -252,34 +252,18 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (session && isProfileLoaded && profile?.role === 'candidate') {
       const handler = setTimeout(async () => {
         if (!session.user) return;
+        const showResumeSaveWarning = () => {
+          if (resumeSaveWarningShownRef.current) return;
+          resumeSaveWarningShownRef.current = true;
+          addToast(t('dashboard_resume_save_warning'), 'info');
+        };
         try {
           const { error } = await data.profiles.update(session.user.id, { resume_text: resumeText });
           if (error) {
-            if (/permission|insufficient/i.test(error.message)) {
-              if (!resumeSaveWarningShownRef.current) {
-                resumeSaveWarningShownRef.current = true;
-                addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
-              }
-            } else {
-              if (!resumeSaveWarningShownRef.current) {
-                resumeSaveWarningShownRef.current = true;
-                addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
-              }
-            }
+            showResumeSaveWarning();
           }
-        } catch (err) {
-          const message = (err as Error).message;
-          if (/permission|insufficient/i.test(message)) {
-            if (!resumeSaveWarningShownRef.current) {
-              resumeSaveWarningShownRef.current = true;
-              addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
-            }
-          } else {
-            if (!resumeSaveWarningShownRef.current) {
-              resumeSaveWarningShownRef.current = true;
-              addToast('Your resume is available in this session, but it could not be saved to your profile yet.', 'info');
-            }
-          }
+        } catch {
+          showResumeSaveWarning();
         }
       }, 1500);
 
@@ -287,7 +271,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         clearTimeout(handler);
       };
     }
-  }, [resumeText, session, isProfileLoaded, profile?.role, addToast]);
+  }, [resumeText, session, isProfileLoaded, profile?.role, addToast, t]);
 
 
   const getProfile = useCallback(async () => {

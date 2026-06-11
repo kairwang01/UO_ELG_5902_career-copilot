@@ -97,7 +97,7 @@ const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; res
           <button 
             onClick={onClose} 
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-slate-700"
-            aria-label="Close modal"
+            aria-label={t('analysis_reference_close')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -382,7 +382,9 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                 <p className="text-sm text-slate-600 dark:text-slate-400">{t(selectedToolGroup.helper)}</p>
                               </div>
                               <p className="text-xs font-medium text-slate-500 dark:text-slate-500">
-                                {filteredTools.length} of {selectedToolGroup.keys.length} tools
+                                {t('studio_tool_count')
+                                  .replace('{shown}', String(filteredTools.length))
+                                  .replace('{total}', String(selectedToolGroup.keys.length))}
                               </p>
                             </div>
 
@@ -407,7 +409,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                             type="button"
                                             onClick={() => openTool(tool.key)}
                                             className="group workspace-card flex min-h-[184px] flex-col p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:border-blue-800"
-                                            aria-label={`Open ${t(titleKey)}`}
+                                            aria-label={t('studio_open_tool_aria').replace('{tool}', t(titleKey))}
                                         >
                                             <div className="flex items-start justify-between gap-3">
                                               <div className="flex items-center gap-3">
@@ -528,7 +530,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
             </div>
             {confirmingApply && (
               <div className="mt-4 rounded-lg border border-white/20 bg-white/10 p-3 text-sm leading-relaxed text-blue-50 animate-panel-expand">
-                Your original resume is still in the workspace until the updated draft is returned. If the generation fails, nothing is replaced.
+                {t('analysis_apply_safety_note')}
               </div>
             )}
             {optimizationError && <p className="text-xs text-red-300 mt-2">{optimizationError}</p>}

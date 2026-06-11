@@ -594,7 +594,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
                 </p>
               </div>
               <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-300">
-                {applicationsLoading ? '...' : `${applicationPulse.total} tracked`}
+                {applicationsLoading
+                  ? '...'
+                  : formatCopy(t('dashboard_application_tracked_count'), { count: applicationPulse.total })}
               </span>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-3">

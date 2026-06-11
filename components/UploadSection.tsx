@@ -31,14 +31,14 @@ const InputMethodButton: React.FC<{
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold rounded-[var(--site-radius)] transition-all border ${
+      className={`flex min-h-11 items-center justify-center gap-2 rounded-[var(--site-radius)] border px-3 py-2.5 text-sm font-semibold transition-all sm:min-h-12 sm:px-4 sm:py-3 ${
         active
           ? 'bg-[var(--site-action)] text-white border-[var(--site-action)]'
           : 'bg-[var(--site-surface)] text-[var(--site-text)] border-[var(--site-border)] hover:border-[var(--site-action)]/40'
       }`}
     >
-      {icon}
-      {label}
+      <span className="shrink-0">{icon}</span>
+      <span className="min-w-0 text-center leading-tight">{label}</span>
     </button>
 );
 
@@ -137,7 +137,6 @@ const UploadSection: React.FC<UploadSectionProps> = ({
             throw new Error(t('upload_file_no_content'));
         }
     } catch (parseError) {
-        console.error("File parsing error:", parseError);
         setError(parseError instanceof Error ? parseError.message : t('upload_file_parse_failed'));
         setInfoMessage(null);
     } finally {
@@ -195,7 +194,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
             </select>
         </div>
 
-        <div className="flex justify-center mb-6 gap-2 sm:gap-3 p-1.5 bg-[var(--site-surface-muted)] rounded-[var(--site-radius)]">
+        <div className="mb-6 grid grid-cols-1 gap-2 rounded-[var(--site-radius)] bg-[var(--site-surface-muted)] p-1.5 sm:grid-cols-3 sm:gap-3">
             <InputMethodButton label={t('upload_tab_paste')} active={activeTab==='paste'} onClick={() => handleTabChange('paste')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 11-2 0V4H6v12a1 1 0 11-2 0V4zm5 2a1 1 0 00-1 1v6a1 1 0 102 0V7a1 1 0 00-1-1z" clipRule="evenodd" /></svg>} />
             <InputMethodButton label={t('upload_tab_upload')} active={activeTab==='upload'} onClick={() => handleTabChange('upload')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>} />
             <InputMethodButton label={t('upload_tab_url')} active={activeTab==='url'} onClick={() => handleTabChange('url')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0l-1.5-1.5a2 2 0 112.828-2.828l1.5 1.5a.5.5 0 00.707 0l.707-.707a2 2 0 00-2.828-2.828l-3 3a2 2 0 000 2.828l1.5 1.5a2 2 0 002.828 0l3-3a.5.5 0 000-.707l-.707-.707z" clipRule="evenodd" /></svg>} />
@@ -233,7 +232,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                       onChange={handleFileChange}
                       className="hidden"
                       accept=".txt,.png,.jpg,.jpeg,.pdf,.docx"
-                      aria-label="Upload resume file"
+                      aria-label={t('upload_file_input_aria')}
                     />
                     {resumeImages && resumeImages.length > 0 ? (
                          <div className="text-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl">
@@ -266,7 +265,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                         value={urlInput}
                         onChange={(e) => { setUrlInput(e.target.value); setError(null); }}
                         disabled={isUrlProcessing}
-                        aria-label="Resume URL"
+                        aria-label={t('upload_url_input_aria')}
                     />
                     <button
                         type="button"
