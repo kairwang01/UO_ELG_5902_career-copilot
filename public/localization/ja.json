@@ -2182,6 +2182,14 @@
   "job_form_location_label": "勤務地",
   "job_form_location_placeholder": "例: Toronto, ON または Remote",
   "job_form_content_generation_label": "求人説明サポート",
+  "job_form_readiness_title": "公開前チェック",
+  "job_form_readiness_desc": "必須情報がそろうと求人を公開できます。",
+  "job_form_check_title": "職種名",
+  "job_form_check_location": "勤務地",
+  "job_form_check_description": "求人説明",
+  "job_form_check_salary": "給与レンジ",
+  "job_form_optional_suffix": "（任意）",
+  "job_form_submit_requirements": "職種名、勤務地、求人説明を追加すると公開できます。",
   "job_form_key_points_placeholder": "主な職務内容を3〜5個の箇条書き、または短い段落で入力してください。",
   "job_form_generate_button": "要点から生成",
   "job_form_generating": "生成中...",
@@ -2197,7 +2205,7 @@
   "job_form_salary_label": "給与範囲（任意）",
   "job_form_salary_placeholder": "例: 80000 - 100000 CAD",
   "job_form_analyze_rate": "相場を分析",
-  "job_form_analyzing_short": "...",
+  "job_form_analyzing_short": "分析中...",
   "job_form_salary_suggestion": "推奨範囲",
   "job_form_yearly_label": "年額",
   "job_form_monthly_label": "月額",
@@ -2220,5 +2228,7 @@
   "job_form_error_salary_failed": "給与範囲を分析できませんでした。",
   "job_form_error_inclusivity_required": "包括性を確認する前に、求人説明を書くか生成してください。",
   "job_form_error_inclusivity_failed": "包括性を確認できませんでした。",
-  "job_form_error_unknown": "不明なエラーが発生しました。"
+  "job_form_error_unknown": "不明なエラーが発生しました。",
+  "job_form_helper_hint": "必須条件から入力してください。生成された説明は公開前に編集できます。",
+  "job_form_action_busy_note": "現在の補助操作が完了してから公開してください。"
 }

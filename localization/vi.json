@@ -2182,6 +2182,14 @@
   "job_form_location_label": "Địa điểm",
   "job_form_location_placeholder": "vd: Toronto, ON hoặc Remote",
   "job_form_content_generation_label": "Hỗ trợ mô tả công việc",
+  "job_form_readiness_title": "Danh sách kiểm tra trước khi đăng",
+  "job_form_readiness_desc": "Thông tin bắt buộc cần sẵn sàng trước khi vị trí được đăng.",
+  "job_form_check_title": "Chức danh",
+  "job_form_check_location": "Địa điểm",
+  "job_form_check_description": "Mô tả công việc",
+  "job_form_check_salary": "Khoảng lương",
+  "job_form_optional_suffix": "(không bắt buộc)",
+  "job_form_submit_requirements": "Thêm chức danh, địa điểm và mô tả để đăng vị trí.",
   "job_form_key_points_placeholder": "Nhập 3-5 gạch đầu dòng hoặc một đoạn ngắn về trách nhiệm chính.",
   "job_form_generate_button": "Tạo từ ý chính",
   "job_form_generating": "Đang tạo...",
@@ -2197,7 +2205,7 @@
   "job_form_salary_label": "Khoảng lương (tùy chọn)",
   "job_form_salary_placeholder": "vd: 80000 - 100000 CAD",
   "job_form_analyze_rate": "Phân tích mức thị trường",
-  "job_form_analyzing_short": "...",
+  "job_form_analyzing_short": "Đang phân tích...",
   "job_form_salary_suggestion": "Khoảng đề xuất",
   "job_form_yearly_label": "Theo năm",
   "job_form_monthly_label": "Theo tháng",
@@ -2220,5 +2228,7 @@
   "job_form_error_salary_failed": "Không thể phân tích khoảng lương.",
   "job_form_error_inclusivity_required": "Vui lòng viết hoặc tạo mô tả công việc trước khi kiểm tra tính bao hàm.",
   "job_form_error_inclusivity_failed": "Không thể kiểm tra tính bao hàm.",
-  "job_form_error_unknown": "Đã xảy ra lỗi không xác định."
+  "job_form_error_unknown": "Đã xảy ra lỗi không xác định.",
+  "job_form_helper_hint": "Bắt đầu với các yêu cầu chính. Bạn vẫn có thể chỉnh sửa mô tả trước khi đăng.",
+  "job_form_action_busy_note": "Hoàn tất thao tác hỗ trợ hiện tại trước khi đăng."
 }

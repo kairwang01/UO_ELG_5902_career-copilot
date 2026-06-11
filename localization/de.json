@@ -2182,6 +2182,14 @@
   "job_form_location_label": "Standort",
   "job_form_location_placeholder": "z. B. Toronto, ON oder Remote",
   "job_form_content_generation_label": "Hilfe für die Stellenbeschreibung",
+  "job_form_readiness_title": "Checkliste vor Veröffentlichung",
+  "job_form_readiness_desc": "Pflichtangaben müssen vollständig sein, bevor die Stelle online geht.",
+  "job_form_check_title": "Stellentitel",
+  "job_form_check_location": "Standort",
+  "job_form_check_description": "Stellenbeschreibung",
+  "job_form_check_salary": "Gehaltsspanne",
+  "job_form_optional_suffix": "(optional)",
+  "job_form_submit_requirements": "Fügen Sie Titel, Standort und Beschreibung hinzu, um zu veröffentlichen.",
   "job_form_key_points_placeholder": "Geben Sie 3 bis 5 Stichpunkte oder einen kurzen Absatz zu den Hauptaufgaben ein.",
   "job_form_generate_button": "Aus Stichpunkten generieren",
   "job_form_generating": "Wird generiert...",
@@ -2197,7 +2205,7 @@
   "job_form_salary_label": "Gehaltsspanne (optional)",
   "job_form_salary_placeholder": "z. B. 80000 - 100000 CAD",
   "job_form_analyze_rate": "Marktgehalt analysieren",
-  "job_form_analyzing_short": "...",
+  "job_form_analyzing_short": "Analyse...",
   "job_form_salary_suggestion": "Vorgeschlagene Spanne",
   "job_form_yearly_label": "Jährlich",
   "job_form_monthly_label": "Monatlich",
@@ -2220,5 +2228,7 @@
   "job_form_error_salary_failed": "Die Gehaltsspanne konnte nicht analysiert werden.",
   "job_form_error_inclusivity_required": "Bitte schreiben oder generieren Sie eine Beschreibung, bevor Sie die Inklusivität prüfen.",
   "job_form_error_inclusivity_failed": "Die Inklusivität konnte nicht geprüft werden.",
-  "job_form_error_unknown": "Ein unbekannter Fehler ist aufgetreten."
+  "job_form_error_unknown": "Ein unbekannter Fehler ist aufgetreten.",
+  "job_form_helper_hint": "Beginnen Sie mit den Muss-Anforderungen. Die generierte Beschreibung können Sie vor dem Veröffentlichen bearbeiten.",
+  "job_form_action_busy_note": "Schließen Sie die aktuelle Hilfsaktion ab, bevor Sie veröffentlichen."
 }

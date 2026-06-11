@@ -1,4 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import {
+    AlertCircle,
+    CheckCircle2,
+    LineChart,
+    Loader2,
+    Send,
+    ShieldCheck,
+    Sparkles,
+    Wand2,
+    X,
+} from 'lucide-react';
 import type { AppSession as Session } from '../lib/data';
 import { generateJobDescription, analyzeSalary, checkInclusivity, formatJobDescription } from '../services/aiClient';
 import type { InclusivitySuggestion, UserProfile } from '../types';
@@ -78,6 +89,21 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
 
     const isEditing = !!existingJob;
     const isAiBusy = aiLoading !== null;
+    const hasTitle = jobTitle.trim().length > 0;
+    const hasLocation = location.trim().length > 0;
+    const hasDescription = jobDescription.trim().length > 0;
+    const hasSalary = salaryRange.trim().length > 0;
+    const readinessItems = [
+        { label: t('job_form_check_title'), complete: hasTitle },
+        { label: t('job_form_check_location'), complete: hasLocation },
+        { label: t('job_form_check_description'), complete: hasDescription },
+        { label: t('job_form_check_salary'), complete: hasSalary, optional: true },
+    ];
+    const completedReadinessItems = readinessItems.filter((item) => item.complete).length;
+    const requiredReadinessItems = readinessItems.filter((item) => !item.optional);
+    const completedRequiredItems = requiredReadinessItems.filter((item) => item.complete).length;
+    const readinessPercent = Math.round((completedReadinessItems / readinessItems.length) * 100);
+    const canSubmit = completedRequiredItems === requiredReadinessItems.length && !loading && !isAiBusy;
 
     useEffect(() => {
         if (existingJob) {
@@ -175,15 +201,19 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!canSubmit) {
+            setError(isAiBusy ? t('job_form_action_busy_note') : t('job_form_submit_requirements'));
+            return;
+        }
         setLoading(true);
         setError('');
 
         try {
             const jobData = {
-                title: jobTitle,
-                location,
-                description: jobDescription,
-                salary_range: salaryRange,
+                title: jobTitle.trim(),
+                location: location.trim(),
+                description: jobDescription.trim(),
+                salary_range: salaryRange.trim(),
                 // Snapshot company name at create time; profile.company_name is
                 // trusted (read from server-provisioned user doc, not user input).
                 company_name: profile.company_name ?? null,
@@ -203,13 +233,55 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
 
     const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
     const inputClass = 'mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:ring-blue-900/40';
-    const secondaryButtonClass = 'rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700';
-    const primaryButtonClass = 'rounded-lg border border-transparent bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400';
+    const secondaryButtonClass = 'inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700';
+    const primaryButtonClass = 'inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400';
+    const submitButtonLabel = loading
+        ? (isEditing ? t('job_form_saving') : t('job_form_posting'))
+        : (isEditing ? t('job_form_save_changes') : t('job_form_post_job'));
+
+    const readinessCard = (
+        <aside className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('job_form_readiness_title')}</h3>
+                    <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{t('job_form_readiness_desc')}</p>
+                </div>
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                    {readinessPercent}%
+                </span>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+                <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${readinessPercent}%` }} />
+            </div>
+            <div className="mt-4 space-y-2">
+                {readinessItems.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between gap-3">
+                        <span className={`text-xs ${item.complete ? 'text-gray-700 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                            {item.label}{item.optional ? ` ${t('job_form_optional_suffix')}` : ''}
+                        </span>
+                        {item.complete
+                            ? <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+                            : <span className="h-4 w-4 rounded-full border border-gray-300 dark:border-gray-600" aria-hidden="true" />}
+                    </div>
+                ))}
+            </div>
+            {!canSubmit && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+                    {isAiBusy ? t('job_form_action_busy_note') : t('job_form_submit_requirements')}
+                </div>
+            )}
+        </aside>
+    );
 
     // Shared form body — used in both embedded and modal modes
     const formBody = (
         <>
-            {error && <p role="alert" className="text-red-600 bg-red-100 p-3 rounded-md text-sm dark:bg-red-900/20 dark:text-red-300">{error}</p>}
+            {error && (
+                <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                    <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    <span>{error}</span>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -223,9 +295,15 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             </div>
 
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3 dark:bg-blue-950/30 dark:border-blue-900/60">
-                <label htmlFor="key-responsibilities" className="block text-sm font-medium text-blue-900 dark:text-blue-200">{t('job_form_content_generation_label')}</label>
+                <div>
+                    <label htmlFor="key-responsibilities" className="block text-sm font-semibold text-blue-900 dark:text-blue-200">{t('job_form_content_generation_label')}</label>
+                    <p className="mt-1 text-xs leading-5 text-blue-800/80 dark:text-blue-200/80">{t('job_form_helper_hint')}</p>
+                </div>
                 <textarea id="key-responsibilities" value={keyResponsibilities} onChange={e => setKeyResponsibilities(e.target.value)} rows={4} className={inputClass} placeholder={t('job_form_key_points_placeholder')} />
                 <button type="button" onClick={handleGenerateDescription} disabled={isAiBusy} className={`w-full sm:w-auto ${primaryButtonClass}`}>
+                    {aiLoading === 'description'
+                        ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        : <Sparkles className="h-4 w-4" aria-hidden="true" />}
                     {aiLoading === 'description' ? t('job_form_generating') : t('job_form_generate_button')}
                 </button>
             </div>
@@ -243,8 +321,18 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                             <label htmlFor="job-description" className="sr-only">{t('job_form_description_label')}</label>
                             <textarea id="job-description" value={jobDescription} onChange={e => setJobDescription(e.target.value)} rows={15} required className={inputClass} placeholder={t('job_form_description_placeholder')} />
                             <div className="mt-2 flex flex-col sm:flex-row gap-2">
-                                <button type="button" onClick={handleFormatDescription} disabled={isAiBusy || !jobDescription} className={`flex-1 ${secondaryButtonClass}`}>{aiLoading === 'format' ? t('job_form_formatting') : t('job_form_format_button')}</button>
-                                <button type="button" onClick={handleCheckInclusivity} disabled={isAiBusy || !jobDescription} className={`flex-1 ${secondaryButtonClass}`}>{aiLoading === 'inclusivity' ? t('job_form_checking') : t('job_form_inclusivity_button')}</button>
+                                <button type="button" onClick={handleFormatDescription} disabled={isAiBusy || !jobDescription} className={`flex-1 ${secondaryButtonClass}`}>
+                                    {aiLoading === 'format'
+                                        ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                        : <Wand2 className="h-4 w-4" aria-hidden="true" />}
+                                    {aiLoading === 'format' ? t('job_form_formatting') : t('job_form_format_button')}
+                                </button>
+                                <button type="button" onClick={handleCheckInclusivity} disabled={isAiBusy || !jobDescription} className={`flex-1 ${secondaryButtonClass}`}>
+                                    {aiLoading === 'inclusivity'
+                                        ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                        : <ShieldCheck className="h-4 w-4" aria-hidden="true" />}
+                                    {aiLoading === 'inclusivity' ? t('job_form_checking') : t('job_form_inclusivity_button')}
+                                </button>
                             </div>
                         </div>
                     ) : (
@@ -257,9 +345,14 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
 
             <div>
                 <label htmlFor="salary" className={labelClass}>{t('job_form_salary_label')}</label>
-                <div className="mt-1 flex gap-2">
+                <div className="mt-1 flex flex-col gap-2 sm:flex-row">
                     <input type="text" id="salary" value={salaryRange} onChange={e => setSalaryRange(e.target.value)} placeholder={t('job_form_salary_placeholder')} className={inputClass} />
-                    <button type="button" onClick={handleAnalyzeSalary} disabled={isAiBusy} className="flex-shrink-0 px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg shadow-sm hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500">{aiLoading === 'salary' ? t('job_form_analyzing_short') : t('job_form_analyze_rate')}</button>
+                    <button type="button" onClick={handleAnalyzeSalary} disabled={isAiBusy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 sm:flex-shrink-0">
+                        {aiLoading === 'salary'
+                            ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            : <LineChart className="h-4 w-4" aria-hidden="true" />}
+                        {aiLoading === 'salary' ? t('job_form_analyzing_short') : t('job_form_analyze_rate')}
+                    </button>
                 </div>
                 {salarySuggestion && (
                     <div className="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200 dark:text-blue-100 dark:bg-blue-950/30 dark:border-blue-900/60">
@@ -276,14 +369,20 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         // Render as a plain page section — no backdrop or fixed positioning
         return (
             <>
-                <div className="max-w-[1088px] mx-auto p-6">
-                    <form id="job-post-form" onSubmit={handleSubmit} className="space-y-6" aria-busy={loading || isAiBusy}>
-                        {formBody}
+                <div className="max-w-[1088px] mx-auto p-4 sm:p-6 lg:p-8">
+                    <form id="job-post-form" onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]" aria-busy={loading || isAiBusy}>
+                        <div className="space-y-6">
+                            {formBody}
+                        </div>
+                        <div className="lg:sticky lg:top-6 lg:self-start">
+                            {readinessCard}
+                        </div>
                     </form>
                     <div className="flex flex-col-reverse gap-3 pt-4 border-t border-gray-200 mt-6 sm:flex-row sm:items-center sm:justify-end dark:border-gray-700">
                         <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('job_form_cancel')}</button>
-                        <button type="submit" form="job-post-form" disabled={loading} className={primaryButtonClass}>
-                            {loading ? (isEditing ? t('job_form_saving') : t('job_form_posting')) : (isEditing ? t('job_form_save_changes') : t('job_form_post_job'))}
+                        <button type="submit" form="job-post-form" disabled={!canSubmit} className={primaryButtonClass}>
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+                            {submitButtonLabel}
                         </button>
                     </div>
                 </div>
@@ -299,16 +398,24 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                     <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                         <h3 className="text-xl font-bold text-gray-800 dark:text-white">{isEditing ? t('job_form_edit_title') : t('job_form_create_title')}</h3>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full p-1" aria-label={t('job_form_close')}>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <X className="h-6 w-6" aria-hidden="true" />
                         </button>
                     </div>
-                    <form id="job-post-form" onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-6" aria-busy={loading || isAiBusy}>
-                        {formBody}
+                    <form id="job-post-form" onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6" aria-busy={loading || isAiBusy}>
+                        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+                            <div className="space-y-6">
+                                {formBody}
+                            </div>
+                            <div className="lg:sticky lg:top-0 lg:self-start">
+                                {readinessCard}
+                            </div>
+                        </div>
                     </form>
                     <div className="flex-shrink-0 flex justify-end items-center p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl space-x-3 dark:border-gray-700 dark:bg-gray-900">
                         <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('job_form_cancel')}</button>
-                        <button type="submit" form="job-post-form" disabled={loading} className={primaryButtonClass}>
-                            {loading ? (isEditing ? t('job_form_saving') : t('job_form_posting')) : (isEditing ? t('job_form_save_changes') : t('job_form_post_job'))}
+                        <button type="submit" form="job-post-form" disabled={!canSubmit} className={primaryButtonClass}>
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+                            {submitButtonLabel}
                         </button>
                     </div>
                 </div>

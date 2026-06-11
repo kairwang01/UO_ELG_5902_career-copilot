@@ -2182,6 +2182,14 @@
   "job_form_location_label": "Lieu",
   "job_form_location_placeholder": "ex. Toronto, ON ou Télétravail",
   "job_form_content_generation_label": "Aide à la description de poste",
+  "job_form_readiness_title": "Liste avant publication",
+  "job_form_readiness_desc": "Les informations obligatoires doivent être prêtes avant la mise en ligne.",
+  "job_form_check_title": "Titre du poste",
+  "job_form_check_location": "Lieu",
+  "job_form_check_description": "Description du poste",
+  "job_form_check_salary": "Fourchette salariale",
+  "job_form_optional_suffix": "(optionnel)",
+  "job_form_submit_requirements": "Ajoutez le titre, le lieu et la description pour publier.",
   "job_form_key_points_placeholder": "Saisissez 3 à 5 points ou un court paragraphe décrivant les responsabilités principales.",
   "job_form_generate_button": "Générer depuis les points clés",
   "job_form_generating": "Génération...",
@@ -2197,7 +2205,7 @@
   "job_form_salary_label": "Fourchette salariale (optionnel)",
   "job_form_salary_placeholder": "ex. 80000 - 100000 CAD",
   "job_form_analyze_rate": "Analyser le marché",
-  "job_form_analyzing_short": "...",
+  "job_form_analyzing_short": "Analyse...",
   "job_form_salary_suggestion": "Fourchette suggérée",
   "job_form_yearly_label": "Annuel",
   "job_form_monthly_label": "Mensuel",
@@ -2220,5 +2228,7 @@
   "job_form_error_salary_failed": "Impossible d'analyser la fourchette salariale.",
   "job_form_error_inclusivity_required": "Veuillez rédiger ou générer une description avant de vérifier l'inclusivité.",
   "job_form_error_inclusivity_failed": "Impossible de vérifier l'inclusivité.",
-  "job_form_error_unknown": "Une erreur inconnue est survenue."
+  "job_form_error_unknown": "Une erreur inconnue est survenue.",
+  "job_form_helper_hint": "Commencez par les exigences clés. Vous pouvez modifier la description générée avant publication.",
+  "job_form_action_busy_note": "Terminez l'action d'aide en cours avant de publier."
 }
