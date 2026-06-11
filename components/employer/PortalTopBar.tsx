@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { Menu } from 'lucide-react';
 import AccountMenu from '../AccountMenu';
 import type { UserProfile } from '../../types';
 import { usePortalAccountMenu } from './PortalAccountMenuContext';
@@ -46,12 +47,10 @@ export function PortalTopBar({ title, darkMode = false, accountMenuProps }: Port
           }`}
           aria-label={t('portal_open_navigation')}
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          <Menu className="h-5 w-5" />
         </button>
       )}
-      <h1 className={`text-xl font-semibold flex-1 text-center ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+      <h1 className={`min-w-0 flex-1 truncate text-left text-lg font-semibold sm:text-center sm:text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>
         {title}
       </h1>
       {menuConfig && (

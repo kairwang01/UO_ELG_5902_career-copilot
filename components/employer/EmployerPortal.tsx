@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { data } from '../../lib/data';
@@ -72,6 +72,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const [planSaving, setPlanSaving] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const { addToast } = useToast();
+  const mainRef = useRef<HTMLElement | null>(null);
   // For applicant funnel
   const [jobForFunnel, setJobForFunnel] = useState<JobPosting | null>(null);
   // Previous page before entering post-job/funnel views
@@ -132,6 +133,10 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [currentPage, jobForFunnel?.id]);
 
   const navigate = (page: PortalPage) => {
     // Clear edit/funnel state when navigating via sidebar
@@ -242,7 +247,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
           <PortalSidebar {...sidebarProps} currentPage={prevPage} />
           {renderMobileNavDrawer(prevPage)}
-          <main className="flex-1 overflow-y-auto">
+          <main ref={mainRef} className="flex-1 overflow-y-auto">
             <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
             <div className="max-w-[1088px] mx-auto p-8 animate-view-fade">
               <ApplicantFunnel
@@ -263,7 +268,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         <PortalSidebar {...sidebarProps} currentPage={currentPage} />
         {renderMobileNavDrawer(currentPage)}
 
-        <main className="flex-1 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
           {currentPage === 'dashboard' && (
             <PortalDashboard
               jobPostings={jobPostings}
