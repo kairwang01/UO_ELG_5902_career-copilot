@@ -6,7 +6,7 @@ import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';
 import { listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
 import { saveToShortlist } from '../lib/shortlistData';
-import { BookmarkCheck, BookmarkPlus, Briefcase, CheckCircle2, Loader2, PlusCircle, Search, XCircle } from 'lucide-react';
+import { BookmarkCheck, BookmarkPlus, Briefcase, CheckCircle2, Clock3, DollarSign, FileText, Loader2, MapPin, PlusCircle, RotateCcw, Search, XCircle } from 'lucide-react';
 import { useToast as useSharedToast } from './Toast';
 
 interface MatchedCandidate extends UserProfile {
@@ -16,6 +16,8 @@ interface MatchedCandidate extends UserProfile {
     potentialGaps: string[];
     suggestedQuestions: string[];
 }
+
+type TranslationFn = (key: string) => string;
 
 /**
  * The server returns only SAFE fields (no resume_text/email — privacy by design;
@@ -49,6 +51,25 @@ const toMatchedCandidate = (c: DiscoveredCandidate, fallbackSummary?: string): M
     potentialGaps: c.potentialGaps,
     suggestedQuestions: c.suggestedQuestions,
 });
+
+const buildPostedJobBrief = (job: JobPosting, t: TranslationFn): string => {
+    const parts = [
+        job.title,
+        job.company_name ? `${t('agency_job_context_company')}: ${job.company_name}` : null,
+        job.location ? `${t('agency_job_context_location')}: ${job.location}` : null,
+        job.salary_range ? `${t('agency_job_context_salary')}: ${job.salary_range}` : null,
+        job.description?.trim() ? `\n${job.description.trim()}` : null,
+    ].filter(Boolean);
+
+    return parts.join('\n');
+};
+
+const formatPostedDate = (value: string | null | undefined): string => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
 
 interface TalentDiscoveryProps {
     t: (key: string) => string;
@@ -84,6 +105,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
 
     const { addToast } = useSharedToast();
     const selectedPostedJob = postedJobs.find((job) => job.id === selectedJobId) ?? null;
+    const selectedPostedJobBrief = selectedPostedJob ? buildPostedJobBrief(selectedPostedJob, t) : '';
+    const selectedPostedDate = selectedPostedJob ? formatPostedDate(selectedPostedJob.created_at) : '';
+    const selectedBriefEdited = !!selectedPostedJob && jobDescription.trim() !== selectedPostedJobBrief.trim();
     const hasJobDescription = jobDescription.trim().length > 0;
     const flowSteps = [
         {
@@ -132,10 +156,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
         if (!jobId) return;
         const job = postedJobs.find((j) => j.id === jobId);
         if (!job) return;
-        const parts: string[] = [job.title];
-        if (job.location) parts.push(job.location);
-        if (job.description) parts.push('', job.description);
-        setJobDescription(parts.join('\n'));
+        setJobDescription(buildPostedJobBrief(job, t));
+        if (searchError) setSearchError(null);
     };
 
     // Pre-fetch verified talent on component mount — server-side read (client
@@ -396,22 +418,59 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                             ))}
                         </select>
                         {selectedPostedJob && (
-                            <div className="mt-3 flex flex-col gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm dark:border-blue-900/60 dark:bg-blue-950/30 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex min-w-0 items-start gap-2 text-blue-900 dark:text-blue-100">
-                                    <Briefcase className="mt-0.5 h-4 w-4 shrink-0" />
-                                    <div className="min-w-0">
-                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
-                                            {t('talent_selected_job_label')}
-                                        </p>
-                                        <p className="truncate font-semibold">{selectedPostedJob.title}</p>
-                                        <p className="text-xs text-blue-700 dark:text-blue-300">
-                                            {selectedPostedJob.location || t('talent_location_remote')}
-                                        </p>
+                            <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm dark:border-blue-900/60 dark:bg-blue-950/30">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="flex min-w-0 items-start gap-2 text-blue-900 dark:text-blue-100">
+                                        <Briefcase className="mt-0.5 h-4 w-4 shrink-0" />
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
+                                                    {t('talent_selected_job_label')}
+                                                </p>
+                                                {selectedBriefEdited && (
+                                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                                                        {t('talent_selected_job_edited')}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="truncate font-semibold">{selectedPostedJob.title}</p>
+                                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-blue-700 dark:text-blue-300">
+                                                <span className="inline-flex items-center gap-1">
+                                                    <MapPin className="h-3.5 w-3.5" />
+                                                    {selectedPostedJob.location || t('talent_location_remote')}
+                                                </span>
+                                                {selectedPostedJob.salary_range && (
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <DollarSign className="h-3.5 w-3.5" />
+                                                        {selectedPostedJob.salary_range}
+                                                    </span>
+                                                )}
+                                                {selectedPostedDate && (
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <Clock3 className="h-3.5 w-3.5" />
+                                                        {selectedPostedDate}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-300">
+                                            <FileText className="h-3.5 w-3.5" />
+                                            {selectedBriefEdited ? t('talent_posted_job_edited_hint') : t('talent_posted_job_loaded')}
+                                        </span>
+                                        {selectedBriefEdited && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setJobDescription(selectedPostedJobBrief)}
+                                                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/40"
+                                            >
+                                                <RotateCcw className="h-3.5 w-3.5" />
+                                                {t('talent_restore_posted_job')}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
-                                <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                                    {t('talent_posted_job_loaded')}
-                                </span>
                             </div>
                         )}
                     </div>
@@ -448,7 +507,13 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                     placeholder={t('talent_jd_placeholder')}
                 />
                 <div id="talent-search-helper" className="flex flex-col gap-2 text-xs text-gray-500 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
-                    <span>{selectedPostedJob ? t('talent_search_ready_hint') : t('talent_search_disabled_hint')}</span>
+                    <span>
+                        {selectedPostedJob
+                            ? selectedBriefEdited
+                                ? t('talent_search_edited_hint')
+                                : t('talent_search_ready_hint')
+                            : t('talent_search_disabled_hint')}
+                    </span>
                     <span>{t('talent_jd_length').replace('{n}', String(jobDescription.trim().length))}</span>
                 </div>
                  {searchError && <div role="alert" className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm">{searchError}</div>}
