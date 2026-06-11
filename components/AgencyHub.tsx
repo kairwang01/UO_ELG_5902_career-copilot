@@ -25,7 +25,23 @@ interface HubSettings {
     denseTable: boolean;
 }
 
-const AgencyHeader = ({ onOpenSettings, onOpenHistory, title, subtitle, iconColor }: { onOpenSettings: () => void, onOpenHistory: () => void, title: string, subtitle: string, iconColor: string }) => (
+const AgencyHeader = ({
+    onOpenSettings,
+    onOpenHistory,
+    title,
+    subtitle,
+    iconColor,
+    settingsLabel,
+    historyLabel,
+}: {
+    onOpenSettings: () => void;
+    onOpenHistory: () => void;
+    title: string;
+    subtitle: string;
+    iconColor: string;
+    settingsLabel: string;
+    historyLabel: string;
+}) => (
     <div className="bg-slate-900 text-white p-6 rounded-t-2xl flex flex-col sm:flex-row justify-between items-center shadow-lg gap-4">
         <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className={`${iconColor} p-3 rounded-xl shadow-lg flex-shrink-0`}>
@@ -39,11 +55,11 @@ const AgencyHeader = ({ onOpenSettings, onOpenHistory, title, subtitle, iconColo
             </div>
         </div>
         <div className="flex gap-3 w-full sm:w-auto justify-end">
-            <button type="button" onClick={onOpenSettings} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-700 text-slate-200" aria-label="Open agency settings">
+            <button type="button" onClick={onOpenSettings} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-700 text-slate-200" aria-label={settingsLabel}>
                 <Settings className="h-5 w-5 text-blue-400" />
-                <span className="font-medium text-sm hidden sm:inline">Settings</span>
+                <span className="font-medium text-sm hidden sm:inline">{settingsLabel}</span>
             </button>
-            <button type="button" onClick={onOpenHistory} className="bg-green-600 hover:bg-green-700 p-2.5 rounded-full shadow-lg transition-colors border border-green-500" title="History" aria-label="Open agency history">
+            <button type="button" onClick={onOpenHistory} className="bg-green-600 hover:bg-green-700 p-2.5 rounded-full shadow-lg transition-colors border border-green-500" title={historyLabel} aria-label={historyLabel}>
                 <History className="h-5 w-5 text-white" />
             </button>
         </div>
@@ -401,30 +417,35 @@ const BatchInsights: React.FC<{ files: BulkAnalysisItem[], mode: 'general' | 'ma
 
 const PitchModal: React.FC<{ 
     file: BulkAnalysisItem; 
-    onClose: () => void; 
-}> = ({ file, onClose }) => {
+    onClose: () => void;
+    t: (key: string) => string;
+}> = ({ file, onClose, t }) => {
     const { addToast } = useToast();
     useModalBehavior(onClose);
     if (!file.pitchEmail) return null;
 
-    const copyToClipboard = () => {
-        const text = `Subject: ${file.pitchEmail!.subject}\n\n${file.pitchEmail!.body}`;
-        navigator.clipboard.writeText(text);
-        addToast("Pitch email copied to clipboard!", 'success');
+    const copyToClipboard = async () => {
+        const text = `${t('outreach_subject_copy_prefix')}: ${file.pitchEmail!.subject}\n\n${file.pitchEmail!.body}`;
+        try {
+            await navigator.clipboard.writeText(text);
+            addToast(t('agency_pitch_copied'), 'success');
+        } catch {
+            addToast(t('agency_pitch_copy_failed'), 'error');
+        }
     };
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in" onClick={onClose}>
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Client Pitch Email</h3>
-                    <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t('agency_pitch_modal_title')}</h3>
+                    <button onClick={onClose} aria-label={t('job_form_close')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
                 <div className="flex-grow overflow-y-auto p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('outreach_subject_label')}</label>
                         <input 
                             readOnly 
                             value={file.pitchEmail.subject} 
@@ -432,7 +453,7 @@ const PitchModal: React.FC<{
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('outreach_body_label')}</label>
                         <textarea 
                             readOnly 
                             value={file.pitchEmail.body} 
@@ -442,8 +463,8 @@ const PitchModal: React.FC<{
                     </div>
                 </div>
                 <div className="flex-shrink-0 flex justify-end items-center p-4 border-t border-gray-200 dark:border-slate-700 space-x-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-slate-600">Close</button>
-                    <button onClick={copyToClipboard} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700">Copy to Clipboard</button>
+                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-slate-600">{t('job_form_close')}</button>
+                    <button onClick={copyToClipboard} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700">{t('outreach_copy')}</button>
                 </div>
             </div>
         </div>
@@ -758,10 +779,9 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             const result = await generateClientPitchEmail(file.text, name, jd);
             setFiles(prev => prev.map(f => f.id === id ? { ...f, isPitching: false, pitchEmail: result } : f));
             setViewPitchId(id);
-        } catch (err) {
-            console.error("Error generating pitch:", err);
-            setFiles(prev => prev.map(f => f.id === id ? { ...f, isPitching: false, error: "Failed to generate pitch." } : f));
-            addToast("Failed to generate pitch", 'error');
+        } catch {
+            setFiles(prev => prev.map(f => f.id === id ? { ...f, isPitching: false, error: t('agency_pitch_failed') } : f));
+            addToast(t('agency_pitch_failed'), 'error');
         }
     };
 
@@ -806,14 +826,14 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     const activePrepKitFile = viewPrepKitId ? files.find(f => f.id === viewPrepKitId) : null;
     const activeBlindResumeFile = viewBlindResumeId ? files.find(f => f.id === viewBlindResumeId) : null;
 
-    const activeHeader = mode === 'general' 
-        ? { title: "General Analysis", subtitle: "Market Benchmarking & Optimization", color: "bg-orange-500" }
-        : { title: "JD Matching", subtitle: "Rank Candidates Against Job", color: "bg-blue-600" };
+    const activeHeader = mode === 'general'
+        ? { title: t('agency_mode_general_title'), subtitle: t('agency_mode_general_subtitle'), color: "bg-orange-500" }
+        : { title: t('agency_mode_matching_title'), subtitle: t('agency_mode_matching_subtitle'), color: "bg-blue-600" };
 
     return (
         <div className="space-y-8 animate-fade-in pb-12">
             {activePitchFile && (
-                <PitchModal file={activePitchFile} onClose={() => setViewPitchId(null)} />
+                <PitchModal file={activePitchFile} onClose={() => setViewPitchId(null)} t={t} />
             )}
             {activePrepKitFile && (
                 <PrepKitModal file={activePrepKitFile} onClose={() => setViewPrepKitId(null)} />
@@ -892,6 +912,8 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                         title={activeHeader.title}
                         subtitle={activeHeader.subtitle}
                         iconColor={activeHeader.color}
+                        settingsLabel={t('agency_header_settings')}
+                        historyLabel={t('agency_header_history')}
                     />
                     <FilterTabs currentFilter={currentFilter} setFilter={setCurrentFilter} counts={counts} />
                     

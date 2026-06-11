@@ -29,14 +29,14 @@ const TALENT_NFT_ABI = [
 
 const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnlock, onClose, onUnlocked, navigateToBusinessPricing, t }) => {
     const [isPaying, setIsPaying] = useState(false);
-    const [unlockFee, setUnlockFee] = useState<string>('...');
+    const [unlockFee, setUnlockFee] = useState<string>(t('unlock_modal_fee_loading'));
     const [error, setError] = useState<string | null>(null);
     useModalBehavior(onClose);
 
     React.useEffect(() => {
         const fetchUnlockFee = async () => {
             if (typeof (window as any).ethereum === 'undefined') {
-                setUnlockFee('N/A');
+                setUnlockFee(t('unlock_modal_fee_unavailable'));
                 return;
             }
             try {
@@ -44,13 +44,12 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnl
                 const contract = new ethers.Contract(TALENT_NFT_CONTRACT_ADDRESS, TALENT_NFT_ABI, provider);
                 const feeInWei = await contract.getUnlockFee();
                 setUnlockFee(ethers.formatEther(feeInWei));
-            } catch (e) {
-                console.error("Could not fetch unlock fee:", e);
-                setUnlockFee('Error');
+            } catch {
+                setUnlockFee(t('unlock_modal_fee_error'));
             }
         };
         fetchUnlockFee();
-    }, []);
+    }, [t]);
 
     const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) {
@@ -64,7 +63,7 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnl
             return;
         }
         if (!candidate.nft_token_id) {
-            setError('This candidate does not have a valid verification token yet.');
+            setError(t('unlock_error_invalid_token'));
             return;
         }
 
@@ -82,12 +81,14 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnl
 
             onUnlocked(candidate);
 
-        } catch (err: any) {
-            if (err.code === 'ACTION_REJECTED') {
-                setError('Transaction rejected. Approve the transaction in your wallet to unlock the profile.');
+        } catch (err) {
+            const code = typeof err === 'object' && err !== null && 'code' in err
+                ? String((err as { code?: unknown }).code)
+                : '';
+            if (code === 'ACTION_REJECTED') {
+                setError(t('unlock_error_rejected'));
             } else {
-                console.error("Unlock transaction failed:", err);
-                setError('The transaction failed. Check your wallet and try again.');
+                setError(t('unlock_error_failed'));
             }
         } finally {
             setIsPaying(false);
@@ -95,28 +96,36 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnl
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in" onClick={handleOverlayClick}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in"
+            onClick={handleOverlayClick}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="unlock-modal-title"
+        >
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md animate-fade-scale" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 text-center">
-                    <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-md">
+                    <div className="w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-950 rounded-full flex items-center justify-center mb-4 border-4 border-white dark:border-slate-800 shadow-md">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                     </div>
 
-                    <h3 className="text-xl font-bold text-gray-800">{t('unlock_modal_title')}</h3>
-                    <p className="text-gray-500 text-sm">{t('unlock_modal_candidate_id').replace('{id}', String(candidate.index + 1))}</p>
+                    <h3 id="unlock-modal-title" className="text-xl font-bold text-gray-800 dark:text-gray-100">{t('unlock_modal_title')}</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">{t('unlock_modal_candidate_id').replace('{id}', String(candidate.index + 1))}</p>
 
                     <div className="my-6">
                         {canUnlock ? (
-                            <p className="text-gray-600">{t('unlock_modal_desc')}</p>
+                            <p className="text-gray-600 dark:text-gray-300">{t('unlock_modal_desc')}</p>
                         ) : (
                              <p className="text-yellow-800 bg-yellow-50 p-3 rounded-md border border-yellow-200">{t('unlock_modal_upgrade_required')}</p>
                         )}
                     </div>
 
                      {canUnlock && (
-                        <div className="p-4 bg-gray-100 rounded-lg">
-                            <p className="text-sm text-gray-600 font-medium">{t('unlock_modal_unlock_fee')}</p>
-                            <p className="text-3xl font-bold text-gray-900">{unlockFee} ETH</p>
+                        <div className="p-4 bg-gray-100 dark:bg-slate-700 rounded-lg">
+                            <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">{t('unlock_modal_unlock_fee')}</p>
+                            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                                {Number.isFinite(Number(unlockFee)) ? `${unlockFee} ETH` : unlockFee}
+                            </p>
                         </div>
                      )}
 
@@ -124,8 +133,8 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({ candidate, canUnl
                         <p className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3" role="alert">{error}</p>
                     )}
                 </div>
-                 <div className="p-4 border-t bg-gray-50 rounded-b-xl grid grid-cols-2 gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50">Cancel</button>
+                 <div className="p-4 border-t bg-gray-50 rounded-b-xl grid grid-cols-2 gap-3 dark:border-slate-700 dark:bg-slate-900/40">
+                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600">{t('unlock_modal_cancel')}</button>
                     {canUnlock ? (
                         <button onClick={handleUnlock} disabled={isPaying} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-400">
                              {isPaying ? t('unlock_modal_unlocking') : t('unlock_modal_unlock_with_wallet')}

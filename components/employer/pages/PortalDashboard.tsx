@@ -35,7 +35,7 @@ function KpiCard({
 }) {
   return (
     <div
-      className={`rounded-xl border p-5 flex items-center gap-4 ${
+      className={`rounded-xl border p-5 flex items-center gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       }`}
     >
@@ -62,6 +62,45 @@ export function PortalDashboard({
 }: PortalDashboardProps) {
   const dm = darkMode;
   const { activeJobs, totalApplicants, newApplicants, avgMatchScore } = kpiData;
+  const quickActions = [
+    {
+      page: 'post-job' as PortalPage,
+      title: t('portal_nav_post_job'),
+      description: t('portal_action_post_job_desc'),
+      Icon: Plus,
+      primary: true,
+    },
+    {
+      page: 'job-listings' as PortalPage,
+      title: t('portal_dashboard_view_applicants'),
+      description: t('portal_action_view_applicants_desc'),
+      Icon: Users,
+    },
+    {
+      page: 'talent-pool' as PortalPage,
+      title: t('portal_nav_discover'),
+      description: t('portal_action_discover_desc'),
+      Icon: Briefcase,
+    },
+    {
+      page: 'company-profile' as PortalPage,
+      title: t('portal_nav_org_profile'),
+      description: t('portal_action_profile_desc'),
+      Icon: User,
+    },
+    {
+      page: 'billing' as PortalPage,
+      title: t('portal_nav_billing'),
+      description: t('portal_action_billing_desc'),
+      Icon: CreditCard,
+    },
+    {
+      page: 'agency-hub' as PortalPage,
+      title: t('portal_nav_agency_hub'),
+      description: t('portal_action_agency_desc'),
+      Icon: Building2,
+    },
+  ];
 
   return (
     <>
@@ -84,7 +123,7 @@ export function PortalDashboard({
           <KpiCard title={t('kpi_total_applicants')} value={totalApplicants.toString()} Icon={Users} darkMode={dm} />
           <KpiCard title={t('portal_kpi_new_applicants_7d')} value={newApplicants.toString()} Icon={TrendingUp} darkMode={dm} />
           <div
-            className={`rounded-xl border p-5 flex items-center gap-4 ${
+            className={`rounded-xl border p-5 flex items-center gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
               dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             }`}
           >
@@ -103,62 +142,39 @@ export function PortalDashboard({
           </div>
         </div>
 
-        {/* Quick actions — 6-button grid matching design */}
+        {/* Quick actions */}
         <div className={`rounded-xl border p-6 mb-8 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <h2 className={`text-base font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_dashboard_quick_actions')}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <button
-              onClick={() => onNavigate('post-job')}
-              className="flex items-center gap-3 px-4 py-3 bg-[#1d4ed8] text-white rounded-lg hover:bg-[#1a45c9] text-sm font-medium transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              <span>{t('portal_nav_post_job')}</span>
-            </button>
-            <button
-              onClick={() => onNavigate('job-listings')}
-              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
-                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span>{t('portal_dashboard_view_applicants')}</span>
-            </button>
-            <button
-              onClick={() => onNavigate('talent-pool')}
-              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
-                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span>{t('portal_nav_discover')}</span>
-            </button>
-            <button
-              onClick={() => onNavigate('company-profile')}
-              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
-                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <User className="w-5 h-5" />
-              <span>{t('portal_nav_org_profile')}</span>
-            </button>
-            <button
-              onClick={() => onNavigate('billing')}
-              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
-                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <CreditCard className="w-5 h-5" />
-              <span>{t('portal_nav_billing')}</span>
-            </button>
-            <button
-              onClick={() => onNavigate('agency-hub')}
-              className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
-                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Building2 className="w-5 h-5" />
-              <span>{t('portal_nav_agency_hub')}</span>
-            </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {quickActions.map(({ page, title, description, Icon, primary }) => (
+              <button
+                key={page}
+                type="button"
+                onClick={() => onNavigate(page)}
+                className={`group flex min-h-[96px] items-start gap-3 rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                  primary
+                    ? 'border-blue-600 bg-[#1d4ed8] text-white shadow-sm shadow-blue-600/20 hover:bg-[#1a45c9]'
+                    : dm
+                    ? 'border-gray-700 bg-gray-900/30 text-gray-200 hover:border-gray-600 hover:bg-gray-700/60'
+                    : 'border-gray-200 bg-white text-gray-900 hover:border-blue-200 hover:bg-blue-50/40'
+                }`}
+              >
+                <span
+                  className={`mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${
+                    primary ? 'bg-white/15' : dm ? 'bg-gray-700' : 'bg-blue-50'
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 ${primary ? 'text-white' : 'text-[#1d4ed8]'}`} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{title}</span>
+                  <span className={`mt-1 block text-xs leading-5 ${primary ? 'text-blue-50' : dm ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {description}
+                  </span>
+                </span>
+                <ChevronRight className={`mt-1 h-4 w-4 flex-shrink-0 transition-transform group-hover:translate-x-0.5 ${primary ? 'text-white' : 'text-[#1d4ed8]'}`} />
+              </button>
+            ))}
           </div>
         </div>
 
@@ -245,11 +261,24 @@ export function PortalDashboard({
           </h2>
 
           {loading && (
-            <p className={dm ? 'text-gray-400' : 'text-gray-500'}>Loading…</p>
+            <div role="status" aria-live="polite" className="space-y-3">
+              <p className={dm ? 'text-gray-400' : 'text-gray-500'}>{t('portal_loading_data')}</p>
+              {[0, 1, 2].map((item) => (
+                <div
+                  key={item}
+                  className={`h-16 rounded-lg border p-4 ${dm ? 'border-gray-700 bg-gray-900/40' : 'border-gray-100 bg-gray-50'}`}
+                >
+                  <div className={`h-3 w-1/3 rounded-full ${dm ? 'bg-gray-700' : 'bg-gray-200'}`} />
+                  <div className={`mt-3 h-2 w-1/2 rounded-full ${dm ? 'bg-gray-700' : 'bg-gray-200'}`} />
+                </div>
+              ))}
+            </div>
           )}
 
           {error && !loading && (
-            <p className="text-red-500 text-sm">{error}</p>
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+              {error}
+            </div>
           )}
 
           {!loading && !error && jobPostings.length === 0 && (
@@ -269,17 +298,17 @@ export function PortalDashboard({
           {!loading && !error && jobPostings.slice(0, 5).map((job) => (
             <div
               key={job.id}
-              className={`flex items-center justify-between py-4 border-b last:border-0 ${
+              className={`flex flex-col gap-3 py-4 border-b last:border-0 sm:flex-row sm:items-center sm:justify-between ${
                 dm ? 'border-gray-700' : 'border-gray-100'
               }`}
             >
-              <div>
+              <div className="min-w-0">
                 <p className={`font-semibold text-sm ${dm ? 'text-white' : 'text-gray-900'}`}>{job.title}</p>
                 <p className={`text-xs mt-0.5 ${dm ? 'text-gray-400' : 'text-gray-500'}`}>
                   {job.location} &bull; {t('employer_dashboard_posted_on')} {new Date(job.created_at).toLocaleDateString()}
                 </p>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between gap-4 sm:justify-end">
                 <div className="text-center">
                   <p className="text-xl font-bold text-[#1d4ed8]">{job.applicant_count}</p>
                   <p className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('employer_dashboard_applicants_label')}</p>

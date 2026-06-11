@@ -29,6 +29,7 @@ export function PortalTopBar({ title, darkMode = false, accountMenuProps }: Port
   const ctxMenu = usePortalAccountMenu();
   const menuConfig = accountMenuProps ?? ctxMenu ?? null;
   const onOpenMobileNav = ctxMenu?.onOpenMobileNav;
+  const t = menuConfig?.t ?? ((key: string) => key);
 
   return (
     <div
@@ -43,7 +44,7 @@ export function PortalTopBar({ title, darkMode = false, accountMenuProps }: Port
           className={`lg:hidden p-2 -ml-2 mr-2 rounded-lg ${
             darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
           }`}
-          aria-label="Open navigation"
+          aria-label={t('portal_open_navigation')}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

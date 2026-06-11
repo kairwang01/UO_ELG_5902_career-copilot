@@ -194,8 +194,8 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             onPostCreated();
             onClose();
 
-        } catch (err: any) {
-            setError(err.message || t('job_form_error_unknown'));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : t('job_form_error_unknown'));
         } finally {
             setLoading(false);
         }
@@ -277,7 +277,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         return (
             <>
                 <div className="max-w-[1088px] mx-auto p-6">
-                    <form id="job-post-form" onSubmit={handleSubmit} className="space-y-6">
+                    <form id="job-post-form" onSubmit={handleSubmit} className="space-y-6" aria-busy={loading || isAiBusy}>
                         {formBody}
                     </form>
                     <div className="flex flex-col-reverse gap-3 pt-4 border-t border-gray-200 mt-6 sm:flex-row sm:items-center sm:justify-end dark:border-gray-700">
@@ -302,7 +302,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
-                    <form id="job-post-form" onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-6">
+                    <form id="job-post-form" onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-6" aria-busy={loading || isAiBusy}>
                         {formBody}
                     </form>
                     <div className="flex-shrink-0 flex justify-end items-center p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl space-x-3 dark:border-gray-700 dark:bg-gray-900">

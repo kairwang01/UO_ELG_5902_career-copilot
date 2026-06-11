@@ -81,7 +81,7 @@ export function PortalSidebar({
       {/* Logo — clicking goes back to the business homepage */}
       <div className="p-6">
         <div className="flex gap-3">
-          <button onClick={onGoHome} className="flex-shrink-0 group self-center" aria-label="Back to Career CoPilot home">
+          <button onClick={onGoHome} className="flex-shrink-0 group self-center" aria-label={t('portal_back_home_aria')}>
             <svg className="w-10 h-10 transition-opacity group-hover:opacity-80" fill="none" viewBox="0 0 32 32">
               <path
                 d="M12 16H20M12 21.3333H20M22.6667 28H9.33333C8.62609 28 7.94781 27.719 7.44771 27.219C6.94762 26.7189 6.66667 26.0406 6.66667 25.3333V6.66667C6.66667 5.95942 6.94762 5.28115 7.44771 4.78105C7.94781 4.28095 8.62609 4 9.33333 4H16.7813C17.1349 4.00008 17.474 4.1406 17.724 4.39067L24.9427 11.6093C25.1927 11.8593 25.3333 12.1984 25.3333 12.552V25.3333C25.3333 26.0406 25.0524 26.7189 24.5523 27.219C24.0522 27.719 23.3739 28 22.6667 28Z"
@@ -120,9 +120,7 @@ export function PortalSidebar({
           {navItem('billing', t('portal_nav_billing'), CreditCard)}
         </div>
 
-        {/* Language switcher — lets users change language after sign-in.
-            (The AI-Mode toggle was removed per the 2026-06-09 requirements:
-            model behaviour is governed by admins, not per-user toggles.) */}
+        {/* Language switcher — lets users change language after sign-in. */}
         <div className="pt-4 space-y-0.5">
           <LanguageSwitcher onLanguageChange={onLanguageChange} currentLang={currentLang} />
         </div>

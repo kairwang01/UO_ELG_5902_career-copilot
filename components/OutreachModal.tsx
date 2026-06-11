@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { generateOutreachEmail } from '../services/aiClient';
 import type { ProfessionalEmailResult, UserProfile } from '../types';
-import LoadingSpinner from './LoadingSpinner';
 import { DEFAULT_MARKET } from '../config';
 import { useToast } from './Toast';
 import { useModalBehavior } from '../hooks/useModalBehavior';
+import { Loader2 } from 'lucide-react';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -35,25 +35,28 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
             setError(null);
             try {
                 if (!candidate.resume_text) {
-                    throw new Error("Candidate resume is not available.");
+                    throw new Error(t('outreach_resume_unavailable'));
                 }
                 const apiResult = await generateOutreachEmail(candidate.resume_text, jobDescription, employerProfile, DEFAULT_MARKET);
                 setResult(apiResult);
                 setEditableBody(apiResult.body);
                 setEditableSubject(apiResult.subject);
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+                setError(err instanceof Error ? err.message : t('outreach_error_unknown'));
             } finally {
                 setLoading(false);
             }
         };
         runTool();
-    }, [candidate, jobDescription, employerProfile]);
+    }, [candidate, jobDescription, employerProfile, t]);
 
-    const handleCopy = () => {
-        if (result) {
-            navigator.clipboard.writeText(`Subject: ${editableSubject}\n\n${editableBody}`);
-            addToast('Email subject and body copied to clipboard!', 'success');
+    const handleCopy = async () => {
+        if (!result) return;
+        try {
+            await navigator.clipboard.writeText(`${t('outreach_subject_copy_prefix')}: ${editableSubject}\n\n${editableBody}`);
+            addToast(t('outreach_copied_toast'), 'success');
+        } catch {
+            addToast(t('outreach_copy_failed'), 'error');
         }
     };
     
@@ -64,30 +67,47 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in" onClick={handleOverlayClick}>
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in"
+            onClick={handleOverlayClick}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="outreach-modal-title"
+        >
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-fade-scale" onClick={(e) => e.stopPropagation()}>
                 <div className="p-4 border-b dark:border-slate-700">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Draft Outreach Message for Candidate #{candidate.index + 1}</h3>
+                    <h3 id="outreach-modal-title" className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                        {t('outreach_modal_title').replace('{n}', String(candidate.index + 1))}
+                    </h3>
                 </div>
                 <div className="flex-grow overflow-y-auto p-6 space-y-4">
-                    {loading && <LoadingSpinner />}
-                    {error && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-lg">{error}</div>}
+                    {loading && (
+                        <div role="status" className="flex flex-col items-center justify-center gap-3 py-12 text-center text-gray-600 dark:text-gray-300">
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-300" />
+                            <p className="text-sm font-medium">{t('outreach_generating')}</p>
+                        </div>
+                    )}
+                    {error && <div role="alert" className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-lg">{error}</div>}
                     {result && (
                         <div className="space-y-4">
                              <div>
-                                <label htmlFor="outreach-subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subject</label>
+                                <label htmlFor="outreach-subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('outreach_subject_label')}</label>
                                 <input type="text" id="outreach-subject" value={editableSubject} onChange={e => setEditableSubject(e.target.value)} className="mt-1 w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm dark:text-gray-100"/>
                              </div>
                              <div>
-                                 <label htmlFor="outreach-body" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Body</label>
+                                 <label htmlFor="outreach-body" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('outreach_body_label')}</label>
                                  <textarea id="outreach-body" value={editableBody} onChange={e => setEditableBody(e.target.value)} rows={15} className="mt-1 w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 dark:text-gray-100"/>
                              </div>
                         </div>
                     )}
                 </div>
                 <div className="p-4 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 rounded-b-xl flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-slate-600">Cancel</button>
-                    <button onClick={handleCopy} disabled={!result} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-300">Copy to Clipboard</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-slate-600">
+                        {t('outreach_cancel')}
+                    </button>
+                    <button type="button" onClick={handleCopy} disabled={!result} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300">
+                        {t('outreach_copy')}
+                    </button>
                 </div>
             </div>
         </div>

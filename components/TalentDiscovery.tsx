@@ -6,7 +6,7 @@ import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';
 import { listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
 import { saveToShortlist } from '../lib/shortlistData';
-import { BookmarkCheck, BookmarkPlus, Briefcase, CheckCircle2, Loader2, Search, XCircle } from 'lucide-react';
+import { BookmarkCheck, BookmarkPlus, Briefcase, CheckCircle2, Loader2, PlusCircle, Search, XCircle } from 'lucide-react';
 import { useToast as useSharedToast } from './Toast';
 
 interface MatchedCandidate extends UserProfile {
@@ -53,10 +53,11 @@ const toMatchedCandidate = (c: DiscoveredCandidate, fallbackSummary?: string): M
 interface TalentDiscoveryProps {
     t: (key: string) => string;
     profile: UserProfile;
+    onPostJob?: () => void;
     navigateToBusinessPricing: () => void;
 }
 
-const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateToBusinessPricing }) => {
+const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob, navigateToBusinessPricing }) => {
     const [jobDescription, setJobDescription] = useState('');
     const [verifiedLoading, setVerifiedLoading] = useState(false);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -80,6 +81,24 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
 
     const { addToast } = useSharedToast();
     const selectedPostedJob = postedJobs.find((job) => job.id === selectedJobId) ?? null;
+    const hasJobDescription = jobDescription.trim().length > 0;
+    const flowSteps = [
+        {
+            title: t('talent_flow_select_job_title'),
+            description: t('talent_flow_select_job_desc'),
+            Icon: Briefcase,
+        },
+        {
+            title: t('talent_flow_match_title'),
+            description: t('talent_flow_match_desc'),
+            Icon: Search,
+        },
+        {
+            title: t('talent_flow_shortlist_title'),
+            description: t('talent_flow_shortlist_desc'),
+            Icon: BookmarkCheck,
+        },
+    ];
 
     // Fetch employer's active posted jobs once on mount
     useEffect(() => {
@@ -125,7 +144,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!jobDescription.trim()) {
+        if (!hasJobDescription) {
             setSearchError(t('talent_jd_required'));
             return;
         }
@@ -154,7 +173,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
         }
         // Fall back to extracting the first line of the description as job title
         const firstLine = jobDescription.split('\n')[0].trim().slice(0, 200);
-        return { job_id: 'manual', job_title: firstLine || 'Unspecified role' };
+        return { job_id: 'manual', job_title: firstLine || t('talent_unspecified_role') };
     };
 
     const handleSaveToShortlist = async (candidate: MatchedCandidate) => {
@@ -162,7 +181,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
         const { job_id, job_title } = getJobInfo();
         try {
             await saveToShortlist(profile.id, {
-                candidate_name: candidate.full_name || `Candidate #${candidate.id.slice(0, 6)}`,
+                candidate_name: candidate.full_name || t('talent_candidate_fallback_name').replace('{id}', candidate.id.slice(0, 6)),
                 candidate_snapshot: {
                     summary: candidate.summary,
                     // UserProfile has no structured skills array; surface strengths as the closest proxy
@@ -190,8 +209,23 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
 
     return (
         <div className="p-0 sm:p-4 animate-fade-in">
+            <div className="mb-6 grid gap-3 md:grid-cols-3">
+                {flowSteps.map(({ title, description, Icon }) => (
+                    <div
+                        key={title}
+                        className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+                    >
+                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/40">
+                            <Icon className="h-5 w-5 text-blue-700 dark:text-blue-300" />
+                        </div>
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
+                        <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{description}</p>
+                    </div>
+                ))}
+            </div>
+
             {/* Verified Talent Section */}
-            <div className="p-5 sm:p-6 bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-xl text-white shadow-lg mb-8">
+            <div className="p-5 sm:p-6 bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-xl text-white shadow-lg mb-8" aria-live="polite">
                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-6">
                     <div>
                         <h2 className="text-xl sm:text-2xl font-bold mb-2">{t('discover_verified_title')}</h2>
@@ -212,7 +246,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                  )}
                  <div className="space-y-3">
                     {verifiedResults.map((candidate, index) => (
-                        <div key={candidate.id} className="p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg">
+                        <div key={candidate.id} className="p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/15">
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="flex-1 min-w-0">
                                     <p className="font-bold text-white">{t('talent_candidate_label').replace('{n}', String(index + 1))}</p>
@@ -279,10 +313,19 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                  </div>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('discover_regular_title')}</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">{t('talent_search_desc')}</p>
-
-            <form onSubmit={handleSearch} className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <form onSubmit={handleSearch} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('discover_regular_title')}</h2>
+                        <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-400">{t('talent_search_desc')}</p>
+                    </div>
+                    {jobsLoaded && postedJobs.length > 0 && (
+                        <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+                            <Briefcase className="h-3.5 w-3.5" />
+                            {t('talent_active_jobs_count').replace('{n}', String(postedJobs.length))}
+                        </span>
+                    )}
+                </div>
                 {/* Posted-job selector — only shown when the employer has active postings */}
                 {!jobsLoaded && (
                     <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
@@ -314,6 +357,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                 <div className="flex min-w-0 items-start gap-2 text-blue-900 dark:text-blue-100">
                                     <Briefcase className="mt-0.5 h-4 w-4 shrink-0" />
                                     <div className="min-w-0">
+                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
+                                            {t('talent_selected_job_label')}
+                                        </p>
                                         <p className="truncate font-semibold">{selectedPostedJob.title}</p>
                                         <p className="text-xs text-blue-700 dark:text-blue-300">
                                             {selectedPostedJob.location || t('talent_location_remote')}
@@ -328,39 +374,67 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                     </div>
                 )}
                 {jobsLoaded && postedJobs.length === 0 && (
-                    <p className="text-sm text-gray-400 dark:text-gray-500 italic">
-                        {t('talent_no_posted_jobs')}
-                    </p>
+                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                            {t('talent_no_posted_jobs')}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {t('talent_no_posted_jobs_desc')}
+                        </p>
+                        {onPostJob && (
+                            <button
+                                type="button"
+                                onClick={onPostJob}
+                                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 dark:border-blue-900/60 dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                            >
+                                <PlusCircle className="h-4 w-4" />
+                                {t('talent_post_job_first_button')}
+                            </button>
+                        )}
+                    </div>
                 )}
                 <textarea
                     value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value)}
+                    onChange={(e) => {
+                        setJobDescription(e.target.value);
+                        if (searchError && e.target.value.trim()) setSearchError(null);
+                    }}
                     rows={8}
+                    aria-describedby="talent-search-helper"
                     className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600 border border-gray-300 rounded-lg shadow-sm p-4 focus:ring-blue-500 focus:border-blue-500"
                     placeholder={t('talent_jd_placeholder')}
                 />
-                 {searchError && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm">{searchError}</div>}
-                 <button type="submit" disabled={searchLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-8 py-3 font-bold text-white shadow-md transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400 sm:w-auto">
+                <div id="talent-search-helper" className="flex flex-col gap-2 text-xs text-gray-500 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+                    <span>{selectedPostedJob ? t('talent_search_ready_hint') : t('talent_search_disabled_hint')}</span>
+                    <span>{t('talent_jd_length').replace('{n}', String(jobDescription.trim().length))}</span>
+                </div>
+                 {searchError && <div role="alert" className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm">{searchError}</div>}
+                 <button type="submit" disabled={searchLoading || !hasJobDescription} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-8 py-3 font-bold text-white shadow-md transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400 sm:w-auto">
                     {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                     {searchLoading ? t('talent_searching') : t('talent_search_button')}
                 </button>
             </form>
 
             {searchLoading && (
-                <div className="text-center mt-8">
+                <div role="status" aria-live="polite" className="text-center mt-8">
                     <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"></div>
                     <p className="mt-3 text-gray-600 dark:text-gray-400">{t('talent_analyzing_pool')}</p>
                 </div>
             )}
 
             {regularResults && (
-                <div className="mt-8">
+                <div className="mt-8 animate-panel-expand" aria-live="polite">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
                         {regularResults.length > 0 ? t('talent_found_matches').replace('{n}', String(regularResults.length)) : t('talent_no_matches')}
                     </h3>
+                    {regularResults.length === 0 ? (
+                        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('talent_results_empty_desc')}</p>
+                        </div>
+                    ) : (
                     <div className="space-y-4">
                         {regularResults.map((candidate, index) => (
-                            <div key={candidate.id} className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-sm">
+                            <div key={candidate.id} className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-gray-800 dark:text-white">{t('talent_candidate_label').replace('{n}', String(index + 1))}</p>
@@ -417,6 +491,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                             </div>
                         ))}
                     </div>
+                    )}
                 </div>
             )}
 

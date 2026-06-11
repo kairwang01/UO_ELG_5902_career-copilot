@@ -153,7 +153,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   };
 
   const handlePostJobSaved = async () => {
-    addToast(jobToEdit ? 'Job updated.' : 'Job posted — it is now visible to candidates.', 'success');
+    addToast(jobToEdit ? t('portal_toast_job_updated') : t('portal_toast_job_posted'), 'success');
     await fetchData();
     setJobToEdit(null);
     navigate('job-listings');
@@ -172,11 +172,11 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         subscription_status: `pending_biz_${planKey}`,
       });
       if (error) {
-        addToast(`Could not update the plan: ${error.message}`, 'error');
+        addToast(t('portal_toast_plan_update_failed').replace('{error}', error.message), 'error');
         return;
       }
       await refreshProfile();
-      addToast('Plan updated.', 'success');
+      addToast(t('portal_toast_plan_updated'), 'success');
     } finally {
       setPlanSaving(false);
     }
@@ -223,13 +223,13 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   // Slide-over nav for narrow screens — the sidebar itself is hidden below lg.
   const renderMobileNavDrawer = (page: PortalPage) =>
     isMobileNavOpen ? (
-      <div className="fixed inset-0 z-50 lg:hidden">
+      <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={t('portal_open_navigation')}>
         <div
           className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
           onClick={() => setIsMobileNavOpen(false)}
           aria-hidden="true"
         />
-        <div className="absolute inset-y-0 left-0">
+        <div className="absolute inset-y-0 left-0 animate-slide-in-left">
           <PortalSidebar {...sidebarProps} currentPage={page} mobile />
         </div>
       </div>
@@ -307,6 +307,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
             <PortalTalentPool
               profile={profile}
               darkMode={darkMode}
+              onPostJob={() => navigate('post-job')}
               navigateToBusinessPricing={navigateToBusinessPricing}
               t={t}
             />

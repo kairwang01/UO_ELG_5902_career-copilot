@@ -96,14 +96,15 @@ export function PortalJobListings({
     job.is_active
       ? 'bg-teal-50 text-teal-800 border-teal-200'
       : 'bg-gray-100 text-gray-700 border-gray-300';
+  const needsCandidates = (job: JobPostingWithCount) => job.is_active && job.applicant_count === 0;
 
   const JobRow: React.FC<{ job: JobPostingWithCount }> = ({ job }) => (
     <div
-      className={`rounded-xl border p-5 hover:shadow-md transition-shadow ${
+      className={`rounded-xl border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       }`}
     >
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1 min-w-0">
           <button
             onClick={() => onViewApplicants(job)}
@@ -112,23 +113,30 @@ export function PortalJobListings({
           >
             {job.title}
           </button>
-          <div className={`flex items-center gap-4 text-sm mt-1 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
+          <div className={`mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
             <span className="flex items-center gap-1">
               <MapPin className="w-4 h-4" />
-              {job.location || 'Remote'}
+              {job.location || t('talent_location_remote')}
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
               {t('employer_dashboard_posted_on')} {new Date(job.created_at).toLocaleDateString()}
             </span>
+            {needsCandidates(job) && (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200">
+                {t('portal_listings_needs_candidates')}
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-6 flex-shrink-0">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-start sm:justify-end sm:gap-6">
           <button
             onClick={() => onViewApplicants(job)}
             aria-label={t('portal_listings_view_applicants_aria').replace('{title}', job.title)}
-            className="text-center group"
+            className={`group rounded-lg border px-4 py-3 text-left transition-colors sm:text-center ${
+              dm ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-blue-50/50'
+            }`}
           >
             <div className={`text-3xl font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>
               {job.applicant_count}
@@ -138,7 +146,7 @@ export function PortalJobListings({
             </div>
           </button>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-row-reverse items-center justify-between gap-2 sm:flex-col sm:items-stretch">
             <button
               onClick={() => onEditJob(job)}
               aria-label={t('portal_listings_edit_aria').replace('{title}', job.title)}
@@ -163,7 +171,7 @@ export function PortalJobListings({
       <PortalTopBar title={t('portal_nav_job_listings')} darkMode={dm} />
       <div className="max-w-[1088px] mx-auto p-8 animate-view-fade">
 
-        {loading && <p className={dm ? 'text-gray-400' : 'text-gray-500'}>Loading…</p>}
+        {loading && <p role="status" className={dm ? 'text-gray-400' : 'text-gray-500'}>{t('portal_loading_data')}</p>}
         {error && !loading && <p className="text-red-500 text-sm mb-6">{error}</p>}
 
         {/* Stats — all derived from existing job/application data, no placeholder pipeline counts. */}
@@ -212,6 +220,7 @@ export function PortalJobListings({
                       setStatusFilter(key);
                       setShowAllActive(false);
                     }}
+                    aria-pressed={statusFilter === key}
                     className={`rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
                       statusFilter === key
                         ? 'bg-white text-[#1d4ed8] shadow-sm dark:bg-gray-900 dark:text-blue-300'
@@ -311,7 +320,7 @@ export function PortalJobListings({
             </button>
 
             {showExpired && (
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 space-y-4 animate-panel-expand">
                 {filteredClosedJobs.map((job) => <JobRow key={job.id} job={job} />)}
               </div>
             )}
