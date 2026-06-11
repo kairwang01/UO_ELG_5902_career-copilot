@@ -15,7 +15,6 @@ import { useLocalization } from './hooks/useLocalization';
 import { ToastProvider, useToast } from './components/Toast';
 import { useCredits } from './contexts/CreditsContext';
 import { useApiStatus } from './contexts/ApiStatusContext';
-import { useSettings } from './contexts/SettingsContext';
 import { useModalBehavior } from './hooks/useModalBehavior';
 import ApiStatusBanner from './components/ApiStatusBanner';
 import CreditModal from './components/modals/CreditModal';
@@ -134,7 +133,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const { credits, setCredits, deductCredits } = useCredits();
   const { addToast } = useToast();
-  const { isAIMode } = useSettings();
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const analysisCost = TOOL_CREDIT_COSTS['resume-analysis'];
 
@@ -750,22 +748,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         
         {dashboardView === 'toolkit' && (
             <div id="toolkit-panel">
-                {!isAIMode ? (
-                    <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 text-center animate-fade-in min-h-[60vh]">
-                        <div className="mb-4 h-12 w-12 rounded-lg border border-blue-100 bg-blue-50 p-2" aria-hidden="true">
-                          <div className="flex h-full flex-col justify-between">
-                            <div className="h-1.5 rounded-full bg-blue-700" />
-                            <div className="space-y-1">
-                              <div className="h-1 rounded-full bg-blue-200" />
-                              <div className="h-1 w-2/3 rounded-full bg-blue-200" />
-                            </div>
-                          </div>
-                        </div>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Assisted tools are off</h3>
-                        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto mb-6">Turn on assistance from the sidebar to use generated career tools. The core workspace remains available.</p>
-                        <button onClick={() => setDashboardView('portfolio')} className="text-blue-600 dark:text-blue-400 font-bold hover:underline">Or try the Professional Showcase (AI optional) &rarr;</button>
-                    </div>
-                ) : !resumeText ? (
+                {!resumeText ? (
                     <EmptyState
                         title="Upload your resume to use the toolkit"
                         description="The toolkit tailors every result to your experience, so it needs your resume first. Add it and these tools unlock right away."
@@ -1123,8 +1106,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
         <CookieConsent t={t} />
 
-        {isAIMode && <button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white w-16 h-16 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 z-40 flex items-center justify-center" aria-label="Open career coach"><svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></button>}
-        {isAIMode && isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} />}
+        <button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white w-16 h-16 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 z-40 flex items-center justify-center" aria-label={t('coach_open_label')}><svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></button>
+        {isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} />}
       </div>
   );
 };

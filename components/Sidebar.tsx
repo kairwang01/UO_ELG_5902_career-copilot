@@ -68,11 +68,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Turn a raw subscription_status (e.g. "pending_essentials") into a readable label.
   const formatPlanStatus = (status?: string | null): string => {
-    if (!status || status === 'free') return 'Free Plan';
+    if (!status || status === 'free') return t('ws_plan_free');
     const pending = status.startsWith('pending_');
     const planKey = status.replace('pending_biz_', '').replace('pending_', '');
     const name = planKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-    return pending ? `${name} (payment pending)` : name;
+    return pending ? t('ws_plan_pending').replace('{plan}', name) : name;
   };
 
   return (
@@ -132,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => setIsToolkitExpanded(!isToolkitExpanded)}
                     aria-expanded={isToolkitExpanded}
                     aria-controls="sidebar-tool-list"
-                    aria-label={isToolkitExpanded ? 'Collapse assisted tools' : 'Expand assisted tools'}
+                    aria-label={isToolkitExpanded ? t('ws_tools_collapse') : t('ws_tools_expand')}
                     className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                     <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform duration-200 ${isToolkitExpanded ? 'rotate-180' : ''}`} />
@@ -203,7 +203,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <div className="mt-1 pt-3 flex items-center gap-3 border-t border-gray-200/50 dark:border-slate-800/50">
             {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="Profile" className="h-7 w-7 rounded-lg object-cover" />
+                <img src={profile.avatar_url} alt={t('ws_profile_avatar_alt')} className="h-7 w-7 rounded-lg object-cover" />
             ) : (
                 <div className="h-7 w-7 rounded-lg bg-gray-200 dark:bg-slate-800 flex items-center justify-center">
                     <UserIcon className="h-3.5 w-3.5 text-gray-500" />
@@ -211,7 +211,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
             <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold text-gray-900 dark:text-white truncate">
-                    {profile?.full_name || profile?.company_name || 'My Profile'}
+                    {profile?.full_name || profile?.company_name || t('ws_profile_fallback')}
                 </p>
                 <div className="flex items-center gap-1.5">
                     <div className="h-1 w-1 rounded-full bg-green-500 animate-pulse"></div>

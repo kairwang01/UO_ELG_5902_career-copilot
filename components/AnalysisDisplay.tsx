@@ -9,7 +9,6 @@ import type { AppSession as Session } from '../lib/data';
 import { applyResumeImprovements } from '../services/aiClient';
 import { renderFormattedText } from './tools/ToolUtils';
 import ResumePreview from './ResumePreview';
-import { useSettings } from '../contexts/SettingsContext';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 
@@ -181,7 +180,6 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
   const [toolQuery, setToolQuery] = useState('');
   const userPlanLevel = PLAN_HIERARCHY[userPlan] ?? 0;
   const isHighestPlan = userPlanLevel === PLAN_HIERARCHY.executive;
-  const { isAIMode } = useSettings();
 
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizationError, setOptimizationError] = useState<string | null>(null);

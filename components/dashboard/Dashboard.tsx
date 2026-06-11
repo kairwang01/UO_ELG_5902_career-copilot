@@ -28,7 +28,6 @@ import Chart from './Chart';
 import { firestoreDb } from '../../lib/firebaseClient';
 import type { AppSession as Session } from '../../lib/data';
 import { generateWeeklySummary } from '../../services/aiClient';
-import { useSettings } from '../../contexts/SettingsContext';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
 
 type DashboardDestination = 'resume' | 'jobs' | 'applications' | 'interview' | 'plan';
@@ -51,13 +50,13 @@ interface ActivityItem {
   details: string;
 }
 
-const toolMetadataMap: { [key: string]: { name: string } } = {
-  'cover-letter': { name: 'Cover Letter' },
-  'mock-interview': { name: 'Mock Interview' },
-  'resume-analysis': { name: 'Resume Analysis' },
-  'opportunity-finder': { name: 'Opportunity Finder' },
-  'career-path': { name: 'Career Path Planner' },
-  default: { name: 'Tool Usage' },
+const toolMetadataMap: { [key: string]: { nameKey: string } } = {
+  'cover-letter': { nameKey: 'tool_cover_letter_title' },
+  'mock-interview': { nameKey: 'tool_mock_interview_title' },
+  'resume-analysis': { nameKey: 'analysis_results_title' },
+  'opportunity-finder': { nameKey: 'tool_opportunity_finder_title' },
+  'career-path': { nameKey: 'tool_career_path_title' },
+  default: { nameKey: 'dashboard_tool_usage' },
 };
 
 const fallbackScores: ChartDataPoint[] = [
@@ -166,7 +165,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
   const [weeklySummary, setWeeklySummary] = useState<string>('');
   const [topSkills, setTopSkills] = useState<string[]>([]);
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
-  const { isAIMode } = useSettings();
   const { applications, loading: applicationsLoading } = useRecentApplications(session);
 
   const fetchDashboardData = useCallback(async () => {
@@ -210,7 +208,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       if (analysesResult.status === 'fulfilled') {
         analyses = analysesResult.value.docs.map((doc) => doc.data());
       } else {
-        unavailableSections.push('readiness history');
+        unavailableSections.push(t('dashboard_section_readiness_history'));
         setScoreData([]);
         setTopSkills([]);
       }
@@ -231,21 +229,28 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       if (activitiesResult.status === 'fulfilled') {
         activities = activitiesResult.value.docs.map((doc) => doc.data());
       } else {
-        unavailableSections.push('recent activity');
+        unavailableSections.push(t('dashboard_section_recent_activity'));
         setActivityFeed([]);
       }
 
       const feedData = activities.map((act) => {
         const toolKey = typeof act.tool_key === 'string' ? act.tool_key : 'default';
         const toolInfo = toolMetadataMap[toolKey] || toolMetadataMap.default;
-        let details = `Used ${toolInfo.name}`;
+        const toolName = t(toolInfo.nameKey);
+        let details = t('dashboard_activity_used').replace('{tool}', toolName);
         if (act.metadata && typeof act.metadata === 'object') {
           const meta = act.metadata as { [key: string]: unknown };
-          if (Array.isArray(meta.scoreChange)) details = `Score changed from ${meta.scoreChange[0]} to ${meta.scoreChange[1]}`;
-          if (typeof meta.jobTitle === 'string') details = `For "${meta.jobTitle}"`;
+          if (Array.isArray(meta.scoreChange)) {
+            details = t('dashboard_activity_score_changed')
+              .replace('{from}', String(meta.scoreChange[0]))
+              .replace('{to}', String(meta.scoreChange[1]));
+          }
+          if (typeof meta.jobTitle === 'string') {
+            details = t('dashboard_activity_for_job').replace('{job}', meta.jobTitle);
+          }
         }
         return {
-          type: toolInfo.name,
+          type: toolName,
           details,
         };
       });
@@ -255,13 +260,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         ? insightResult.value.docs[0]?.data()
         : null;
       if (insightResult.status === 'rejected') {
-        unavailableSections.push('weekly summary history');
+        unavailableSections.push(t('dashboard_section_weekly_history'));
       }
 
       if (insight && typeof insight.summary_text === 'string' && insight.summary_text.trim().length > 0) {
         setWeeklySummary(insight.summary_text);
-      } else if (!isAIMode) {
-        setWeeklySummary('Turn on assisted tools when you want generated coaching. Your workbench still tracks resume, match, interview, and plan progress.');
       } else if (analyses.length > 0 || activities.length > 0) {
         try {
           const { summary } = await generateWeeklySummary({
@@ -279,14 +282,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
                 created_at: serverTimestamp(),
               });
             } catch {
-              unavailableSections.push('saving weekly summary');
+              unavailableSections.push(t('dashboard_section_save_summary'));
             }
           } else {
             setWeeklySummary(t('dashboard_welcome_summary'));
           }
         } catch {
-          unavailableSections.push('generated weekly summary');
-          setWeeklySummary('Use today to tighten your resume, review the strongest matches, and complete one interview practice round.');
+          unavailableSections.push(t('dashboard_section_generated_summary'));
+          setWeeklySummary(t('dashboard_generated_summary_fallback'));
         }
       } else {
         setWeeklySummary(t('dashboard_welcome_summary'));
@@ -294,12 +297,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
 
       setError(
         unavailableSections.length > 0
-          ? `Some live workspace data could not be loaded (${unavailableSections.join(', ')}). The dashboard is showing the available information.`
+          ? t('dashboard_partial_data_error').replace('{sections}', unavailableSections.join(', '))
           : null,
       );
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Some workspace history could not be loaded.');
-      setWeeklySummary('Use today to tighten your resume, review the strongest matches, and complete one interview practice round.');
+      setError(err instanceof Error ? err.message : t('dashboard_history_load_error'));
+      setWeeklySummary(t('dashboard_generated_summary_fallback'));
     } finally {
       setLoading(false);
     }
@@ -308,7 +311,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
     // changing the user, and the object identity would re-fire the auto-fetch
     // (incl. the weekly-summary AI call) on every such event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, t, isAIMode]);
+  }, [session?.user?.id, t]);
 
   useEffect(() => {
     fetchDashboardData();

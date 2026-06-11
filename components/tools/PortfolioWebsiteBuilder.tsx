@@ -4,7 +4,6 @@ import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../se
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { useSettings } from '../../contexts/SettingsContext';
 import { useToast } from '../Toast';
 import { ToolError } from './ToolUtils';
 import type { AppSession as Session } from '../../lib/data';
@@ -578,7 +577,6 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     }
   }, [initialInput]);
 
-  const { isAIMode } = useSettings();
   const { addToast } = useToast();
 
   const runTool = async () => {
@@ -589,24 +587,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     const alive = begin();
     setError(null);
     try {
-      let extractedContent: PortfolioContent;
-      if (isAIMode) {
-          extractedContent = await generatePortfolioWebsite(resumeText);
-      } else {
-          // tagline/bio flow through buildHtml's `branding` arg and projects through its
-          // `projects` arg, so they are intentionally omitted from the typed PortfolioContent here.
-          extractedContent = {
-              fullName: profile?.full_name || 'Your Name',
-              firstName: profile?.full_name?.split(' ')[0] || 'Your',
-              lastName: profile?.full_name?.split(' ').slice(1).join(' ') || 'Name',
-              contactEmail: session?.user.email || 'contact@example.com',
-              contactPhone: '',
-              contactLocation: '',
-              socials: {},
-              skills: [{ category: 'General Skills', description: 'Various professional skills', icon: 'fas fa-star' }],
-              experience: [],
-          };
-      }
+      const extractedContent = await generatePortfolioWebsite(resumeText);
 
       if (!alive()) return;
 
@@ -628,12 +609,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   };
 
   const handleGenerateHeadshots = async () => {
-    if (!isAIMode) {
-        setHeadshotError("AI Avatar Generation requires AI Mode to be enabled.");
-        return;
-    }
     if (!uploadedImage) {
-      setHeadshotError("Please provide a photo first.");
+      setHeadshotError(t('tool_portfolio_photo_required'));
       return;
     }
     setHeadshotStep('generating');
@@ -825,7 +802,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 <div className="p-4 bg-white dark:bg-slate-800 rounded-md border dark:border-slate-700 text-center">
                     <img src={`data:${uploadedImage.mimeType};base64,${uploadedImage.data}`} alt="Uploaded headshot" className="w-40 h-40 object-cover rounded-full mx-auto shadow-lg border-4 border-gray-200 dark:border-slate-700 p-1" />
                     <div className="flex flex-col sm:flex-row justify-center gap-3 mt-4">
-                        {isAIMode && <button type="button" onClick={handleGenerateHeadshots} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold">{t('tool_portfolio_generate_avatars_button')}</button>}
+                        <button type="button" onClick={handleGenerateHeadshots} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold">{t('tool_portfolio_generate_avatars_button')}</button>
                         <button type="button" onClick={() => { setSelectedHeadshot(uploadedImage); setHeadshotStep('final_selected'); }} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold">{t('tool_portfolio_use_photo_button')}</button>
                     </div>
                      <button type="button" onClick={resetHeadshotFlow} className="mt-3 text-sm text-gray-600 dark:text-slate-400 hover:underline">{t('tool_portfolio_change_photo_button')}</button>

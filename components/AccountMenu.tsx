@@ -14,12 +14,12 @@ interface AccountMenuProps {
 }
 
 /** Formats a raw subscription_status into a readable plan label. */
-function formatPlan(status?: string | null): string {
-  if (!status || status === 'free') return 'Free Plan';
+function formatPlan(status: string | null | undefined, t: (key: string) => string): string {
+  if (!status || status === 'free') return t('ws_plan_free');
   const pending = status.startsWith('pending_');
   const key = status.replace('pending_biz_', '').replace('pending_', '');
   const name = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  return pending ? `${name} (pending)` : name;
+  return pending ? t('ws_plan_pending').replace('{plan}', name) : name;
 }
 
 const AccountMenu: React.FC<AccountMenuProps> = ({
@@ -79,7 +79,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
             ? 'hover:bg-slate-800 focus:ring-offset-slate-900'
             : 'hover:bg-gray-100 focus:ring-offset-white'
         }`}
-        aria-label="Account menu"
+        aria-label={t('menu_account_menu')}
         aria-expanded={open}
         aria-haspopup="true"
       >
@@ -142,7 +142,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
             <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5">
               <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
               <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                {formatPlan(profile?.subscription_status)}
+                {formatPlan(profile?.subscription_status, t)}
               </span>
             </div>
           </div>
