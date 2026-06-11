@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
-import { Bell, Briefcase, CheckCircle2, Circle, Search, Star, X } from 'lucide-react';
+import { ArrowDownUp, Bell, Briefcase, CheckCircle2, Circle, RotateCcw, Search, Star, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
 import {
   subscribeNotifications,
@@ -25,6 +25,7 @@ interface ApplicationRow {
 }
 
 type FilterStatus = 'All' | AppStatus;
+type ApplicationSortKey = 'newest' | 'match' | 'title';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,28 @@ function formatDate(row: ApplicationRow): string {
     // ignore
   }
   return '—';
+}
+
+function applicationTime(row: ApplicationRow): number {
+  try {
+    return row.application_date?.toMillis?.() ?? row.application_date?.toDate?.().getTime() ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+const normalizeFilterText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+function formatTranslation(template: string, values: Record<string, string | number>): string {
+  return Object.entries(values).reduce(
+    (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
+    template,
+  );
 }
 
 /** Map a status to the 3-step stepper's active step index (0-based) */
@@ -71,8 +94,14 @@ const FILTER_STATUSES: FilterStatus[] = [
   'Rejected',
 ];
 
+const SORT_OPTIONS: ApplicationSortKey[] = ['newest', 'match', 'title'];
+
 function filterLabel(status: FilterStatus, t: (k: string) => string): string {
   return status === 'All' ? t('applications_filter_all') : t(STATUS_LABEL_KEYS[status]);
+}
+
+function sortLabel(sort: ApplicationSortKey, t: (k: string) => string): string {
+  return t(`applications_sort_${sort}`);
 }
 
 // ─── Stepper ──────────────────────────────────────────────────────────────────
@@ -98,7 +127,7 @@ const Stepper: React.FC<StepperProps> = ({ status, t }) => {
   ];
 
   return (
-    <div className="flex items-center gap-0 mt-3">
+    <div className="mt-4 flex items-center gap-0" aria-label={t('applications_timeline_label')}>
       {steps.map((label, i) => {
         const isDone = i < current || (i === current && (isHired || isRejected));
         const isCurrent = i === current && !isHired && !isRejected;
@@ -138,7 +167,7 @@ const Stepper: React.FC<StepperProps> = ({ status, t }) => {
 
         return (
           <React.Fragment key={i}>
-            <div className="flex flex-col items-center gap-1 min-w-0" style={{ flex: '0 0 auto', maxWidth: '6rem' }}>
+            <div className="flex min-w-0 flex-col items-center gap-1" style={{ flex: '0 0 auto', maxWidth: '7rem' }}>
               <div
                 className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${circleClass}`}
               >
@@ -150,7 +179,7 @@ const Stepper: React.FC<StepperProps> = ({ status, t }) => {
                   <Circle className="h-3.5 w-3.5 opacity-40" />
                 )}
               </div>
-              <span className={`text-[9px] text-center leading-tight truncate w-full text-center ${labelClass}`}>
+              <span className={`w-full text-center text-[10px] leading-tight sm:text-[11px] ${labelClass}`}>
                 {label}
               </span>
             </div>
@@ -187,8 +216,10 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
 
   return (
     <div
-      className={`relative bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm transition-all ${
-        isRejected ? 'opacity-[0.57] grayscale' : 'hover:shadow-md hover:border-blue-100 dark:hover:border-blue-800/50'
+      className={`relative rounded-2xl border p-4 shadow-sm transition-all ${
+        isRejected
+          ? 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60'
+          : 'border-gray-100 bg-white hover:border-blue-100 hover:shadow-md dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-800/50'
       }`}
     >
       {/* Top row: title + status chip */}
@@ -226,7 +257,9 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
       {isHired && app.employer_id && (
         <div className="mt-3 flex items-center justify-end">
           <button
+            type="button"
             onClick={() => setReviewOpen(true)}
+            aria-label={t('review_company_button')}
             className="flex items-center gap-1 text-[10px] font-semibold text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 rounded-lg px-2 py-1 transition-colors"
           >
             <Star className="h-3 w-3" />
@@ -242,7 +275,9 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
             {t('applications_process_ended')}
           </span>
           <button
+            type="button"
             onClick={onFindSimilar}
+            aria-label={t('applications_find_similar')}
             className="flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg px-2 py-1 transition-colors"
           >
             <Search className="h-3 w-3" />
@@ -279,6 +314,8 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState<FilterStatus>('All');
+  const [queryText, setQueryText] = useState('');
+  const [sortKey, setSortKey] = useState<ApplicationSortKey>('newest');
 
   // ── Notifications state ───────────────────────────────────────────────────
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -290,6 +327,47 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
     const unsub = subscribeNotifications(uid, setNotifications);
     return () => unsub();
   }, [uid]);
+
+  // ── Counts, search, sort ──────────────────────────────────────────────────
+  const counts: Record<FilterStatus, number> = useMemo(() => ({
+    All: apps.length,
+    Applied: apps.filter((a) => a.status === 'Applied').length,
+    Interviewing: apps.filter((a) => a.status === 'Interviewing').length,
+    Hired: apps.filter((a) => a.status === 'Hired').length,
+    Rejected: apps.filter((a) => a.status === 'Rejected').length,
+  }), [apps]);
+
+  const activeCount = counts.Applied + counts.Interviewing;
+  const hasActiveFilters = filter !== 'All' || queryText.trim().length > 0;
+
+  const visible = useMemo(() => {
+    const keyword = normalizeFilterText(queryText);
+    const rows = apps.filter((app) => {
+      if (filter !== 'All' && app.status !== filter) return false;
+      if (!keyword) return true;
+      return normalizeFilterText([
+        app.job_title ?? '',
+        app.status ?? '',
+        String(app.compatibility_score ?? ''),
+      ].join(' ')).includes(keyword);
+    });
+
+    return [...rows].sort((a, b) => {
+      if (sortKey === 'match') {
+        return (b.compatibility_score ?? -1) - (a.compatibility_score ?? -1);
+      }
+      if (sortKey === 'title') {
+        return (a.job_title ?? '').localeCompare(b.job_title ?? '');
+      }
+      return applicationTime(b) - applicationTime(a);
+    });
+  }, [apps, filter, queryText, sortKey]);
+
+  const clearFilters = () => {
+    setFilter('All');
+    setQueryText('');
+    setSortKey('newest');
+  };
 
   const handleMarkRead = (id: string) => {
     if (!uid) return;
@@ -379,17 +457,6 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
     );
   }
 
-  // ── Counts for filter chips ────────────────────────────────────────────────
-  const counts: Record<FilterStatus, number> = {
-    All: apps.length,
-    Applied: apps.filter((a) => a.status === 'Applied').length,
-    Interviewing: apps.filter((a) => a.status === 'Interviewing').length,
-    Hired: apps.filter((a) => a.status === 'Hired').length,
-    Rejected: apps.filter((a) => a.status === 'Rejected').length,
-  };
-
-  const visible = filter === 'All' ? apps : apps.filter((a) => a.status === filter);
-  const activeCount = counts.Applied + counts.Interviewing;
   const summaryCards = [
     { label: t('applications_summary_total'), value: counts.All, helper: t('applications_summary_total_desc') },
     { label: t('applications_summary_active'), value: activeCount, helper: t('applications_summary_active_desc') },
@@ -506,34 +573,89 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
         </div>
       </div>
 
-      {/* ── Filter chips ── */}
-      <div className="flex flex-wrap gap-2">
-        {FILTER_STATUSES.map((s) => {
-          const isActive = filter === s;
-          return (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              aria-pressed={isActive}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border transition-all ${
-                isActive
-                  ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
-                  : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700'
-              }`}
+      {/* ── Search, sort, filters ── */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="relative">
+            <label htmlFor="applications-search" className="sr-only">
+              {t('applications_search_label')}
+            </label>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              id="applications-search"
+              type="search"
+              value={queryText}
+              onChange={(event) => setQueryText(event.target.value)}
+              placeholder={t('applications_search_placeholder')}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500 dark:focus:bg-slate-900 dark:focus:ring-blue-900/40"
+            />
+          </div>
+
+          <label className="relative block">
+            <span className="sr-only">{t('applications_sort_label')}</span>
+            <ArrowDownUp className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <select
+              value={sortKey}
+              onChange={(event) => setSortKey(event.target.value as ApplicationSortKey)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:focus:border-blue-500 dark:focus:bg-slate-900 dark:focus:ring-blue-900/40"
             >
-              {filterLabel(s, t)}
-              <span
-                className={`text-[10px] rounded-full px-1.5 py-0 font-bold ${
-                  isActive
-                    ? 'bg-white/20 text-white'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
-                }`}
+              {SORT_OPTIONS.map((option) => (
+                <option key={option} value={option}>{sortLabel(option, t)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t('applications_filter_label')}>
+            {FILTER_STATUSES.map((s) => {
+              const isActive = filter === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setFilter(s)}
+                  aria-pressed={isActive}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
+                    isActive
+                      ? 'border-blue-600 bg-blue-600 text-white dark:border-blue-500 dark:bg-blue-500'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-blue-700'
+                  }`}
+                >
+                  {filterLabel(s, t)}
+                  <span
+                    className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400'
+                    }`}
+                  >
+                    {counts[s]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span>
+              {formatTranslation(t('applications_filter_summary'), {
+                shown: visible.length,
+                total: apps.length,
+              })}
+            </span>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
               >
-                {counts[s]}
-              </span>
-            </button>
-          );
-        })}
+                <RotateCcw className="h-3.5 w-3.5" />
+                {t('applications_clear_filters')}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── Empty state ── */}
@@ -561,14 +683,15 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
       ) : visible.length === 0 ? (
         /* Filtered-to-zero state */
         <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-12 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-          <p>{t('applications_filter_empty')}</p>
+          <p className="font-semibold text-slate-700 dark:text-slate-200">{t('applications_filter_empty')}</p>
+          <p className="mx-auto mt-2 max-w-md text-xs leading-5">{t('applications_filter_empty_desc')}</p>
           <button
             type="button"
-            onClick={onFindSimilar}
+            onClick={clearFilters}
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
           >
-            <Search className="h-4 w-4" />
-            {t('applications_empty_cta')}
+            <RotateCcw className="h-4 w-4" />
+            {t('applications_clear_filters')}
           </button>
         </div>
       ) : (
