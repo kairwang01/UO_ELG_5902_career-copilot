@@ -35,6 +35,8 @@ interface SidebarProps {
   t: (key: string) => string;
   currentLang: string;
   onLanguageChange: (lang: string) => void;
+  /** Rendered inside the mobile drawer overlay (always visible, fills the drawer height). */
+  mobile?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -47,6 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   t,
   currentLang,
   onLanguageChange,
+  mobile = false,
 }) => {
   // Default collapsed: the full tool list is long, so the sidebar leads with a single
   // "Browse all tools" entry (the dedicated gallery) and keeps the quick-list one tap away.
@@ -73,7 +76,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside className="w-64 flex-shrink-0 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col h-screen sticky top-0">
+    <aside
+      className={`${
+        mobile ? 'flex w-72 max-w-[85vw] h-full' : 'hidden lg:flex w-64 h-screen sticky top-0'
+      } flex-shrink-0 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex-col`}
+    >
       {/* Brand */}
       <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3">
         <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-500/20">

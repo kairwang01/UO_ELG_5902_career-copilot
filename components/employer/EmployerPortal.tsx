@@ -69,6 +69,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
   // For edit-job flow: which job to edit, back to which page
   const [jobToEdit, setJobToEdit] = useState<JobPostingWithCount | null>(null);
+  const [planSaving, setPlanSaving] = useState(false);
   const { addToast } = useToast();
   // For applicant funnel
   const [jobForFunnel, setJobForFunnel] = useState<JobPosting | null>(null);
@@ -162,11 +163,21 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   };
 
   const handleSelectPlan = async (planKey: string) => {
-    const { error } = await data.profiles.update(session.user.id, {
-      subscription_status: `pending_biz_${planKey}`,
-    });
-    if (error) { console.error('Failed to update plan:', error.message); return; }
-    await refreshProfile();
+    if (planSaving) return;
+    setPlanSaving(true);
+    try {
+      const { error } = await data.profiles.update(session.user.id, {
+        subscription_status: `pending_biz_${planKey}`,
+      });
+      if (error) {
+        addToast(`Could not update the plan: ${error.message}`, 'error');
+        return;
+      }
+      await refreshProfile();
+      addToast('Plan updated.', 'success');
+    } finally {
+      setPlanSaving(false);
+    }
   };
 
   const getPageTitle = () => {
@@ -333,6 +344,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               darkMode={darkMode}
               activeJobs={kpiData.activeJobs}
               onSelectPlan={handleSelectPlan}
+              planSaving={planSaving}
               navigateToBusinessPricing={navigateToBusinessPricing}
               t={t}
             />

@@ -36,9 +36,9 @@ export const SiteHeader: React.FC = () => {
         </Link>
 
         <nav className="hidden lg:flex items-center gap-7 text-sm font-medium">
-          <a href={workflowHref} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+          <Link to={workflowHref} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
             {isEmployerSurface ? t('site_nav_hiring_workflow') : t('site_nav_how_it_works')}
-          </a>
+          </Link>
           {!isEmployerSurface && (
             <Link to={SITE_ROUTES.sampleReport} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
               {t('site_nav_sample_report')}
@@ -49,16 +49,9 @@ export const SiteHeader: React.FC = () => {
               {t('site_cta_post_job')}
             </Link>
           )}
-          {/* Pricing is surface-aware: business plans live on the business page. */}
-          {isEmployerSurface ? (
-            <a href={`${SITE_ROUTES.employers}#pricing`} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-              {t('site_nav_pricing')}
-            </a>
-          ) : (
-            <Link to={SITE_ROUTES.pricing} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-              {t('site_nav_pricing')}
-            </Link>
-          )}
+          <Link to={SITE_ROUTES.pricing} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+            {t('site_nav_pricing')}
+          </Link>
           {/* ONE audience switch per surface, visually separated from content nav —
               switching audience is a mode change, not another page. */}
           <span className="h-4 w-px bg-[var(--site-border)]" aria-hidden="true" />

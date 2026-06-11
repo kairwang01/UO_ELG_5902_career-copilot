@@ -151,8 +151,8 @@ export const PricingPage: React.FC = () => {
 
           <p className="mt-5 text-center text-xs text-[var(--site-text-muted)]">
             {audience === 'jobseeker'
-              ? 'Free plan includes our standard AI model · Paid plans unlock premium models and remove the daily run cap'
-              : 'Business plans support a custom LLM endpoint — connect your own OpenAI-compatible API key'}
+              ? t('site_pricing_model_note_jobseeker')
+              : t('site_pricing_model_note_business')}
           </p>
 
           {audience === 'jobseeker' ? (
@@ -170,7 +170,7 @@ export const PricingPage: React.FC = () => {
                     <p className="mt-3 text-4xl font-bold tracking-[-0.04em] text-[var(--site-text)]">{pack.credits.toLocaleString()}</p>
                     <p className="text-sm text-[var(--site-text-muted)]">{t('site_pricing_credits_label')}</p>
                     <p className="mt-5 text-lg font-semibold">{pack.price}</p>
-                    <p className="text-xs text-[var(--site-text-muted)]">{pack.priceDescription}</p>
+                    <p className="text-xs text-[var(--site-text-muted)]">{t(`site_pack_${pack.key}_desc`)}</p>
                     <SiteButton href={SITE_ROUTES.workspace} variant="secondary" className="mt-5 w-full">
                       {t('site_pricing_buy_credits')}
                     </SiteButton>

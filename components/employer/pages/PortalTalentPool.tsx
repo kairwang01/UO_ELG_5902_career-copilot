@@ -14,7 +14,7 @@ interface PortalTalentPoolProps {
 export function PortalTalentPool({ profile, darkMode, navigateToBusinessPricing, t }: PortalTalentPoolProps) {
   return (
     <>
-      <PortalTopBar title="Discover Talent" darkMode={darkMode} />
+      <PortalTopBar title={t('portal_nav_discover')} darkMode={darkMode} />
       <div className={`max-w-[1088px] mx-auto p-8 ${darkMode ? 'text-white' : ''}`}>
         <TalentDiscovery t={t} profile={profile} navigateToBusinessPricing={navigateToBusinessPricing} />
       </div>

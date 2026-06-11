@@ -119,9 +119,6 @@ export const SiteFooter: React.FC = () => {
                   {t('footer_privacy')}
                 </a>
               </li>
-              <li>
-                <span className="text-[var(--site-text-muted)]">{t('footer_terms')}</span>
-              </li>
             </ul>
           </div>
 

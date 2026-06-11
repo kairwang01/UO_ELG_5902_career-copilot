@@ -511,7 +511,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                     <h4 className="font-bold text-lg text-center text-gray-900 dark:text-gray-100">{t('tool_english_pro_spoken_results_title')}</h4>
 
                     {/* Scores row */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {renderResultCard(t('tool_english_pro_spoken_clarity_score'), (
                             <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                                 {spokenResult.clarityScore}<span className="text-base font-normal text-gray-500 dark:text-gray-400">/100</span>

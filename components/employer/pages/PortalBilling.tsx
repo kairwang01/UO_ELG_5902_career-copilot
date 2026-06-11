@@ -8,6 +8,8 @@ interface PortalBillingProps {
   darkMode: boolean;
   activeJobs: number;
   onSelectPlan: (planKey: string) => void;
+  /** True while a plan change request is in flight — disables plan buttons. */
+  planSaving?: boolean;
   navigateToBusinessPricing: () => void;
   t: (key: string) => string;
 }
@@ -47,7 +49,7 @@ const PLAN_DISPLAY = [
   },
 ];
 
-export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, navigateToBusinessPricing }: PortalBillingProps) {
+export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, planSaving = false, navigateToBusinessPricing }: PortalBillingProps) {
   const dm = darkMode;
   const currentStatus = profile.subscription_status || 'free';
   const card = `rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`;
@@ -169,18 +171,20 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, nav
                   ) : isUpgrade ? (
                     <button
                       onClick={() => onSelectPlan(plan.key)}
-                      className="w-full py-2 rounded-lg text-sm font-semibold bg-blue-50 text-[#1d4ed8] border border-[#1d4ed8] hover:bg-blue-100 transition-colors"
+                      disabled={planSaving}
+                      className="w-full py-2 rounded-lg text-sm font-semibold bg-blue-50 text-[#1d4ed8] border border-[#1d4ed8] hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Upgrade
+                      {planSaving ? 'Updating…' : 'Upgrade'}
                     </button>
                   ) : (
                     <button
                       onClick={() => onSelectPlan(plan.key)}
-                      className={`w-full py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      disabled={planSaving}
+                      className={`w-full py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                         dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
                       }`}
                     >
-                      Switch Plan
+                      {planSaving ? 'Updating…' : 'Switch Plan'}
                     </button>
                   )}
                 </div>

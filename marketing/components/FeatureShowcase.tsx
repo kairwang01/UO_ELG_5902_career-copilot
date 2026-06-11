@@ -211,6 +211,7 @@ export const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({ t }) => {
       className="py-14 sm:py-[var(--site-section)] border-t border-[var(--site-border)]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
+      onTouchStart={() => setPaused(true)}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8 grid gap-3 lg:grid-cols-[0.7fr_1fr] lg:items-end">

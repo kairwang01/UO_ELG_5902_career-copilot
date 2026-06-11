@@ -20,7 +20,6 @@ import ApiStatusBanner from './components/ApiStatusBanner';
 import CreditModal from './components/modals/CreditModal';
 import { INITIAL_USER_CREDITS, TOOL_CREDIT_COSTS } from './config/credits';
 
-import Header from './components/Header';
 import CookieConsent from './components/CookieConsent';
 import UploadSection from './components/UploadSection';
 import EmptyState from './components/EmptyState';
@@ -55,7 +54,6 @@ const EmployerPortal = React.lazy(() =>
 const AgencyHub = React.lazy(() => import('./components/AgencyHub'));
 
 interface AppContentProps {
-  siteShell?: boolean;
   entry?: 'workspace' | 'portal';
 }
 
@@ -104,7 +102,7 @@ const buildLocalProfile = (
   ...patch,
 });
 
-const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'workspace' }) => {
+const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [session, setSession] = useState<Session | null>(null);
@@ -126,6 +124,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const [dashboardView, setDashboardView] = useState<DashboardView>('dashboard');
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   // Deep-link target page for the employer hiring portal
   const [portalInitialPage, setPortalInitialPage] = useState<PortalPage>('dashboard');
@@ -544,11 +543,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   };
   
   const navigateToBusinessPricing = () => {
-    if (siteShell) {
-      navigate('/pricing?from=business-upsell');
-      return;
-    }
-    setView('business');
+    navigate('/pricing?from=business-upsell');
   };
   const navigateToAccount = () => { setShowHomePageOverride(false); setView('account'); };
 
@@ -644,21 +639,15 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
     handleReset();
   };
 
-  const uploadVariant = siteShell ? 'site' as const : 'legacy' as const;
+  const uploadVariant = 'site' as const;
 
   const renderAppEntry = () => (
     <>
       <div className="text-center mb-8 sm:mb-10 max-w-2xl mx-auto">
-        <h1
-          className={
-            siteShell
-              ? 'text-[clamp(1.5rem,3vw,2.25rem)] font-semibold tracking-tight text-[var(--site-text)] mb-3'
-              : 'text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-3'
-          }
-        >
+        <h1 className="text-[clamp(1.5rem,3vw,2.25rem)] font-semibold tracking-tight text-[var(--site-text)] mb-3">
           {t('site_app_entry_title')}
         </h1>
-        <p className={siteShell ? 'text-[var(--site-text-muted)]' : 'text-gray-600 dark:text-gray-400'}>
+        <p className="text-[var(--site-text-muted)]">
           {t('site_app_entry_subtitle')}
         </p>
       </div>
@@ -946,33 +935,56 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const renderCandidateShell = () => {
     if (!session || !profile || !isCandidate) return renderRoleFallback();
 
+    const sidebarProps = {
+      activeView: dashboardView,
+      onViewChange: (v: DashboardView) => {
+        setDashboardView(v);
+        setIsUpdatingResume(false);
+        setIsMobileNavOpen(false);
+      },
+      profile,
+      credits,
+      theme,
+      onToggleTheme: toggleTheme,
+      activeTool,
+      onToolSelect: (tool: string | null) => {
+        setActiveTool(tool);
+        setIsMobileNavOpen(false);
+      },
+      onLogout: () => data.auth.signOut(),
+      t,
+      currentLang,
+      onLanguageChange: changeLanguage,
+    };
+
     return (
       <>
-        <Sidebar
-          activeView={dashboardView}
-          onViewChange={(v) => {
-            setDashboardView(v);
-            setIsUpdatingResume(false);
-          }}
-          profile={profile}
-          credits={credits}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          activeTool={activeTool}
-          onToolSelect={setActiveTool}
-          onLogout={() => data.auth.signOut()}
-          t={t}
-          currentLang={currentLang}
-          onLanguageChange={changeLanguage}
-        />
+        <Sidebar {...sidebarProps} />
+        {/* Mobile navigation drawer — the sidebar is hidden below lg */}
+        {isMobileNavOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+              onClick={() => setIsMobileNavOpen(false)}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-y-0 left-0">
+              <Sidebar {...sidebarProps} mobile />
+            </div>
+          </div>
+        )}
         <div className="flex-1 flex flex-col h-screen overflow-hidden">
-          <header
-            className={
-              siteShell
-                ? 'h-16 bg-[var(--site-surface)] border-b border-[var(--site-border)] flex items-center justify-between px-8 shrink-0'
-                : 'h-16 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-8 shrink-0'
-            }
-          >
+          <header className="h-16 bg-[var(--site-surface)] border-b border-[var(--site-border)] flex items-center justify-between px-4 sm:px-8 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsMobileNavOpen(true)}
+              className="lg:hidden p-2 -ml-2 mr-2 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"
+              aria-label="Open navigation"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
             <ApiStatusBanner />
             <div className="flex items-center gap-3 ml-auto">
               <span className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 hidden sm:block">
@@ -989,13 +1001,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
               />
             </div>
           </header>
-          <main
-            className={
-              siteShell
-                ? 'flex-1 overflow-y-auto bg-[var(--site-surface-muted)] p-6 md:p-10'
-                : 'flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-6 md:p-10'
-            }
-          >
+          <main className="flex-1 overflow-y-auto bg-[var(--site-surface-muted)] p-6 md:p-10">
             <div className="max-w-6xl mx-auto">
               {(isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                 <div className="mt-4 animate-slide-in-up">
@@ -1073,9 +1079,7 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
   const showEmployerShell = canShowWorkspaceShell && isEmployer;
   const showUnsupportedRole = canShowWorkspaceShell && !isKnownWorkspaceRole;
 
-  const rootClass = siteShell
-    ? `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`
-    : `min-h-screen w-full font-sans bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200 ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
+  const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
   return (
       <div className={rootClass}>
@@ -1092,19 +1096,10 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
             renderCandidateShell()
         ) : showUnsupportedRole ? (
             renderRoleFallback()
-        ) : siteShell ? (
+        ) : (
             <SiteLayout pageId={isPortalEntry ? 'portal' : 'workspace'} marketingShell={false}>
               {renderWorkspaceBody()}
             </SiteLayout>
-        ) : (
-            <div className="flex flex-col min-h-screen">
-                <ApiStatusBanner />
-                <Header session={session} profile={profile} onSetView={handleSetView} navigateToPricing={navigateToPricing} t={t} changeLanguage={changeLanguage} currentLang={currentLang} theme={theme} toggleTheme={toggleTheme} view={view} credits={credits} />
-                <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{renderContent()}</main>
-                <div className="border-t border-gray-200 dark:border-slate-700 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                  <a href="/" className="hover:text-gray-800 dark:hover:text-gray-200">{t('site_app_entry_back')}</a>
-                </div>
-            </div>
         )}
 
         <CookieConsent t={t} />
@@ -1116,15 +1111,14 @@ const AppContent: React.FC<AppContentProps> = ({ siteShell = false, entry = 'wor
 };
 
 interface AppWrapperProps {
-  siteShell?: boolean;
   entry?: 'workspace' | 'portal';
 }
 
 // Api/Credits/Settings providers come from SiteApp (the only mount point), so the
 // workspace shares one state instance with the marketing shell instead of shadowing it.
-const AppWrapper: React.FC<AppWrapperProps> = ({ siteShell, entry }) => (
+const AppWrapper: React.FC<AppWrapperProps> = ({ entry }) => (
     <ToastProvider>
-        <AppContent siteShell={siteShell} entry={entry} />
+        <AppContent entry={entry} />
     </ToastProvider>
 );
 

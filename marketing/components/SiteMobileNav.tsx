@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
@@ -17,6 +17,16 @@ export const SiteMobileNav: React.FC = () => {
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : SITE_ROUTES.workspace;
 
   const linkClass = 'block py-3 text-sm border-b border-[var(--site-border)]';
+
+  // Close the menu on Escape, matching the app's modal behavior.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
   return (
     <div className="lg:hidden">
@@ -37,9 +47,9 @@ export const SiteMobileNav: React.FC = () => {
       </button>
       {open && (
         <nav className="absolute left-0 right-0 top-16 border-b border-[var(--site-border)] bg-[var(--site-surface)] px-4 shadow-sm z-40">
-          <a href={workflowHref} className={linkClass} onClick={() => setOpen(false)}>
+          <Link to={workflowHref} className={linkClass} onClick={() => setOpen(false)}>
             {isEmployerSurface ? t('site_nav_hiring_workflow') : t('site_nav_how_it_works')}
-          </a>
+          </Link>
           {!isEmployerSurface && (
             <Link to={SITE_ROUTES.sampleReport} className={linkClass} onClick={() => setOpen(false)}>
               {t('site_nav_sample_report')}
@@ -50,16 +60,9 @@ export const SiteMobileNav: React.FC = () => {
               {t('site_cta_post_job')}
             </Link>
           )}
-          {/* Pricing is surface-aware: business plans live on the business page. */}
-          {isEmployerSurface ? (
-            <a href={`${SITE_ROUTES.employers}#pricing`} className={linkClass} onClick={() => setOpen(false)}>
-              {t('site_nav_pricing')}
-            </a>
-          ) : (
-            <Link to={SITE_ROUTES.pricing} className={linkClass} onClick={() => setOpen(false)}>
-              {t('site_nav_pricing')}
-            </Link>
-          )}
+          <Link to={SITE_ROUTES.pricing} className={linkClass} onClick={() => setOpen(false)}>
+            {t('site_nav_pricing')}
+          </Link>
           {/* ONE audience switch per surface (no self-referential "Business"
               item while already on the business surface). */}
           {isEmployerSurface ? (

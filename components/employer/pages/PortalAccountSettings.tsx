@@ -22,7 +22,7 @@ export function PortalAccountSettings({
 }: PortalAccountSettingsProps) {
   return (
     <>
-      <PortalTopBar title="Account Settings" darkMode={darkMode} />
+      <PortalTopBar title={t('portal_nav_account')} darkMode={darkMode} />
       <div className="max-w-[1088px] mx-auto p-8">
         <Account
           key={session.user.id}

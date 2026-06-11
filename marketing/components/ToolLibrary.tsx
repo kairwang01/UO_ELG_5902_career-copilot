@@ -105,9 +105,9 @@ export const ToolLibrary: React.FC<ToolLibraryProps> = ({ t }) => (
     <div className="max-w-6xl mx-auto px-4 sm:px-6">
       <div className="max-w-3xl mb-8">
         <p className="text-sm font-medium text-[var(--site-action)] mb-3">{t('site_tool_library_label')}</p>
-        <h2 className="text-xl sm:text-2xl font-semibold">An All-in-One Career Toolkit</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold">{t('site_tool_library_title')}</h2>
         <p className="mt-3 text-[var(--site-text-muted)]">
-          From resume analysis to interview practice, our AI-powered tools guide you at every step.
+          {t('site_tool_library_desc')}
         </p>
       </div>
 

@@ -190,7 +190,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('tool_email_crafter_scenario_label')}</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {Object.entries(EMAIL_SCENARIOS).map(([key, value]) => (
                 <button type="button" key={key} onClick={() => setEmailScenario(value)} className={`p-3 border-2 rounded-lg text-left transition-all text-sm ${emailScenario === value ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-gray-300'}`}>
                   {t(`tool_email_crafter_scenario_${key.toLowerCase().replace(' ', '_')}`)}
