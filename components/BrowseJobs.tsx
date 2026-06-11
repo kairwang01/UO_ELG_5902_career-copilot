@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Briefcase,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Clock3,
   MapPin,
+  MessageSquare,
   Search,
   SlidersHorizontal,
   Star,
@@ -345,11 +348,16 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             const employerReviews = eid ? (reviewCache[eid] ?? null) : null;
             const showRatingChip = employerReviews && employerReviews.count > 0;
             const reviewsOpen = eid ? (reviewsExpanded[eid] ?? false) : false;
+            const applicationStages = [
+              { label: t('browse_jobs_status_viewed'), active: true, icon: Clock3 },
+              { label: t('browse_jobs_status_applied'), active: isApplied, icon: CheckCircle2 },
+              { label: t('browse_jobs_status_interview'), active: false, icon: MessageSquare },
+            ];
 
             return (
               <article
                 key={job.id}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm transition hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800/60"
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm transition duration-200 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800/60"
               >
                 {/* card header — always visible */}
                 <button
@@ -394,6 +402,10 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                         <span className="text-xs text-slate-400 dark:text-slate-500">
                           {postedLabel(job.created_at, t)}
                         </span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-300">
+                          <Clock3 className="h-3 w-3" />
+                          {t('browse_jobs_status_active')}
+                        </span>
                       </div>
                     </div>
                     {/* Salary sits top-right next to the chevron — the first thing a
@@ -417,23 +429,64 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                       {job.description}
                     </p>
                   )}
+                  {!isExpanded && (
+                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-400">
+                      {t('browse_jobs_view_details')}
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </span>
+                  )}
                 </button>
 
                 {/* expanded content */}
                 {isExpanded && (
                   <div id={detailsId} className="animate-panel-expand border-t border-slate-100 dark:border-slate-700 px-5 pb-5 pt-4">
+                    <div className="mb-4 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/50 sm:grid-cols-3">
+                      {applicationStages.map((stage, index) => {
+                        const Icon = stage.icon;
+                        return (
+                          <div
+                            key={stage.label}
+                            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold ${
+                              stage.active
+                                ? 'text-blue-800 dark:text-blue-200'
+                                : 'text-slate-500 dark:text-slate-500'
+                            }`}
+                          >
+                            <span className={`flex h-6 w-6 items-center justify-center rounded-full ${
+                              stage.active
+                                ? 'bg-blue-700 text-white dark:bg-blue-500'
+                                : 'bg-white text-slate-400 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700'
+                            }`}>
+                              <Icon className="h-3.5 w-3.5" />
+                            </span>
+                            <span>{stage.label}</span>
+                            {index < applicationStages.length - 1 && (
+                              <ChevronRight className="ml-auto hidden h-3.5 w-3.5 text-slate-300 dark:text-slate-600 sm:block" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                     {job.description && (
                       <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line">
                         {job.description}
                       </p>
                     )}
-                    <div className="mt-4 flex items-center gap-3">
+                    <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/70 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {isApplied ? t('browse_jobs_application_recorded') : t('browse_jobs_direct_apply_title')}
+                        </p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                          {isApplied ? t('browse_jobs_track_in_applications') : t('browse_jobs_direct_apply_hint')}
+                        </p>
+                      </div>
                       <button
                         type="button"
                         disabled={isApplied || isApplying}
                         onClick={() => handleApply(job.id)}
                         aria-busy={isApplying}
-                        className={`inline-flex min-h-[38px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                        className={`inline-flex min-h-[38px] shrink-0 items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition ${
                           isApplied
                             ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 cursor-default'
                             : isApplying

@@ -406,9 +406,10 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                     candidate={candidateToUnlock}
                     canUnlock={canUnlock}
                     onClose={() => setCandidateToUnlock(null)}
-                    onUnlocked={(c) => {
+                    onUnlocked={() => {
+                        const unlockedCandidate = candidateToUnlock;
                         setCandidateToUnlock(null);
-                        setCandidateToEngage(c);
+                        if (unlockedCandidate) setCandidateToEngage(unlockedCandidate);
                     }}
                     navigateToBusinessPricing={navigateToBusinessPricing}
                     t={t}

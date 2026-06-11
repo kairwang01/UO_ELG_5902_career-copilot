@@ -46,6 +46,7 @@ import {
   adminWhoAmI,
   SUBSCRIPTION_PLANS,
   type AdminDashboard,
+  type AdminQuotas,
   type AdminRow,
   type AdminUserRow,
   type AuditLogEntry,
@@ -133,7 +134,7 @@ const AdminPortal: React.FC = () => {
   // per-tab data
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [llm, setLlm] = useState<Record<string, string>>({});
-  const [quotas, setQuotas] = useState<Record<string, number | boolean>>({});
+  const [quotas, setQuotas] = useState<AdminQuotas>({});
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [userCursor, setUserCursor] = useState<string | null>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
@@ -410,8 +411,10 @@ const AdminPortal: React.FC = () => {
         per_user_daily_credit_limit: Number(quotas.per_user_daily_credit_limit ?? 0),
         enabled: quotas.enabled !== false,
         free_max_output_tokens: fmot,
+        mi_min_tier: quotas.mi_min_tier === 'free' ? 'free' : 'paid',
+        mi_report_unlock_credits: Number(quotas.mi_report_unlock_credits ?? 500),
       });
-      setQuotas(updated as Record<string, number | boolean>);
+      setQuotas(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -2307,7 +2310,7 @@ const AdminPortal: React.FC = () => {
                                                       {v.status === 'published' && (
                                                         <span className="text-[10px] text-emerald-600 font-medium">active</span>
                                                       )}
-                                                      {(v.status === 'published' || v.status === 'rolled_back') && v.status !== 'draft' && (
+                                                      {(v.status === 'published' || v.status === 'rolled_back') && (
                                                         <button
                                                           type="button"
                                                           disabled={promptSaving || v.status === 'rolled_back'}

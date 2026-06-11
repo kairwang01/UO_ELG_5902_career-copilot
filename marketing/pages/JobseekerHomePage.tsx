@@ -46,16 +46,15 @@ export const JobseekerHomePage: React.FC = () => {
           }}
         />
         <div className="pointer-events-none absolute inset-0 opacity-75">
-          <div className="absolute left-1/2 top-0 h-64 w-[48rem] -translate-x-1/2 rounded-full bg-blue-100/60 blur-3xl" />
           <div className="absolute inset-y-0 right-0 w-2/3 bg-[linear-gradient(270deg,rgba(248,250,252,0.18)_0%,rgba(255,255,255,0.5)_58%,rgba(255,255,255,0)_100%)]" />
           <div className="absolute inset-x-0 bottom-0 h-px bg-[var(--site-border)]" />
         </div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[0.92fr_1.08fr] gap-10 lg:gap-16 items-center">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[minmax(0,0.95fr)_minmax(480px,1.05fr)] gap-10 lg:gap-16 items-center">
           <div className="min-w-0">
             <p className="inline-flex rounded-full border border-white/70 bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--site-text-muted)] shadow-sm backdrop-blur">
               Career tools with real output
             </p>
-            <h1 className="mt-5 max-w-3xl text-[clamp(2.35rem,6vw,4.75rem)] font-bold leading-[0.98] tracking-[-0.055em] text-[var(--site-text)]">
+            <h1 className="mt-5 max-w-2xl text-[clamp(2.25rem,3.9vw,3.35rem)] font-bold leading-[1.07] tracking-normal text-[var(--site-text)]">
               {t('site_js_hero_title')}
             </h1>
             <p className="mt-6 max-w-2xl text-base sm:text-lg leading-8 text-[var(--site-text-muted)]">

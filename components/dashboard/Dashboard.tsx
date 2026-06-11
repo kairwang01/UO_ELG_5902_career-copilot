@@ -14,8 +14,8 @@ import {
   AlertTriangle,
   ArrowRight,
   Briefcase,
-  CalendarCheck,
   CheckCircle2,
+  ClipboardList,
   FileText,
   ListChecks,
   MessageSquare,
@@ -30,7 +30,7 @@ import type { AppSession as Session } from '../../lib/data';
 import { generateWeeklySummary } from '../../services/aiClient';
 import { useSettings } from '../../contexts/SettingsContext';
 
-type DashboardDestination = 'resume' | 'jobs' | 'interview' | 'plan';
+type DashboardDestination = 'resume' | 'jobs' | 'applications' | 'interview' | 'plan';
 
 interface DashboardProps {
   session: Session | null;
@@ -331,24 +331,24 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       tone: hasResume ? 'ready' : 'gap',
     },
     {
-      label: 'Job matching',
+      label: 'Interested roles',
       helper: hasResume ? 'Review fit reasons' : 'Needs resume',
       icon: Briefcase,
       view: 'jobs' as const,
       tone: hasResume ? 'ready' : 'gap',
     },
     {
+      label: 'Applied pipeline',
+      helper: 'Track status changes',
+      icon: ClipboardList,
+      view: 'applications' as const,
+      tone: hasResume ? 'neutral' : 'gap',
+    },
+    {
       label: 'Interview practice',
       helper: hasResume ? 'Prepare STAR answers' : 'Tailored later',
       icon: MessageSquare,
       view: 'interview' as const,
-      tone: hasResume ? 'neutral' : 'gap',
-    },
-    {
-      label: 'Weekly plan',
-      helper: 'Keep momentum visible',
-      icon: CalendarCheck,
-      view: 'plan' as const,
       tone: 'neutral',
     },
   ];
@@ -363,7 +363,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
               Welcome back, {firstName}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              Keep the search moving through a simple loop: fix the resume evidence, compare fit, practice the likely interview, then update the plan.
+              Keep the search moving through a simple loop: fix the resume evidence, review interested roles, apply with context, then track interviews and next actions.
             </p>
           </div>
           <button

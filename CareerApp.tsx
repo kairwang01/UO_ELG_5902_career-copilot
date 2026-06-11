@@ -16,6 +16,7 @@ import { ToastProvider, useToast } from './components/Toast';
 import { useCredits } from './contexts/CreditsContext';
 import { useApiStatus } from './contexts/ApiStatusContext';
 import { useSettings } from './contexts/SettingsContext';
+import { useModalBehavior } from './hooks/useModalBehavior';
 import ApiStatusBanner from './components/ApiStatusBanner';
 import CreditModal from './components/modals/CreditModal';
 import { INITIAL_USER_CREDITS, TOOL_CREDIT_COSTS } from './config/credits';
@@ -143,6 +144,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const isCandidate = profile?.role === 'candidate';
   const isEmployer = profile?.role === 'employer';
   const isKnownWorkspaceRole = isCandidate || isEmployer || profile?.role === 'agency';
+  const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
+  useModalBehavior(closeMobileNav, isMobileNavOpen);
 
   useEffect(() => {
     setApiStatusUpdater((status, errorMsg) => {
@@ -505,12 +508,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   }, [session?.user?.id, setCredits]);
 
   useEffect(() => {
-    if (session && isProfileLoaded && isCandidate) {
-        setIsUpdatingResume(!resumeText);
-    } else if (session && isProfileLoaded && !isCandidate) {
+    if (!session || (session && isProfileLoaded && !isCandidate)) {
         setIsUpdatingResume(false);
     }
-  }, [session, isProfileLoaded, resumeText, isCandidate]);
+  }, [session, isProfileLoaded, isCandidate]);
 
   useEffect(() => {
     const roleKey = `${session?.user?.id ?? 'signed-out'}:${profile?.role ?? 'no-role'}`;
@@ -986,7 +987,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               onClick={() => setIsMobileNavOpen(false)}
               aria-hidden="true"
             />
-            <div className="absolute inset-y-0 left-0">
+            <div className="absolute inset-y-0 left-0 animate-slide-in-left">
               <Sidebar {...sidebarProps} mobile />
             </div>
           </div>
@@ -1021,7 +1022,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           </header>
           <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10">
             <div className="max-w-6xl mx-auto">
-              {(isUpdatingResume || !resumeText) && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
+              {isUpdatingResume && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                 <div className="mt-4 animate-slide-in-up">
                   <div className="text-center mb-10">
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Resume Laboratory</h2>
@@ -1122,7 +1123,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
         <CookieConsent t={t} />
 
-        {isAIMode && <button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white w-16 h-16 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 z-40 flex items-center justify-center" aria-label="Open AI Career Coach"><svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></button>}
+        {isAIMode && <button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white w-16 h-16 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 z-40 flex items-center justify-center" aria-label="Open career coach"><svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></button>}
         {isAIMode && isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} />}
       </div>
   );

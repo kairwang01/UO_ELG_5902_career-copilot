@@ -172,8 +172,8 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                             </svg>
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">AI Career Coach</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Powered by Gemini</p>
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Career Coach</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Resume, interview, and planning support</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Close modal">

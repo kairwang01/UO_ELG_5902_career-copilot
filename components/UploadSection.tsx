@@ -5,7 +5,6 @@ import { SUPPORTED_MARKETS } from '../config';
 import { extractTextFromUrl } from '../services/aiClient';
 import { parseFile } from '../services/fileHelpers';
 import ResumePreview from './ResumePreview';
-import { useSettings } from '../contexts/SettingsContext';
 
 interface UploadSectionProps {
   resumeText: string;
@@ -62,7 +61,12 @@ const UploadSection: React.FC<UploadSectionProps> = ({
   const [isParsing, setIsParsing] = useState(false);
   const [isUrlProcessing, setIsUrlProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { isAIMode } = useSettings();
+
+  const formatMessage = (key: string, values: Record<string, string | number>) =>
+    Object.entries(values).reduce(
+      (message, [token, value]) => message.split(`{${token}}`).join(String(value)),
+      t(key),
+    );
 
   const clearInputs = () => {
     setResumeText('');
@@ -77,12 +81,8 @@ const UploadSection: React.FC<UploadSectionProps> = ({
   };
 
   const handleUrlImport = async () => {
-    if (!isAIMode) {
-        setError("Importing from URL requires AI Mode to be enabled.");
-        return;
-    }
     if (!urlInput.trim()) {
-        setError("Please enter a URL.");
+        setError(t('upload_url_required'));
         return;
     }
 
@@ -90,7 +90,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
     setResumeText('');
     setResumeImages(null);
     setError(null);
-    setInfoMessage("Importing from URL... The AI is reading the page, this may take a moment.");
+    setInfoMessage(t('upload_url_importing'));
 
     try {
         const { extractedText } = await extractTextFromUrl(urlInput);
@@ -98,15 +98,15 @@ const UploadSection: React.FC<UploadSectionProps> = ({
         if (extractedText && extractedText.trim().length > 300) {
             setResumeText(extractedText);
             setActiveTab('paste');
-            setInfoMessage("Import successful! Please review the extracted text below.");
+            setInfoMessage(t('upload_url_import_success'));
         } else {
-            setError("We couldn't extract enough content from that URL. Please try pasting the text manually.");
+            setError(t('upload_url_import_insufficient'));
             setInfoMessage(null);
         }
     } catch (err) {
         // Some sites (e.g. LinkedIn) block automated import — always leave the user a way forward.
-        const detail = err instanceof Error ? err.message : 'An unknown error occurred while processing the URL.';
-        setError(`${detail} If the page can't be imported, please paste your resume text manually instead.`);
+        const detail = err instanceof Error ? err.message : t('upload_url_unknown_error');
+        setError(`${detail} ${t('upload_url_import_error_suffix')}`);
         setInfoMessage(null);
     } finally {
         setIsUrlProcessing(false);
@@ -120,7 +120,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
 
     clearInputs();
     setIsParsing(true);
-    setInfoMessage(`Processing ${file.name}...`);
+    setInfoMessage(formatMessage('upload_file_processing', { fileName: file.name }));
 
     try {
         const result = await parseFile(file);
@@ -128,17 +128,17 @@ const UploadSection: React.FC<UploadSectionProps> = ({
         if (result.images && result.images.length > 0) {
             setResumeImages(result.images);
             setActiveTab('upload');
-            setInfoMessage(`Successfully converted ${result.images.length} page(s) from ${file.name}. Your resume will be analyzed as images.`);
+            setInfoMessage(formatMessage('upload_file_images_success', { count: result.images.length, fileName: file.name }));
         } else if (result.text) {
             setResumeText(result.text);
             setActiveTab('paste');
-            setInfoMessage(`Successfully extracted text from ${file.name}. Please review below.`);
+            setInfoMessage(formatMessage('upload_file_text_success', { fileName: file.name }));
         } else {
-            throw new Error("No content extracted.");
+            throw new Error(t('upload_file_no_content'));
         }
     } catch (parseError) {
         console.error("File parsing error:", parseError);
-        setError(parseError instanceof Error ? parseError.message : "Failed to parse file.");
+        setError(parseError instanceof Error ? parseError.message : t('upload_file_parse_failed'));
         setInfoMessage(null);
     } finally {
         setIsParsing(false);
@@ -209,18 +209,18 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                       htmlFor="resume-text"
                       className="block text-sm font-medium text-[var(--site-text)] mb-2"
                     >
-                        Edit Your Resume Text
+                        {t('upload_resume_text_label')}
                     </label>
                     <textarea
                         id="resume-text"
                         className="w-full h-[260px] sm:h-[380px] bg-[var(--site-surface)] border border-[var(--site-border)] text-[var(--site-text)] text-base rounded-[var(--site-radius)] focus:ring-2 focus:ring-[var(--site-action)]/40 focus:border-[var(--site-action)] block p-4 transition placeholder:text-[var(--site-text-muted)] disabled:bg-[var(--site-surface-muted)] disabled:cursor-not-allowed"
-                        placeholder="Paste your resume text here..."
+                        placeholder={t('upload_resume_text_placeholder')}
                         value={resumeText}
                         onChange={handleTextChange}
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Formatted Preview</label>
+                    <label className="block text-sm font-medium text-[var(--site-text)] mb-2">{t('upload_preview_label')}</label>
                     <ResumePreview resumeText={resumeText} market={market} t={t} />
                 </div>
             </div>
@@ -237,8 +237,12 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                     />
                     {resumeImages && resumeImages.length > 0 ? (
                          <div className="text-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl">
-                            <p className="text-green-700 dark:text-green-400 font-semibold">{resumeImages.length > 1 ? `${resumeImages.length} pages ready!` : 'Image ready!'}</p>
-                            <button type="button" onClick={() => fileInputRef.current?.click()} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">Change file</button>
+                            <p className="text-green-700 dark:text-green-400 font-semibold">
+                              {resumeImages.length > 1
+                                ? formatMessage('upload_image_ready_pages', { count: resumeImages.length })
+                                : t('upload_image_ready_single')}
+                            </p>
+                            <button type="button" onClick={() => fileInputRef.current?.click()} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('upload_change_file')}</button>
                          </div>
                     ) : (
                         <button
@@ -248,7 +252,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                           aria-busy={isParsing}
                           className="w-full rounded-xl border-2 border-dashed border-gray-300 p-8 text-center transition-colors hover:border-blue-500 disabled:cursor-wait disabled:opacity-60 dark:border-gray-600"
                         >
-                           <p className="mt-2 font-semibold">{isParsing ? "Processing..." : "Click to upload a file"}</p>
+                           <p className="mt-2 font-semibold">{isParsing ? t('upload_processing') : t('upload_click_upload')}</p>
                         </button>
                     )}
                 </div>
@@ -258,7 +262,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                     <input
                         type="url"
                         className="w-full bg-white dark:bg-slate-900 border-2 border-gray-200 dark:border-slate-600 rounded-xl p-4"
-                        placeholder="https://www.linkedin.com/in/your-profile"
+                        placeholder={t('upload_url_placeholder')}
                         value={urlInput}
                         onChange={(e) => { setUrlInput(e.target.value); setError(null); }}
                         disabled={isUrlProcessing}
@@ -267,12 +271,11 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                     <button
                         type="button"
                         onClick={handleUrlImport}
-                        disabled={isUrlProcessing || !urlInput.trim() || !isAIMode}
+                        disabled={isUrlProcessing || !urlInput.trim()}
                         aria-busy={isUrlProcessing}
                         className="w-full rounded-xl bg-gray-700 px-6 py-3 font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
-                        title={!isAIMode ? "Requires AI Mode to be enabled" : ""}
                     >
-                        {isUrlProcessing ? "Importing..." : "Import from URL"}
+                        {isUrlProcessing ? t('upload_importing') : t('upload_import_url')}
                     </button>
                 </div>
             )}
@@ -290,18 +293,13 @@ const UploadSection: React.FC<UploadSectionProps> = ({
         )}
 
         <div className="text-center pt-4">
-            {!isAIMode && (
-              <p className="font-semibold mb-2 text-sm text-[var(--site-risk)]">
-                Enable AI Mode from the top menu to use Analysis features.
-              </p>
-            )}
             <button
               type="submit"
-              disabled={analysisButtonDisabled || !isAIMode}
-              aria-disabled={analysisButtonDisabled || !isAIMode}
+              disabled={analysisButtonDisabled}
+              aria-disabled={analysisButtonDisabled}
               className="w-full max-w-xs flex items-center justify-center bg-[var(--site-action)] hover:bg-[var(--site-action-hover)] disabled:cursor-not-allowed disabled:opacity-50 text-white font-semibold py-3.5 px-6 rounded-[var(--site-radius)] transition-all mx-auto"
             >
-              {isLoading ? "Analyzing..." : t('upload_button_analyze')}
+              {isLoading ? t('upload_analyzing') : t('upload_button_analyze')}
             </button>
         </div>
       </form>

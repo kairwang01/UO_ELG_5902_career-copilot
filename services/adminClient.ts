@@ -52,8 +52,10 @@ export const adminUpdateLlmConfig = (payload: {
   deepseek_base_url?: string;
 }) => call<typeof payload, Record<string, string>>('adminUpdateLlmConfig')(payload).then((r) => r.data);
 
+export type AdminQuotas = Record<string, number | boolean | string>;
+
 export const adminGetQuotas = () =>
-  call<Record<string, never>, Record<string, number | boolean>>('adminGetQuotas')({}).then((r) => r.data);
+  call<Record<string, never>, AdminQuotas>('adminGetQuotas')({}).then((r) => r.data);
 
 export const adminUpdateQuotas = (payload: {
   daily_tool_run_limit: number;
@@ -61,7 +63,9 @@ export const adminUpdateQuotas = (payload: {
   per_user_daily_credit_limit: number;
   enabled: boolean;
   free_max_output_tokens?: number;
-}) => call<typeof payload, Record<string, unknown>>('adminUpdateQuotas')(payload).then((r) => r.data);
+  mi_min_tier?: 'free' | 'paid';
+  mi_report_unlock_credits?: number;
+}) => call<typeof payload, AdminQuotas>('adminUpdateQuotas')(payload).then((r) => r.data);
 
 export const adminListUsers = (limit = 50, start_after_uid?: string) =>
   call<{ limit?: number; start_after_uid?: string }, { users: AdminUserRow[]; next_cursor: string | null }>(

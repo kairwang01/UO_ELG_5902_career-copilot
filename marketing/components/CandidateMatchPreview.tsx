@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { candidateMatches, jobRoleTitle } from '../mock/candidateMatch';
 import { ScoreBar } from './ScoreBar';
 
 interface CandidateMatchPreviewProps {
@@ -7,6 +6,23 @@ interface CandidateMatchPreviewProps {
 }
 
 type ActionState = Record<string, 'idle' | 'shortlisted' | 'messaged'>;
+
+interface RoleRequirement {
+  label: string;
+  required: boolean;
+  met: boolean;
+}
+
+interface CandidateMatch {
+  id: string;
+  name: string;
+  roleFit: number;
+  resumeEvidence: string;
+  availability: string;
+  location: string;
+  matchReasons: string[];
+  roleRequirements: RoleRequirement[];
+}
 
 const initials = (name: string) =>
   name
@@ -17,6 +33,48 @@ const initials = (name: string) =>
 
 export const CandidateMatchPreview: React.FC<CandidateMatchPreviewProps> = ({ t }) => {
   const [actions, setActions] = useState<ActionState>({});
+  const jobRoleTitle = t('site_match_demo_role_title');
+  const candidateMatches: CandidateMatch[] = [
+    {
+      id: 'c1',
+      name: 'Jordan Lee',
+      roleFit: 84,
+      resumeEvidence: t('site_match_demo_c1_evidence'),
+      availability: t('site_match_demo_c1_availability'),
+      location: t('site_match_demo_c1_location'),
+      matchReasons: [
+        t('site_match_demo_c1_reason_1'),
+        t('site_match_demo_c1_reason_2'),
+        t('site_match_demo_c1_reason_3'),
+      ],
+      roleRequirements: [
+        { label: t('site_match_demo_req_react'), required: true, met: true },
+        { label: t('site_match_demo_req_design_systems'), required: true, met: true },
+        { label: t('site_match_demo_req_accessibility'), required: true, met: true },
+        { label: t('site_match_demo_req_graphql'), required: false, met: false },
+        { label: t('site_match_demo_req_lead'), required: false, met: true },
+      ],
+    },
+    {
+      id: 'c2',
+      name: 'Samira Okonkwo',
+      roleFit: 76,
+      resumeEvidence: t('site_match_demo_c2_evidence'),
+      availability: t('site_match_demo_c2_availability'),
+      location: t('site_match_demo_c2_location'),
+      matchReasons: [
+        t('site_match_demo_c2_reason_1'),
+        t('site_match_demo_c2_reason_2'),
+      ],
+      roleRequirements: [
+        { label: t('site_match_demo_req_react'), required: true, met: false },
+        { label: t('site_match_demo_req_design_systems'), required: true, met: false },
+        { label: t('site_match_demo_req_accessibility'), required: true, met: false },
+        { label: t('site_match_demo_req_graphql'), required: false, met: true },
+        { label: t('site_match_demo_req_lead'), required: false, met: false },
+      ],
+    },
+  ];
 
   const setAction = (id: string, state: 'shortlisted' | 'messaged') => {
     setActions((prev) => ({ ...prev, [id]: state }));

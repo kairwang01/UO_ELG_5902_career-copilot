@@ -257,7 +257,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                 className="workspace-button-secondary inline-flex items-center justify-center gap-2 px-3 py-2"
                             >
                                 <FileText className="h-4 w-4" />
-                                Resume Reference
+                                {t('studio_review_resume')}
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto bg-slate-50/70 p-4 dark:bg-slate-950/40 sm:p-6 md:p-10">
@@ -380,7 +380,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
 
                             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                               <div>
-                                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{selectedToolGroup.label}</h3>
+                                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t(selectedToolGroup.label)}</h3>
                                 <p className="text-sm text-slate-600 dark:text-slate-400">{t(selectedToolGroup.helper)}</p>
                               </div>
                               <p className="text-xs font-medium text-slate-500 dark:text-slate-500">

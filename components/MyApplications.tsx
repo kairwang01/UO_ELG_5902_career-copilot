@@ -71,6 +71,10 @@ const FILTER_STATUSES: FilterStatus[] = [
   'Rejected',
 ];
 
+function filterLabel(status: FilterStatus, t: (k: string) => string): string {
+  return status === 'All' ? t('applications_filter_all') : t(STATUS_LABEL_KEYS[status]);
+}
+
 // ─── Stepper ──────────────────────────────────────────────────────────────────
 
 interface StepperProps {
@@ -312,6 +316,15 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   }, [notifOpen]);
 
   useEffect(() => {
+    if (!notifOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNotifOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [notifOpen]);
+
+  useEffect(() => {
     if (!uid) return;
     const q = query(collection(firestoreDb, 'job_applications'), where('candidate_id', '==', uid));
     const unsub = onSnapshot(
@@ -376,40 +389,47 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   };
 
   const visible = filter === 'All' ? apps : apps.filter((a) => a.status === filter);
+  const activeCount = counts.Applied + counts.Interviewing;
+  const summaryCards = [
+    { label: t('applications_summary_total'), value: counts.All, helper: t('applications_summary_total_desc') },
+    { label: t('applications_summary_active'), value: activeCount, helper: t('applications_summary_active_desc') },
+    { label: t('applications_summary_interviews'), value: counts.Interviewing, helper: t('applications_summary_interviews_desc') },
+  ];
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-            {t('applications_title')}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {t('applications_subtitle')}
-          </p>
-        </div>
+      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+              {t('applications_title')}
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              {t('applications_subtitle')}
+            </p>
+          </div>
 
-        {/* ── Notifications bell ── */}
-        <div ref={notificationMenuRef} className="relative flex-shrink-0 mt-1">
-          <button
-            onClick={() => setNotifOpen((v) => !v)}
-            className="relative p-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-700 transition-colors shadow-sm"
-            aria-label={t('notifications_bell_label')}
-            aria-haspopup="menu"
-            aria-expanded={notifOpen}
-          >
-            <Bell className="h-5 w-5" />
-            {badge > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 min-w-[1rem] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
-                {badge > 9 ? '9+' : badge}
-              </span>
-            )}
-          </button>
+          {/* ── Notifications bell ── */}
+          <div ref={notificationMenuRef} className="relative flex-shrink-0 mt-1">
+            <button
+              onClick={() => setNotifOpen((v) => !v)}
+              className="relative p-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-700 transition-colors shadow-sm"
+              aria-label={t('notifications_bell_label')}
+              aria-haspopup="menu"
+              aria-expanded={notifOpen}
+            >
+              <Bell className="h-5 w-5" />
+              {badge > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-[1rem] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                  {badge > 9 ? '9+' : badge}
+                </span>
+              )}
+            </button>
 
-          {/* Dropdown panel */}
-          {notifOpen && (
-            <div role="menu" className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-30 animate-fade-scale">
+            {/* Dropdown panel */}
+            {notifOpen && (
+              <div role="menu" className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-30 animate-fade-scale">
               {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -470,8 +490,19 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
                   ))
                 )}
               </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          {summaryCards.map((card) => (
+            <div key={card.label} className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">{card.label}</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-100">{card.value}</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{card.helper}</p>
             </div>
-          )}
+          ))}
         </div>
       </div>
 
@@ -483,13 +514,14 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
             <button
               key={s}
               onClick={() => setFilter(s)}
+              aria-pressed={isActive}
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border transition-all ${
                 isActive
                   ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
                   : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700'
               }`}
             >
-              {s === 'All' ? t('applications_filter_all') : s}
+              {filterLabel(s, t)}
               <span
                 className={`text-[10px] rounded-full px-1.5 py-0 font-bold ${
                   isActive

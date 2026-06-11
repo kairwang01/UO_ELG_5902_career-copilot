@@ -7,6 +7,7 @@ import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useToast } from '../Toast';
 import { ToolError } from './ToolUtils';
+import type { AppSession as Session } from '../../lib/data';
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -493,10 +494,11 @@ interface PortfolioWebsiteBuilderProps {
   resumeText: string;
   initialInput?: string;
   profile?: UserProfile | null;
+  session?: Session | null;
   t: (key: string) => string;
 }
 
-const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resumeText, initialInput, profile, t }) => {
+const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resumeText, initialInput, profile, session, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioWebsiteResult | null>(null);
@@ -574,7 +576,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
               fullName: profile?.full_name || 'Your Name',
               firstName: profile?.full_name?.split(' ')[0] || 'Your',
               lastName: profile?.full_name?.split(' ').slice(1).join(' ') || 'Name',
-              contactEmail: profile?.email || 'contact@example.com',
+              contactEmail: session?.user.email || 'contact@example.com',
               contactPhone: '',
               contactLocation: '',
               socials: {},
