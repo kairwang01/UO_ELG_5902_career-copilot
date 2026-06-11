@@ -2530,5 +2530,16 @@
   "tour_skip": "跳过引导",
   "tour_back": "上一步",
   "tour_next": "下一步",
-  "tour_finish": "完成"
+  "tour_finish": "完成",
+  "agency_drop_formats": "支持格式：PDF、DOCX、TXT、PNG、JPG",
+  "agency_toolbar_summary": "{pending} 份待处理，{done} 份已完成",
+  "agency_results_ready_title": "已完成候选人",
+  "agency_mobile_actions_label": "候选人操作",
+  "agency_results_processing_title": "正在处理候选人文件",
+  "agency_results_processing_desc": "请保持此页面打开；每份简历完成后会自动出现在结果区。",
+  "agency_results_empty_filter_desc": "切换筛选或继续添加简历以继续评审。",
+  "agency_results_no_attention_title": "暂无需处理文件",
+  "agency_results_no_attention_desc": "如果文件无法处理，错误和重试项会出现在这里。",
+  "agency_results_waiting_title": "队列可以运行",
+  "agency_results_waiting_desc": "运行待处理文件，生成候选人评分和客户交付材料。"
 }

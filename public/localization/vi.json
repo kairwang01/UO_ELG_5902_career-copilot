@@ -2530,5 +2530,16 @@
   "tour_skip": "Bỏ qua",
   "tour_back": "Quay lại",
   "tour_next": "Tiếp",
-  "tour_finish": "Xong"
+  "tour_finish": "Xong",
+  "agency_drop_formats": "Hỗ trợ: PDF, DOCX, TXT, PNG, JPG",
+  "agency_toolbar_summary": "{pending} đang chờ, {done} hoàn tất",
+  "agency_results_ready_title": "Ứng viên đã hoàn tất",
+  "agency_mobile_actions_label": "Thao tác ứng viên",
+  "agency_results_processing_title": "Đang xử lý hồ sơ ứng viên",
+  "agency_results_processing_desc": "Giữ tab này mở. Các dòng hoàn tất sẽ xuất hiện khi từng CV xử lý xong.",
+  "agency_results_empty_filter_desc": "Đổi bộ lọc hoặc thêm CV để tiếp tục rà soát.",
+  "agency_results_no_attention_title": "Không có tệp cần xử lý",
+  "agency_results_no_attention_desc": "Lỗi và mục cần thử lại sẽ xuất hiện ở đây khi tệp không thể xử lý.",
+  "agency_results_waiting_title": "Hàng đợi đã sẵn sàng",
+  "agency_results_waiting_desc": "Chạy các tệp đang chờ để tạo điểm ứng viên và tài liệu bàn giao khách hàng."
 }

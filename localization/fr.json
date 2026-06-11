@@ -2530,5 +2530,16 @@
   "tour_skip": "Passer la visite",
   "tour_back": "Retour",
   "tour_next": "Suivant",
-  "tour_finish": "Terminé"
+  "tour_finish": "Terminé",
+  "agency_drop_formats": "Formats pris en charge : PDF, DOCX, TXT, PNG, JPG",
+  "agency_toolbar_summary": "{pending} en attente, {done} terminés",
+  "agency_results_ready_title": "Candidats terminés",
+  "agency_mobile_actions_label": "Actions candidat",
+  "agency_results_processing_title": "Traitement des dossiers candidats",
+  "agency_results_processing_desc": "Gardez cet onglet ouvert. Les lignes terminées apparaissent dès que chaque CV est traité.",
+  "agency_results_empty_filter_desc": "Changez de filtre ou ajoutez des CV pour continuer la revue.",
+  "agency_results_no_attention_title": "Aucun fichier à vérifier",
+  "agency_results_no_attention_desc": "Les erreurs et éléments à relancer apparaîtront ici si un fichier ne peut pas être traité.",
+  "agency_results_waiting_title": "File prête à lancer",
+  "agency_results_waiting_desc": "Lancez les fichiers en attente pour créer scores candidats et livrables client."
 }

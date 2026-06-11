@@ -2530,5 +2530,16 @@
   "tour_skip": "ツアーをスキップ",
   "tour_back": "戻る",
   "tour_next": "次へ",
-  "tour_finish": "完了"
+  "tour_finish": "完了",
+  "agency_drop_formats": "対応形式: PDF、DOCX、TXT、PNG、JPG",
+  "agency_toolbar_summary": "{pending} 件待機、{done} 件完了",
+  "agency_results_ready_title": "完了した候補者",
+  "agency_mobile_actions_label": "候補者アクション",
+  "agency_results_processing_title": "候補者ファイルを処理中",
+  "agency_results_processing_desc": "このタブを開いたままにしてください。各履歴書の処理が終わると結果行が表示されます。",
+  "agency_results_empty_filter_desc": "フィルターを切り替えるか、履歴書を追加してレビューを続けてください。",
+  "agency_results_no_attention_title": "対応が必要なファイルはありません",
+  "agency_results_no_attention_desc": "処理できないファイルがある場合、エラーと再試行項目がここに表示されます。",
+  "agency_results_waiting_title": "キューを実行できます",
+  "agency_results_waiting_desc": "待機中のファイルを実行して、候補者スコアとクライアント向け資料を作成します。"
 }

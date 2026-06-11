@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type { AppSession as Session } from "../lib/data";
 import type { UserProfile, BulkAnalysisItem } from "../types";
 import {
@@ -137,32 +137,34 @@ const AgencyHeader = ({
   settingsLabel: string;
   historyLabel: string;
 }) => (
-  <div className="bg-slate-900 text-white p-6 rounded-t-2xl flex flex-col sm:flex-row justify-between items-center shadow-lg gap-4">
-    <div className="flex items-center gap-4 w-full sm:w-auto">
+  <div className="bg-slate-900 text-white p-4 sm:p-6 rounded-t-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center shadow-lg gap-4">
+    <div className="flex items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
       <div className={`${iconColor} p-3 rounded-xl shadow-lg flex-shrink-0`}>
         <BarChart3 className="h-8 w-8 text-white" />
       </div>
       <div>
-        <h2 className="text-2xl font-bold tracking-wide">{title}</h2>
-        <p className="text-slate-400 text-sm">{subtitle}</p>
+        <h2 className="text-xl font-bold tracking-wide sm:text-2xl">
+          {title}
+        </h2>
+        <p className="mt-1 text-sm leading-5 text-slate-400">{subtitle}</p>
       </div>
     </div>
-    <div className="flex gap-3 w-full sm:w-auto justify-end">
+    <div className="flex gap-3 w-full sm:w-auto sm:justify-end">
       <button
         type="button"
         onClick={onOpenSettings}
-        className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-700 text-slate-200"
+        className="flex min-h-10 flex-1 items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-700 text-slate-200 sm:flex-none"
         aria-label={settingsLabel}
       >
         <Settings className="h-5 w-5 text-blue-400" />
-        <span className="font-medium text-sm hidden sm:inline">
+        <span className="font-medium text-sm">
           {settingsLabel}
         </span>
       </button>
       <button
         type="button"
         onClick={onOpenHistory}
-        className="bg-green-600 hover:bg-green-700 p-2.5 rounded-full shadow-lg transition-colors border border-green-500"
+        className="inline-flex min-h-10 min-w-10 items-center justify-center bg-green-600 hover:bg-green-700 p-2.5 rounded-lg sm:rounded-full shadow-lg transition-colors border border-green-500"
         title={historyLabel}
         aria-label={historyLabel}
       >
@@ -288,6 +290,25 @@ const statusTone = (status: BulkAnalysisItem["status"]) => {
     return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800";
   return "bg-gray-50 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-300 dark:border-slate-700";
 };
+
+const isPendingAnalysisStatus = (status: BulkAnalysisItem["status"]) =>
+  status === "queued" || status === "error";
+
+const isProcessingStatus = (status: BulkAnalysisItem["status"]) =>
+  status === "parsing" || status === "analyzing";
+
+const getAgencyScore = (
+  file: BulkAnalysisItem,
+  mode: "general" | "matching",
+) => (mode === "matching" ? file.matchScore || 0 : file.result?.score || 0);
+
+const getAgencySummary = (
+  file: BulkAnalysisItem,
+  mode: "general" | "matching",
+) => (mode === "matching" ? file.matchSummary : file.result?.summary);
+
+const getCandidateDisplayName = (file: BulkAnalysisItem) =>
+  file.candidateName || file.fileName;
 
 const AgencyHistoryModal = ({
   files,
@@ -489,7 +510,7 @@ const AgencyWorkflowPanel: React.FC<{
             : t("agency_workflow_all_done");
 
   return (
-    <div className="border-b border-gray-100 bg-slate-50 px-6 py-4 dark:border-slate-700 dark:bg-slate-900/40">
+    <div className="border-b border-gray-100 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/40 sm:px-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-3">
           {steps.map((step) => {
@@ -851,7 +872,7 @@ const FilterTabs = ({
   counts: AgencyFilterCounts;
   t: TranslationFn;
 }) => (
-  <div className="flex flex-wrap gap-2 px-6 py-4 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+  <div className="flex gap-2 overflow-x-auto px-4 py-3 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 sm:flex-wrap sm:px-6 sm:py-4">
     {[
       { id: "all" as const, label: t("agency_filter_all"), count: counts.all },
       {
@@ -878,7 +899,7 @@ const FilterTabs = ({
         type="button"
         onClick={() => setFilter(tab.id)}
         aria-pressed={currentFilter === tab.id}
-        className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+        className={`shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
           currentFilter === tab.id
             ? "bg-slate-900 dark:bg-slate-600 text-white shadow-md"
             : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
@@ -1091,19 +1112,361 @@ const ScoreBar: React.FC<{ score: number }> = ({ score }) => {
   );
 };
 
-const TableSkeleton: React.FC = () => (
-  <div className="animate-pulse space-y-4 p-4">
-    {[1, 2, 3].map((i) => (
-      <div key={i} className="flex items-center space-x-4">
-        <div className="rounded-full bg-gray-200 dark:bg-slate-700 h-10 w-10"></div>
-        <div className="flex-1 space-y-2 py-1">
-          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/4"></div>
-          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-1/2"></div>
-        </div>
+const TableSkeleton: React.FC<{ t: TranslationFn }> = ({ t }) => (
+  <div
+    role="status"
+    aria-live="polite"
+    className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 animate-panel-expand dark:border-blue-900/50 dark:bg-blue-950/20"
+  >
+    <div className="mb-4 flex items-start gap-3">
+      <div className="rounded-lg bg-blue-600 p-2 text-white">
+        <Loader2 className="h-4 w-4 animate-spin" />
       </div>
-    ))}
+      <div>
+        <p className="text-sm font-bold text-blue-950 dark:text-blue-100">
+          {t("agency_results_processing_title")}
+        </p>
+        <p className="mt-1 text-sm text-blue-800 dark:text-blue-200">
+          {t("agency_results_processing_desc")}
+        </p>
+      </div>
+    </div>
+    <div className="animate-pulse space-y-4">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center space-x-4">
+          <div className="rounded-full bg-gray-200 dark:bg-slate-700 h-10 w-10"></div>
+          <div className="flex-1 space-y-2 py-1">
+            <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/4"></div>
+            <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-1/2"></div>
+          </div>
+        </div>
+      ))}
+    </div>
   </div>
 );
+
+const AgencyResultsEmptyState: React.FC<{
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}> = ({ title, description, actionLabel, onAction }) => (
+  <div className="animate-panel-expand rounded-xl border border-dashed border-gray-300 bg-white px-4 py-8 text-center dark:border-slate-700 dark:bg-slate-800 sm:px-6">
+    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-300">
+      <FileText className="h-5 w-5" aria-hidden="true" />
+    </div>
+    <p className="mt-3 text-sm font-bold text-gray-900 dark:text-gray-100">
+      {title}
+    </p>
+    <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-gray-500 dark:text-gray-400">
+      {description}
+    </p>
+    {actionLabel && onAction && (
+      <button
+        type="button"
+        onClick={onAction}
+        className="mt-4 inline-flex min-h-9 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+      >
+        {actionLabel}
+      </button>
+    )}
+  </div>
+);
+
+const ResultActionButton: React.FC<{
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  className: string;
+  children: React.ReactNode;
+}> = ({ label, onClick, disabled, className, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+    title={label}
+    aria-label={label}
+  >
+    {children}
+  </button>
+);
+
+const AgencyResultActions: React.FC<{
+  file: BulkAnalysisItem;
+  mode: "general" | "matching";
+  canGeneratePrep: boolean;
+  onViewAnalysis: (file: BulkAnalysisItem) => void;
+  onAnonymize: (id: string) => void;
+  onPrep: (id: string) => void;
+  onPitch: (id: string) => void;
+  onRemove: (id: string) => void;
+  t: TranslationFn;
+}> = ({
+  file,
+  mode,
+  canGeneratePrep,
+  onViewAnalysis,
+  onAnonymize,
+  onPrep,
+  onPitch,
+  onRemove,
+  t,
+}) => (
+  <div className="flex items-center justify-end gap-2">
+    {mode === "general" && (
+      <ResultActionButton
+        label={t("agency_action_view_analysis")}
+        onClick={() => onViewAnalysis(file)}
+        className="bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+      >
+        <Eye className="h-4 w-4" />
+      </ResultActionButton>
+    )}
+    <ResultActionButton
+      label={
+        file.isAnonymizing
+          ? t("agency_action_anonymizing")
+          : t("agency_action_blind_resume")
+      }
+      onClick={() => onAnonymize(file.id)}
+      disabled={file.isAnonymizing}
+      className={
+        file.blindResumeText
+          ? "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-800/40"
+          : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600"
+      }
+    >
+      {file.isAnonymizing ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <FileText className="h-4 w-4" />
+      )}
+    </ResultActionButton>
+    {mode === "matching" && (
+      <ResultActionButton
+        label={
+          file.isPrepping
+            ? t("agency_action_generating_prep")
+            : t("agency_action_prep_kit")
+        }
+        onClick={() => onPrep(file.id)}
+        disabled={file.isPrepping || (!file.prepKit && !canGeneratePrep)}
+        className={
+          file.prepKit
+            ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-800/40"
+            : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600"
+        }
+      >
+        {file.isPrepping ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <BookOpen className="h-4 w-4" />
+        )}
+      </ResultActionButton>
+    )}
+    <ResultActionButton
+      label={
+        file.isPitching
+          ? t("agency_action_generating_pitch")
+          : t("agency_action_generate_pitch")
+      }
+      onClick={() => onPitch(file.id)}
+      disabled={file.isPitching}
+      className={
+        file.pitchEmail
+          ? "bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-800/40"
+          : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600"
+      }
+    >
+      {file.isPitching ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Mail className="h-4 w-4" />
+      )}
+    </ResultActionButton>
+    <ResultActionButton
+      label={t("agency_action_remove")}
+      onClick={() => onRemove(file.id)}
+      className="text-gray-400 hover:bg-red-50 hover:text-red-500 dark:text-gray-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+    >
+      <Trash2 className="h-4 w-4" />
+    </ResultActionButton>
+  </div>
+);
+
+const CompletedResultsList: React.FC<{
+  files: BulkAnalysisItem[];
+  mode: "general" | "matching";
+  denseTable: boolean;
+  hasJobDescription: boolean;
+  onViewAnalysis: (file: BulkAnalysisItem) => void;
+  onAnonymize: (id: string) => void;
+  onPrep: (id: string) => void;
+  onPitch: (id: string) => void;
+  onRemove: (id: string) => void;
+  t: TranslationFn;
+}> = ({
+  files,
+  mode,
+  denseTable,
+  hasJobDescription,
+  onViewAnalysis,
+  onAnonymize,
+  onPrep,
+  onPitch,
+  onRemove,
+  t,
+}) => {
+  if (files.length === 0) return null;
+
+  const renderActions = (file: BulkAnalysisItem) => (
+    <AgencyResultActions
+      file={file}
+      mode={mode}
+      canGeneratePrep={hasJobDescription}
+      onViewAnalysis={onViewAnalysis}
+      onAnonymize={onAnonymize}
+      onPrep={onPrep}
+      onPitch={onPitch}
+      onRemove={onRemove}
+      t={t}
+    />
+  );
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg animate-fade-in dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex flex-col gap-1 border-b border-gray-100 bg-gray-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-700/40 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+          {t("agency_results_ready_title")}
+        </p>
+        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          {formatTranslation(t("agency_workflow_completed_count"), {
+            count: files.length,
+          })}
+        </p>
+      </div>
+
+      <div className="space-y-3 p-3 md:hidden">
+        {files.map((file, index) => {
+          const score = getAgencyScore(file, mode);
+          const summary = getAgencySummary(file, mode);
+          const name = getCandidateDisplayName(file);
+
+          return (
+            <article
+              key={file.id}
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-blue-50 text-xs font-bold text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-gray-900 dark:text-gray-100">
+                      {name}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                      {file.fileName}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-24 shrink-0">
+                  <ScoreBar score={score} />
+                </div>
+              </div>
+              <p className="mt-3 line-clamp-3 text-sm leading-6 text-gray-600 dark:text-gray-300">
+                {summary || t("agency_analysis_pending")}
+              </p>
+              <div className="mt-4 flex flex-col gap-2 border-t border-gray-100 pt-3 dark:border-slate-700">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  {t("agency_mobile_actions_label")}
+                </p>
+                {renderActions(file)}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[720px] text-left">
+          <thead className="bg-gray-50 text-xs font-semibold uppercase text-gray-700 dark:bg-slate-700/50 dark:text-gray-200">
+            <tr>
+              <th className="px-6 py-4">{t("agency_table_rank")}</th>
+              <th className="px-6 py-4">{t("agency_table_candidate")}</th>
+              <th className="w-32 px-6 py-4">{t("agency_table_score")}</th>
+              <th className="px-6 py-4">{t("agency_table_summary")}</th>
+              <th className="px-6 py-4 text-right">
+                {t("agency_table_actions")}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+            {files.map((file, index) => {
+              const score = getAgencyScore(file, mode);
+              const summary = getAgencySummary(file, mode);
+              const name = getCandidateDisplayName(file);
+
+              return (
+                <tr
+                  key={file.id}
+                  className="transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50"
+                >
+                  <td
+                    className={`w-16 whitespace-nowrap px-6 text-center font-medium ${denseTable ? "py-3" : "py-4"}`}
+                  >
+                    <span
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold ${
+                        index < 3
+                          ? "border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                          : "border-gray-100 bg-gray-50 text-gray-500 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-400"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                  </td>
+                  <td className={`px-6 ${denseTable ? "py-3" : "py-4"}`}>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <CandidateAvatar name={name} />
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-gray-900 dark:text-gray-100">
+                          {name}
+                        </p>
+                        <p className="max-w-[180px] truncate text-xs text-gray-500 dark:text-gray-400">
+                          {file.fileName}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td
+                    className={`align-middle px-6 ${denseTable ? "py-3" : "py-4"}`}
+                  >
+                    <ScoreBar score={score} />
+                  </td>
+                  <td className={`px-6 ${denseTable ? "py-3" : "py-4"}`}>
+                    <p
+                      className="line-clamp-2 text-sm text-gray-600 dark:text-gray-300"
+                      title={summary}
+                    >
+                      {summary || t("agency_analysis_pending")}
+                    </p>
+                  </td>
+                  <td
+                    className={`px-6 text-right ${denseTable ? "py-3" : "py-4"}`}
+                  >
+                    {renderActions(file)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 const BatchInsights: React.FC<{
   files: BulkAnalysisItem[];
@@ -1113,17 +1476,16 @@ const BatchInsights: React.FC<{
   const completed = files.filter((f) => f.status === "complete");
   if (completed.length === 0) return null;
 
-  const getScore = (f: BulkAnalysisItem) =>
-    mode === "matching" ? f.matchScore || 0 : f.result?.score || 0;
-
   const avgScore = Math.round(
-    completed.reduce((acc, curr) => acc + getScore(curr), 0) / completed.length,
+    completed.reduce((acc, curr) => acc + getAgencyScore(curr, mode), 0) /
+      completed.length,
   );
-  const highMatches = completed.filter((f) => getScore(f) >= 80).length;
+  const highMatches = completed.filter(
+    (f) => getAgencyScore(f, mode) >= 80,
+  ).length;
 
-  // Sort to find top candidate
   const topCandidate = [...completed].sort(
-    (a, b) => getScore(b) - getScore(a),
+    (a, b) => getAgencyScore(b, mode) - getAgencyScore(a, mode),
   )[0];
   const topName =
     mode === "matching"
@@ -1181,7 +1543,7 @@ const BatchInsights: React.FC<{
           </p>
           <p className="text-sm text-blue-100">
             {formatTranslation(t("agency_insights_points"), {
-              score: getScore(topCandidate),
+              score: getAgencyScore(topCandidate, mode),
             })}
           </p>
         </div>
@@ -1602,7 +1964,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     }
 
     const queue = files.filter(
-      (f) => f.status === "queued" || f.status === "error",
+      (f) => isPendingAnalysisStatus(f.status),
     ) as QueuedBulkAnalysisItem[];
 
     if (queue.length === 0) {
@@ -1775,7 +2137,11 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
 
   const handleGeneratePrepKit = async (id: string) => {
     const file = files.find((f) => f.id === id);
-    if (!file || !file.text || !jobDescription) return;
+    if (!file || !file.text) return;
+    if (!jobDescription.trim()) {
+      addToast(t("agency_jd_required"), "error");
+      return;
+    }
 
     setFiles((prev) =>
       prev.map((f) => (f.id === id ? { ...f, isPrepping: true } : f)),
@@ -1803,28 +2169,79 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
 
   const removeFile = (id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
+    if (viewPitchId === id) setViewPitchId(null);
+    if (viewPrepKitId === id) setViewPrepKitId(null);
+    if (viewBlindResumeId === id) setViewBlindResumeId(null);
+    if (showDetailModal?.id === id) setShowDetailModal(null);
   };
 
-  // Helper to extract score regardless of mode
-  const getScore = (f: BulkAnalysisItem) =>
-    mode === "matching" ? f.matchScore || 0 : f.result?.score || 0;
+  const handleBlindResumeAction = (id: string) => {
+    const file = files.find((f) => f.id === id);
+    if (!file) return;
+    if (file.blindResumeText) {
+      setViewBlindResumeId(id);
+      return;
+    }
+    void handleAnonymize(id);
+  };
 
-  // Unified sorting logic for both modes
-  const sortedFiles = [...files].sort((a, b) => getScore(b) - getScore(a));
+  const handlePrepKitAction = (id: string) => {
+    const file = files.find((f) => f.id === id);
+    if (!file) return;
+    if (file.prepKit) {
+      setViewPrepKitId(id);
+      return;
+    }
+    void handleGeneratePrepKit(id);
+  };
 
-  // Filtered + sorted display list
-  const displayFiles = sortedFiles.filter(
-    (f) => currentFilter === "all" || f.status === currentFilter,
+  const handlePitchAction = (id: string) => {
+    const file = files.find((f) => f.id === id);
+    if (!file) return;
+    if (file.pitchEmail) {
+      setViewPitchId(id);
+      return;
+    }
+    void handleGeneratePitch(id);
+  };
+
+  const sortedFiles = useMemo(
+    () =>
+      [...files].sort(
+        (a, b) => getAgencyScore(b, mode) - getAgencyScore(a, mode),
+      ),
+    [files, mode],
   );
 
-  const counts: AgencyFilterCounts = {
-    all: files.length,
-    complete: files.filter((f) => f.status === "complete").length,
-    analyzing: files.filter(
-      (f) => f.status === "analyzing" || f.status === "parsing",
-    ).length,
-    error: files.filter((f) => f.status === "error").length,
-  };
+  const displayFiles = useMemo(
+    () =>
+      sortedFiles.filter(
+        (f) =>
+          currentFilter === "all" ||
+          f.status === currentFilter ||
+          (currentFilter === "analyzing" && isProcessingStatus(f.status)),
+      ),
+    [currentFilter, sortedFiles],
+  );
+
+  const completedDisplayFiles = useMemo(
+    () => displayFiles.filter((f) => f.status === "complete"),
+    [displayFiles],
+  );
+  const errorDisplayFiles = useMemo(
+    () => displayFiles.filter((f) => f.status === "error"),
+    [displayFiles],
+  );
+
+  const counts: AgencyFilterCounts = useMemo(
+    () => ({
+      all: files.length,
+      complete: files.filter((f) => f.status === "complete").length,
+      analyzing: files.filter((f) => isProcessingStatus(f.status)).length,
+      error: files.filter((f) => f.status === "error").length,
+    }),
+    [files],
+  );
 
   const activePitchFile = viewPitchId
     ? files.find((f) => f.id === viewPitchId)
@@ -1840,7 +2257,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     : null;
   const hasJobDescription = jobDescription.trim().length > 0;
   const pendingAnalysisCount = files.filter(
-    (file) => file.status === "queued" || file.status === "error",
+    (file) => isPendingAnalysisStatus(file.status),
   ).length;
   const completedCount = counts.complete;
   const errorCount = counts.error;
@@ -1884,7 +2301,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         };
 
   return (
-    <div className="space-y-8 animate-fade-in pb-12">
+    <div className="space-y-6 animate-fade-in pb-12 sm:space-y-8">
       {activePitchFile && (
         <PitchModal
           file={activePitchFile}
@@ -1930,21 +2347,21 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         />
       )}
 
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
+      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="max-w-3xl">
+          <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100 sm:text-3xl">
             {t("portal_nav_agency_hub")}
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400 sm:text-base">
             {t("agency_page_subtitle")}
           </p>
         </div>
         {mode === "general" && (
-          <div className="flex items-center gap-3">
+          <div className="flex w-full items-center gap-3 md:w-auto">
             <select
               value={market}
               onChange={(e) => setMarket(e.target.value)}
-              className="bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 md:w-auto"
             >
               {SUPPORTED_MARKETS.map((m) => (
                 <option key={m} value={m}>
@@ -1957,14 +2374,14 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       </header>
 
       {/* Mode Switcher */}
-      <div className="flex justify-center mb-6">
-        <div className="bg-gray-100 dark:bg-slate-800/50 p-1 rounded-lg inline-flex">
+      <div className="flex justify-center">
+        <div className="grid w-full grid-cols-2 rounded-xl bg-gray-100 p-1 dark:bg-slate-800/50 sm:w-auto">
           <button
             type="button"
             onClick={() => {
               setMode("general");
             }}
-            className={`px-6 py-2 text-sm font-medium rounded-md transition-all ${
+            className={`min-h-10 rounded-lg px-4 py-2 text-sm font-semibold transition-all sm:px-6 ${
               mode === "general"
                 ? "bg-white dark:bg-slate-700 shadow text-blue-600 dark:text-blue-400"
                 : "text-gray-500 hover:text-gray-700 dark:text-gray-400"
@@ -1977,7 +2394,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             onClick={() => {
               setMode("matching");
             }}
-            className={`px-6 py-2 text-sm font-medium rounded-md transition-all ${
+            className={`min-h-10 rounded-lg px-4 py-2 text-sm font-semibold transition-all sm:px-6 ${
               mode === "matching"
                 ? "bg-white dark:bg-slate-700 shadow text-blue-600 dark:text-blue-400"
                 : "text-gray-500 hover:text-gray-700 dark:text-gray-400"
@@ -2004,7 +2421,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       />
 
       {/* Main Container */}
-      <div className="bg-gray-50 dark:bg-slate-900/50 p-2 rounded-2xl">
+      <div className="rounded-2xl bg-gray-50 p-1 dark:bg-slate-900/50 sm:p-2">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
           <AgencyHeader
             onOpenSettings={() => setShowSettingsModal(true)}
@@ -2030,10 +2447,10 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             t={t}
           />
 
-          <div className="p-6 space-y-6">
+          <div className="space-y-5 p-4 sm:space-y-6 sm:p-6">
             {/* JD Input for Matching Mode */}
             {mode === "matching" && (
-              <div ref={jdPanelRef} className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-6 animate-fade-in scroll-mt-6">
+              <div ref={jdPanelRef} className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-4 animate-fade-in scroll-mt-6 sm:p-6">
                 <label className="block text-sm font-bold text-blue-900 dark:text-blue-100 mb-3">
                   {t("agency_jd_step_label")}
                 </label>
@@ -2082,7 +2499,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                       setJobDescription(e.target.value);
                     }}
                     placeholder={t("agency_jd_paste_placeholder")}
-                    className="w-full h-32 bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
+                    className="min-h-32 w-full resize-y rounded-lg border border-blue-300 bg-white p-3 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500"
                   />
                 )}
 
@@ -2093,13 +2510,13 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                       value={jdUrl}
                       onChange={(e) => setJdUrl(e.target.value)}
                       placeholder="https://company.com/careers/job-123"
-                      className="flex-1 bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
+                      className="min-h-11 flex-1 rounded-lg border border-blue-300 bg-white p-3 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500"
                     />
                     <button
                       type="button"
                       onClick={handleJdUrlImport}
                       disabled={isExtractingJd || !jdUrl.trim()}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isExtractingJd && (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -2132,7 +2549,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     <select
                       value={selectedInternalJobId}
                       onChange={handleInternalJobSelect}
-                      className="w-full bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
+                      className="min-h-11 w-full rounded-lg border border-blue-300 bg-white p-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
                     >
                       <option value="">
                         {t("agency_select_job_placeholder")}
@@ -2231,7 +2648,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     }
                   }}
                   aria-label={t("agency_drop_title")}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors sm:p-10 ${
+                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors sm:p-10 ${
                     isDragging
                       ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
                       : "border-gray-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 bg-gray-50 dark:bg-slate-700/30"
@@ -2256,20 +2673,31 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                       ? t("agency_drop_rank_hint")
                       : t("agency_drop_browse_hint")}
                   </p>
+                  <p className="mt-2 text-xs font-medium text-gray-400 dark:text-gray-500">
+                    {t("agency_drop_formats")}
+                  </p>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 {/* Actions Toolbar */}
-                <div className="flex flex-col gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200 dark:border-slate-600 dark:bg-slate-700/50 sm:flex-row sm:items-center sm:justify-between">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    <Plus className="h-4 w-4" />
-                    {t("agency_add_more")}
-                  </button>
+                <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-600 dark:bg-slate-700/50 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+                    >
+                      <Plus className="h-4 w-4" />
+                      {t("agency_add_more")}
+                    </button>
+                    <p className="mt-1 px-2 text-xs text-gray-500 dark:text-gray-400">
+                      {formatTranslation(t("agency_toolbar_summary"), {
+                        pending: pendingAnalysisCount,
+                        done: completedCount,
+                      })}
+                    </p>
+                  </div>
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -2283,7 +2711,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     <button
                       type="button"
                       onClick={() => setFiles([])}
-                      className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                      className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       disabled={isAnalyzing}
                     >
                       {t("agency_clear_all")}
@@ -2292,7 +2720,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                       type="button"
                       onClick={runBulkAnalysis}
                       disabled={!canRunAnalysis}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900/50"
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900/50"
                     >
                       {isAnalyzing && (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2316,310 +2744,110 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                   t={t}
                 />
                 {currentFilter === "complete" &&
-                  !files.some((file) => file.status === "complete") && (
-                    <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500 animate-fade-in dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400">
-                      {t("agency_no_completed_results")}
-                    </div>
+                  completedDisplayFiles.length === 0 && (
+                    <AgencyResultsEmptyState
+                      title={t("agency_no_completed_results")}
+                      description={
+                        isAnalyzing
+                          ? t("agency_results_processing_desc")
+                          : t("agency_results_empty_filter_desc")
+                      }
+                    />
                   )}
+                {currentFilter === "error" && errorDisplayFiles.length === 0 && (
+                  <AgencyResultsEmptyState
+                    title={t("agency_results_no_attention_title")}
+                    description={t("agency_results_no_attention_desc")}
+                  />
+                )}
 
                 {/* Batch Insights */}
                 <BatchInsights files={files} mode={mode} t={t} />
 
                 {/* Error file list — shown when filter is 'error' */}
-                {currentFilter === "error" &&
-                  displayFiles.some((f) => f.status === "error") && (
-                    <div className="space-y-2 animate-fade-in">
-                      {displayFiles
-                        .filter((f) => f.status === "error")
-                        .map((file) => (
-                          <div
-                            key={file.id}
-                            className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <CandidateAvatar name={file.fileName} />
-                              <div className="min-w-0">
-                                <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                  {file.fileName}
-                                </p>
-                                <p className="text-xs text-red-600 dark:text-red-400 truncate">
-                                  {file.error || t("agency_analysis_failed")}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setFiles((prev) =>
-                                    prev.map((f) =>
-                                      f.id === file.id
-                                        ? {
-                                            ...f,
-                                            status: "queued",
-                                            error: undefined,
-                                          }
-                                        : f,
-                                    ),
-                                  )
-                                }
-                                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-                              >
-                                {t("agency_retry")}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeFile(file.id)}
-                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full"
-                                title={t("agency_action_remove")}
-                                aria-label={t("agency_action_remove")}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
+                {currentFilter === "error" && errorDisplayFiles.length > 0 && (
+                  <div className="space-y-2 animate-fade-in">
+                    {errorDisplayFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-700 dark:bg-red-900/20 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <CandidateAvatar name={file.fileName} />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                              {file.fileName}
+                            </p>
+                            <p className="text-xs text-red-600 dark:text-red-400 truncate">
+                              {file.error || t("agency_analysis_failed")}
+                            </p>
                           </div>
-                        ))}
-                    </div>
-                  )}
-
-                {/* Unified Leaderboard Table */}
-                {files.some((f) => f.status === "complete") && (
-                  <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden animate-fade-in">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left min-w-[640px]">
-                        <thead className="bg-gray-50 dark:bg-slate-700/50 text-gray-700 dark:text-gray-200 uppercase text-xs font-semibold">
-                          <tr>
-                            <th className="px-6 py-4">
-                              {t("agency_table_rank")}
-                            </th>
-                            <th className="px-6 py-4">
-                              {t("agency_table_candidate")}
-                            </th>
-                            <th className="px-6 py-4 w-32">
-                              {t("agency_table_score")}
-                            </th>
-                            <th className="px-6 py-4">
-                              {t("agency_table_summary")}
-                            </th>
-                            <th className="px-6 py-4 text-right">
-                              {t("agency_table_actions")}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                          {displayFiles.filter((f) => f.status === "complete")
-                            .length === 0 ? (
-                            <tr>
-                              <td
-                                colSpan={5}
-                                className="px-6 py-10 text-center text-sm text-gray-400 dark:text-gray-500"
-                              >
-                                {t("agency_no_completed_results")}
-                              </td>
-                            </tr>
-                          ) : (
-                            displayFiles
-                              .filter((f) => f.status === "complete")
-                              .map((file, index) => {
-                                const rankBadge = (
-                                  <span
-                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
-                                      index < 3
-                                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800"
-                                        : "bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-slate-600"
-                                    }`}
-                                  >
-                                    {index + 1}
-                                  </span>
-                                );
-
-                                const score = getScore(file);
-                                const summary =
-                                  mode === "matching"
-                                    ? file.matchSummary
-                                    : file.result?.summary;
-                                const name =
-                                  file.candidateName || file.fileName;
-
-                                return (
-                                  <tr
-                                    key={file.id}
-                                    className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
-                                  >
-                                    <td
-                                      className={`px-6 ${hubSettings.denseTable ? "py-3" : "py-4"} whitespace-nowrap font-medium text-center w-16`}
-                                    >
-                                      {rankBadge}
-                                    </td>
-                                    <td
-                                      className={`px-6 ${hubSettings.denseTable ? "py-3" : "py-4"}`}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <CandidateAvatar name={name} />
-                                        <div>
-                                          <p className="font-bold text-gray-900 dark:text-gray-100">
-                                            {name}
-                                          </p>
-                                          <p className="text-xs text-gray-500 truncate max-w-[150px]">
-                                            {file.fileName}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td
-                                      className={`px-6 ${hubSettings.denseTable ? "py-3" : "py-4"} align-middle`}
-                                    >
-                                      <ScoreBar score={score} />
-                                    </td>
-                                    <td
-                                      className={`px-6 ${hubSettings.denseTable ? "py-3" : "py-4"}`}
-                                    >
-                                      <p
-                                        className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2"
-                                        title={summary}
-                                      >
-                                        {summary ||
-                                          t("agency_analysis_pending")}
-                                      </p>
-                                    </td>
-                                    <td
-                                      className={`px-6 ${hubSettings.denseTable ? "py-3" : "py-4"} text-right`}
-                                    >
-                                      <div className="flex items-center justify-end gap-2">
-                                        {mode === "general" && (
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              setShowDetailModal(file)
-                                            }
-                                            className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-full transition-colors"
-                                            title={t(
-                                              "agency_action_view_analysis",
-                                            )}
-                                            aria-label={t(
-                                              "agency_action_view_analysis",
-                                            )}
-                                          >
-                                            <Eye className="h-4 w-4" />
-                                          </button>
-                                        )}
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            file.blindResumeText
-                                              ? setViewBlindResumeId(file.id)
-                                              : handleAnonymize(file.id)
-                                          }
-                                          disabled={file.isAnonymizing}
-                                          className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${file.blindResumeText ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/40" : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"}`}
-                                          title={
-                                            file.isAnonymizing
-                                              ? t("agency_action_anonymizing")
-                                              : t("agency_action_blind_resume")
-                                          }
-                                          aria-label={
-                                            file.isAnonymizing
-                                              ? t("agency_action_anonymizing")
-                                              : t("agency_action_blind_resume")
-                                          }
-                                        >
-                                          {file.isAnonymizing ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                          ) : (
-                                            <FileText className="h-4 w-4" />
-                                          )}
-                                        </button>
-                                        {mode === "matching" && (
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              file.prepKit
-                                                ? setViewPrepKitId(file.id)
-                                                : handleGeneratePrepKit(file.id)
-                                            }
-                                            disabled={file.isPrepping}
-                                            className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${file.prepKit ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-800/40" : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"}`}
-                                            title={
-                                              file.isPrepping
-                                                ? t(
-                                                    "agency_action_generating_prep",
-                                                  )
-                                                : t("agency_action_prep_kit")
-                                            }
-                                            aria-label={
-                                              file.isPrepping
-                                                ? t(
-                                                    "agency_action_generating_prep",
-                                                  )
-                                                : t("agency_action_prep_kit")
-                                            }
-                                          >
-                                            {file.isPrepping ? (
-                                              <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                              <BookOpen className="h-4 w-4" />
-                                            )}
-                                          </button>
-                                        )}
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            file.pitchEmail
-                                              ? setViewPitchId(file.id)
-                                              : handleGeneratePitch(file.id)
-                                          }
-                                          disabled={file.isPitching}
-                                          className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${file.pitchEmail ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-800/40" : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"}`}
-                                          title={
-                                            file.isPitching
-                                              ? t(
-                                                  "agency_action_generating_pitch",
-                                                )
-                                              : t(
-                                                  "agency_action_generate_pitch",
-                                                )
-                                          }
-                                          aria-label={
-                                            file.isPitching
-                                              ? t(
-                                                  "agency_action_generating_pitch",
-                                                )
-                                              : t(
-                                                  "agency_action_generate_pitch",
-                                                )
-                                          }
-                                        >
-                                          {file.isPitching ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                          ) : (
-                                            <Mail className="h-4 w-4" />
-                                          )}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => removeFile(file.id)}
-                                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full"
-                                          title={t("agency_action_remove")}
-                                          aria-label={t("agency_action_remove")}
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-2 sm:ml-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFiles((prev) =>
+                                prev.map((f) =>
+                                  f.id === file.id
+                                    ? {
+                                        ...f,
+                                        status: "queued",
+                                        error: undefined,
+                                      }
+                                    : f,
+                                ),
+                              )
+                            }
+                            className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            {t("agency_retry")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(file.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full"
+                            title={t("agency_action_remove")}
+                            aria-label={t("agency_action_remove")}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* Skeleton Loading State */}
-                {isAnalyzing && !files.some((f) => f.status === "complete") && (
-                  <TableSkeleton />
-                )}
+                <CompletedResultsList
+                  files={completedDisplayFiles}
+                  mode={mode}
+                  denseTable={hubSettings.denseTable}
+                  hasJobDescription={hasJobDescription}
+                  onViewAnalysis={setShowDetailModal}
+                  onAnonymize={handleBlindResumeAction}
+                  onPrep={handlePrepKitAction}
+                  onPitch={handlePitchAction}
+                  onRemove={removeFile}
+                  t={t}
+                />
+
+                {completedDisplayFiles.length === 0 &&
+                  currentFilter !== "complete" &&
+                  currentFilter !== "error" &&
+                  (isAnalyzing ? (
+                    <TableSkeleton t={t} />
+                  ) : pendingAnalysisCount > 0 ? (
+                    <AgencyResultsEmptyState
+                      title={t("agency_results_waiting_title")}
+                      description={t("agency_results_waiting_desc")}
+                      actionLabel={
+                        canRunAnalysis ? t("agency_command_run_queue") : undefined
+                      }
+                      onAction={
+                        canRunAnalysis ? () => void runBulkAnalysis() : undefined
+                      }
+                    />
+                  ) : null)}
               </div>
             )}
           </div>

@@ -2530,5 +2530,16 @@
   "tour_skip": "Skip tour",
   "tour_back": "Back",
   "tour_next": "Next",
-  "tour_finish": "Done"
+  "tour_finish": "Done",
+  "agency_drop_formats": "Supported: PDF, DOCX, TXT, PNG, JPG",
+  "agency_toolbar_summary": "{pending} pending, {done} completed",
+  "agency_results_ready_title": "Completed candidates",
+  "agency_mobile_actions_label": "Candidate actions",
+  "agency_results_processing_title": "Processing candidate files",
+  "agency_results_processing_desc": "Keep this tab open. Completed rows appear as each resume finishes.",
+  "agency_results_empty_filter_desc": "Switch filters or add more resumes to continue reviewing.",
+  "agency_results_no_attention_title": "No files need attention",
+  "agency_results_no_attention_desc": "Errors and retry items will appear here when a file cannot be processed.",
+  "agency_results_waiting_title": "Queue ready to run",
+  "agency_results_waiting_desc": "Run the pending files to create scored candidates and client handoff assets."
 }

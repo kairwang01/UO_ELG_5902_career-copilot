@@ -2530,5 +2530,16 @@
   "tour_skip": "Tour überspringen",
   "tour_back": "Zurück",
   "tour_next": "Weiter",
-  "tour_finish": "Fertig"
+  "tour_finish": "Fertig",
+  "agency_drop_formats": "Unterstützt: PDF, DOCX, TXT, PNG, JPG",
+  "agency_toolbar_summary": "{pending} ausstehend, {done} abgeschlossen",
+  "agency_results_ready_title": "Abgeschlossene Kandidaten",
+  "agency_mobile_actions_label": "Kandidatenaktionen",
+  "agency_results_processing_title": "Kandidatendateien werden verarbeitet",
+  "agency_results_processing_desc": "Lassen Sie diesen Tab offen. Fertige Zeilen erscheinen, sobald ein Lebenslauf abgeschlossen ist.",
+  "agency_results_empty_filter_desc": "Wechseln Sie den Filter oder fügen Sie weitere Lebensläufe hinzu.",
+  "agency_results_no_attention_title": "Keine Dateien benötigen Aufmerksamkeit",
+  "agency_results_no_attention_desc": "Fehler und Wiederholungen erscheinen hier, wenn eine Datei nicht verarbeitet werden kann.",
+  "agency_results_waiting_title": "Warteschlange bereit",
+  "agency_results_waiting_desc": "Starten Sie die ausstehenden Dateien, um Bewertungen und Kundenunterlagen zu erstellen."
 }
