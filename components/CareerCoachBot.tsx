@@ -148,9 +148,8 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                 companyDescription: profile?.company_description,
             });
             setMessages(prev => [...prev, { role: 'model', content: reply }]);
-        } catch (error) {
-            console.error("Error sending message:", error);
-            setMessages(prev => [...prev, { role: 'model', content: "Sorry, I encountered an error. Please try again." }]);
+        } catch {
+            setMessages(prev => [...prev, { role: 'model', content: t('coach_error') }]);
         } finally {
             setIsLoading(false);
         }
@@ -172,11 +171,11 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                             </svg>
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Career Coach</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Resume, interview, and planning support</p>
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{t('coach_title')}</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{t('coach_subtitle')}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Close modal">
+                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={t('tool_mock_interview_close_button')}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
@@ -224,11 +223,11 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                             type="text"
                             value={userInput}
                             onChange={(e) => setUserInput(e.target.value)}
-                            placeholder="Ask your career question..."
+                            placeholder={t('coach_input_placeholder')}
                             className="flex-grow w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                             disabled={isLoading}
                         />
-                        <button type="submit" disabled={isLoading || !userInput.trim()} className="p-2 bg-blue-700 text-white rounded-full hover:bg-blue-800 disabled:bg-blue-400 disabled:cursor-not-allowed">
+                        <button type="submit" disabled={isLoading || !userInput.trim()} className="p-2 bg-blue-700 text-white rounded-full hover:bg-blue-800 disabled:bg-blue-400 disabled:cursor-not-allowed" aria-label={t('coach_send_label')}>
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
                         </button>
                     </form>

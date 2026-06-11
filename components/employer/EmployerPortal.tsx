@@ -318,6 +318,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               session={session}
               darkMode={darkMode}
               t={t}
+              onNavigate={navigate}
             />
           )}
 
