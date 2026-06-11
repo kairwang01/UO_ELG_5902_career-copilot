@@ -441,7 +441,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                       className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
                     >
                       <Mail className="h-4 w-4" />
-                      Draft cover letter
+                      {t('workspace_draft_cover_letter')}
                     </button>
                     <button
                       type="button"
@@ -449,7 +449,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                       className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
                     >
                       <Send className="h-4 w-4" />
-                      Prepare outreach
+                      {t('workspace_prepare_outreach')}
                     </button>
                   </div>
                 </div>

@@ -114,54 +114,56 @@ const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; res
 
 type ToolGroupId = 'recommended' | 'resume' | 'jobs' | 'practice' | 'growth';
 
+// label / helper hold i18n KEYS, resolved with t() at render.
 const TOOL_GROUPS: { id: ToolGroupId; label: string; helper: string; keys: string[] }[] = [
   {
     id: 'recommended',
-    label: 'Recommended',
-    helper: 'Best next steps for a complete job-search loop.',
+    label: 'studio_group_recommended_label',
+    helper: 'studio_group_recommended_helper',
     keys: ['resume-formatter', 'opportunity-finder', 'cover-letter', 'mock-interview'],
   },
   {
     id: 'resume',
-    label: 'Resume & profile',
-    helper: 'Tighten evidence before matching and outreach.',
+    label: 'studio_group_resume_label',
+    helper: 'studio_group_resume_helper',
     keys: ['resume-formatter', 'linkedin-optimizer'],
   },
   {
     id: 'jobs',
-    label: 'Jobs & outreach',
-    helper: 'Find roles, prepare messages, and move conversations forward.',
+    label: 'studio_group_jobs_label',
+    helper: 'studio_group_jobs_helper',
     keys: ['opportunity-finder', 'cover-letter', 'email-crafter', 'networking-assistant', 'industry-event-scout'],
   },
   {
     id: 'practice',
-    label: 'Interview',
-    helper: 'Prepare answers, negotiation, and English delivery.',
+    label: 'studio_group_practice_label',
+    helper: 'studio_group_practice_helper',
     keys: ['mock-interview', 'english-pro', 'salary-negotiation'],
   },
   {
     id: 'growth',
-    label: 'Career growth',
-    helper: 'Plan the role path, learning, review prep, and agile habits.',
+    label: 'studio_group_growth_label',
+    helper: 'studio_group_growth_helper',
     keys: ['career-path', 'skill-learning-plan', 'performance-review-prep', 'agile-coach'],
   },
 ];
 
+// Values are i18n keys, resolved with t() at render.
 const TOOL_PHASE_LABELS: Record<string, string> = {
-  'resume-formatter': 'Resume',
-  'linkedin-optimizer': 'Profile',
-  'opportunity-finder': 'Matching',
-  'cover-letter': 'Application',
-  'email-crafter': 'Outreach',
-  'networking-assistant': 'Outreach',
-  'industry-event-scout': 'Networking',
-  'mock-interview': 'Interview',
-  'english-pro': 'Interview',
-  'salary-negotiation': 'Offer',
-  'career-path': 'Planning',
-  'skill-learning-plan': 'Learning',
-  'performance-review-prep': 'Growth',
-  'agile-coach': 'Growth',
+  'resume-formatter': 'studio_phase_resume',
+  'linkedin-optimizer': 'studio_phase_profile',
+  'opportunity-finder': 'studio_phase_matching',
+  'cover-letter': 'studio_phase_application',
+  'email-crafter': 'studio_phase_outreach',
+  'networking-assistant': 'studio_phase_outreach',
+  'industry-event-scout': 'studio_phase_networking',
+  'mock-interview': 'studio_phase_interview',
+  'english-pro': 'studio_phase_interview',
+  'salary-negotiation': 'studio_phase_offer',
+  'career-path': 'studio_phase_planning',
+  'skill-learning-plan': 'studio_phase_learning',
+  'performance-review-prep': 'studio_phase_growth',
+  'agile-coach': 'studio_phase_growth',
 };
 
 const formatPlanLabel = (planKey: string | undefined): string => {
@@ -226,7 +228,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
   // CAREER STUDIO WORKSPACE LAYOUT (NO RESULT)
   // -----------------------------------------------------------
   if (!result) {
-      const toolTitle = activeTool ? t(`tool_${activeTool.replace(/-/g, '_')}_title`) : 'Career toolkit';
+      const toolTitle = activeTool ? t(`tool_${activeTool.replace(/-/g, '_')}_title`) : t('studio_toolkit_kicker');
 
       return (
           <>
@@ -239,13 +241,13 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                 <button 
                                     onClick={() => setActiveTool(null)}
                                     className="workspace-button-ghost inline-flex h-9 w-9 shrink-0 items-center justify-center"
-                                    aria-label="Back to tool library"
+                                    aria-label={t('studio_back_to_library')}
                                 >
                                     <ArrowLeft className="h-5 w-5" />
                                 </button>
                                 <div className="min-w-0">
                                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
-                                    Assisted tool
+                                    {t('studio_assisted_tool')}
                                   </p>
                                   <h2 className="truncate text-lg font-semibold text-slate-900 dark:text-slate-100">{toolTitle}</h2>
                                 </div>
@@ -296,27 +298,27 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
                                       <Wrench className="h-4 w-4" />
-                                      Career toolkit
+                                      {t('studio_toolkit_kicker')}
                                     </div>
                                     <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
-                                      Choose the next action, not another dashboard
+                                      {t('studio_toolkit_title')}
                                     </h2>
                                     <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                                      Tools are grouped around the search flow: resume evidence, job matching, outreach, interview practice, and growth planning.
+                                      {t('studio_toolkit_subtitle')}
                                     </p>
                                   </div>
                                   <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
                                     {isHighestPlan ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <LockKeyhole className="h-4 w-4 text-slate-400" />}
-                                    {isHighestPlan ? 'All tools included' : `${formatPlanLabel(userPlan)} plan`}
+                                    {isHighestPlan ? t('studio_all_tools_included') : t('studio_plan_suffix').replace('{plan}', formatPlanLabel(userPlan))}
                                   </div>
                                 </div>
 
                                 <div className="mt-5 grid gap-3 sm:grid-cols-4">
                                   {[
-                                    ['Resume', 'Fix evidence'],
-                                    ['Match', 'Rank roles'],
-                                    ['Outreach', 'Prepare message'],
-                                    ['Interview', 'Practice answer'],
+                                    [t('studio_phase_resume'), t('studio_stat_resume_helper')],
+                                    [t('studio_stat_match_label'), t('studio_stat_match_helper')],
+                                    [t('studio_phase_outreach'), t('studio_stat_outreach_helper')],
+                                    [t('studio_phase_interview'), t('studio_stat_interview_helper')],
                                   ].map(([label, helper]) => (
                                     <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
                                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{label}</p>
@@ -329,10 +331,10 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                               <div className="workspace-card p-5">
                                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                                   <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                  Resume context
+                                  {t('studio_resume_context')}
                                 </div>
                                 <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                                  Each tool reads the resume text currently in this workspace. Review it before generating application or interview material.
+                                  {t('studio_resume_context_desc')}
                                 </p>
                                 <button
                                   type="button"
@@ -340,7 +342,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                   className="workspace-button-secondary mt-4 inline-flex w-full items-center justify-center gap-2 px-3 py-2"
                                 >
                                   <FileText className="h-4 w-4" />
-                                  Review resume
+                                  {t('studio_review_resume')}
                                 </button>
                               </div>
                             </div>
@@ -359,18 +361,18 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
                                     }`}
                                   >
-                                    {group.label}
+                                    {t(group.label)}
                                   </button>
                                 ))}
                               </div>
                               <label className="relative block">
-                                <span className="sr-only">Search tools in this group</span>
+                                <span className="sr-only">{t('studio_search_label')}</span>
                                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                 <input
                                   type="search"
                                   value={toolQuery}
                                   onChange={(event) => setToolQuery(event.target.value)}
-                                  placeholder="Search this group"
+                                  placeholder={t('studio_search_ph')}
                                   className="h-full min-h-[46px] w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-blue-900/40"
                                 />
                               </label>
@@ -379,7 +381,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                               <div>
                                 <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{selectedToolGroup.label}</h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">{selectedToolGroup.helper}</p>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">{t(selectedToolGroup.helper)}</p>
                               </div>
                               <p className="text-xs font-medium text-slate-500 dark:text-slate-500">
                                 {filteredTools.length} of {selectedToolGroup.keys.length} tools
@@ -389,8 +391,8 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                             {filteredTools.length === 0 ? (
                               <div className="workspace-card p-8 text-center">
                                 <Search className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
-                                <h3 className="mt-3 text-base font-semibold text-slate-900 dark:text-slate-100">No tools match that search</h3>
-                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Clear the search or switch groups to continue.</p>
+                                <h3 className="mt-3 text-base font-semibold text-slate-900 dark:text-slate-100">{t('studio_no_match_title')}</h3>
+                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('studio_no_match_desc')}</p>
                               </div>
                             ) : (
                               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -416,7 +418,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                                 </div>
                                                 <div>
                                                   <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                                                    {TOOL_PHASE_LABELS[tool.key] ?? 'Tool'}
+                                                    {t(TOOL_PHASE_LABELS[tool.key] ?? 'studio_phase_tool')}
                                                   </span>
                                                   <h3 className="mt-0.5 text-sm font-semibold leading-snug text-slate-900 dark:text-white">{t(titleKey)}</h3>
                                                 </div>
@@ -424,7 +426,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                               {isRecommended && (
                                                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                                                   <Sparkles className="h-3 w-3" />
-                                                  Next
+                                                  {t('studio_card_next')}
                                                 </span>
                                               )}
                                             </div>
@@ -433,10 +435,10 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                             )}
                                             <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
                                               <span className={`text-xs font-semibold ${isIncluded ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                                                {isIncluded ? 'Included' : `Plan: ${formatPlanLabel(requiredPlan)}`}
+                                                {isIncluded ? t('studio_card_included') : t('studio_card_plan_prefix').replace('{plan}', formatPlanLabel(requiredPlan))}
                                               </span>
                                               <span className="text-sm font-semibold text-blue-700 transition group-hover:translate-x-0.5 dark:text-blue-400">
-                                                Open
+                                                {t('studio_card_open')}
                                               </span>
                                             </div>
                                         </button>
@@ -472,11 +474,11 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                 className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-                Dashboard
+                {t('analysis_breadcrumb_dashboard')}
             </button>
             <span>/</span>
             <span className="font-semibold text-gray-800 dark:text-gray-200">
-                Analysis Results
+                {t('analysis_breadcrumb_results')}
             </span>
         </div>
 
@@ -488,9 +490,9 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
         <div className="mb-8 rounded-2xl border border-blue-200 bg-blue-700 p-5 text-white shadow-sm dark:border-blue-800 dark:bg-blue-950 sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
-                <h3 className="text-xl font-semibold">Apply the recommended resume edits</h3>
+                <h3 className="text-xl font-semibold">{t('analysis_apply_title')}</h3>
                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-blue-100">
-                  This will generate an updated resume draft from the improvement list and replace the current workspace text after completion.
+                  {t('analysis_apply_desc')}
                 </p>
               </div>
               {!confirmingApply ? (
@@ -500,7 +502,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                   disabled={isOptimizing}
                   className="inline-flex min-h-[42px] items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-70"
                 >
-                  Review before applying
+                  {t('analysis_apply_review')}
                 </button>
               ) : (
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -510,7 +512,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                     disabled={isOptimizing}
                     className="inline-flex min-h-[42px] items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-70"
                   >
-                    {isOptimizing ? 'Applying...' : 'Apply edits'}
+                    {isOptimizing ? t('analysis_applying') : t('analysis_apply_edits')}
                   </button>
                   <button
                     type="button"
@@ -518,7 +520,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                     disabled={isOptimizing}
                     className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-white/30 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-70"
                   >
-                    Cancel
+                    {t('action_cancel')}
                   </button>
                 </div>
               )}

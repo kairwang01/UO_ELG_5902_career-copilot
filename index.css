@@ -207,6 +207,23 @@ html.dark body {
   to { transform: translateX(0); opacity: 1; }
 }
 
+/* Radix dialog entrance/exit. The shadcn ui/dialog markup referenced
+   tailwindcss-animate utilities (animate-in/fade-in-0/zoom-in) which are NOT
+   installed, so the business auth modals popped in with no transition. These
+   data-state rules give them a smooth fade (+ subtle scale for the centered
+   content) without adding a dependency. The content keeps its -50%/-50%
+   centering translate inside the keyframe. */
+@keyframes dialog-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialog-content-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.dialog-overlay-anim[data-state='open'] { animation: dialog-overlay-in 0.18s ease-out; }
+.dialog-content-anim[data-state='open'] { animation: dialog-content-in 0.2s ease-out; }
+
 .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
 .animate-slide-in-up { animation: slide-in-up 0.6s ease-out forwards; }
 .animate-view-fade { animation: view-fade 0.28s ease-out both; }

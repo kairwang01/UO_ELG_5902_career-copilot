@@ -374,7 +374,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         if (!jobDescription.trim() && !jobResponsibilities.trim() && !jobRequirements.trim()) {
             setError(t('mi_error_context_required')); return;
         }
-        if (!session) { setError("You must be logged in to start an interview."); return; }
+        if (!session) { setError(t('error_login_required_interview')); return; }
         setError(null);
         setDisclaimerChecked(false);
         setShowDisclaimer(true);
@@ -519,6 +519,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
     };
 
     const endInterviewEarly = () => {
+        setConfirmEndEarly(false);
         stopListening();
         cancelSpeech();
         // Count the current draft, mark the rest unanswered, evaluate what we have.
@@ -661,7 +662,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                         onClick={() => setConfirmEndEarly(false)}
                                         className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/50"
                                     >
-                                        Cancel
+                                        {t('action_cancel')}
                                     </button>
                                 </div>
                             </div>
