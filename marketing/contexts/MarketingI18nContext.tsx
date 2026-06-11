@@ -17,11 +17,6 @@ export const MarketingI18nProvider: React.FC<{ children: React.ReactNode }> = ({
   const { t, isLoaded, currentLang, changeLanguage } = useLocalization(stored || undefined);
 
   const setLanguage = (lang: string) => {
-    try {
-      localStorage.setItem('preferred_language', lang);
-    } catch {
-      /* ignore storage failures */
-    }
     changeLanguage(lang);
   };
 

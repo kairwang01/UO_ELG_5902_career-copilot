@@ -39,7 +39,7 @@ const jobMatches = [
     company: 'Northstar CRM',
     location: 'Toronto, ON · Hybrid',
     score: 84,
-    priority: 'Apply this week',
+    priorityKey: 'ws_job_match_priority_week',
     evidence: [
       'Billing workflow redesign maps to product operations scope.',
       'Cross-functional backlog ownership appears in recent experience.',
@@ -58,7 +58,7 @@ const jobMatches = [
     company: 'Canopy Labs',
     location: 'Remote Canada',
     score: 78,
-    priority: 'Review after resume edits',
+    priorityKey: 'ws_job_match_priority_after_edits',
     evidence: [
       'Developer background supports API/platform credibility.',
       'A/B testing and SQL keywords align with screening filters.',
@@ -76,7 +76,7 @@ const jobMatches = [
     company: 'BrightHire',
     location: 'Ottawa, ON',
     score: 72,
-    priority: 'Good bridge role',
+    priorityKey: 'ws_job_match_priority_bridge',
     evidence: [
       'Process improvement examples transfer well.',
       'Operational metrics can be reframed into product evidence.',
@@ -90,11 +90,14 @@ const jobMatches = [
   },
 ];
 
-const practiceQuestions = [
-  'Tell me about a time you had to prioritize conflicting requests from stakeholders.',
-  'Walk me through a product decision you made with incomplete information.',
-  'Describe a time you used data to change a team decision.',
+const practiceQuestionKeys = [
+  'ws_interview_question_prioritize',
+  'ws_interview_question_incomplete_info',
+  'ws_interview_question_data_decision',
 ];
+
+const formatWorkspaceCopy = (template: string, values: Record<string, string | number>) =>
+  Object.entries(values).reduce((copy, [key, value]) => copy.replaceAll(`{${key}}`, String(value)), template);
 
 const StatusPill: React.FC<{ tone: 'ready' | 'gap' | 'risk' | 'neutral'; children: React.ReactNode }> = ({
   tone,
@@ -212,42 +215,42 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   return (
     <div className="space-y-6">
       <PageHeader
-        label="Resume readiness"
-        title="Resume report built for screening decisions"
-        description="Review ATS risks, missing keywords, evidence quality, and the highest-priority edits before sending applications."
+        label={t('ws_resume_label')}
+        title={t('ws_resume_title')}
+        description={t('ws_resume_desc')}
         icon={FileText}
-        primaryLabel={hasResume ? 'Update resume' : 'Upload resume'}
+        primaryLabel={hasResume ? t('ws_update_resume') : t('ws_upload_resume')}
         onPrimary={onUploadResume}
       />
 
       {!hasResume ? (
         <EmptyWorkbenchState
-          title="Upload a resume to generate the readiness report"
-          description="After upload, this page shows a score, ATS risks, keyword gaps, content quality findings, and a ranked fix list."
-          buttonLabel="Upload resume"
+          title={t('ws_resume_empty_title')}
+          description={t('ws_resume_empty_desc')}
+          buttonLabel={t('ws_upload_resume')}
           onClick={onUploadResume}
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
             <Panel
-              title="Readiness summary"
-              description="The report separates formatting risk from content gaps so you know what to fix first."
-              action={<StatusPill tone="gap">4 priority fixes</StatusPill>}
+              title={t('ws_resume_summary_title')}
+              description={t('ws_resume_summary_desc')}
+              action={<StatusPill tone="gap">{formatWorkspaceCopy(t('ws_resume_priority_fixes'), { count: 4 })}</StatusPill>}
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <ScoreBlock label="ATS readiness" value={sampleReport.atsReadiness} />
-                <ScoreBlock label="Target role fit" value={sampleReport.roleFit} tone="gap" />
+                <ScoreBlock label={t('ws_resume_ats_readiness')} value={sampleReport.atsReadiness} />
+                <ScoreBlock label={t('ws_resume_target_fit')} value={sampleReport.roleFit} tone="gap" />
               </div>
               <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-200">
-                Next action: {sampleReport.nextAction}
+                {formatWorkspaceCopy(t('ws_resume_next_action'), { action: sampleReport.nextAction })}
               </div>
             </Panel>
 
-            <Panel title="ATS risks and keyword gaps">
+            <Panel title={t('ws_resume_risks_title')}>
               <div className="grid gap-4 lg:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">ATS risks</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">{t('ws_resume_ats_risks')}</p>
                   <div className="space-y-2">
                     {sampleReport.issues
                       .filter((issue) => issue.severity !== 'ready')
@@ -255,7 +258,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
                         <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
                           <div className="flex items-start justify-between gap-3">
                             <p className="text-sm font-medium text-slate-950 dark:text-slate-100">{issue.issue}</p>
-                            <StatusPill tone={issue.severity === 'risk' ? 'risk' : 'gap'}>{issue.severity}</StatusPill>
+                            <StatusPill tone={issue.severity === 'risk' ? 'risk' : 'gap'}>{t(`workspace_status_${issue.severity}`)}</StatusPill>
                           </div>
                           <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.fix}</p>
                         </div>
@@ -263,7 +266,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
                   </div>
                 </div>
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">Missing keywords</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('ws_resume_missing_keywords')}</p>
                   <div className="flex flex-wrap gap-2">
                     {sampleReport.missingKeywords.map((keyword) => (
                       <StatusPill key={keyword} tone="gap">
@@ -271,7 +274,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
                       </StatusPill>
                     ))}
                   </div>
-                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Matched signals</p>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">{t('ws_resume_matched_signals')}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {sampleReport.matchedKeywords.slice(0, 5).map((keyword) => (
                       <StatusPill key={keyword} tone="ready">
@@ -284,15 +287,15 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
             </Panel>
 
             <Panel
-              title="Content quality suggestions"
-              description="Edits are framed as recruiter-visible improvements, not generic writing advice."
+              title={t('ws_resume_quality_title')}
+              description={t('ws_resume_quality_desc')}
             >
               <div className="space-y-3">
                 {sampleReport.issues.slice(0, 3).map((issue) => (
                   <div key={issue.id} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
                     <p className="font-medium text-slate-950 dark:text-slate-100">{issue.issue}</p>
                     <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.whyItMatters}</p>
-                    <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-200">Fix: {issue.fix}</p>
+                    <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-200">{formatWorkspaceCopy(t('ws_resume_fix_prefix'), { fix: issue.fix })}</p>
                   </div>
                 ))}
               </div>
@@ -301,13 +304,13 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
                 onClick={() => onOpenTool('resume-formatter')}
                 className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
               >
-                Open resume formatter
+                {t('ws_resume_open_formatter')}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </Panel>
           </div>
 
-          <Panel title="Current resume preview" description={`Market: ${market}`}>
+          <Panel title={t('ws_resume_preview_title')} description={formatWorkspaceCopy(t('ws_resume_preview_desc'), { market })}>
             <ResumePreview resumeText={resumeText} market={market} t={t} />
           </Panel>
         </div>
@@ -392,7 +395,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
                       {job.company} · {job.location}
                     </p>
                   </div>
-                  <StatusPill tone="neutral">{job.priority}</StatusPill>
+                  <StatusPill tone="neutral">{t(job.priorityKey)}</StatusPill>
                 </div>
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -464,53 +467,53 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
   );
 };
 
-export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText, onUploadResume, onOpenTool }) => {
-  const [question, setQuestion] = useState(practiceQuestions[0]);
+export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool }) => {
+  const [questionKey, setQuestionKey] = useState(practiceQuestionKeys[0]);
   const [answer, setAnswer] = useState(
-    'In the sprint planning cycle, sales needed a demo feature while support needed a billing fix. I reviewed ticket volume, revenue impact, and customer renewal risk...',
+    t('ws_interview_default_answer'),
   );
   const hasResume = resumeText.trim().length > 0;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        label="Interview practice"
-        title="Practice answers against the roles you are targeting"
-        description="Use role-relevant prompts, draft an answer, and review STAR structure, completeness, clarity, and the next drill."
+        label={t('ws_interview_label')}
+        title={t('ws_interview_title')}
+        description={t('ws_interview_desc')}
         icon={MessageSquare}
-        primaryLabel={hasResume ? 'Start guided practice' : 'Upload resume'}
+        primaryLabel={hasResume ? t('ws_interview_start_practice') : t('ws_upload_resume')}
         onPrimary={() => (hasResume ? onOpenTool('mock-interview') : onUploadResume())}
       />
 
       {!hasResume ? (
         <EmptyWorkbenchState
-          title="Upload a resume to tailor interview questions"
-          description="Without a resume, practice can only be generic. Upload first to generate role and experience-specific prompts."
-          buttonLabel="Upload resume"
+          title={t('ws_interview_empty_title')}
+          description={t('ws_interview_empty_desc')}
+          buttonLabel={t('ws_upload_resume')}
           onClick={onUploadResume}
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <Panel title="Question set" description="Choose a likely interview prompt for the next practice round.">
+          <Panel title={t('ws_interview_question_set_title')} description={t('ws_interview_question_set_desc')}>
             <div className="space-y-2">
-              {practiceQuestions.map((item) => (
+              {practiceQuestionKeys.map((item) => (
                 <button
                   key={item}
                   type="button"
-                  onClick={() => setQuestion(item)}
+                  onClick={() => setQuestionKey(item)}
                   className={`w-full rounded-lg border p-3 text-left text-sm font-medium transition ${
-                    question === item ? 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                    questionKey === item ? 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                   }`}
                 >
-                  {item}
+                  {t(item)}
                 </button>
               ))}
             </div>
           </Panel>
 
-          <Panel title="Answer workspace" description="Draft the answer in STAR form, then compare it to the feedback model.">
+          <Panel title={t('ws_interview_answer_title')} description={t('ws_interview_answer_desc')}>
             <label htmlFor="practice-answer" className="text-sm font-medium text-slate-800 dark:text-slate-200">
-              Your answer
+              {t('ws_interview_your_answer')}
             </label>
             <textarea
               id="practice-answer"
@@ -520,10 +523,10 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
             />
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {[
-                ['Situation', interviewFeedback.starFeedback.situation],
-                ['Task', interviewFeedback.starFeedback.task],
-                ['Action', interviewFeedback.starFeedback.action],
-                ['Result', interviewFeedback.starFeedback.result],
+                [t('site_interview_star_s'), interviewFeedback.starFeedback.situation],
+                [t('site_interview_star_t'), interviewFeedback.starFeedback.task],
+                [t('site_interview_star_a'), interviewFeedback.starFeedback.action],
+                [t('site_interview_star_r'), interviewFeedback.starFeedback.result],
               ].map(([label, detail]) => (
                 <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
                   <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">{label}</p>
@@ -532,18 +535,18 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
               ))}
             </div>
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
-              <span className="font-semibold">Improve next: </span>
+              <span className="font-semibold">{t('ws_interview_improve_next')} </span>
               {interviewFeedback.starFeedback.missing}
             </div>
             <div className="mt-4 rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Clarity score</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('site_interview_clarity')}</span>
                 <span className="text-lg font-semibold text-slate-950 dark:text-slate-100">{interviewFeedback.clarityScore}</span>
               </div>
               <div className="mt-3 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
                 <div className="h-2 rounded-full bg-amber-500" style={{ width: `${interviewFeedback.clarityScore}%` }} />
               </div>
-              <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">Next drill: {interviewFeedback.nextDrill}</p>
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{formatWorkspaceCopy(t('ws_interview_next_drill'), { drill: interviewFeedback.nextDrill })}</p>
             </div>
           </Panel>
         </div>
@@ -552,30 +555,33 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
   );
 };
 
-export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUploadResume, onOpenTool }) => {
+export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool }) => {
   const hasResume = resumeText.trim().length > 0;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        label="Career plan"
-        title="Turn the target role into weekly actions"
-        description="Plan the bridge role, skill gaps, learning path, project proof, application rhythm, and next milestone."
+        label={t('ws_plan_label')}
+        title={t('ws_plan_title')}
+        description={t('ws_plan_desc')}
         icon={CalendarCheck}
-        primaryLabel={hasResume ? 'Generate updated plan' : 'Upload resume'}
+        primaryLabel={hasResume ? t('ws_plan_generate_updated') : t('ws_upload_resume')}
         onPrimary={() => (hasResume ? onOpenTool('career-path') : onUploadResume())}
       />
 
       {!hasResume ? (
         <EmptyWorkbenchState
-          title="Upload a resume to create a role path"
-          description="The plan needs your current role and evidence level to estimate skill gaps, bridge roles, and weekly actions."
-          buttonLabel="Upload resume"
+          title={t('ws_plan_empty_title')}
+          description={t('ws_plan_empty_desc')}
+          buttonLabel={t('ws_upload_resume')}
           onClick={onUploadResume}
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <Panel title="Target path" description={`${careerPathPlan.currentRole} to ${careerPathPlan.targetRole}`}>
+          <Panel title={t('ws_plan_target_path')} description={formatWorkspaceCopy(t('ws_plan_role_path'), {
+            current: careerPathPlan.currentRole,
+            target: careerPathPlan.targetRole,
+          })}>
             <div className="space-y-0">
               {careerPathPlan.timeline.map((step, index) => (
                 <div key={step.id} className="flex gap-3">
@@ -595,7 +601,7 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-slate-950 dark:text-slate-100">{step.label}</p>
                       <StatusPill tone={step.status === 'done' ? 'ready' : step.status === 'in_progress' ? 'neutral' : 'gap'}>
-                        {step.status.replace('_', ' ')}
+                        {t(`workspace_status_${step.status}`)}
                       </StatusPill>
                     </div>
                     {step.detail && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{step.detail}</p>}
@@ -604,18 +610,18 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
               ))}
             </div>
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-200">
-              Recommended bridge role: <span className="font-semibold">{careerPathPlan.bridgeRole}</span>
+              {formatWorkspaceCopy(t('ws_plan_bridge_role'), { role: careerPathPlan.bridgeRole })}
             </div>
           </Panel>
 
           <div className="space-y-6">
-            <Panel title="Skill gaps" description="Gap progress is used to shape learning and portfolio tasks.">
+            <Panel title={t('ws_plan_skill_gaps')} description={t('ws_plan_skill_gaps_desc')}>
               <div className="grid gap-3 sm:grid-cols-2">
                 {careerPathPlan.skillGaps.map((gap) => (
                   <div key={gap.skill} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{gap.skill}</p>
-                      <StatusPill tone={gap.priority === 'high' ? 'gap' : 'neutral'}>{gap.priority}</StatusPill>
+                      <StatusPill tone={gap.priority === 'high' ? 'gap' : 'neutral'}>{t(`workspace_priority_${gap.priority}`)}</StatusPill>
                     </div>
                     <div className="mt-3 h-2 rounded-full bg-white dark:bg-slate-700">
                       <div className="h-2 rounded-full bg-blue-700" style={{ width: `${gap.progress}%` }} />
@@ -625,16 +631,16 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
               </div>
             </Panel>
 
-            <Panel title="Four-week action plan" description="A concrete operating cadence for resume, projects, practice, and applications.">
+            <Panel title={t('ws_plan_four_week_title')} description={t('ws_plan_four_week_desc')}>
               <div className="grid gap-3 sm:grid-cols-2">
                 {careerPathPlan.fourWeekPlan.map((week) => (
                   <div key={week.week} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-medium text-slate-950 dark:text-slate-100">
-                        Week {week.week}: {week.focus}
+                        {formatWorkspaceCopy(t('ws_plan_week_label'), { week: week.week, focus: week.focus })}
                       </p>
                       <StatusPill tone={week.status === 'done' ? 'ready' : week.status === 'in_progress' ? 'neutral' : 'gap'}>
-                        {week.status.replace('_', ' ')}
+                        {t(`workspace_status_${week.status}`)}
                       </StatusPill>
                     </div>
                     <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
@@ -650,12 +656,12 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, onUpl
               </div>
             </Panel>
 
-            <Panel title="Project and application rhythm">
+            <Panel title={t('ws_plan_rhythm_title')}>
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
-                  ['Project proof', 'Build one product case study from a current workflow improvement.'],
-                  ['Learning', 'Complete one roadmap prioritization exercise and one user interview synthesis.'],
-                  ['Applications', 'Apply to 5 bridge roles after resume title and evidence edits.'],
+                  [t('ws_plan_rhythm_project'), t('ws_plan_rhythm_project_desc')],
+                  [t('ws_plan_rhythm_learning'), t('ws_plan_rhythm_learning_desc')],
+                  [t('ws_plan_rhythm_applications'), t('ws_plan_rhythm_applications_desc')],
                 ].map(([title, detail]) => (
                   <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
                     <p className="font-medium text-slate-950 dark:text-slate-100">{title}</p>

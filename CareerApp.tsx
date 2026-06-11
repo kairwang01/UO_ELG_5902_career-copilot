@@ -759,9 +759,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             <div id="toolkit-panel">
                 {!resumeText ? (
                     <EmptyState
-                        title="Upload your resume to use the toolkit"
-                        description="The toolkit tailors every result to your experience, so it needs your resume first. Add it and these tools unlock right away."
-                        action={{ label: 'Upload resume', onClick: () => { setActiveTool(null); setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                        title={t('ws_toolkit_empty_title')}
+                        description={t('ws_toolkit_empty_desc')}
+                        action={{ label: t('ws_upload_resume'), onClick: () => { setActiveTool(null); setDashboardView('resume'); setIsUpdatingResume(true); } }}
                     />
                 ) : (
                     <AnalysisDisplay
@@ -853,9 +853,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             <div id="portfolio-panel">
                  {!resumeText ? (
                     <EmptyState
-                        title="Upload your resume to build your Showcase"
-                        description="Your Showcase turns your resume into a shareable professional profile. Add your resume to get started."
-                        action={{ label: 'Upload resume', onClick: () => { setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                        title={t('ws_portfolio_empty_title')}
+                        description={t('ws_portfolio_empty_desc')}
+                        action={{ label: t('ws_upload_resume'), onClick: () => { setDashboardView('resume'); setIsUpdatingResume(true); } }}
                     />
                  ) : (
                     <AnalysisDisplay

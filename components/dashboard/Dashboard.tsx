@@ -66,7 +66,15 @@ const fallbackScores: ChartDataPoint[] = [
   { label: 'Jun 2', value: 76 },
 ];
 
-const fallbackSkills = ['Product discovery', 'Stakeholder alignment', 'Roadmap prioritization', 'ATS formatting'];
+const fallbackSkillKeys = [
+  'dashboard_skill_product_discovery',
+  'dashboard_skill_stakeholder_alignment',
+  'dashboard_skill_roadmap_prioritization',
+  'dashboard_skill_ats_formatting',
+];
+
+const formatCopy = (template: string, values: Record<string, string | number>) =>
+  Object.entries(values).reduce((copy, [key, value]) => copy.replaceAll(`{${key}}`, String(value)), template);
 
 const getStartOfWeek = () => {
   const now = new Date();
@@ -132,8 +140,9 @@ const PriorityItem: React.FC<{
   title: string;
   detail: string;
   status: 'High' | 'Medium' | 'Ready';
+  statusLabel: string;
   onClick?: () => void;
-}> = ({ title, detail, status, onClick }) => {
+}> = ({ title, detail, status, statusLabel, onClick }) => {
   const tone =
     status === 'High'
       ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/50 dark:bg-red-900/30 dark:text-red-300'
@@ -152,7 +161,7 @@ const PriorityItem: React.FC<{
           <p className="font-medium text-slate-950 dark:text-slate-100">{title}</p>
           <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{detail}</p>
         </div>
-        <span className={`shrink-0 rounded border px-2 py-1 text-[11px] font-semibold ${tone}`}>{status}</span>
+        <span className={`shrink-0 rounded border px-2 py-1 text-[11px] font-semibold ${tone}`}>{statusLabel}</span>
       </div>
     </button>
   );
@@ -320,9 +329,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
   const displayScores = scoreData.length > 0 ? scoreData : fallbackScores;
   const latestScore = displayScores[displayScores.length - 1]?.value ?? (hasResume ? 72 : 0);
   const readinessScore = hasResume ? latestScore : 0;
-  const skills = topSkills.length > 0 ? topSkills : fallbackSkills;
-  const firstName = profile?.full_name?.split(' ')[0] || 'there';
-  const nextCtaLabel = hasResume ? 'Review priority fixes' : 'Upload resume';
+  const skills = topSkills.length > 0 ? topSkills : fallbackSkillKeys.map((key) => t(key));
+  const firstName = profile?.full_name?.split(' ')[0] || t('dashboard_user_fallback');
+  const nextCtaLabel = hasResume ? t('dashboard_review_priority_fixes') : t('ws_upload_resume');
   const applicationPulse = applications.reduce(
     (counts, app) => {
       const status = app.status.toLowerCase();
@@ -339,42 +348,45 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
   );
   const latestApplication = applications[0];
   const applicationStageHelper = applicationsLoading
-    ? 'Loading status'
+    ? t('dashboard_app_stage_loading')
     : applicationPulse.total > 0
-      ? `${applicationPulse.active} active · ${applicationPulse.interviewing} interview`
-      : 'Track status changes';
+      ? formatCopy(t('dashboard_app_stage_counts'), {
+          active: applicationPulse.active,
+          interviewing: applicationPulse.interviewing,
+        })
+      : t('dashboard_app_stage_track');
 
   const priorities = hasResume
     ? [
         {
-          title: 'Rewrite top 3 resume bullets with outcomes',
-          detail: 'Add one measurable result to each bullet before applying to product roles.',
+          title: t('dashboard_priority_rewrite_title'),
+          detail: t('dashboard_priority_rewrite_detail'),
           status: 'High' as const,
           view: 'resume' as const,
         },
         {
-          title: 'Review 12 high-fit job matches',
-          detail: 'Two roles have strong evidence from your current experience and low skill gaps.',
+          title: t('dashboard_priority_matches_title'),
+          detail: t('dashboard_priority_matches_detail'),
           status: 'Medium' as const,
           view: 'jobs' as const,
         },
         {
-          title: 'Run one STAR answer practice',
-          detail: 'Your last practice needs a clearer Result line and stakeholder communication example.',
+          title: t('dashboard_priority_interview_title'),
+          detail: t('dashboard_priority_interview_detail'),
           status: 'Medium' as const,
           view: 'interview' as const,
         },
       ]
     : [
         {
-          title: 'Add your resume to unlock the workbench',
-          detail: 'The report, job matches, interview prompts, and career plan use your resume as the baseline.',
+          title: t('dashboard_priority_upload_title'),
+          detail: t('dashboard_priority_upload_detail'),
           status: 'High' as const,
           view: 'resume' as const,
         },
         {
-          title: 'Preview the target role plan',
-          detail: 'Set a role target after upload to turn gaps into weekly actions.',
+          title: t('dashboard_priority_plan_title'),
+          detail: t('dashboard_priority_plan_detail'),
           status: 'Medium' as const,
           view: 'plan' as const,
         },
@@ -382,29 +394,29 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
 
   const searchStages = [
     {
-      label: 'Resume evidence',
-      helper: hasResume ? 'Baseline ready' : 'Upload first',
+      label: t('dashboard_stage_resume_label'),
+      helper: hasResume ? t('dashboard_stage_resume_ready') : t('dashboard_stage_resume_upload'),
       icon: FileText,
       view: 'resume' as const,
       tone: hasResume ? 'ready' : 'gap',
     },
     {
-      label: 'Interested roles',
-      helper: hasResume ? 'Review fit reasons' : 'Needs resume',
+      label: t('dashboard_stage_roles_label'),
+      helper: hasResume ? t('dashboard_stage_roles_ready') : t('dashboard_stage_roles_need_resume'),
       icon: Briefcase,
       view: 'jobs' as const,
       tone: hasResume ? 'ready' : 'gap',
     },
     {
-      label: 'Applied pipeline',
+      label: t('dashboard_stage_pipeline_label'),
       helper: applicationStageHelper,
       icon: ClipboardList,
       view: 'applications' as const,
       tone: applicationPulse.total > 0 ? 'ready' : hasResume ? 'neutral' : 'gap',
     },
     {
-      label: 'Interview practice',
-      helper: hasResume ? 'Prepare STAR answers' : 'Tailored later',
+      label: t('dashboard_stage_interview_label'),
+      helper: hasResume ? t('dashboard_stage_interview_ready') : t('dashboard_stage_interview_later'),
       icon: MessageSquare,
       view: 'interview' as const,
       tone: 'neutral',
@@ -416,12 +428,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-blue-700 dark:text-blue-400">Today&apos;s search workbench</p>
+            <p className="text-sm font-medium text-blue-700 dark:text-blue-400">{t('dashboard_workbench_kicker')}</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
-              Welcome back, {firstName}
+              {formatCopy(t('dashboard_workbench_welcome'), { name: firstName })}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              Keep the search moving through a simple loop: fix the resume evidence, review interested roles, apply with context, then track interviews and next actions.
+              {t('dashboard_workbench_desc')}
             </p>
           </div>
           <button
@@ -436,7 +448,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         {error && (
           <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>Live history is unavailable, so sample readiness data is shown. {error}</span>
+            <span>{formatCopy(t('dashboard_live_history_unavailable'), { error })}</span>
           </div>
         )}
       </div>
@@ -473,35 +485,38 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Resume readiness"
+          label={t('dashboard_metric_resume_readiness')}
           value={hasResume ? `${readinessScore}` : '--'}
-          helper={hasResume ? 'Score from the latest readiness pass.' : 'Upload a resume to generate the baseline.'}
+          helper={hasResume ? t('dashboard_metric_resume_readiness_ready') : t('dashboard_metric_resume_readiness_empty')}
           icon={FileText}
           tone="blue"
         />
         <MetricCard
-          label="Priority fixes"
+          label={t('dashboard_metric_priority_fixes')}
           value={hasResume ? '4' : '--'}
-          helper={hasResume ? 'ATS, title alignment, and evidence gaps.' : 'Fix list appears after analysis.'}
+          helper={hasResume ? t('dashboard_metric_priority_fixes_ready') : t('dashboard_metric_priority_fixes_empty')}
           icon={ListChecks}
           tone="amber"
         />
         <MetricCard
-          label="Matched roles"
+          label={t('dashboard_metric_matched_roles')}
           value={hasResume ? '12' : '--'}
-          helper={hasResume ? 'Ranked by evidence and missing skill risk.' : 'Matches need a resume baseline.'}
+          helper={hasResume ? t('dashboard_metric_matched_roles_ready') : t('dashboard_metric_matched_roles_empty')}
           icon={Briefcase}
           tone="green"
         />
         <MetricCard
-          label="Application status"
+          label={t('dashboard_metric_application_status')}
           value={applicationsLoading ? '...' : hasResume ? `${applicationPulse.active}` : '--'}
           helper={
             applicationsLoading
-              ? 'Loading tracked applications.'
+              ? t('dashboard_metric_application_status_loading')
               : applicationPulse.total > 0
-                ? `${applicationPulse.interviewing} interview-stage, ${applicationPulse.closed} closed.`
-                : hasResume ? 'Track applications after you start applying.' : 'Pipeline appears after resume and matches.'
+                ? formatCopy(t('dashboard_metric_application_status_counts'), {
+                    interviewing: applicationPulse.interviewing,
+                    closed: applicationPulse.closed,
+                  })
+                : hasResume ? t('dashboard_metric_application_status_ready') : t('dashboard_metric_application_status_empty')
           }
           icon={ClipboardList}
           tone="slate"
@@ -512,10 +527,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Readiness trend</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Track whether resume changes are improving role readiness before applying.</p>
+              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_readiness_trend_title')}</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{t('dashboard_readiness_trend_desc')}</p>
             </div>
-            {loading && <span className="text-xs font-medium text-slate-500 dark:text-slate-500">Loading history...</span>}
+            {loading && <span className="text-xs font-medium text-slate-500 dark:text-slate-500">{t('dashboard_loading_history')}</span>}
           </div>
           <div className="h-64 min-w-0 overflow-hidden">
             <Chart data={displayScores} width={620} height={250} t={t} />
@@ -523,8 +538,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Current skill evidence</h3>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Strongest signals to carry into job matching and interviews.</p>
+          <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_current_skill_title')}</h3>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{t('dashboard_current_skill_desc')}</p>
           <div className="mt-5 space-y-4">
             {skills.slice(0, 4).map((skill, index) => (
               <div key={skill} className="space-y-2">
@@ -543,8 +558,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Priority queue</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Work items ranked by impact on applications this week.</p>
+              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_priority_queue_title')}</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{t('dashboard_priority_queue_desc')}</p>
             </div>
             <Target className="h-5 w-5 text-blue-700 dark:text-blue-400" />
           </div>
@@ -555,6 +570,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
                 title={item.title}
                 detail={item.detail}
                 status={item.status}
+                statusLabel={t(`dashboard_priority_status_${item.status.toLowerCase()}`)}
                 onClick={() => onNavigate?.(item.view)}
               />
             ))}
@@ -565,13 +581,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Application progress</h3>
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_application_progress_title')}</h3>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                   {applicationsLoading
-                    ? 'Loading tracked roles...'
+                    ? t('dashboard_application_progress_loading')
                     : latestApplication
-                      ? `${latestApplication.job_title || 'Recent role'} · ${latestApplication.status || 'Tracked'}`
-                      : 'No tracked applications yet'}
+                      ? formatCopy(t('dashboard_application_progress_latest'), {
+                          role: latestApplication.job_title || t('dashboard_recent_role_fallback'),
+                          status: latestApplication.status || t('dashboard_tracked_status_fallback'),
+                        })
+                      : t('dashboard_application_progress_empty')}
                 </p>
               </div>
               <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-300">
@@ -580,9 +599,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
               {[
-                ['Active', applicationPulse.active],
-                ['Interviewing', applicationPulse.interviewing],
-                ['Closed', applicationPulse.closed],
+                [t('dashboard_pipeline_active'), applicationPulse.active],
+                [t('dashboard_pipeline_interviewing'), applicationPulse.interviewing],
+                [t('dashboard_pipeline_closed'), applicationPulse.closed],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">{label}</p>
@@ -595,7 +614,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
               onClick={() => onNavigate?.(applicationPulse.total > 0 ? 'applications' : 'jobs')}
               className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
             >
-              {applicationPulse.total > 0 ? 'Open application pipeline' : 'Find roles to apply'}
+              {applicationPulse.total > 0 ? t('dashboard_open_application_pipeline') : t('dashboard_find_roles_to_apply')}
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
@@ -606,9 +625,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
                 <MessageSquare className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Next interview drill</h3>
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_next_interview_title')}</h3>
                 <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                  Practice stakeholder prioritization and add one measurable Result line.
+                  {t('dashboard_next_interview_desc')}
                 </p>
               </div>
             </div>
@@ -617,7 +636,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
               onClick={() => onNavigate?.('interview')}
               className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
             >
-              Open practice room
+              {t('dashboard_open_practice_room')}
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
@@ -628,11 +647,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-blue-700 dark:text-blue-400" />
-            <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Weekly coaching summary</h3>
+            <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_weekly_coaching_title')}</h3>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{weeklySummary}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {['Resume evidence', 'Bridge applications', 'Interview result line'].map((label, index) => (
+            {[t('dashboard_weekly_chip_resume'), t('dashboard_weekly_chip_applications'), t('dashboard_weekly_chip_interview')].map((label, index) => (
               <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
                   <CheckCircle2 className={`h-4 w-4 ${index === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-600'}`} />
@@ -644,14 +663,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Recent activity</h3>
+          <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_recent_activity_title')}</h3>
           <div className="mt-4 space-y-3">
             {(activityFeed.length > 0
               ? activityFeed
               : [
-                  { type: 'Resume Analysis', details: hasResume ? 'Readiness score updated to 76' : 'Waiting for first upload' },
-                  { type: 'Job Match', details: 'Example match queue ready after resume analysis' },
-                  { type: 'Career Plan', details: 'Weekly plan starts with role target selection' },
+                  { type: t('dashboard_activity_resume_analysis'), details: hasResume ? t('dashboard_activity_resume_ready') : t('dashboard_activity_resume_waiting') },
+                  { type: t('dashboard_activity_job_match'), details: t('dashboard_activity_job_match_ready') },
+                  { type: t('dashboard_activity_career_plan'), details: t('dashboard_activity_career_plan_ready') },
                 ]
             ).map((item) => (
               <div key={`${item.type}-${item.details}`} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
