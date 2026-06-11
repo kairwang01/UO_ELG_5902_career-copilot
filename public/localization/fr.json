@@ -2091,5 +2091,17 @@
   "ws_plan_rhythm_learning": "Learning",
   "ws_plan_rhythm_learning_desc": "Complete one roadmap prioritization exercise and one user interview synthesis.",
   "ws_plan_rhythm_applications": "Applications",
-  "ws_plan_rhythm_applications_desc": "Apply to 5 bridge roles after resume title and evidence edits."
+  "ws_plan_rhythm_applications_desc": "Apply to 5 bridge roles after resume title and evidence edits.",
+  "agency_job_context_company": "Entreprise",
+  "agency_job_context_location": "Lieu",
+  "agency_job_context_salary": "Salaire",
+  "agency_active_jobs_count": "{count} postes actifs",
+  "agency_selected_job_label": "Poste publié sélectionné",
+  "agency_selected_job_missing_description": "Aucune description enregistrée ; le matching utilisera les métadonnées du poste.",
+  "agency_selected_job_ready": "Prêt pour le matching",
+  "agency_selected_job_clear": "Effacer la sélection",
+  "agency_jd_helper_posted": "Ce lot classera les CV selon le poste sélectionné.",
+  "agency_jd_helper_manual": "Utilisez un poste publié, une URL ou une description collée avant de classer les candidats.",
+  "agency_jd_length": "{count} caractères dans le brief de matching",
+  "agency_matching_empty_jd_hint": "Ajoutez une description de poste avant de classer les candidats."
 }

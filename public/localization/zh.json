@@ -2187,5 +2187,17 @@
   "ws_plan_rhythm_learning": "学习",
   "ws_plan_rhythm_learning_desc": "完成一次路线图优先级练习和一次用户访谈综合。",
   "ws_plan_rhythm_applications": "投递",
-  "ws_plan_rhythm_applications_desc": "修改简历标题和证据后申请 5 个过渡岗位。"
+  "ws_plan_rhythm_applications_desc": "修改简历标题和证据后申请 5 个过渡岗位。",
+  "agency_job_context_company": "公司",
+  "agency_job_context_location": "地点",
+  "agency_job_context_salary": "薪资",
+  "agency_active_jobs_count": "{count} 个开放职位",
+  "agency_selected_job_label": "已选择发布职位",
+  "agency_selected_job_missing_description": "该职位没有保存描述；匹配会使用职位元信息。",
+  "agency_selected_job_ready": "可用于匹配",
+  "agency_selected_job_clear": "清除选择",
+  "agency_jd_helper_posted": "本批简历会按选中的职位进行排序。",
+  "agency_jd_helper_manual": "排序候选人前，请选择已发布职位、导入 URL 或粘贴职位说明。",
+  "agency_jd_length": "匹配说明 {count} 个字符",
+  "agency_matching_empty_jd_hint": "请先提供职位说明，再进行候选人排序。"
 }

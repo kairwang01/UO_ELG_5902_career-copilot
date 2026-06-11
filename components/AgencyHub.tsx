@@ -12,7 +12,7 @@ import {
 import { parseFile } from "../services/fileHelpers";
 import { SUPPORTED_MARKETS, DEFAULT_MARKET } from "../config";
 import { DownloadButtons } from "./tools/ToolUtils";
-import { listActiveEmployerJobs } from "../lib/recruitingData";
+import { listActiveEmployerJobs, type JobPosting } from "../lib/recruitingData";
 import { useToast } from "./Toast";
 import { useModalBehavior } from "../hooks/useModalBehavior";
 import {
@@ -56,6 +56,18 @@ const formatTranslation = (
     (text, [key, value]) => text.replace(`{${key}}`, String(value)),
     template,
   );
+
+const buildPostedJobBrief = (job: JobPosting, t: TranslationFn) => {
+  const sections = [
+    job.title,
+    job.company_name ? `${t("agency_job_context_company")}: ${job.company_name}` : null,
+    job.location ? `${t("agency_job_context_location")}: ${job.location}` : null,
+    job.salary_range ? `${t("agency_job_context_salary")}: ${job.salary_range}` : null,
+    job.description?.trim() ? `\n${job.description.trim()}` : null,
+  ].filter(Boolean);
+
+  return sections.join("\n");
+};
 
 const agencyStatusLabel = (
   status: BulkAnalysisItem["status"],
@@ -1101,9 +1113,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const [jobDescription, setJobDescription] = useState("");
   const [jdUrl, setJdUrl] = useState("");
   const [isExtractingJd, setIsExtractingJd] = useState(false);
-  const [internalJobs, setInternalJobs] = useState<
-    { id: string; title: string; description: string | null }[]
-  >([]);
+  const [internalJobs, setInternalJobs] = useState<JobPosting[]>([]);
   const [selectedInternalJobId, setSelectedInternalJobId] =
     useState<string>("");
 
@@ -1116,30 +1126,27 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const [jobsFetchError, setJobsFetchError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch internal jobs when 'select' tab is active
-  useEffect(() => {
-    if (mode === "matching" && jdSource === "select") {
-      setIsLoadingJobs(true);
-      setJobsFetchError(false);
-      const fetchInternalJobs = async () => {
-        try {
-          const jobs = await listActiveEmployerJobs(session.user.id);
-          setInternalJobs(
-            jobs.map((job) => ({
-              id: job.id,
-              title: job.title,
-              description: job.description,
-            })),
-          );
-        } catch {
-          setJobsFetchError(true);
-        } finally {
-          setIsLoadingJobs(false);
-        }
-      };
-      fetchInternalJobs();
+  const fetchInternalJobs = useCallback(async () => {
+    setIsLoadingJobs(true);
+    setJobsFetchError(false);
+    try {
+      const jobs = await listActiveEmployerJobs(session.user.id);
+      setInternalJobs(jobs);
+    } catch {
+      setInternalJobs([]);
+      setJobsFetchError(true);
+    } finally {
+      setIsLoadingJobs(false);
     }
-  }, [mode, jdSource, session.user.id]);
+  }, [session.user.id]);
+
+  // Preload active postings as soon as the recruiter enters JD matching. The
+  // selector should feel ready, not like a hidden second step after tab switch.
+  useEffect(() => {
+    if (mode === "matching") {
+      void fetchInternalJobs();
+    }
+  }, [mode, fetchInternalJobs]);
 
   const handleJdUrlImport = async () => {
     if (!jdUrl.trim()) return;
@@ -1147,6 +1154,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     try {
       const result = await extractTextFromUrl(jdUrl);
       if (result.extractedText) {
+        setSelectedInternalJobId("");
         setJobDescription(result.extractedText);
         setJdSource("paste"); // Switch to paste mode to show result
         addToast(t("agency_jd_import_success"), "success");
@@ -1161,9 +1169,13 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const handleInternalJobSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const jobId = e.target.value;
     setSelectedInternalJobId(jobId);
+    if (!jobId) {
+      setJobDescription("");
+      return;
+    }
     const job = internalJobs.find((j) => j.id === jobId);
-    if (job && job.description) {
-      setJobDescription(job.description);
+    if (job) {
+      setJobDescription(buildPostedJobBrief(job, t));
     }
   };
 
@@ -1445,6 +1457,10 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const activeBlindResumeFile = viewBlindResumeId
     ? files.find((f) => f.id === viewBlindResumeId)
     : null;
+  const selectedInternalJob = selectedInternalJobId
+    ? internalJobs.find((job) => job.id === selectedInternalJobId) ?? null
+    : null;
+  const hasJobDescription = jobDescription.trim().length > 0;
 
   const activeHeader =
     mode === "general"
@@ -1590,7 +1606,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                 </label>
 
                 {/* JD Source Tabs */}
-                <div className="flex gap-2 mb-4 border-b border-blue-200 dark:border-blue-800 pb-2">
+                <div className="flex flex-wrap gap-2 mb-4 border-b border-blue-200 dark:border-blue-800 pb-2">
                   <button
                     onClick={() => setJdSource("paste")}
                     className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === "paste" ? "text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}
@@ -1612,13 +1628,23 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                   >
                     {t("agency_jd_tab_posted")}
                   </button>
+                  {mode === "matching" && internalJobs.length > 0 && (
+                    <span className="ml-auto inline-flex items-center rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300">
+                      {formatTranslation(t("agency_active_jobs_count"), {
+                        count: internalJobs.length,
+                      })}
+                    </span>
+                  )}
                 </div>
 
                 {/* Inputs based on source */}
                 {jdSource === "paste" && (
                   <textarea
                     value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedInternalJobId("");
+                      setJobDescription(e.target.value);
+                    }}
                     placeholder={t("agency_jd_paste_placeholder")}
                     className="w-full h-32 bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
                   />
@@ -1658,10 +1684,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     <div className="flex items-center justify-between gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">
                       <span>{t("agency_jobs_load_failed")}</span>
                       <button
-                        onClick={() => {
-                          setJobsFetchError(false);
-                          setJdSource("select");
-                        }}
+                        onClick={fetchInternalJobs}
                         className="text-xs font-semibold underline hover:no-underline"
                       >
                         {t("agency_retry")}
@@ -1683,11 +1706,65 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                       )}
                       {internalJobs.map((job) => (
                         <option key={job.id} value={job.id}>
-                          {job.title}
+                          {job.title}{job.location ? ` — ${job.location}` : ""}
                         </option>
                       ))}
                     </select>
                   ))}
+
+                {selectedInternalJob && (
+                  <div className="mt-4 animate-panel-expand rounded-xl border border-blue-200 bg-white p-4 text-sm shadow-sm dark:border-blue-800 dark:bg-slate-900">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                          {t("agency_selected_job_label")}
+                        </p>
+                        <p className="mt-1 truncate text-base font-bold text-gray-900 dark:text-gray-100">
+                          {selectedInternalJob.title}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-400">
+                          <span>{selectedInternalJob.location || t("talent_location_remote")}</span>
+                          {selectedInternalJob.salary_range && (
+                            <span>{selectedInternalJob.salary_range}</span>
+                          )}
+                          {!selectedInternalJob.description?.trim() && (
+                            <span className="font-semibold text-amber-700 dark:text-amber-300">
+                              {t("agency_selected_job_missing_description")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                          {t("agency_selected_job_ready")}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedInternalJobId("");
+                            setJobDescription("");
+                          }}
+                          className="text-xs font-semibold text-blue-700 underline-offset-2 hover:underline dark:text-blue-300"
+                        >
+                          {t("agency_selected_job_clear")}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 flex flex-col gap-2 text-xs text-blue-800 dark:text-blue-200 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    {selectedInternalJob
+                      ? t("agency_jd_helper_posted")
+                      : t("agency_jd_helper_manual")}
+                  </span>
+                  <span>
+                    {formatTranslation(t("agency_jd_length"), {
+                      count: jobDescription.trim().length,
+                    })}
+                  </span>
+                </div>
               </div>
             )}
 
@@ -1791,7 +1868,8 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                       onClick={runBulkAnalysis}
                       disabled={
                         isAnalyzing ||
-                        files.every((f) => f.status === "complete")
+                        files.every((f) => f.status === "complete") ||
+                        (mode === "matching" && !hasJobDescription)
                       }
                       className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-sm flex items-center gap-2"
                     >
@@ -1806,6 +1884,11 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     </button>
                   </div>
                 </div>
+                {mode === "matching" && !hasJobDescription && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-100">
+                    {t("agency_matching_empty_jd_hint")}
+                  </div>
+                )}
 
                 {/* Batch Insights */}
                 <BatchInsights files={files} mode={mode} t={t} />
