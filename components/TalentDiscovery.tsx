@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { discoverTalent, type DiscoveredCandidate } from '../services/aiClient';
 import type { UserProfile } from '../types';
 import EngageCandidateModal from './EngageCandidateModal';
@@ -72,6 +72,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
     // Posted-job selector state
     const [postedJobs, setPostedJobs] = useState<JobPosting[]>([]);
     const [jobsLoaded, setJobsLoaded] = useState(false);
+    const [jobsError, setJobsError] = useState<string | null>(null);
 
     // Track which jobs are currently selected in the selector (for snapshot)
     const [selectedJobId, setSelectedJobId] = useState<string>('');
@@ -100,14 +101,29 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
         },
     ];
 
-    // Fetch employer's active posted jobs once on mount
+    const fetchPostedJobs = useCallback(async () => {
+        if (!profile.id) {
+            setPostedJobs([]);
+            setJobsLoaded(true);
+            return;
+        }
+        setJobsLoaded(false);
+        setJobsError(null);
+        try {
+            const jobs = await listActiveEmployerJobs(profile.id);
+            setPostedJobs(jobs);
+        } catch {
+            setPostedJobs([]);
+            setJobsError(t('talent_posted_jobs_error'));
+        } finally {
+            setJobsLoaded(true);
+        }
+    }, [profile.id, t]);
+
+    // Fetch employer's active posted jobs once on mount.
     useEffect(() => {
-        if (!profile.id) return;
-        listActiveEmployerJobs(profile.id)
-            .then((jobs) => setPostedJobs(jobs))
-            .catch(() => { /* silent fail — hide selector */ })
-            .finally(() => setJobsLoaded(true));
-    }, [profile.id]);
+        fetchPostedJobs();
+    }, [fetchPostedJobs]);
 
     const handleSelectPostedJob = (jobId: string) => {
         setSelectedJobId(jobId);
@@ -333,7 +349,21 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                         {t('talent_loading_posted_jobs')}
                     </div>
                 )}
-                {jobsLoaded && postedJobs.length > 0 && (
+                {jobsLoaded && jobsError && (
+                    <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p>{jobsError}</p>
+                            <button
+                                type="button"
+                                onClick={fetchPostedJobs}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/40 sm:w-auto"
+                            >
+                                {t('talent_retry_posted_jobs')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {jobsLoaded && !jobsError && postedJobs.length > 0 && (
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('talent_select_posted_job')}
@@ -343,8 +373,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                             onChange={(e) => handleSelectPostedJob(e.target.value)}
                             className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
                         >
-                            <option value="" disabled>
-                                {t('talent_select_posted_job_placeholder')}
+                            <option value="">
+                                {t('talent_select_manual_option')}
                             </option>
                             {postedJobs.map((job) => (
                                 <option key={job.id} value={job.id}>
@@ -373,7 +403,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                         )}
                     </div>
                 )}
-                {jobsLoaded && postedJobs.length === 0 && (
+                {jobsLoaded && !jobsError && postedJobs.length === 0 && (
                     <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                             {t('talent_no_posted_jobs')}

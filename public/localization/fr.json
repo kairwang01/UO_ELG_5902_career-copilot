@@ -1360,9 +1360,12 @@
   "talent_search_button": "Trouver des candidats correspondants",
   "talent_search_desc": "Collez une description de poste pour trouver proactivement des candidats correspondants dans le vivier de talents Career CoPilot.",
   "talent_search_error": "Une erreur inconnue est survenue lors de la recherche.",
+  "talent_loading_verified": "Chargement des talents vérifiés",
+  "talent_loading_posted_jobs": "Chargement des offres publiées",
+  "talent_location_remote": "Télétravail",
+  "talent_posted_job_loaded": "Description remplie depuis cette offre",
   "talent_searching": "Recherche en cours...",
   "talent_select_posted_job": "Sélectionner parmi vos offres publiées",
-  "talent_select_posted_job_placeholder": "— Sélectionnez une offre publiée pour auto-remplir —",
   "tool_agile_coach_intro_desc": "Obtenez des réponses claires et pratiques sur les cérémonies Agile, les rôles et les pratiques d'équipe.",
   "tool_agile_coach_intro_title": "Coach Agile & Scrum",
   "tool_career_path_intro_line1": "Tracez un chemin étape par étape de votre expérience actuelle à votre poste de rêve.",
@@ -1841,5 +1844,8 @@
   "shortlist_filter_result": "{shown} sur {total} candidats affichés",
   "shortlist_no_results_title": "Aucun candidat ne correspond aux filtres",
   "shortlist_no_results_desc": "Effacez la recherche ou changez de statut pour voir plus de candidats sauvegardés.",
-  "shortlist_clear_filters": "Effacer les filtres"
+  "shortlist_clear_filters": "Effacer les filtres",
+  "talent_select_manual_option": "Coller un brief de rôle manuellement",
+  "talent_posted_jobs_error": "Impossible de charger vos offres publiées. Vous pouvez coller un brief manuellement ou réessayer.",
+  "talent_retry_posted_jobs": "Réessayer"
 }

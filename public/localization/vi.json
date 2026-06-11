@@ -993,7 +993,6 @@
   "job_card_uses_credits": "Sử dụng credit",
   "account_model_managed": "AI models are managed by the platform.",
   "talent_select_posted_job": "Chọn từ tin đã đăng",
-  "talent_select_posted_job_placeholder": "— Chọn tin đã đăng để tự động điền —",
   "talent_no_posted_jobs": "Chưa có tin đăng nào đang hoạt động. Dán mô tả bên dưới.",
   "org_company_size": "Quy mô công ty",
   "org_industry": "Ngành",
@@ -1119,6 +1118,10 @@
   "talent_match_label": "Phù hợp",
   "talent_load_error": "Không thể tải nhân tài đã xác minh.",
   "talent_search_error": "Đã xảy ra lỗi không xác định trong quá trình tìm kiếm.",
+  "talent_loading_verified": "Đang tải nhân tài đã xác minh",
+  "talent_loading_posted_jobs": "Đang tải tin đã đăng",
+  "talent_location_remote": "Từ xa",
+  "talent_posted_job_loaded": "Đã điền mô tả từ tin đăng này",
   "discover_verified_summary_default": "Kỹ năng của ứng viên này đã được xác minh và đặt cọc trong kho nhân tài.",
   "portal_subtitle": "CỔNG TUYỂN DỤNG",
   "portal_nav_workspace_group": "KHÔNG GIAN LÀM VIỆC",
@@ -1841,5 +1844,8 @@
   "shortlist_filter_result": "Đang hiển thị {shown} / {total} ứng viên",
   "shortlist_no_results_title": "Không có ứng viên phù hợp bộ lọc",
   "shortlist_no_results_desc": "Xóa tìm kiếm hoặc đổi trạng thái để xem thêm ứng viên đã lưu.",
-  "shortlist_clear_filters": "Xóa bộ lọc"
+  "shortlist_clear_filters": "Xóa bộ lọc",
+  "talent_select_manual_option": "Dán mô tả vai trò thủ công",
+  "talent_posted_jobs_error": "Không tải được các tin đã đăng. Bạn có thể dán mô tả thủ công hoặc thử lại.",
+  "talent_retry_posted_jobs": "Tải lại tin đăng"
 }
