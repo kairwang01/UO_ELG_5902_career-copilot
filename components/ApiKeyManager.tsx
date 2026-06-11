@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { data as dataClient } from '@/lib/data';
 import type { AppSession, ApiKey } from '@/lib/data';
 import { useToast } from './Toast';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface ApiKeyManagerProps {
   session: AppSession;
@@ -15,6 +16,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
   const [fetchError, setFetchError] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  useModalBehavior(() => setGeneratedKey(null), !!generatedKey);
   const { addToast } = useToast();
 
   const fetchKeys = useCallback(async () => {

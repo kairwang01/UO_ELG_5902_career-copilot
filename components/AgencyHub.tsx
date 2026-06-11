@@ -8,6 +8,7 @@ import { SUPPORTED_MARKETS, DEFAULT_MARKET } from '../config';
 import { DownloadButtons } from './tools/ToolUtils';
 import { listActiveEmployerJobs } from '../lib/recruitingData';
 import { useToast } from './Toast';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface AgencyHubProps {
     session: Session;
@@ -70,6 +71,7 @@ const FilterTabs = ({ currentFilter, setFilter, counts }: { currentFilter: strin
 );
 
 const AnalysisResultModal = ({ file, onClose }: { file: BulkAnalysisItem, onClose: () => void }) => {
+    useModalBehavior(onClose);
     if (!file.result) return null;
     const { score, summary, strengths, improvements, keywords } = file.result;
 
@@ -84,7 +86,7 @@ const AnalysisResultModal = ({ file, onClose }: { file: BulkAnalysisItem, onClos
                             <p className="text-sm text-gray-500">Detailed Analysis Report</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
+                    <button onClick={onClose} aria-label="Close" className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
@@ -264,6 +266,7 @@ const PitchModal: React.FC<{
     onClose: () => void; 
 }> = ({ file, onClose }) => {
     const { addToast } = useToast();
+    useModalBehavior(onClose);
     if (!file.pitchEmail) return null;
 
     const copyToClipboard = () => {
@@ -277,7 +280,7 @@ const PitchModal: React.FC<{
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Client Pitch Email</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
@@ -313,6 +316,7 @@ const PrepKitModal: React.FC<{
     file: BulkAnalysisItem; 
     onClose: () => void; 
 }> = ({ file, onClose }) => {
+    useModalBehavior(onClose);
     if (!file.prepKit) return null;
 
     const { weakSpots = [], keyProjects = [], predictedQuestions = [] } = file.prepKit;
@@ -336,7 +340,7 @@ const PrepKitModal: React.FC<{
                     <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Interview Prep Kit: {candidateName}</h3>
                     <div className="flex items-center gap-3">
                         <DownloadButtons textContent={formatForDownload()} baseFilename={`prep_kit_${candidateName.replace(/\s+/g, '_')}`} />
-                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
@@ -381,6 +385,7 @@ const BlindResumeModal: React.FC<{
     file: BulkAnalysisItem; 
     onClose: () => void; 
 }> = ({ file, onClose }) => {
+    useModalBehavior(onClose);
     if (!file.blindResumeText) return null;
 
     return (
@@ -390,7 +395,7 @@ const BlindResumeModal: React.FC<{
                     <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Blind Resume: {file.fileName}</h3>
                     <div className="flex items-center gap-3">
                         <DownloadButtons textContent={file.blindResumeText} baseFilename={`blind_resume_${file.fileName.replace(/\s+/g, '_')}`} />
-                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>

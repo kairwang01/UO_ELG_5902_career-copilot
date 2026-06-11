@@ -19,6 +19,7 @@ interface JobPostFormProps {
 
 // Simple modal component for inclusivity results
 const InclusivityModal: React.FC<{ suggestions: InclusivitySuggestion[]; onClose: () => void }> = ({ suggestions, onClose }) => {
+    useModalBehavior(onClose);
     const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) {
             onClose();
@@ -57,19 +58,20 @@ const InclusivityModal: React.FC<{ suggestions: InclusivitySuggestion[]; onClose
 
 
 const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, onPostCreated, existingJob, t, embedded = false }) => {
-    useModalBehavior(onClose, !embedded);
     // Main form state
     const [jobTitle, setJobTitle] = useState('');
     const [location, setLocation] = useState('');
     const [salaryRange, setSalaryRange] = useState('');
     const [keyResponsibilities, setKeyResponsibilities] = useState('');
     const [jobDescription, setJobDescription] = useState('');
-    
+
     // UI/Loading state
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [aiLoading, setAiLoading] = useState<null | 'description' | 'salary' | 'inclusivity' | 'format'>(null);
     const [inclusivityResults, setInclusivityResults] = useState<InclusivitySuggestion[] | null>(null);
+    // While the nested InclusivityModal is open, Escape should close that layer, not the form.
+    useModalBehavior(onClose, !embedded && !inclusivityResults);
     const [salarySuggestion, setSalarySuggestion] = useState<{ yearly: string; monthly: string; } | null>(null);
     const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
 

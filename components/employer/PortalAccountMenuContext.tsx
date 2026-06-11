@@ -10,6 +10,8 @@ export interface PortalAccountMenuConfig {
   onAccount: () => void;
   onSignOut: () => void;
   t: (key: string) => string;
+  /** When set, PortalTopBar shows a hamburger below lg that opens the mobile nav drawer. */
+  onOpenMobileNav?: () => void;
 }
 
 const PortalAccountMenuContext = createContext<PortalAccountMenuConfig | null>(null);

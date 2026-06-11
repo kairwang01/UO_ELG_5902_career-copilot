@@ -114,9 +114,9 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
 
     useEffect(() => {
         if (isOpen) {
-            setMessages([{ role: 'model', content: "Hi there! I'm Alex, your AI-powered career coach. Whether you're looking for resume feedback, interview practice, or career advice, I'm here to help. What's on your mind today?" }]);
+            setMessages([{ role: 'model', content: t('coach_greeting') }]);
         }
-    }, [isOpen]);
+    }, [isOpen, t]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

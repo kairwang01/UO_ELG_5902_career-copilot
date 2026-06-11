@@ -10,6 +10,7 @@ import { applyResumeImprovements } from '../services/aiClient';
 import { renderFormattedText } from './tools/ToolUtils';
 import ResumePreview from './ResumePreview';
 import { useSettings } from '../contexts/SettingsContext';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 
 interface AnalysisDisplayProps {
@@ -26,6 +27,8 @@ interface AnalysisDisplayProps {
   onApplyImprovements: (newText: string) => void;
   activeTool: string | null;
   setActiveTool: (tool: string | null) => void;
+  /** Leaves the report view and opens the toolkit gallery (result view only). */
+  onContinueToToolkit?: () => void;
 }
 
 const ScoreCircle: React.FC<{ score: number, t: (key: string) => string }> = ({ score, t }) => {
@@ -77,6 +80,8 @@ const ScoreCircle: React.FC<{ score: number, t: (key: string) => string }> = ({ 
 };
 
 const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; resumeText: string; market: string; t: (key: string) => string; }> = ({ isOpen, onClose, resumeText, market, t }) => {
+  useModalBehavior(onClose, isOpen);
+
   if (!isOpen) return null;
 
   return (
@@ -89,7 +94,7 @@ const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; res
         onClick={e => e.stopPropagation()}
       >
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Resume Reference</h3>
+          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{t('analysis_reference_title')}</h3>
           <button 
             onClick={onClose} 
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-slate-700"
@@ -108,7 +113,7 @@ const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; res
 };
 
 
-const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, resumeText, userPlan, market, navigateToPricing, session, profile, refreshProfile, onApplyImprovements, activeTool, setActiveTool }) => {
+const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, resumeText, userPlan, market, navigateToPricing, session, profile, refreshProfile, onApplyImprovements, activeTool, setActiveTool, onContinueToToolkit }) => {
   const [toolInput, setToolInput] = useState<string>('');
   const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
   const userPlanLevel = PLAN_HIERARCHY[userPlan] ?? 0;
@@ -126,7 +131,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
   
   const handleApplySuggestions = async () => {
     if (!result) return;
-    if (!window.confirm("Are you sure? This will rewrite your resume text with the AI's suggestions. Your current text will be replaced.")) {
+    if (!window.confirm(t('confirm_apply_improvements'))) {
         return;
     }
     setIsOptimizing(true);
@@ -339,8 +344,11 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
             </div>
 
         <div className="mt-12 text-center">
-            <button onClick={() => openTool(null)} className="font-bold py-3 px-8 rounded-lg shadow-md bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-slate-600 transition-all">
-                Continue to AI Toolkit &rarr;
+            <button
+              onClick={() => (onContinueToToolkit ? onContinueToToolkit() : onReset())}
+              className="font-bold py-3 px-8 rounded-lg shadow-md bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-slate-600 transition-all"
+            >
+                {t('analysis_continue_toolkit')}
             </button>
         </div>
     </div>

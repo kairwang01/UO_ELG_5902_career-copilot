@@ -30,7 +30,7 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
   const [industry, setIndustry] = useState('');
   const [foundedYear, setFoundedYear] = useState('');
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     setCompanyName(profile.company_name || '');
@@ -59,9 +59,9 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
 
       if (error) throw error;
       await onSaved();
-      setMessage('Profile saved.');
+      setMessage({ type: 'success', text: t('portal_org_saved') });
     } catch (err) {
-      setMessage((err as Error).message || 'Save failed.');
+      setMessage({ type: 'error', text: (err as Error).message || t('portal_org_save_failed') });
     } finally {
       setSaving(false);
     }
@@ -75,10 +75,10 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
 
   return (
     <>
-      <PortalTopBar title="Organization Profile" darkMode={dm} />
+      <PortalTopBar title={t('portal_nav_org_profile')} darkMode={dm} />
       <div className="max-w-[1088px] mx-auto p-8">
         <p className={`mb-8 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
-          Manage your organization's information and branding.
+          {t('portal_org_subtitle')}
         </p>
 
         <form onSubmit={handleSave}>
@@ -88,33 +88,33 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
                 <Building2 className="w-5 h-5 text-[#1d4ed8]" />
               </div>
               <h2 className={`text-xl font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>
-                Organization Information
+                {t('portal_org_info_title')}
               </h2>
             </div>
 
             <div className="space-y-6">
               {/* Logo — reuses CompanyLogo which handles Firebase Storage upload */}
               <div>
-                <label className={label}>Organization Logo</label>
+                <label className={label}>{t('portal_org_logo')}</label>
                 <CompanyLogo url={logoUrl} size={96} onUpload={(url) => setLogoUrl(url)} />
               </div>
 
               <div>
                 <label className={label}>
-                  Organization Name <span className="text-red-500">*</span>
+                  {t('portal_org_name')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   required
-                  placeholder="e.g. Acme Corporation"
+                  placeholder={t('portal_org_name_ph')}
                   className={input}
                 />
               </div>
 
               <div>
-                <label className={label}>Website</label>
+                <label className={label}>{t('portal_org_website')}</label>
                 <input
                   type="url"
                   value={website}
@@ -161,25 +161,25 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
                   maxLength={4}
                   value={foundedYear}
                   onChange={(e) => setFoundedYear(e.target.value)}
-                  placeholder="e.g. 2015"
+                  placeholder={t('portal_org_founded_ph')}
                   className={input}
                 />
               </div>
 
               <div>
-                <label className={label}>Description</label>
+                <label className={label}>{t('portal_org_desc')}</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Brief description of your organization…"
+                  placeholder={t('portal_org_desc_ph')}
                   rows={5}
                   className={input}
                 />
               </div>
 
               {message && (
-                <p className={`text-sm ${message === 'Profile saved.' ? 'text-green-600' : 'text-red-500'}`}>
-                  {message}
+                <p className={`text-sm ${message.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                  {message.text}
                 </p>
               )}
 
@@ -201,14 +201,14 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
                     dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  Cancel
+                  {t('portal_org_cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="flex-1 px-6 py-3 bg-[#1d4ed8] text-white rounded-lg hover:bg-[#1a45c9] transition-colors disabled:opacity-60 font-medium"
                 >
-                  {saving ? 'Saving…' : 'Save Profile'}
+                  {saving ? t('portal_org_saving') : t('portal_org_save')}
                 </button>
               </div>
             </div>

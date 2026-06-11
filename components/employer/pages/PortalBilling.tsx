@@ -14,42 +14,17 @@ interface PortalBillingProps {
   t: (key: string) => string;
 }
 
+// Names and feature lines come from i18n: portal_plan_<key>_name / _f1.._f4
 const PLAN_DISPLAY = [
-  {
-    key: 'free',
-    name: 'Free',
-    price: '$0',
-    period: '/month',
-    jobLimit: 3,
-    features: ['3 active job posts', '30-day job listing', 'Basic AI job creation', 'Standard applicant view'],
-  },
-  {
-    key: 'starter',
-    name: 'Starter',
-    price: '$79',
-    period: '/month',
-    jobLimit: 8,
-    features: ['8 active job posts', '30-day job visibility', 'AI job description generator', 'Basic candidate matching'],
-  },
-  {
-    key: 'growth',
-    name: 'Growth',
-    price: '$199',
-    period: '/month',
-    jobLimit: 20,
-    features: ['20 active job posts', '45-day job visibility', 'Advanced AI matching', 'Analytics & company branding'],
-  },
-  {
-    key: 'pro',
-    name: 'Pro / Enterprise',
-    price: '$499',
-    period: '/month',
-    jobLimit: 100,
-    features: ['100 active job posts', '60-day premium visibility', 'Full AI + verified talent access', 'Priority support'],
-  },
+  { key: 'free', price: '$0', period: '/month', jobLimit: 3 },
+  { key: 'starter', price: '$79', period: '/month', jobLimit: 8 },
+  { key: 'growth', price: '$199', period: '/month', jobLimit: 20 },
+  { key: 'pro', price: '$499', period: '/month', jobLimit: 100 },
 ];
 
-export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, planSaving = false, navigateToBusinessPricing }: PortalBillingProps) {
+const PLAN_FEATURE_SLOTS = [1, 2, 3, 4] as const;
+
+export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, planSaving = false, navigateToBusinessPricing, t }: PortalBillingProps) {
   const dm = darkMode;
   const currentStatus = profile.subscription_status || 'free';
   const card = `rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`;
@@ -76,12 +51,12 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, pla
 
   return (
     <>
-      <PortalTopBar title="Billing & Plan" darkMode={dm} />
+      <PortalTopBar title={t('portal_nav_billing')} darkMode={dm} />
       <div className="max-w-[1088px] mx-auto p-8 space-y-8">
 
         {/* Current plan */}
         <div className={card}>
-          <p className={sectionLabel}>Current Plan</p>
+          <p className={sectionLabel}>{t('portal_billing_current_plan')}</p>
           <div className="flex items-start justify-between flex-wrap gap-6">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
@@ -89,22 +64,24 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, pla
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h2 className={`text-xl font-bold ${text}`}>{currentPlan.name} Plan</h2>
+                  <h2 className={`text-xl font-bold ${text}`}>
+                    {t('portal_billing_plan_title').replace('{name}', t(`portal_plan_${currentPlan.key}_name`))}
+                  </h2>
                   {isActive && (
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-[#1d4ed8]">
-                      Active
+                      {t('portal_billing_active')}
                     </span>
                   )}
                   {currentStatus.startsWith('pending') && (
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
-                      Pending
+                      {t('portal_billing_pending')}
                     </span>
                   )}
                 </div>
                 <p className={`text-sm ${muted}`}>
                   {currentPlan.price}{currentPlan.period}
                   {isActive && (
-                    <> &nbsp;·&nbsp; <span className={dm ? 'text-gray-300' : 'text-gray-700'}>Billed monthly</span></>
+                    <> &nbsp;·&nbsp; <span className={dm ? 'text-gray-300' : 'text-gray-700'}>{t('portal_billing_billed_monthly')}</span></>
                   )}
                 </p>
               </div>
@@ -116,26 +93,28 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, pla
               }`}
             >
               <CreditCard size={15} />
-              Manage Billing
+              {t('portal_billing_manage')}
             </button>
           </div>
 
           {/* Job Posts Used progress bar */}
           <div className={`mt-5 pt-5 border-t ${divider}`}>
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${text}`}>Job Posts Used</span>
+              <span className={`text-sm font-medium ${text}`}>{t('portal_billing_posts_used')}</span>
               <span className={`text-sm font-semibold ${text}`}>{usedCount} / {planLimit}</span>
             </div>
             <div className={`w-full h-2 rounded-full ${dm ? 'bg-gray-700' : 'bg-gray-200'}`}>
               <div className="h-2 rounded-full bg-[#1d4ed8]" style={{ width: `${usedPct}%` }} />
             </div>
-            <p className={`text-sm mt-2 ${muted}`}>{Math.max(0, planLimit - usedCount)} job post{planLimit - usedCount !== 1 ? 's' : ''} remaining this cycle</p>
+            <p className={`text-sm mt-2 ${muted}`}>
+              {t('portal_billing_posts_remaining').replace('{n}', String(Math.max(0, planLimit - usedCount)))}
+            </p>
           </div>
         </div>
 
         {/* Available plans */}
         <div>
-          <p className={sectionLabel}>Available Plans</p>
+          <p className={sectionLabel}>{t('portal_billing_available_plans')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {PLAN_DISPLAY.map((plan, idx) => {
               const isCurrent = plan.key === currentPlanKey;
@@ -151,22 +130,22 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, pla
                       : 'bg-white border-gray-200'
                   }`}
                 >
-                  <p className={`text-sm font-semibold mb-1 ${isCurrent ? 'text-[#1d4ed8]' : muted}`}>{plan.name}</p>
+                  <p className={`text-sm font-semibold mb-1 ${isCurrent ? 'text-[#1d4ed8]' : muted}`}>{t(`portal_plan_${plan.key}_name`)}</p>
                   <div className="flex items-baseline gap-1 mb-4">
                     <span className={`text-2xl font-bold ${text}`}>{plan.price}</span>
                     <span className={`text-sm ${muted}`}>{plan.period}</span>
                   </div>
                   <ul className="space-y-2 flex-1 mb-5">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2">
+                    {PLAN_FEATURE_SLOTS.map((slot) => (
+                      <li key={slot} className="flex items-start gap-2">
                         <Check size={13} className="text-[#1d4ed8] mt-0.5 shrink-0" />
-                        <span className={`text-sm ${muted}`}>{f}</span>
+                        <span className={`text-sm ${muted}`}>{t(`portal_plan_${plan.key}_f${slot}`)}</span>
                       </li>
                     ))}
                   </ul>
                   {isCurrent ? (
                     <button disabled className="w-full py-2 rounded-lg text-sm font-semibold bg-[#1d4ed8] text-white cursor-default">
-                      Current Plan
+                      {t('portal_billing_current_plan')}
                     </button>
                   ) : isUpgrade ? (
                     <button
@@ -174,7 +153,7 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, pla
                       disabled={planSaving}
                       className="w-full py-2 rounded-lg text-sm font-semibold bg-blue-50 text-[#1d4ed8] border border-[#1d4ed8] hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {planSaving ? 'Updating…' : 'Upgrade'}
+                      {planSaving ? t('portal_billing_updating') : t('portal_billing_upgrade')}
                     </button>
                   ) : (
                     <button
@@ -184,7 +163,7 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, pla
                         dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
                       }`}
                     >
-                      {planSaving ? 'Updating…' : 'Switch Plan'}
+                      {planSaving ? t('portal_billing_updating') : t('portal_billing_switch')}
                     </button>
                   )}
                 </div>
@@ -195,9 +174,9 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, pla
 
         {/* Billing history placeholder */}
         <div className={card}>
-          <p className={sectionLabel}>Billing History</p>
+          <p className={sectionLabel}>{t('portal_billing_history')}</p>
           <p className={`text-sm ${muted}`}>
-            Billing history will appear here once payment records are available.
+            {t('portal_billing_history_empty')}
           </p>
         </div>
       </div>

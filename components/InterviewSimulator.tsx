@@ -678,8 +678,9 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                         type="button"
                                         onClick={toggleListening}
                                         aria-pressed={isListening}
+                                        aria-label={isListening ? t('mi_mic_stop') : t('mi_mic_start')}
                                         className={`p-2.5 rounded-full transition-colors shrink-0 ${isListening ? 'bg-red-500 text-white animate-pulse-mic' : 'bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-slate-500'}`}
-                                        title={t('mi_answer_placeholder')}
+                                        title={isListening ? t('mi_mic_stop') : t('mi_mic_start')}
                                     >
                                         <Mic className="h-5 w-5" />
                                     </button>

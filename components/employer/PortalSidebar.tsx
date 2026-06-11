@@ -35,6 +35,8 @@ interface PortalSidebarProps {
   currentLang: string;
   onLanguageChange: (lang: string) => void;
   t: (key: string) => string;
+  /** Rendered inside the mobile drawer overlay (always visible, fills the drawer height). */
+  mobile?: boolean;
 }
 
 export function PortalSidebar({
@@ -46,6 +48,7 @@ export function PortalSidebar({
   currentLang,
   onLanguageChange,
   t,
+  mobile = false,
 }: PortalSidebarProps) {
 
   const dm = darkMode;
@@ -69,7 +72,9 @@ export function PortalSidebar({
 
   return (
     <aside
-      className={`w-64 flex-shrink-0 flex flex-col h-screen border-r ${
+      className={`${
+        mobile ? 'flex w-72 max-w-[85vw] h-full' : 'hidden lg:flex w-64 h-screen'
+      } flex-shrink-0 flex-col border-r ${
         dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       }`}
     >

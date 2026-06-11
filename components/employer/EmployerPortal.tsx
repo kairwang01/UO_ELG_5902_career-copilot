@@ -70,6 +70,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   // For edit-job flow: which job to edit, back to which page
   const [jobToEdit, setJobToEdit] = useState<JobPostingWithCount | null>(null);
   const [planSaving, setPlanSaving] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const { addToast } = useToast();
   // For applicant funnel
   const [jobForFunnel, setJobForFunnel] = useState<JobPosting | null>(null);
@@ -136,6 +137,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     // Clear edit/funnel state when navigating via sidebar
     setJobToEdit(null);
     setJobForFunnel(null);
+    setIsMobileNavOpen(false);
     setCurrentPage(page);
   };
 
@@ -204,24 +206,42 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     onAccount: () => navigate('account-settings'),
     onSignOut,
     t,
+    onOpenMobileNav: () => setIsMobileNavOpen(true),
   };
+
+  const sidebarProps = {
+    onNavigate: navigate,
+    onGoHome,
+    profile,
+    darkMode,
+    onToggleDark: onToggleTheme,
+    currentLang,
+    onLanguageChange,
+    t,
+  };
+
+  // Slide-over nav for narrow screens — the sidebar itself is hidden below lg.
+  const renderMobileNavDrawer = (page: PortalPage) =>
+    isMobileNavOpen ? (
+      <div className="fixed inset-0 z-50 lg:hidden">
+        <div
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+          onClick={() => setIsMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+        <div className="absolute inset-y-0 left-0">
+          <PortalSidebar {...sidebarProps} currentPage={page} mobile />
+        </div>
+      </div>
+    ) : null;
 
   // Applicant funnel takes over the whole main area
   if (jobForFunnel) {
     return (
       <PortalAccountMenuProvider value={accountMenuProps}>
         <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-          <PortalSidebar
-            currentPage={prevPage}
-            onNavigate={navigate}
-            onGoHome={onGoHome}
-            profile={profile}
-            darkMode={darkMode}
-            onToggleDark={onToggleTheme}
-            currentLang={currentLang}
-            onLanguageChange={onLanguageChange}
-            t={t}
-          />
+          <PortalSidebar {...sidebarProps} currentPage={prevPage} />
+          {renderMobileNavDrawer(prevPage)}
           <main className="flex-1 overflow-y-auto">
             <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
             <div className="max-w-[1088px] mx-auto p-8">
@@ -240,17 +260,8 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   return (
     <PortalAccountMenuProvider value={accountMenuProps}>
       <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-        <PortalSidebar
-          currentPage={currentPage}
-          onNavigate={navigate}
-          onGoHome={onGoHome}
-          profile={profile}
-          darkMode={darkMode}
-          onToggleDark={onToggleTheme}
-          currentLang={currentLang}
-          onLanguageChange={onLanguageChange}
-          t={t}
-        />
+        <PortalSidebar {...sidebarProps} currentPage={currentPage} />
+        {renderMobileNavDrawer(currentPage)}
 
         <main className="flex-1 overflow-y-auto">
           {currentPage === 'dashboard' && (
