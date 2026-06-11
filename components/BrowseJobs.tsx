@@ -45,6 +45,22 @@ const QUICK_SEARCH_KEYS = [
   'browse_jobs_quick_remote',
 ] as const;
 
+type WorkModeFilter = 'all' | 'remote' | 'hybrid' | 'onsite';
+type DerivedWorkMode = Exclude<WorkModeFilter, 'all'>;
+
+const WORK_MODE_OPTIONS: Array<{ value: WorkModeFilter; labelKey: string }> = [
+  { value: 'all', labelKey: 'browse_jobs_work_mode_all' },
+  { value: 'remote', labelKey: 'browse_jobs_work_mode_remote' },
+  { value: 'hybrid', labelKey: 'browse_jobs_work_mode_hybrid' },
+  { value: 'onsite', labelKey: 'browse_jobs_work_mode_onsite' },
+];
+
+const WORK_MODE_TOKENS: Record<DerivedWorkMode, string[]> = {
+  remote: ['remote', 'remotely', 'work from home', 'wfh', 'teletravail', '远程', 'リモート', 'tu xa'],
+  hybrid: ['hybrid', 'hybride', 'mixed', '混合', 'ハイブリッド', 'ket hop'],
+  onsite: ['onsite', 'on-site', 'on site', 'office', 'in office', 'vor ort', 'sur site', '现场', '現場', '办公室', '辦公室', '出社', 'オフィス', 'tai van phong'],
+};
+
 const normalizeFilterText = (value: string) =>
   value
     .toLowerCase()
@@ -84,6 +100,24 @@ const findPreferredLocation = (prefs: JobPreferences | null, locations: string[]
     );
   }) ?? 'all';
 };
+
+const detectWorkMode = (value: string): WorkModeFilter => {
+  const normalized = normalizeFilterText(value);
+  if (!normalized) return 'all';
+  if (WORK_MODE_TOKENS.remote.some((token) => normalized.includes(token))) return 'remote';
+  if (WORK_MODE_TOKENS.hybrid.some((token) => normalized.includes(token))) return 'hybrid';
+  if (WORK_MODE_TOKENS.onsite.some((token) => normalized.includes(token))) return 'onsite';
+  return 'all';
+};
+
+const deriveWorkMode = (job: JobPosting): DerivedWorkMode => {
+  const explicitMode = detectWorkMode(`${job.location ?? ''} ${job.description ?? ''}`);
+  if (explicitMode !== 'all') return explicitMode;
+  return 'onsite';
+};
+
+const findPreferredWorkMode = (prefs: JobPreferences | null): WorkModeFilter =>
+  prefs ? detectWorkMode(prefs.locations) : 'all';
 
 // ── skeleton card ──────────────────────────────────────────────────────────────
 const SkeletonCard: React.FC = () => (
@@ -125,6 +159,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   const [rawKeyword, setRawKeyword] = useState('');
   const [keyword, setKeyword] = useState('');
   const [locationFilter, setLocationFilter] = useState('all');
+  const [workModeFilter, setWorkModeFilter] = useState<WorkModeFilter>('all');
   const [hasSalaryFilter, setHasSalaryFilter] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'title_az'>('newest');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -156,13 +191,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   const clearFilters = () => {
     commitKeyword('');
     setLocationFilter('all');
+    setWorkModeFilter('all');
     setHasSalaryFilter(false);
     setSortOrder('newest');
     setExpandedId(null);
   };
 
-  // ── fetch jobs on mount (ONCE — no reactive deps; raw errors are logged and a
-  //    translated generic message is rendered, so `t` stays out of the deps) ────
+  // ── fetch jobs on mount (ONCE — no reactive deps; a translated generic
+  //    message is rendered, so `t` stays out of the deps) ────────────────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -171,8 +207,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       try {
         const data = await listAllActiveJobPostings();
         if (!cancelled) setJobs(data);
-      } catch (err) {
-        console.error('BrowseJobs: failed to load postings:', err);
+      } catch {
         if (!cancelled) setFetchError(true);
       } finally {
         if (!cancelled) setLoading(false);
@@ -257,6 +292,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           return false;
         }
         if (locationFilter !== 'all' && j.location !== locationFilter) return false;
+        if (workModeFilter !== 'all' && deriveWorkMode(j) !== workModeFilter) return false;
         if (hasSalaryFilter && !j.salary_range) return false;
         return true;
       })
@@ -265,23 +301,26 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
         // newest: already sorted by created_at desc from fetch; resort to be safe
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
-  }, [jobs, keyword, locationFilter, hasSalaryFilter, sortOrder]);
-  const hasActiveFilters = keyword !== '' || locationFilter !== 'all' || hasSalaryFilter || sortOrder !== 'newest';
+  }, [jobs, keyword, locationFilter, workModeFilter, hasSalaryFilter, sortOrder]);
+  const hasActiveFilters = keyword !== '' || locationFilter !== 'all' || workModeFilter !== 'all' || hasSalaryFilter || sortOrder !== 'newest';
   const hasSavedGoals = hasFilterablePreferences(prefs);
   const goalKeyword = buildGoalKeyword(prefs);
   const goalLocation = findPreferredLocation(prefs, locations);
+  const goalWorkMode = findPreferredWorkMode(prefs);
   const goalSummary = prefs ? prefsSummaryLine(prefs) : '';
   const goalSalaryFilter = !!prefs?.salaryMin.trim();
   const goalsApplied =
     hasSavedGoals &&
     normalizeFilterText(keyword) === normalizeFilterText(goalKeyword) &&
     locationFilter === goalLocation &&
+    workModeFilter === goalWorkMode &&
     hasSalaryFilter === goalSalaryFilter;
 
   const applySavedGoals = () => {
     if (!prefs) return;
     commitKeyword(goalKeyword);
     setLocationFilter(goalLocation);
+    setWorkModeFilter(goalWorkMode);
     setHasSalaryFilter(goalSalaryFilter);
     setSortOrder('newest');
     setExpandedId(null);
@@ -304,8 +343,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       await createJobApplication({ jobId, compatibilityScore: null });
       setAppliedJobs((prev) => new Set(prev).add(jobId));
       addToast(t('browse_jobs_apply_success'), 'success');
-    } catch (err) {
-      console.error('Error applying to job:', err);
+    } catch {
       addToast(t('browse_jobs_apply_error'), 'error');
     } finally {
       applyInFlight.current = null;
@@ -349,7 +387,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           </span>
           {QUICK_SEARCH_KEYS.map((key) => {
             const label = t(key);
-            const active = keyword.toLowerCase() === label.toLowerCase();
+            const active = normalizeFilterText(keyword) === normalizeFilterText(label);
             return (
               <button
                 key={key}
@@ -431,6 +469,36 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
               />
               {t('browse_jobs_has_salary')}
             </label>
+
+            {/* work mode */}
+            <div
+              className="flex flex-wrap items-center gap-1.5"
+              role="group"
+              aria-label={t('browse_jobs_work_mode_label')}
+            >
+              <span className="mr-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                {t('browse_jobs_work_mode_label')}
+              </span>
+              {WORK_MODE_OPTIONS.map((option) => {
+                const active = workModeFilter === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setWorkModeFilter(option.value)}
+                    disabled={loading}
+                    aria-pressed={active}
+                    className={`inline-flex min-h-[32px] items-center justify-center rounded-full border px-3 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/30 disabled:cursor-wait disabled:opacity-60 ${
+                      active
+                        ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300'
+                    }`}
+                  >
+                    {t(option.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -531,6 +599,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             const isApplied = appliedJobs.has(job.id);
             const isApplying = applyingId === job.id;
             const detailsId = `job-details-${job.id}`;
+            const workMode = deriveWorkMode(job);
 
             const eid = job.employer_id;
             const employerReviews = eid ? (reviewCache[eid] ?? null) : null;
@@ -589,6 +658,9 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                         )}
                         <span className="text-xs text-slate-400 dark:text-slate-500">
                           {postedLabel(job.created_at, t)}
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                          {t(`browse_jobs_work_mode_${workMode}`)}
                         </span>
                         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-300">
                           <Clock3 className="h-3 w-3" />
