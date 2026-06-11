@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Star,
   Target,
+  X,
 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -62,6 +63,7 @@ const QUICK_SEARCHES = [
 
 type WorkModeFilter = 'all' | 'remote' | 'hybrid' | 'onsite';
 type DerivedWorkMode = Exclude<WorkModeFilter, 'all'>;
+type ActiveFilterKey = 'keyword' | 'location' | 'workMode' | 'salary' | 'sort';
 
 const WORK_MODE_OPTIONS: Array<{ value: WorkModeFilter; labelKey: string }> = [
   { value: 'all', labelKey: 'browse_jobs_work_mode_all' },
@@ -133,6 +135,12 @@ const deriveWorkMode = (job: JobPosting): DerivedWorkMode => {
 
 const findPreferredWorkMode = (prefs: JobPreferences | null): WorkModeFilter =>
   prefs ? detectWorkMode(prefs.locations) : 'all';
+
+const isPostedWithinDays = (iso: string, days: number) => {
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return false;
+  return Date.now() - timestamp <= days * 86_400_000;
+};
 
 // ── skeleton card ──────────────────────────────────────────────────────────────
 const SkeletonCard: React.FC = () => (
@@ -336,6 +344,72 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       });
   }, [jobs, keyword, quickSearchAliasMap, locationFilter, workModeFilter, hasSalaryFilter, sortOrder]);
   const hasActiveFilters = keyword !== '' || locationFilter !== 'all' || workModeFilter !== 'all' || hasSalaryFilter || sortOrder !== 'newest';
+  const summaryMetrics = useMemo(() => {
+    const withSalary = filtered.filter((job) => Boolean(job.salary_range)).length;
+    const flexible = filtered.filter((job) => {
+      const mode = deriveWorkMode(job);
+      return mode === 'remote' || mode === 'hybrid';
+    }).length;
+    const recent = filtered.filter((job) => isPostedWithinDays(job.created_at, 7)).length;
+    return [
+      {
+        label: t('browse_jobs_summary_matching'),
+        value: filtered.length,
+        detail: hasActiveFilters
+          ? t('browse_jobs_summary_filtered')
+          : t('browse_jobs_summary_all_open'),
+      },
+      {
+        label: t('browse_jobs_summary_salary'),
+        value: withSalary,
+        detail: t('browse_jobs_summary_salary_desc'),
+      },
+      {
+        label: t('browse_jobs_summary_flexible'),
+        value: flexible,
+        detail: t('browse_jobs_summary_flexible_desc'),
+      },
+      {
+        label: t('browse_jobs_summary_recent'),
+        value: recent,
+        detail: t('browse_jobs_summary_recent_desc'),
+      },
+    ];
+  }, [filtered, hasActiveFilters, t]);
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: ActiveFilterKey; label: string }> = [];
+    if (keyword) {
+      chips.push({
+        key: 'keyword',
+        label: t('browse_jobs_filter_keyword').replace('{value}', keyword),
+      });
+    }
+    if (locationFilter !== 'all') {
+      chips.push({
+        key: 'location',
+        label: t('browse_jobs_filter_location').replace('{value}', locationFilter),
+      });
+    }
+    if (workModeFilter !== 'all') {
+      chips.push({
+        key: 'workMode',
+        label: t('browse_jobs_filter_work_mode').replace('{value}', t(`browse_jobs_work_mode_${workModeFilter}`)),
+      });
+    }
+    if (hasSalaryFilter) {
+      chips.push({
+        key: 'salary',
+        label: t('browse_jobs_filter_salary'),
+      });
+    }
+    if (sortOrder !== 'newest') {
+      chips.push({
+        key: 'sort',
+        label: t('browse_jobs_filter_sort').replace('{value}', t('browse_jobs_sort_az')),
+      });
+    }
+    return chips;
+  }, [hasSalaryFilter, keyword, locationFilter, sortOrder, t, workModeFilter]);
   const hasSavedGoals = hasFilterablePreferences(prefs);
   const goalKeyword = buildGoalKeyword(prefs);
   const goalLocation = findPreferredLocation(prefs, locations);
@@ -356,6 +430,15 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
     setWorkModeFilter(goalWorkMode);
     setHasSalaryFilter(goalSalaryFilter);
     setSortOrder('newest');
+    setExpandedId(null);
+  };
+
+  const removeFilter = (filter: ActiveFilterKey) => {
+    if (filter === 'keyword') commitKeyword('');
+    if (filter === 'location') setLocationFilter('all');
+    if (filter === 'workMode') setWorkModeFilter('all');
+    if (filter === 'salary') setHasSalaryFilter(false);
+    if (filter === 'sort') setSortOrder('newest');
     setExpandedId(null);
   };
 
@@ -415,7 +498,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          <span className="w-full text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 sm:w-auto">
             {t('browse_jobs_popular_searches')}
           </span>
           {QUICK_SEARCHES.map(({ labelKey, aliases }) => {
@@ -478,9 +561,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
         )}
 
         {/* filter row */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
+            <div className="hidden items-center gap-2 lg:flex">
+              <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                {t('browse_jobs_filters_label')}
+              </span>
+            </div>
 
             {/* location */}
             <select
@@ -488,7 +576,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
               onChange={(e) => setLocationFilter(e.target.value)}
               aria-label={t('browse_jobs_all_locations')}
               disabled={loading}
-              className="min-w-[150px] rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
+              className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:focus:border-blue-500 dark:focus:ring-blue-900/40 sm:min-w-[150px] lg:w-auto"
             >
               <option value="all">{t('browse_jobs_all_locations')}</option>
               {locations.map((loc) => (
@@ -497,7 +585,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             </select>
 
             {/* has salary */}
-            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-700 dark:text-slate-300">
+            <label className="flex min-h-10 cursor-pointer select-none items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={hasSalaryFilter}
@@ -510,11 +598,11 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
 
             {/* work mode */}
             <div
-              className="flex flex-wrap items-center gap-1.5"
+              className="sm:col-span-2 flex flex-wrap items-center gap-1.5"
               role="group"
               aria-label={t('browse_jobs_work_mode_label')}
             >
-              <span className="mr-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <span className="w-full text-xs font-semibold text-slate-500 dark:text-slate-400 sm:w-auto">
                 {t('browse_jobs_work_mode_label')}
               </span>
               {WORK_MODE_OPTIONS.map((option) => {
@@ -546,7 +634,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
               onChange={(e) => setSortOrder(e.target.value as 'newest' | 'title_az')}
               aria-label={t('browse_jobs_sort_label')}
               disabled={loading}
-              className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
             >
               <option value="newest">{t('browse_jobs_sort_newest')}</option>
               <option value="title_az">{t('browse_jobs_sort_az')}</option>
@@ -563,15 +651,84 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             )}
           </div>
         </div>
+
+        {activeFilterChips.length > 0 && (
+          <div className="animate-panel-expand rounded-lg border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/50 dark:bg-blue-950/20">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                {t('browse_jobs_active_filters')}
+              </p>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex w-fit items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/40"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {t('browse_jobs_clear_filters')}
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {activeFilterChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => removeFilter(chip.key)}
+                  className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-blue-100 bg-white px-2.5 py-1 text-xs font-semibold text-blue-900 transition-colors hover:border-blue-200 hover:bg-blue-50 dark:border-blue-900/60 dark:bg-slate-900 dark:text-blue-200 dark:hover:bg-blue-950/50"
+                  aria-label={t('browse_jobs_remove_filter').replace('{label}', chip.label)}
+                >
+                  <span>{chip.label}</span>
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* result count */}
       {!loading && !fetchError && (
-        <p aria-live="polite" className="text-sm text-slate-500 dark:text-slate-400">
-          {filtered.length === 0
-            ? t('browse_jobs_no_results')
-            : t('browse_jobs_result_count').replace('{n}', String(filtered.length))}
-        </p>
+        <div aria-live="polite" className="animate-panel-expand rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {filtered.length === 0
+                  ? t('browse_jobs_no_results')
+                  : t('browse_jobs_result_count').replace('{n}', String(filtered.length))}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                {hasActiveFilters ? t('browse_jobs_summary_filtered_desc') : t('browse_jobs_summary_all_desc')}
+              </p>
+            </div>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300 sm:w-auto"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {t('browse_jobs_clear_filters')}
+              </button>
+            )}
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {summaryMetrics.map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/60"
+              >
+                <p className="text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                  {metric.value}
+                </p>
+                <p className="mt-0.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {metric.label}
+                </p>
+                <p className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-slate-500">
+                  {metric.detail}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* signed-out hint */}
