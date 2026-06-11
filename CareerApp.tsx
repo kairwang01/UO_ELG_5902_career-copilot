@@ -462,7 +462,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         sessionStorage.clear();
         try {
           localStorage.removeItem('preferred_ai_model');
-          localStorage.removeItem('aiModeEnabled');
         } catch { /* storage unavailable */ }
         setAiModel(undefined);
         return;

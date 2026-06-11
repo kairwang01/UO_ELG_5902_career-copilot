@@ -198,11 +198,6 @@ html.dark body {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
-@keyframes crystal-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.6)); }
-  50% { filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.9)); }
-}
-
 @keyframes toast-slide-in {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
@@ -236,7 +231,6 @@ html.dark body {
 .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
 .animate-aurora { animation: aurora 20s infinite linear; }
 .animate-holographic-text { animation: holographic-text 5s infinite linear; }
-.animate-crystal-glow { animation: crystal-glow 2.5s ease-in-out infinite; }
 
 /* Candidate workspace primitives. These keep repeated app surfaces aligned
    without introducing another component dependency layer. */

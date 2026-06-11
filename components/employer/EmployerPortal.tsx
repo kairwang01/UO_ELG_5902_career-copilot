@@ -244,7 +244,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           {renderMobileNavDrawer(prevPage)}
           <main className="flex-1 overflow-y-auto">
             <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
-            <div className="max-w-[1088px] mx-auto p-8">
+            <div className="max-w-[1088px] mx-auto p-8 animate-view-fade">
               <ApplicantFunnel
                 job={jobForFunnel}
                 onBack={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}

@@ -79,6 +79,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
 
     // Session-level saved set (candidate.id) so we can disable after saving
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+    // Candidates whose shortlist write is in flight — blocks double-clicks.
+    const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
 
     const { addToast } = useSharedToast();
     const selectedPostedJob = postedJobs.find((job) => job.id === selectedJobId) ?? null;
@@ -193,7 +195,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
     };
 
     const handleSaveToShortlist = async (candidate: MatchedCandidate) => {
-        if (savedIds.has(candidate.id)) return;
+        if (savedIds.has(candidate.id) || savingIds.has(candidate.id)) return;
+        setSavingIds(prev => new Set(prev).add(candidate.id));
         const { job_id, job_title } = getJobInfo();
         try {
             await saveToShortlist(profile.id, {
@@ -217,6 +220,12 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
             addToast(t('shortlist_saved_toast'), 'success');
         } catch (err) {
             addToast(err instanceof Error ? err.message : t('shortlist_save_error'), 'error');
+        } finally {
+            setSavingIds(prev => {
+                const next = new Set(prev);
+                next.delete(candidate.id);
+                return next;
+            });
         }
     };
 
@@ -300,18 +309,22 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                                         {candidate.compatibilityScore > 0 && (
                                             <button
                                                 onClick={() => handleSaveToShortlist(candidate)}
-                                                disabled={savedIds.has(candidate.id)}
+                                                disabled={savedIds.has(candidate.id) || savingIds.has(candidate.id)}
                                                 title={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
                                                 aria-label={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
                                                 className={`p-2 rounded-lg transition-colors ${
                                                     savedIds.has(candidate.id)
                                                         ? 'bg-white/10 text-green-400 cursor-not-allowed'
-                                                        : 'bg-white/20 text-white hover:bg-white/30'
+                                                        : savingIds.has(candidate.id)
+                                                          ? 'bg-white/10 text-white/70 cursor-wait'
+                                                          : 'bg-white/20 text-white hover:bg-white/30'
                                                 }`}
                                             >
                                                 {savedIds.has(candidate.id)
                                                     ? <BookmarkCheck className="w-4 h-4" />
-                                                    : <BookmarkPlus className="w-4 h-4" />
+                                                    : savingIds.has(candidate.id)
+                                                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                      : <BookmarkPlus className="w-4 h-4" />
                                                 }
                                             </button>
                                         )}
@@ -502,18 +515,22 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                                         </div>
                                         <button
                                             onClick={() => handleSaveToShortlist(candidate)}
-                                            disabled={savedIds.has(candidate.id)}
+                                            disabled={savedIds.has(candidate.id) || savingIds.has(candidate.id)}
                                             title={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
                                             aria-label={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
                                             className={`p-2 rounded-lg transition-colors border ${
                                                 savedIds.has(candidate.id)
                                                     ? 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 cursor-not-allowed bg-green-50 dark:bg-green-900/20'
-                                                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400'
+                                                    : savingIds.has(candidate.id)
+                                                      ? 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-wait'
+                                                      : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400'
                                             }`}
                                         >
                                             {savedIds.has(candidate.id)
                                                 ? <BookmarkCheck className="w-4 h-4" />
-                                                : <BookmarkPlus className="w-4 h-4" />
+                                                : savingIds.has(candidate.id)
+                                                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                  : <BookmarkPlus className="w-4 h-4" />
                                             }
                                         </button>
                                     </div>

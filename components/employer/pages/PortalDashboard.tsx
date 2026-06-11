@@ -314,10 +314,10 @@ export function PortalDashboard({
                   <p className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('employer_dashboard_applicants_label')}</p>
                 </div>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
                     job.is_active
-                      ? 'bg-teal-50 text-teal-800 border border-teal-200'
-                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                      ? dm ? 'bg-teal-900/30 text-teal-300 border-teal-800' : 'bg-teal-50 text-teal-800 border-teal-200'
+                      : dm ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-100 text-gray-600 border-gray-200'
                   }`}
                 >
                   {job.is_active ? t('portal_status_active') : t('portal_status_closed')}

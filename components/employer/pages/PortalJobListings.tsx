@@ -94,8 +94,8 @@ export function PortalJobListings({
   const statusLabel = (job: JobPostingWithCount) => (job.is_active ? t('portal_status_active') : t('portal_status_closed'));
   const statusStyle = (job: JobPostingWithCount) =>
     job.is_active
-      ? 'bg-teal-50 text-teal-800 border-teal-200'
-      : 'bg-gray-100 text-gray-700 border-gray-300';
+      ? dm ? 'bg-teal-900/30 text-teal-300 border-teal-800' : 'bg-teal-50 text-teal-800 border-teal-200'
+      : dm ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-100 text-gray-700 border-gray-300';
   const needsCandidates = (job: JobPostingWithCount) => job.is_active && job.applicant_count === 0;
 
   const JobRow: React.FC<{ job: JobPostingWithCount }> = ({ job }) => (

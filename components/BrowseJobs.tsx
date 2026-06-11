@@ -216,12 +216,16 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   const hasActiveFilters = keyword !== '' || locationFilter !== 'all' || hasSalaryFilter || sortOrder !== 'newest';
 
   // ── apply handler ─────────────────────────────────────────────────────────
+  // Ref guard catches double-clicks that land before React re-renders with the
+  // disabled state (state updates are async; the ref flips synchronously).
+  const applyInFlight = useRef<string | null>(null);
   const handleApply = useCallback(async (jobId: string) => {
     if (!session?.user) {
       addToast(t('browse_jobs_sign_in_to_apply'), 'error');
       return;
     }
-    if (appliedJobs.has(jobId) || applyingId === jobId) return;
+    if (appliedJobs.has(jobId) || applyInFlight.current === jobId) return;
+    applyInFlight.current = jobId;
     setApplyingId(jobId);
     try {
       const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
@@ -232,9 +236,10 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       console.error('Error applying to job:', err);
       addToast(t('browse_jobs_apply_error'), 'error');
     } finally {
+      applyInFlight.current = null;
       setApplyingId(null);
     }
-  }, [session, appliedJobs, applyingId, addToast, t]);
+  }, [session, appliedJobs, addToast, t]);
 
   // ── render ────────────────────────────────────────────────────────────────
   return (

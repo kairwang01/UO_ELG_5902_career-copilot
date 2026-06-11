@@ -647,7 +647,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
             <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg flex justify-between items-center">
                 <div>
                     <p className="font-medium text-gray-800 dark:text-gray-200">{t('account_current_plan')}</p>
-                    <p className={`text-lg font-bold ${userLevel > 0 ? 'text-green-600' : 'text-gray-600 dark:text-gray-400'}`}>
+                    <p className={`text-lg font-bold ${userLevel > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-300'}`}>
                         {t(`plan_${currentPlan.key}_name`)}
                     </p>
                 </div>
