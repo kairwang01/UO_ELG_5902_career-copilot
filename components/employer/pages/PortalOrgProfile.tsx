@@ -3,7 +3,7 @@ import type { AppSession as Session } from '../../../lib/data';
 import { data } from '../../../lib/data';
 import type { UserProfile } from '../../../types';
 import CompanyLogo from '../../CompanyLogo';
-import { AlertCircle, Building2, CheckCircle2, Loader2, RotateCcw, Save } from 'lucide-react';
+import { AlertCircle, Building2, CheckCircle2, ExternalLink, Loader2, RotateCcw, Save } from 'lucide-react';
 import { PortalTopBar } from '../PortalTopBar';
 
 interface PortalOrgProfileProps {
@@ -15,8 +15,37 @@ interface PortalOrgProfileProps {
 }
 
 const COMPANY_SIZE_OPTIONS = ['1-10', '11-50', '51-200', '201-500', '500+'] as const;
+const DESCRIPTION_TARGET_LENGTH = 160;
+const MIN_FOUNDED_YEAR = 1800;
+const CURRENT_YEAR = new Date().getFullYear();
 
 const toProfileValue = (value?: string | null) => value ?? '';
+
+const normalizeWebsiteUrl = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(withProtocol);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname.includes('.')) return null;
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+};
+
+const getFoundedYearError = (value: string, t: (key: string) => string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\d{4}$/.test(trimmed)) {
+    return t('portal_org_founded_error').replace('{year}', String(CURRENT_YEAR));
+  }
+  const year = Number(trimmed);
+  if (year < MIN_FOUNDED_YEAR || year > CURRENT_YEAR) {
+    return t('portal_org_founded_error').replace('{year}', String(CURRENT_YEAR));
+  }
+  return null;
+};
 
 export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: PortalOrgProfileProps) {
   const dm = darkMode;
@@ -69,18 +98,26 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
   }), [companyName, website, description, logoUrl, companySize, industry, foundedYear]);
 
   const isDirty = JSON.stringify(currentValues) !== JSON.stringify(initialValues);
+  const normalizedWebsitePreview = normalizeWebsiteUrl(website);
+  const websiteError = website.trim().length > 0 && normalizedWebsitePreview === null
+    ? t('portal_org_website_error')
+    : null;
+  const foundedYearError = getFoundedYearError(foundedYear, t);
+  const validationError = websiteError || foundedYearError;
   const completionItems = [
     { label: t('portal_org_name'), complete: companyName.trim().length > 0 },
     { label: t('portal_org_logo'), complete: Boolean(logoUrl) },
-    { label: t('portal_org_website'), complete: website.trim().length > 0 },
+    { label: t('portal_org_website'), complete: website.trim().length > 0 && !websiteError },
     { label: t('org_company_size'), complete: companySize.trim().length > 0 },
     { label: t('org_industry'), complete: industry.trim().length > 0 },
-    { label: t('org_founded_year'), complete: foundedYear.trim().length > 0 },
+    { label: t('org_founded_year'), complete: foundedYear.trim().length > 0 && !foundedYearError },
     { label: t('portal_org_desc'), complete: description.trim().length > 0 },
   ];
   const completedFields = completionItems.filter((item) => item.complete).length;
   const completionPercent = Math.round((completedFields / completionItems.length) * 100);
-  const canSave = isDirty && companyName.trim().length > 0 && !saving;
+  const canSave = isDirty && companyName.trim().length > 0 && !saving && !validationError;
+  const missingItem = completionItems.find((item) => !item.complete);
+  const descriptionCount = description.trim().length;
 
   const resetForm = () => {
     setCompanyName(initialValues.companyName);
@@ -95,13 +132,17 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (validationError) {
+      setMessage({ type: 'error', text: validationError });
+      return;
+    }
     if (!canSave) return;
     setSaving(true);
     setMessage(null);
 
     const normalized = {
       companyName: companyName.trim(),
-      website: website.trim(),
+      website: normalizedWebsitePreview || '',
       description: description.trim(),
       logoUrl,
       companySize: companySize.trim(),
@@ -198,6 +239,22 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
                 <p className={`mt-1 text-xs ${muted}`}>
                   {[industry, companySize].filter(Boolean).join(' · ') || t('portal_org_profile_preview')}
                 </p>
+                {normalizedWebsitePreview && (
+                  <p className={`mt-2 flex items-center gap-1 text-xs ${dm ? 'text-blue-300' : 'text-blue-700'}`}>
+                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                    <span className="truncate">{normalizedWebsitePreview.replace(/^https?:\/\//, '')}</span>
+                  </p>
+                )}
+                <div className={`mt-4 rounded-lg border px-3 py-2 text-xs leading-5 ${dm ? 'border-gray-700 bg-gray-950/60 text-gray-300' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <p className={`font-semibold ${dm ? 'text-gray-100' : 'text-gray-900'}`}>
+                    {t('portal_org_candidate_view_title')}
+                  </p>
+                  <p className="mt-1">
+                    {missingItem
+                      ? t('portal_org_next_step').replace('{field}', missingItem.label)
+                      : t('portal_org_ready_for_candidates')}
+                  </p>
+                </div>
               </div>
 
               <div className="mt-5 space-y-2">
@@ -253,15 +310,29 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
                 <label htmlFor="portal-org-website" className={label}>{t('portal_org_website')}</label>
                 <input
                   id="portal-org-website"
-                  type="url"
+                  type="text"
+                  inputMode="url"
                   value={website}
                   onChange={(e) => {
                     setWebsite(e.target.value);
                     setMessage(null);
                   }}
+                  onBlur={() => {
+                    if (normalizedWebsitePreview) {
+                      setWebsite(normalizedWebsitePreview);
+                    }
+                  }}
                   placeholder="https://www.example.com"
-                  className={input}
+                  className={`${input} ${websiteError ? 'border-red-400 focus:ring-red-400' : ''}`}
+                  aria-invalid={Boolean(websiteError)}
+                  aria-describedby="portal-org-website-help"
                 />
+                <p
+                  id="portal-org-website-help"
+                  className={`mt-1 text-xs ${websiteError ? 'text-red-600 dark:text-red-400' : muted}`}
+                >
+                  {websiteError || t('portal_org_website_hint')}
+                </p>
               </div>
 
               <div>
@@ -311,8 +382,16 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
                     setMessage(null);
                   }}
                   placeholder={t('portal_org_founded_ph')}
-                  className={input}
+                  className={`${input} ${foundedYearError ? 'border-red-400 focus:ring-red-400' : ''}`}
+                  aria-invalid={Boolean(foundedYearError)}
+                  aria-describedby="portal-org-founded-help"
                 />
+                <p
+                  id="portal-org-founded-help"
+                  className={`mt-1 text-xs ${foundedYearError ? 'text-red-600 dark:text-red-400' : muted}`}
+                >
+                  {foundedYearError || t('portal_org_founded_hint').replace('{year}', String(CURRENT_YEAR))}
+                </p>
               </div>
 
               <div className="sm:col-span-2">
@@ -326,14 +405,27 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
                   }}
                   placeholder={t('portal_org_desc_ph')}
                   rows={6}
+                  aria-describedby="portal-org-description-help"
                   className={`${input} resize-y leading-6`}
                 />
+                <div
+                  id="portal-org-description-help"
+                  className={`mt-1 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between ${muted}`}
+                >
+                  <span>{t('portal_org_description_hint')}</span>
+                  <span className={descriptionCount >= DESCRIPTION_TARGET_LENGTH ? 'text-emerald-600 dark:text-emerald-400' : ''}>
+                    {t('portal_org_description_count')
+                      .replace('{count}', String(descriptionCount))
+                      .replace('{target}', String(DESCRIPTION_TARGET_LENGTH))}
+                  </span>
+                </div>
               </div>
             </div>
 
             {message && (
               <div
-                role="status"
+                role={message.type === 'error' ? 'alert' : 'status'}
+                aria-live={message.type === 'error' ? 'assertive' : 'polite'}
                 className={`mt-5 animate-panel-expand rounded-lg border px-4 py-3 text-sm ${
                   message.type === 'success'
                     ? dm ? 'border-emerald-800 bg-emerald-950/20 text-emerald-200' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
