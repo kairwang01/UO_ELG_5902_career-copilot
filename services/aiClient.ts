@@ -282,6 +282,36 @@ export const discoverTalent = (jobDescription?: string): Promise<DiscoverTalentR
     return res.data;
   });
 
+// ---- Employer applicant funnel (server-side; resumes never reach the browser) --
+
+export interface JobApplicant {
+  id: string;
+  candidate_name: string;
+  application_date: string | null;
+  status: string;
+  compatibility_score: number;
+  summary: string;
+  strengths: string[];
+  potentialGaps: string[];
+  suggestedQuestions: string[];
+}
+
+export interface ListJobApplicantsResult {
+  applicants: JobApplicant[];
+}
+
+/**
+ * Returns the applicants for a job the caller owns, each with a server-computed
+ * match analysis. Resume text stays on the server (clients are rules-blocked
+ * from reading other profiles); viewing applicants is free (no wallet unlock).
+ */
+export const listJobApplicants = (jobId: string): Promise<ListJobApplicantsResult> =>
+  callDedicated(async () => {
+    const fn = httpsCallable<{ jobId: string }, ListJobApplicantsResult>(firebaseFunctions, 'listJobApplicants', { timeout: 190_000 });
+    const res = await fn({ jobId });
+    return res.data;
+  });
+
 /**
  * Dispatches a long-tail tool through the consolidated `aiProxy` callable, which
  * applies tier-gated model routing (Gemini / KairLLM / DeepSeek / custom). The

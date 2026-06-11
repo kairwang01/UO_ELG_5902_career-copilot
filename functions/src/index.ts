@@ -36,6 +36,7 @@ export { generateCareerPathFunction   as generateCareerPath    } from "./handler
 export { setSubscriptionStatusFunction as setSubscriptionStatus } from "./handlers/setSubscriptionStatus";
 export { onUserCreatedFunction        as onUserCreated         } from "./handlers/onUserCreated";
 export { createJobApplicationFunction as createJobApplication  } from "./handlers/jobApplications";
+export { listJobApplicantsFunction    as listJobApplicants     } from "./handlers/listJobApplicants";
 export { adminGetDashboardFunction    as adminGetDashboard     } from "./handlers/adminPortal";
 export { adminGetLlmConfigFunction   as adminGetLlmConfig     } from "./handlers/adminPortal";
 export { adminUpdateLlmConfigFunction as adminUpdateLlmConfig } from "./handlers/adminPortal";

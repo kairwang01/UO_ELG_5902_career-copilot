@@ -2,7 +2,6 @@ import {
   addDoc,
   collection,
   doc,
-  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -12,7 +11,6 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { firestoreDb } from './firebaseClient';
-import type { UserProfile } from '../types';
 
 export interface JobPosting {
   id: string;
@@ -82,31 +80,6 @@ const mapApplication = (id: string, data: DocumentData): JobApplication => ({
   compatibility_score: data.compatibility_score ?? null,
 });
 
-const mapUserProfile = (id: string, data: DocumentData): UserProfile => ({
-  id,
-  updated_at: data.updated_at ? toIsoString(data.updated_at) : '',
-  full_name: data.full_name ?? null,
-  avatar_url: data.avatar_url ?? null,
-  subscription_status: data.subscription_status ?? 'free',
-  role: data.role ?? 'candidate',
-  company_name: data.company_name ?? null,
-  company_website: data.company_website ?? null,
-  company_description: data.company_description ?? null,
-  company_logo_url: data.company_logo_url ?? null,
-  resume_text: data.resume_text ?? null,
-  preferred_language: data.preferred_language ?? null,
-  wallet_address: data.wallet_address ?? null,
-  nft_minted: data.nft_minted ?? null,
-  nft_staked: data.nft_staked ?? null,
-  nft_earnings: data.nft_earnings ?? null,
-  nft_token_id: data.nft_token_id ?? null,
-  english_pro_streak: data.english_pro_streak ?? null,
-  english_pro_last_practice: data.english_pro_last_practice
-    ? toIsoString(data.english_pro_last_practice)
-    : null,
-  credits: data.credits ?? null,
-});
-
 export const listEmployerJobs = async (employerId: string): Promise<JobPosting[]> => {
   const jobsQuery = query(
     collection(firestoreDb, 'job_postings'),
@@ -126,11 +99,6 @@ export const listApplicationsForEmployer = async (employerId: string): Promise<J
   );
   const snap = await getDocs(appsQuery);
   return snap.docs.map((appDoc) => mapApplication(appDoc.id, appDoc.data()));
-};
-
-export const listJobApplications = async (jobId: string, employerId: string): Promise<JobApplication[]> => {
-  const all = await listApplicationsForEmployer(employerId);
-  return all.filter((app) => app.job_id === jobId);
 };
 
 export const listApplicationsForJobs = async (jobIds: string[], employerId: string): Promise<JobApplication[]> => {
@@ -184,14 +152,6 @@ export const saveJobPosting = async (
   });
 };
 
-export const getCandidateProfilesByIds = async (candidateIds: string[]): Promise<UserProfile[]> => {
-  const uniqueIds = Array.from(new Set(candidateIds));
-  const snaps = await Promise.all(uniqueIds.map((candidateId) => getDoc(doc(firestoreDb, 'users', candidateId))));
-  return snaps
-    .filter((snap) => snap.exists())
-    .map((snap) => mapUserProfile(snap.id, snap.data()));
-};
-
 export const listAllActiveJobPostings = async (): Promise<JobPosting[]> => {
   const activeQuery = query(
     collection(firestoreDb, 'job_postings'),
@@ -199,16 +159,4 @@ export const listAllActiveJobPostings = async (): Promise<JobPosting[]> => {
   );
   const snap = await getDocs(activeQuery);
   return sortByCreatedDesc(snap.docs.map((jobDoc) => mapJobPosting(jobDoc.id, jobDoc.data())));
-};
-
-export const listCandidateProfilesWithResume = async (limitCount = 50): Promise<UserProfile[]> => {
-  const candidatesQuery = query(
-    collection(firestoreDb, 'users'),
-    where('role', '==', 'candidate'),
-  );
-  const snap = await getDocs(candidatesQuery);
-  return snap.docs
-    .map((candidateDoc) => mapUserProfile(candidateDoc.id, candidateDoc.data()))
-    .filter((candidate) => Boolean(candidate.resume_text))
-    .slice(0, limitCount);
 };

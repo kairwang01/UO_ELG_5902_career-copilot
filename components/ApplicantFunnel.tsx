@@ -1,14 +1,9 @@
 
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { analyzeCandidateMatch } from '../services/aiClient';
-import type { UserProfile, CandidateMatchAnalysis } from '../types';
+import { listJobApplicants, type JobApplicant } from '../services/aiClient';
 import FunnelChart from './FunnelChart';
-import {
-    getCandidateProfilesByIds,
-    listJobApplications,
-    type JobPosting,
-} from '../lib/recruitingData';
+import type { JobPosting } from '../lib/recruitingData';
 
 interface ApplicantFunnelProps {
   job: JobPosting;
@@ -16,11 +11,9 @@ interface ApplicantFunnelProps {
   t: (key: string) => string;
 }
 
-interface Applicant extends UserProfile {
-    application_date: string;
-    compatibility_score?: number;
-    match_analysis?: CandidateMatchAnalysis;
-}
+// Server-computed safe shape: match analysis is flattened onto each applicant;
+// resume_text never reaches the browser (see services/aiClient listJobApplicants).
+type Applicant = JobApplicant;
 
 type ScoreThreshold = 'all' | '50' | '70' | '85';
 type SortKey = 'score' | 'name' | 'newest';
@@ -54,56 +47,24 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
         try {
             setLoading(true);
             setError(null);
+            setLoadingMessage('Fetching and analyzing applicants…');
 
-            const applications = await listJobApplications(job.id, job.employer_id);
+            // Single server-side call: reads applications + resumes with the Admin
+            // SDK, runs the match analysis on the server, and returns safe fields
+            // only (already sorted by match score). Resumes never reach the browser.
+            const { applicants: result } = await listJobApplicants(job.id);
 
-            if (applications.length === 0) {
-                setApplicants([]);
-                return;
+            setApplicants(result);
+            if (result.length > 0) {
+                setSelectedApplicant(result[0]);
             }
-
-            setLoadingMessage(`Analyzing ${applications.length} applicant(s)...`);
-
-            const candidateIds = applications.map(a => a.candidate_id);
-            const profiles = await getCandidateProfilesByIds(candidateIds);
-
-            const analyzedApplicants: Applicant[] = [];
-            let count = 1;
-            for (const profile of profiles) {
-                setLoadingMessage(`Analyzing applicant ${count} of ${profiles.length}...`);
-                const application = applications.find(a => a.candidate_id === profile.id);
-                if (!application) continue;
-
-                let analyzedProfile: Applicant;
-                if (!profile.resume_text || !job.description) {
-                    analyzedProfile = { ...profile, application_date: application.application_date, compatibility_score: 0 };
-                } else {
-                    try {
-                        const analysis = await analyzeCandidateMatch(profile.resume_text, job.description);
-                        analyzedProfile = { ...profile, application_date: application.application_date, compatibility_score: analysis.score, match_analysis: analysis };
-                    } catch (e) {
-                        console.error(`Failed to analyze applicant ${profile.id}:`, e);
-                        analyzedProfile = { ...profile, application_date: application.application_date, compatibility_score: 0 };
-                    }
-                }
-                analyzedApplicants.push(analyzedProfile);
-                count++;
-            }
-
-            analyzedApplicants.sort((a, b) => (b.compatibility_score ?? 0) - (a.compatibility_score ?? 0));
-            setApplicants(analyzedApplicants);
-
-            if (analyzedApplicants.length > 0) {
-                setSelectedApplicant(analyzedApplicants[0]);
-            }
-
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load applicant data.');
         } finally {
             setLoading(false);
             setLoadingMessage('');
         }
-    }, [job.id, job.description, job.employer_id]);
+    }, [job.id]);
 
     useEffect(() => {
         fetchApplicants();
@@ -124,7 +85,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
         const kw = keyword.trim().toLowerCase();
         if (kw) {
             result = result.filter(a =>
-                (a.full_name ?? '').toLowerCase().includes(kw)
+                (a.candidate_name ?? '').toLowerCase().includes(kw)
             );
         }
 
@@ -138,7 +99,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
         if (sortKey === 'score') {
             result.sort((a, b) => (b.compatibility_score ?? 0) - (a.compatibility_score ?? 0));
         } else if (sortKey === 'name') {
-            result.sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? ''));
+            result.sort((a, b) => (a.candidate_name ?? '').localeCompare(b.candidate_name ?? ''));
         } else {
             // newest first
             result.sort((a, b) => new Date(b.application_date).getTime() - new Date(a.application_date).getTime());
@@ -283,7 +244,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                 >
                                     <div className="flex justify-between items-center">
                                         <p className="font-semibold text-gray-900 dark:text-gray-100 truncate pr-2">
-                                            {applicant.full_name || 'Unnamed Candidate'}
+                                            {applicant.candidate_name || 'Unnamed Candidate'}
                                         </p>
                                         <p className={`font-bold text-lg flex-shrink-0 ${
                                             (applicant.compatibility_score ?? 0) >= 75
@@ -304,29 +265,36 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
 
                 {/* ── Right pane: detail (unchanged) ── */}
                 <div className="lg:col-span-2 p-4 h-[70vh] overflow-y-auto">
-                    {selectedApplicant && selectedApplicant.match_analysis ? (
+                    {!selectedApplicant ? (
+                        <div className="flex items-center justify-center h-full text-gray-500">Select an applicant to view their detailed analysis.</div>
+                    ) : selectedApplicant.summary ? (
                         <div className="space-y-6">
                             <div className="text-center">
-                                <h2 className="text-2xl font-bold text-gray-900">{selectedApplicant.full_name || 'Unnamed Candidate'}</h2>
-                                <p className="text-lg font-bold text-blue-700 mt-1">Match Score: {selectedApplicant.match_analysis.score}%</p>
-                                <p className="text-sm text-gray-600 mt-2 max-w-xl mx-auto">{selectedApplicant.match_analysis.summary}</p>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{selectedApplicant.candidate_name || 'Unnamed Candidate'}</h2>
+                                <p className="text-lg font-bold text-blue-700 dark:text-blue-400 mt-1">Match Score: {selectedApplicant.compatibility_score}%</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 max-w-xl mx-auto">{selectedApplicant.summary}</p>
                             </div>
 
                             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                                 <h4 className="font-semibold text-green-800">Strengths</h4>
-                                <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-green-900">{selectedApplicant.match_analysis.strengths.map((s,i) => <li key={i}>{s}</li>)}</ul>
+                                <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-green-900">{selectedApplicant.strengths.map((s,i) => <li key={i}>{s}</li>)}</ul>
                             </div>
                             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                                 <h4 className="font-semibold text-yellow-800">Potential Gaps</h4>
-                                <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-yellow-900">{selectedApplicant.match_analysis.potentialGaps.map((g,i) => <li key={i}>{g}</li>)}</ul>
+                                <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-yellow-900">{selectedApplicant.potentialGaps.map((g,i) => <li key={i}>{g}</li>)}</ul>
                             </div>
                              <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
                                 <h4 className="font-semibold text-indigo-800">Suggested Interview Questions</h4>
-                                <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-indigo-900">{selectedApplicant.match_analysis.suggestedQuestions.map((q,i) => <li key={i}>{q}</li>)}</ul>
+                                <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-indigo-900">{selectedApplicant.suggestedQuestions.map((q,i) => <li key={i}>{q}</li>)}</ul>
                             </div>
                         </div>
                     ) : (
-                         <div className="flex items-center justify-center h-full text-gray-500">Select an applicant to view their detailed analysis.</div>
+                        <div className="flex items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
+                            <div>
+                                <p className="font-semibold text-gray-700 dark:text-gray-300">{selectedApplicant.candidate_name || 'Unnamed Candidate'}</p>
+                                <p className="mt-2 text-sm max-w-xs mx-auto">No résumé on file for this applicant, so an AI match analysis isn’t available yet.</p>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>

@@ -10,43 +10,57 @@ interface FunnelChartProps {
     data: FunnelDataPoint[];
 }
 
+/**
+ * Stage-by-stage hiring funnel rendered as full-width proportional bars.
+ *
+ * Each stage is a fixed-width track with a colored fill sized to count/maxCount.
+ * Labels and counts live OUTSIDE the fill, so they never overflow regardless of
+ * value (the previous shrinking-box layout clipped wrapped labels at 0 counts).
+ * maxCount is the first stage (Applied), so every later bar reads as a share of
+ * the top of the funnel; the connector between bars shows stage-to-stage
+ * conversion.
+ */
 const FunnelChart: React.FC<FunnelChartProps> = ({ data }) => {
     if (!data || data.length === 0) {
-        return <div className="text-center p-4 text-gray-500">No data available for funnel.</div>;
+        return <div className="text-center p-4 text-gray-500 dark:text-gray-400">No data available for funnel.</div>;
     }
-    
+
     const colors = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
-    const maxCount = data[0]?.count || 1;
+    const maxCount = data[0]?.count || 0;
 
     return (
-        <div className="flex flex-col items-center w-full space-y-1">
+        <div className="w-full">
             {data.map(({ stage, count }, index) => {
-                const widthPercentage = (count / maxCount) * 100;
-                const conversionRate = index > 0 && data[index - 1].count > 0 
-                    ? ((count / data[index - 1].count) * 100).toFixed(1)
+                const widthPercentage = maxCount > 0 ? (count / maxCount) * 100 : 0;
+                const shareOfTotal = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+                const conversionRate = index > 0 && data[index - 1].count > 0
+                    ? Math.round((count / data[index - 1].count) * 100)
                     : null;
 
                 return (
-                    <div key={stage} className="w-full flex flex-col items-center">
+                    <div key={stage}>
                         {index > 0 && (
-                            <div className="flex items-center text-xs text-gray-500 font-semibold my-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                                {conversionRate && <span>{conversionRate}%</span>}
+                            <div className="py-2 pl-1 text-xs font-medium text-gray-400 dark:text-gray-500">
+                                <span>{conversionRate !== null ? `${conversionRate}% from previous stage` : 'no prior applicants'}</span>
                             </div>
                         )}
-                        <div className="relative group w-full flex justify-center">
+
+                        <div className="flex items-baseline justify-between mb-1.5">
+                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{stage}</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100 tabular-nums">
+                                {count}
+                                <span className="ml-1.5 text-xs font-medium text-gray-400 dark:text-gray-500">({shareOfTotal}%)</span>
+                            </span>
+                        </div>
+
+                        <div className="h-3 w-full rounded-full bg-gray-100 dark:bg-slate-700 overflow-hidden">
                             <div
-                                className="h-12 rounded-md flex items-center justify-center text-white font-bold text-sm px-4 transition-all duration-300"
+                                className="h-full rounded-full transition-all duration-500"
                                 style={{
-                                    width: `${Math.max(widthPercentage, 15)}%`, // Minimum width for visibility
+                                    width: `${widthPercentage}%`,
                                     backgroundColor: colors[index % colors.length],
                                 }}
-                            >
-                               <div className="text-center">
-                                    <p>{stage}</p>
-                                    <p className="text-base font-extrabold">{count}</p>
-                                </div>
-                            </div>
+                            />
                         </div>
                     </div>
                 );
