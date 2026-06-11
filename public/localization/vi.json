@@ -1906,5 +1906,7 @@
   "applicant_funnel_no_analysis_desc": "Chưa có phân tích hồ sơ cho ứng viên này.",
   "funnel_empty": "Chưa có dữ liệu phễu.",
   "funnel_conversion_from_previous": "{rate}% từ giai đoạn trước",
-  "funnel_conversion_no_prior": "Chưa có ứng viên ở giai đoạn trước"
+  "funnel_conversion_no_prior": "Chưa có ứng viên ở giai đoạn trước",
+  "account_web3_experimental_badge": "Thử nghiệm",
+  "account_web3_optional_note": "Tính năng tùy chọn trên testnet Sepolia. Tài khoản, đơn ứng tuyển và công cụ AI hoạt động bình thường mà không cần ví."
 }

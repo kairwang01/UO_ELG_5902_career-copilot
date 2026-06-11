@@ -11,6 +11,7 @@ import { ethers } from 'ethers';
 import ApiKeyManager from './ApiKeyManager';
 import { BusinessCustomApi } from './ModelSelector';
 import { listModels } from '../services/aiClient';
+import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
 
 // A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
 const TALENT_NFT_CONTRACT_ADDRESS = '0x2A3b1A43842238321a22542a035921A362358189';
@@ -88,7 +89,11 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
   const [isEligibleForNFT, setIsEligibleForNFT] = useState(false);
   const [resumeText, setResumeText] = useState<string | null>(null);
   const [isWrongNetwork, setIsWrongNetwork] = useState(false);
+  // Web3 is an experimental, admin-toggleable module — the whole section hides
+  // when disabled and nothing else on this page depends on wallet state.
+  const [web3Enabled, setWeb3Enabled] = useState(isWeb3Enabled());
 
+  useEffect(() => onWeb3FlagChange(setWeb3Enabled), []);
 
   useEffect(() => {
     getProfile();
@@ -518,9 +523,16 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
         <ModelSelectorManagedNote t={t} />
 
 
-        {/* Web3 Identity Section */}
+        {/* Web3 Identity Section — experimental, feature-flagged */}
+        {web3Enabled && (
         <div className="space-y-6 mt-10">
-            <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">{t('account_web3_title')}</h2>
+            <div className="flex items-center gap-2 border-b dark:border-slate-700 pb-2">
+                <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">{t('account_web3_title')}</h2>
+                <span className="inline-block rounded-full border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                    {t('account_web3_experimental_badge')}
+                </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-3">{t('account_web3_optional_note')}</p>
             <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg space-y-4">
                  {isWrongNetwork && walletAddress ? (
                     <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-500/30 rounded-lg text-center">
@@ -624,6 +636,7 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
                 )}
             </div>
         </div>
+        )}
 
         <form onSubmit={handleUpdatePassword} className="space-y-6 mt-10">
             <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">{t('account_change_password')}</h2>

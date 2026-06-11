@@ -1906,5 +1906,7 @@
   "applicant_funnel_no_analysis_desc": "Für diesen Bewerber ist noch keine Lebenslaufanalyse verfügbar.",
   "funnel_empty": "Keine Funnel-Daten verfügbar.",
   "funnel_conversion_from_previous": "{rate}% aus der vorherigen Stufe",
-  "funnel_conversion_no_prior": "Keine vorherigen Bewerber"
+  "funnel_conversion_no_prior": "Keine vorherigen Bewerber",
+  "account_web3_experimental_badge": "Experimentell",
+  "account_web3_optional_note": "Optionale Funktion im Sepolia-Testnetz. Konto, Bewerbungen und KI-Tools funktionieren ohne Wallet genauso."
 }

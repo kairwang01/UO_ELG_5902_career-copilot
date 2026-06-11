@@ -19,6 +19,7 @@ import {
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import LanguageSwitcher from './LanguageSwitcher';
+import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
 
 type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
 
@@ -54,8 +55,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   // Default collapsed: the full tool list is long, so the sidebar leads with a single
   // "Browse all tools" entry (the dedicated gallery) and keeps the quick-list one tap away.
   const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(false);
+  // Identity & Wallet is part of the experimental Web3 module — hidden when the flag is off.
+  const [web3Enabled, setWeb3Enabled] = React.useState(isWeb3Enabled());
+  React.useEffect(() => onWeb3FlagChange(setWeb3Enabled), []);
 
-  const workspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
+  const allWorkspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: t('ws_nav_dashboard'), icon: LayoutDashboard },
     { id: 'resume', label: t('ws_nav_resume'), icon: FileText },
     { id: 'jobs', label: t('ws_nav_jobs'), icon: Briefcase },
@@ -65,6 +69,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'portfolio', label: t('ws_nav_portfolio'), icon: Globe },
     { id: 'credentials', label: t('ws_nav_credentials'), icon: ShieldCheck },
   ];
+  const workspaceItems = web3Enabled
+    ? allWorkspaceItems
+    : allWorkspaceItems.filter((item) => item.id !== 'credentials');
 
   // Turn a raw subscription_status (e.g. "pending_essentials") into a readable label.
   const formatPlanStatus = (status?: string | null): string => {

@@ -43,6 +43,7 @@ import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';
 import ApiDocsViewer from './components/ApiDocsViewer';
 import { SiteLayout } from './marketing/components/SiteLayout';
+import { isWeb3Enabled, onWeb3FlagChange } from './config/featureFlags';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -128,6 +129,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   // Deep-link target page for the employer hiring portal
   const [portalInitialPage, setPortalInitialPage] = useState<PortalPage>('dashboard');
+  // Experimental Web3 module flag — gates the Identity & Wallet view.
+  const [web3Enabled, setWeb3Enabled] = useState(isWeb3Enabled());
   const roleStateKeyRef = useRef<string | null>(null);
   const resumeSaveWarningShownRef = useRef(false);
 
@@ -144,6 +147,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const isKnownWorkspaceRole = isCandidate || isEmployer || profile?.role === 'agency';
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
   useModalBehavior(closeMobileNav, isMobileNavOpen);
+
+  // Keep the Web3 flag in sync and bounce off the credentials view if the
+  // module is switched off while the user is on it.
+  useEffect(() => onWeb3FlagChange(setWeb3Enabled), []);
+  useEffect(() => {
+    if (!web3Enabled && dashboardView === 'credentials') setDashboardView('dashboard');
+  }, [web3Enabled, dashboardView]);
 
   useEffect(() => {
     setApiStatusUpdater((status, errorMsg) => {
@@ -867,7 +877,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             </div>
         )}
 
-        {dashboardView === 'credentials' && session && (
+        {dashboardView === 'credentials' && session && web3Enabled && (
             <div id="credentials-panel" className="space-y-10 animate-slide-in-up">
                 {/* Identity & Wallet shows verification only. Account settings live in their
                     own view — rendering Account here too duplicated the whole panel (QA C13). */}

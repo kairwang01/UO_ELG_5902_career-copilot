@@ -55,9 +55,11 @@ import {
   type PromptVersion,
   type TestModelResult,
 } from '../../services/adminClient';
-
-// ─── role type ────────────────────────────────────────────────────────────────
-type AdminRole = 'super' | 'admin' | 'reviewer';
+import { hasAdminPermission, type AdminRole } from '../../lib/access/permissions';
+import { PermissionMatrix, ProductRoleOverview } from './AccessControlSections';
+import { KeyPoolHealthSection } from './KeyPoolHealthSection';
+import { ApiPlatformPanel } from './ApiPlatformPanel';
+import { Web3SettingsPanel } from './Web3SettingsPanel';
 
 // ─── minimal i18n stub — keys returned in StructuredOutput ───────────────────
 const STRINGS: Record<string, string> = {
@@ -115,7 +117,7 @@ const STRINGS: Record<string, string> = {
 };
 const t = (key: string) => STRINGS[key] ?? key;
 
-type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'audit';
+type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'apiplatform' | 'web3' | 'audit';
 
 /** Per-key/model test result: key is a provider slug ('gemini'|'kairllm'|'deepseek') or a model id. */
 type TestStatus = { state: 'idle' } | { state: 'running' } | ({ state: 'done' } & TestModelResult);
@@ -674,19 +676,22 @@ const AdminPortal: React.FC = () => {
 
   const role = adminRole ?? 'admin'; // default to admin while loading
   const isSuper = role === 'super';
-  const isAdminOrAbove = role === 'super' || role === 'admin';
   const isReviewer = role === 'reviewer';
 
   // ── tab definitions ───────────────────────────────────────────────────────
+  // Visibility is driven by the central registry (lib/access/permissions.ts);
+  // the server re-checks every action regardless of what renders here.
 
   const allTabs: { id: Tab; label: string; visible: boolean }[] = [
-    { id: 'dashboard', label: 'Dashboard', visible: true },
-    { id: 'ai', label: 'Models & Keys', visible: isSuper },
-    { id: 'prompts', label: 'Prompts', visible: isAdminOrAbove },
-    { id: 'quotas', label: 'Quotas', visible: isAdminOrAbove },
-    { id: 'users', label: 'Users', visible: isAdminOrAbove },
-    { id: 'admins', label: 'Admins', visible: isSuper },
-    { id: 'audit', label: 'Audit Log', visible: true },
+    { id: 'dashboard', label: 'Dashboard', visible: hasAdminPermission(role, 'admin.dashboard.read') },
+    { id: 'ai', label: 'Models & Keys', visible: hasAdminPermission(role, 'admin.models.read') },
+    { id: 'prompts', label: 'Prompts', visible: hasAdminPermission(role, 'admin.prompts.read') },
+    { id: 'quotas', label: 'Quotas', visible: hasAdminPermission(role, 'admin.quotas.read') },
+    { id: 'users', label: 'Users', visible: hasAdminPermission(role, 'admin.users.read') },
+    { id: 'admins', label: 'Access Control', visible: hasAdminPermission(role, 'admin.admins.manage') },
+    { id: 'apiplatform', label: 'API Platform', visible: hasAdminPermission(role, 'admin.apiplatform.read') },
+    { id: 'web3', label: 'Web3', visible: hasAdminPermission(role, 'admin.web3.manage') },
+    { id: 'audit', label: 'Audit Log', visible: hasAdminPermission(role, 'admin.audit.read') },
   ];
 
   const tabs = allTabs.filter((t) => t.visible).map(({ id, label }) => ({ id, label }));
@@ -982,6 +987,9 @@ const AdminPortal: React.FC = () => {
         {/* ── MODELS & KEYS (merged) ────────────────────────────────── */}
         {tab === 'ai' && (
           <div className="space-y-8">
+
+            {/* ══ SECTION 0: KEY POOL HEALTH ═══════════════════════════════ */}
+            <KeyPoolHealthSection models={models} />
 
             {/* ══ SECTION A: PROVIDER CREDENTIALS ══════════════════════════ */}
             <div>
@@ -2719,7 +2727,9 @@ const AdminPortal: React.FC = () => {
 
         {/* ── ADMINS ────────────────────────────────────────────────────── */}
         {tab === 'admins' && isSuper && (
-          <div className="max-w-2xl space-y-5">
+          <div className="max-w-4xl space-y-5">
+            <PermissionMatrix />
+            <ProductRoleOverview />
             <Card className="p-5 space-y-4">
               <div>
                 <SectionHeading>{t('admin.admins.title')}</SectionHeading>
@@ -2841,6 +2851,16 @@ const AdminPortal: React.FC = () => {
               )}
             </Card>
           </div>
+        )}
+
+        {/* ── API PLATFORM (developer preview) ──────────────────────────── */}
+        {tab === 'apiplatform' && hasAdminPermission(role, 'admin.apiplatform.read') && (
+          <ApiPlatformPanel canManage={hasAdminPermission(role, 'admin.apiplatform.manage')} />
+        )}
+
+        {/* ── WEB3 SETTINGS (experimental) ──────────────────────────────── */}
+        {tab === 'web3' && hasAdminPermission(role, 'admin.web3.manage') && (
+          <Web3SettingsPanel />
         )}
 
         {/* ── AUDIT LOG ─────────────────────────────────────────────────── */}

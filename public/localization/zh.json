@@ -2002,5 +2002,7 @@
   "shortlist_filter_result": "当前显示 {shown} / {total} 位候选人",
   "shortlist_no_results_title": "没有符合筛选条件的候选人",
   "shortlist_no_results_desc": "清空搜索或切换状态后继续查看已保存候选人。",
-  "shortlist_clear_filters": "清空筛选"
+  "shortlist_clear_filters": "清空筛选",
+  "account_web3_experimental_badge": "实验功能",
+  "account_web3_optional_note": "可选功能，运行于 Sepolia 测试网。不连接钱包不影响账户、投递和 AI 工具的任何使用。"
 }

@@ -1906,5 +1906,7 @@
   "applicant_funnel_no_analysis_desc": "Aucune analyse de CV n’est encore disponible pour ce candidat.",
   "funnel_empty": "Aucune donnée d’entonnoir disponible.",
   "funnel_conversion_from_previous": "{rate}% depuis l’étape précédente",
-  "funnel_conversion_no_prior": "Aucun candidat à l’étape précédente"
+  "funnel_conversion_no_prior": "Aucun candidat à l’étape précédente",
+  "account_web3_experimental_badge": "Expérimental",
+  "account_web3_optional_note": "Fonction optionnelle sur le testnet Sepolia. Votre compte, vos candidatures et les outils IA fonctionnent exactement pareil sans portefeuille."
 }

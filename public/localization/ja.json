@@ -1906,5 +1906,7 @@
   "applicant_funnel_no_analysis_desc": "この応募者の履歴書分析はまだ利用できません。",
   "funnel_empty": "ファネルデータがありません。",
   "funnel_conversion_from_previous": "前段階から {rate}%",
-  "funnel_conversion_no_prior": "前段階の応募者はいません"
+  "funnel_conversion_no_prior": "前段階の応募者はいません",
+  "account_web3_experimental_badge": "実験的機能",
+  "account_web3_optional_note": "Sepolia テストネット上のオプション機能です。ウォレットを接続しなくても、アカウント・応募・AI ツールは通常どおり利用できます。"
 }

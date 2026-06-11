@@ -2002,5 +2002,7 @@
   "shortlist_filter_result": "{shown} of {total} candidates shown",
   "shortlist_no_results_title": "No candidates match those filters",
   "shortlist_no_results_desc": "Clear the search or switch status to review more saved candidates.",
-  "shortlist_clear_filters": "Clear filters"
+  "shortlist_clear_filters": "Clear filters",
+  "account_web3_experimental_badge": "Experimental",
+  "account_web3_optional_note": "Optional feature on the Sepolia testnet. Your account, applications and AI tools work exactly the same without a wallet."
 }
