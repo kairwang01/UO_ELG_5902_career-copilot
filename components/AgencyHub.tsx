@@ -62,6 +62,8 @@ interface AgencyFilterCounts {
   error: number;
 }
 
+const ACCEPTED_RESUME_TYPES = ".pdf,.docx,.txt,.png,.jpg";
+
 const formatTranslation = (
   template: string,
   values: Record<string, string | number>,
@@ -499,6 +501,114 @@ const AgencyWorkflowPanel: React.FC<{
         </div>
       </div>
     </div>
+  );
+};
+
+const AgencyModeGuide: React.FC<{
+  mode: "general" | "matching";
+  hasJobDescription: boolean;
+  onUsePostedJob: () => void;
+  onPasteBrief: () => void;
+  onUploadResumes: () => void;
+  t: TranslationFn;
+}> = ({
+  mode,
+  hasJobDescription,
+  onUsePostedJob,
+  onPasteBrief,
+  onUploadResumes,
+  t,
+}) => {
+  const matching = mode === "matching";
+  const steps = [
+    {
+      title: t("agency_workflow_step_brief"),
+      description: matching
+        ? hasJobDescription
+          ? t("agency_workflow_ready_to_run")
+          : t("agency_workflow_add_brief")
+        : t("agency_workflow_market_ready"),
+      Icon: BriefcaseBusiness,
+    },
+    {
+      title: t("agency_workflow_step_resumes"),
+      description: matching
+        ? t("agency_drop_rank_hint")
+        : t("agency_drop_browse_hint"),
+      Icon: FileText,
+    },
+    {
+      title: t("agency_workflow_step_results"),
+      description: t("agency_mode_guide_results_desc"),
+      Icon: CheckCircle2,
+    },
+  ];
+
+  return (
+    <section className="animate-panel-expand rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-2xl">
+          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+            {t("agency_mode_guide_title")}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
+            {matching
+              ? t("agency_mode_guide_matching_desc")
+              : t("agency_mode_guide_general_desc")}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {matching && !hasJobDescription && (
+            <>
+              <button
+                type="button"
+                onClick={onUsePostedJob}
+                className="inline-flex min-h-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+              >
+                {t("agency_mode_guide_select_job")}
+              </button>
+              <button
+                type="button"
+                onClick={onPasteBrief}
+                className="inline-flex min-h-9 items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-gray-200 dark:hover:bg-slate-700"
+              >
+                {t("agency_jd_tab_paste")}
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={onUploadResumes}
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            <CloudUpload className="h-4 w-4" aria-hidden="true" />
+            {t("agency_mode_guide_upload")}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {steps.map((step) => {
+          const Icon = step.Icon;
+          return (
+            <div
+              key={step.title}
+              className="rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-900/50"
+            >
+              <div className="flex items-center gap-2">
+                <Icon className="h-4 w-4 text-blue-600 dark:text-blue-300" aria-hidden="true" />
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {step.title}
+                </p>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                {step.description}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 };
 
@@ -1296,6 +1406,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     if (newItems.length === 0) return;
 
     setFiles((prev) => [...prev, ...newItems]);
+    setCurrentFilter("all");
     addToast(
       formatTranslation(t("agency_files_added"), { count: newItems.length }),
       "info",
@@ -1659,6 +1770,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       <div className="flex justify-center mb-6">
         <div className="bg-gray-100 dark:bg-slate-800/50 p-1 rounded-lg inline-flex">
           <button
+            type="button"
             onClick={() => {
               setMode("general");
             }}
@@ -1671,6 +1783,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             {t("agency_mode_general_title")}
           </button>
           <button
+            type="button"
             onClick={() => {
               setMode("matching");
             }}
@@ -1723,6 +1836,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                 {/* JD Source Tabs */}
                 <div className="flex flex-wrap gap-2 mb-4 border-b border-blue-200 dark:border-blue-800 pb-2">
                   <button
+                    type="button"
                     onClick={() => setJdSource("paste")}
                     className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === "paste" ? "text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}
                     aria-pressed={jdSource === "paste"}
@@ -1730,6 +1844,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     {t("agency_jd_tab_paste")}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setJdSource("url")}
                     className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === "url" ? "text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}
                     aria-pressed={jdSource === "url"}
@@ -1737,6 +1852,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     {t("agency_jd_tab_url")}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setJdSource("select")}
                     className={`px-3 py-1 text-sm font-medium rounded-t-md transition-colors ${jdSource === "select" ? "text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}
                     aria-pressed={jdSource === "select"}
@@ -1775,6 +1891,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                       className="flex-1 bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500"
                     />
                     <button
+                      type="button"
                       onClick={handleJdUrlImport}
                       disabled={isExtractingJd || !jdUrl.trim()}
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1799,6 +1916,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     <div className="flex items-center justify-between gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">
                       <span>{t("agency_jobs_load_failed")}</span>
                       <button
+                        type="button"
                         onClick={fetchInternalJobs}
                         className="text-xs font-semibold underline hover:no-underline"
                       >
@@ -1885,51 +2003,62 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
 
             {/* File Drop Area */}
             {files.length === 0 ? (
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    fileInputRef.current?.click();
-                  }
-                }}
-                aria-label={t("agency_drop_title")}
-                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
-                  isDragging
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                    : "border-gray-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 bg-gray-50 dark:bg-slate-700/30"
-                }`}
-              >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  multiple
-                  onChange={handleFileInput}
-                  accept=".pdf,.docx,.txt,.png,.jpg"
+              <div className="space-y-4">
+                <AgencyModeGuide
+                  mode={mode}
+                  hasJobDescription={hasJobDescription}
+                  onUsePostedJob={() => setJdSource("select")}
+                  onPasteBrief={() => setJdSource("paste")}
+                  onUploadResumes={() => fileInputRef.current?.click()}
+                  t={t}
                 />
-                <div className="bg-white dark:bg-slate-700 p-4 rounded-full inline-block shadow-sm mb-4">
-                  <CloudUpload className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  aria-label={t("agency_drop_title")}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors sm:p-10 ${
+                    isDragging
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-gray-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 bg-gray-50 dark:bg-slate-700/30"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    multiple
+                    onChange={handleFileInput}
+                    accept={ACCEPTED_RESUME_TYPES}
+                  />
+                  <div className="bg-white dark:bg-slate-700 p-4 rounded-full inline-block shadow-sm mb-4">
+                    <CloudUpload className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <p className="text-xl font-medium text-gray-900 dark:text-gray-100">
+                    {t("agency_drop_title")}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    {mode === "matching"
+                      ? t("agency_drop_rank_hint")
+                      : t("agency_drop_browse_hint")}
+                  </p>
                 </div>
-                <p className="text-xl font-medium text-gray-900 dark:text-gray-100">
-                  {t("agency_drop_title")}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                  {mode === "matching"
-                    ? t("agency_drop_rank_hint")
-                    : t("agency_drop_browse_hint")}
-                </p>
               </div>
             ) : (
               <div className="space-y-4">
                 {/* Actions Toolbar */}
                 <div className="flex flex-col gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200 dark:border-slate-600 dark:bg-slate-700/50 sm:flex-row sm:items-center sm:justify-between">
                   <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                   >
@@ -1942,11 +2071,12 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     className="hidden"
                     multiple
                     onChange={handleFileInput}
-                    accept=".pdf,.docx,.txt,.png,.jpg"
+                    accept={ACCEPTED_RESUME_TYPES}
                   />
 
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <button
+                      type="button"
                       onClick={() => setFiles([])}
                       className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       disabled={isAnalyzing}
@@ -1954,6 +2084,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                       {t("agency_clear_all")}
                     </button>
                     <button
+                      type="button"
                       onClick={runBulkAnalysis}
                       disabled={!canRunAnalysis}
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900/50"
@@ -2013,6 +2144,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                             </div>
                             <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                               <button
+                                type="button"
                                 onClick={() =>
                                   setFiles((prev) =>
                                     prev.map((f) =>
@@ -2031,6 +2163,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                 {t("agency_retry")}
                               </button>
                               <button
+                                type="button"
                                 onClick={() => removeFile(file.id)}
                                 className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full"
                                 title={t("agency_action_remove")}
@@ -2150,6 +2283,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                       <div className="flex items-center justify-end gap-2">
                                         {mode === "general" && (
                                           <button
+                                            type="button"
                                             onClick={() =>
                                               setShowDetailModal(file)
                                             }
@@ -2165,6 +2299,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                           </button>
                                         )}
                                         <button
+                                          type="button"
                                           onClick={() =>
                                             file.blindResumeText
                                               ? setViewBlindResumeId(file.id)
@@ -2191,6 +2326,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                         </button>
                                         {mode === "matching" && (
                                           <button
+                                            type="button"
                                             onClick={() =>
                                               file.prepKit
                                                 ? setViewPrepKitId(file.id)
@@ -2221,6 +2357,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                           </button>
                                         )}
                                         <button
+                                          type="button"
                                           onClick={() =>
                                             file.pitchEmail
                                               ? setViewPitchId(file.id)
@@ -2254,6 +2391,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                           )}
                                         </button>
                                         <button
+                                          type="button"
                                           onClick={() => removeFile(file.id)}
                                           className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full"
                                           title={t("agency_action_remove")}
