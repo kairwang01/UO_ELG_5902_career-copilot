@@ -970,7 +970,7 @@
   "applications_error_title": "Could not load applications",
   "applications_error_desc": "Something went wrong. Please refresh the page and try again.",
   "goals_panel_title": "Karriereziele",
-  "goals_panel_desc": "Set your job-seeking preferences to guide your AI job search.",
+  "goals_panel_desc": "Lege deine Suchpräferenzen fest, damit passende Rollen empfohlen werden.",
   "goals_status_active": "Aktiv auf Suche",
   "goals_status_open": "Offen für Angebote",
   "goals_status_browsing": "Nur am Schauen",
@@ -985,7 +985,7 @@
   "goals_placeholder_availability": "e.g. 2 weeks notice",
   "goals_save_button": "Speichern",
   "goals_saved_flash": "Gespeichert ✓",
-  "goals_feeds_ai": "These preferences guide your AI job search.",
+  "goals_feeds_ai": "Diese Präferenzen steuern Job-Matches, Filter und die Vorbereitung von Nachrichten.",
   "goals_no_prefs": "No preferences set yet.",
   "goals_active_banner": "Searching with your preferences:",
   "job_card_why_fit": "Why am I a fit?",
@@ -2103,5 +2103,10 @@
   "agency_jd_helper_posted": "Dieser Stapel bewertet Lebensläufe gegen die ausgewählte Ausschreibung.",
   "agency_jd_helper_manual": "Nutzen Sie einen veröffentlichten Job, eine URL oder einen eingefügten Brief, bevor Kandidaten gerankt werden.",
   "agency_jd_length": "{count} Zeichen im Matching-Brief",
-  "agency_matching_empty_jd_hint": "Fügen Sie zuerst eine Stellenbeschreibung hinzu, bevor Kandidaten gerankt werden."
+  "agency_matching_empty_jd_hint": "Fügen Sie zuerst eine Stellenbeschreibung hinzu, bevor Kandidaten gerankt werden.",
+  "browse_jobs_goal_filter_title": "Gespeicherte Ziele nutzen",
+  "browse_jobs_goal_filter_desc": "Wende Zielrollen, bevorzugte Standorte und Gehaltswunsch auf diese Liste an.",
+  "browse_jobs_goal_filter_apply": "Ziele anwenden",
+  "browse_jobs_goal_filter_active": "Ziele angewendet",
+  "browse_jobs_goal_filter_summary": "Gespeicherte Ziele: {summary}"
 }

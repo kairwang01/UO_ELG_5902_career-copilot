@@ -999,7 +999,7 @@
   "applications_summary_interviews": "面试中",
   "applications_summary_interviews_desc": "已经进入面试阶段的职位。",
   "goals_panel_title": "求职意向",
-  "goals_panel_desc": "设置您的求职偏好以引导 AI 职位搜索。",
+  "goals_panel_desc": "设置求职偏好，用于匹配更合适的职位推荐。",
   "goals_status_active": "积极求职中",
   "goals_status_open": "对机会保持开放",
   "goals_status_browsing": "随便看看",
@@ -1014,7 +1014,7 @@
   "goals_placeholder_availability": "例如：提前两周通知",
   "goals_save_button": "保存",
   "goals_saved_flash": "已保存 ✓",
-  "goals_feeds_ai": "这些偏好将指导您的 AI 职位搜索。",
+  "goals_feeds_ai": "这些偏好会影响职位匹配、筛选和沟通准备。",
   "goals_no_prefs": "尚未设置求职意向。",
   "goals_active_banner": "按您的求职意向搜索：",
   "job_card_why_fit": "为什么我适合这个职位？",
@@ -2199,5 +2199,10 @@
   "agency_jd_helper_posted": "本批简历会按选中的职位进行排序。",
   "agency_jd_helper_manual": "排序候选人前，请选择已发布职位、导入 URL 或粘贴职位说明。",
   "agency_jd_length": "匹配说明 {count} 个字符",
-  "agency_matching_empty_jd_hint": "请先提供职位说明，再进行候选人排序。"
+  "agency_matching_empty_jd_hint": "请先提供职位说明，再进行候选人排序。",
+  "browse_jobs_goal_filter_title": "使用已保存求职意向",
+  "browse_jobs_goal_filter_desc": "将目标岗位、期望地点和薪资偏好套用到当前职位列表。",
+  "browse_jobs_goal_filter_apply": "套用意向",
+  "browse_jobs_goal_filter_active": "已套用",
+  "browse_jobs_goal_filter_summary": "已保存意向：{summary}"
 }

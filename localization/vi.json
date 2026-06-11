@@ -970,7 +970,7 @@
   "applications_error_title": "Không thể tải đơn ứng tuyển",
   "applications_error_desc": "Đã xảy ra lỗi. Vui lòng làm mới trang và thử lại.",
   "goals_panel_title": "Mục tiêu nghề nghiệp",
-  "goals_panel_desc": "Đặt tùy chọn tìm việc để định hướng tìm kiếm việc làm AI của bạn.",
+  "goals_panel_desc": "Đặt ưu tiên tìm việc để gợi ý vai trò phù hợp hơn.",
   "goals_status_active": "Đang tìm việc",
   "goals_status_open": "Sẵn sàng cơ hội",
   "goals_status_browsing": "Đang tham khảo",
@@ -985,7 +985,7 @@
   "goals_placeholder_availability": "vd: Báo trước 2 tuần",
   "goals_save_button": "Lưu",
   "goals_saved_flash": "Đã lưu ✓",
-  "goals_feeds_ai": "Những tùy chọn này định hướng tìm kiếm việc làm AI của bạn.",
+  "goals_feeds_ai": "Những ưu tiên này ảnh hưởng đến gợi ý việc làm, bộ lọc và chuẩn bị tin nhắn.",
   "goals_no_prefs": "Chưa đặt tùy chọn nào.",
   "goals_active_banner": "Searching with your preferences:",
   "job_card_why_fit": "Tại sao tôi phù hợp?",
@@ -2103,5 +2103,10 @@
   "agency_jd_helper_posted": "Lô CV này sẽ được xếp hạng theo tin tuyển dụng đã chọn.",
   "agency_jd_helper_manual": "Dùng tin đã đăng, URL hoặc mô tả dán vào trước khi xếp hạng ứng viên.",
   "agency_jd_length": "{count} ký tự trong brief ghép nối",
-  "agency_matching_empty_jd_hint": "Hãy cung cấp mô tả công việc trước khi xếp hạng ứng viên."
+  "agency_matching_empty_jd_hint": "Hãy cung cấp mô tả công việc trước khi xếp hạng ứng viên.",
+  "browse_jobs_goal_filter_title": "Dùng mục tiêu đã lưu",
+  "browse_jobs_goal_filter_desc": "Áp dụng vai trò mục tiêu, địa điểm ưu tiên và kỳ vọng lương vào danh sách này.",
+  "browse_jobs_goal_filter_apply": "Áp dụng mục tiêu",
+  "browse_jobs_goal_filter_active": "Đã áp dụng mục tiêu",
+  "browse_jobs_goal_filter_summary": "Mục tiêu đã lưu: {summary}"
 }

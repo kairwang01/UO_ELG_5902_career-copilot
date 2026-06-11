@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export interface JobPreferences {
   status: 'active' | 'open' | 'browsing' | 'not_looking';
@@ -9,6 +9,7 @@ export interface JobPreferences {
 }
 
 const KEY = 'job_preferences';
+const UPDATE_EVENT = 'career-copilot:job-preferences-updated';
 
 export function loadJobPreferences(): JobPreferences | null {
   try {
@@ -23,6 +24,9 @@ export function saveJobPreferences(p: JobPreferences): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(p));
   } catch { /* storage unavailable */ }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<JobPreferences>(UPDATE_EVENT, { detail: p }));
+  }
 }
 
 const STATUS_LABELS: Record<JobPreferences['status'], string> = {
@@ -58,6 +62,22 @@ export function prefsSummaryLine(p: JobPreferences): string {
 /** React hook — wraps load/save with local state. */
 export function useJobPreferences(): { prefs: JobPreferences | null; save: (p: JobPreferences) => void } {
   const [prefs, setPrefs] = useState<JobPreferences | null>(() => loadJobPreferences());
+
+  useEffect(() => {
+    const syncFromStorage = () => setPrefs(loadJobPreferences());
+    const syncFromEvent = (event: Event) => {
+      const nextPrefs = (event as CustomEvent<JobPreferences>).detail;
+      setPrefs(nextPrefs ?? loadJobPreferences());
+    };
+
+    window.addEventListener('storage', syncFromStorage);
+    window.addEventListener(UPDATE_EVENT, syncFromEvent);
+
+    return () => {
+      window.removeEventListener('storage', syncFromStorage);
+      window.removeEventListener(UPDATE_EVENT, syncFromEvent);
+    };
+  }, []);
 
   const save = (p: JobPreferences) => {
     saveJobPreferences(p);

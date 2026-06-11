@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Target } from 'lucide-react';
-import { useJobPreferences, saveJobPreferences, prefsSummaryLine } from '../hooks/useJobPreferences';
+import { useJobPreferences, prefsSummaryLine } from '../hooks/useJobPreferences';
 import type { JobPreferences } from '../hooks/useJobPreferences';
 
 interface CareerGoalsPanelProps {

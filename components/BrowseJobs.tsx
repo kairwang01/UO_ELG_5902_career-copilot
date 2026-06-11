@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   RotateCcw,
   Star,
+  Target,
 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -25,6 +26,11 @@ import {
   aggregateRating,
   type CompanyReview,
 } from '../lib/companyReviewsData';
+import {
+  prefsSummaryLine,
+  useJobPreferences,
+  type JobPreferences,
+} from '../hooks/useJobPreferences';
 
 interface BrowseJobsProps {
   session: Session | null;
@@ -38,6 +44,46 @@ const QUICK_SEARCH_KEYS = [
   'browse_jobs_quick_marketing',
   'browse_jobs_quick_remote',
 ] as const;
+
+const normalizeFilterText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+const tokenizeSearch = (value: string) =>
+  normalizeFilterText(value)
+    .split(/[\s,;/|]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+const splitPreferenceList = (value: string) =>
+  value
+    .split(/[,;/\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+const hasFilterablePreferences = (prefs: JobPreferences | null) =>
+  !!prefs && [prefs.roles, prefs.locations, prefs.salaryMin].some((value) => value.trim().length > 0);
+
+const buildGoalKeyword = (prefs: JobPreferences | null) => {
+  if (!prefs) return '';
+  return splitPreferenceList(prefs.roles).join(' ');
+};
+
+const findPreferredLocation = (prefs: JobPreferences | null, locations: string[]) => {
+  if (!prefs?.locations.trim()) return 'all';
+  const desiredLocations = splitPreferenceList(prefs.locations).map(normalizeFilterText);
+  if (desiredLocations.length === 0) return 'all';
+
+  return locations.find((location) => {
+    const normalizedLocation = normalizeFilterText(location);
+    return desiredLocations.some(
+      (desired) => normalizedLocation.includes(desired) || desired.includes(normalizedLocation),
+    );
+  }) ?? 'all';
+};
 
 // ── skeleton card ──────────────────────────────────────────────────────────────
 const SkeletonCard: React.FC = () => (
@@ -66,6 +112,7 @@ const postedLabel = (iso: string, t: (k: string) => string): string => {
 // ── main component ─────────────────────────────────────────────────────────────
 const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   const { addToast } = useToast();
+  const { prefs } = useJobPreferences();
 
   // ── data state ────────────────────────────────────────────────────────────
   const [jobs, setJobs] = useState<JobPosting[]>([]);
@@ -192,7 +239,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
 
   // ── filtered + sorted results ─────────────────────────────────────────────
   const filtered = useMemo(() => {
-    const kw = keyword.toLowerCase();
+    const keywordTokens = tokenizeSearch(keyword);
     return jobs
       .filter((j) => {
         const searchable = [
@@ -201,8 +248,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           j.location,
           j.salary_range,
           j.description,
-        ].filter(Boolean).join(' ').toLowerCase();
-        if (kw && !searchable.includes(kw)) return false;
+        ].filter(Boolean).join(' ');
+        const normalizedSearchable = normalizeFilterText(searchable);
+        if (
+          keywordTokens.length > 0 &&
+          !keywordTokens.every((token) => normalizedSearchable.includes(token))
+        ) {
+          return false;
+        }
         if (locationFilter !== 'all' && j.location !== locationFilter) return false;
         if (hasSalaryFilter && !j.salary_range) return false;
         return true;
@@ -214,6 +267,25 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       });
   }, [jobs, keyword, locationFilter, hasSalaryFilter, sortOrder]);
   const hasActiveFilters = keyword !== '' || locationFilter !== 'all' || hasSalaryFilter || sortOrder !== 'newest';
+  const hasSavedGoals = hasFilterablePreferences(prefs);
+  const goalKeyword = buildGoalKeyword(prefs);
+  const goalLocation = findPreferredLocation(prefs, locations);
+  const goalSummary = prefs ? prefsSummaryLine(prefs) : '';
+  const goalSalaryFilter = !!prefs?.salaryMin.trim();
+  const goalsApplied =
+    hasSavedGoals &&
+    normalizeFilterText(keyword) === normalizeFilterText(goalKeyword) &&
+    locationFilter === goalLocation &&
+    hasSalaryFilter === goalSalaryFilter;
+
+  const applySavedGoals = () => {
+    if (!prefs) return;
+    commitKeyword(goalKeyword);
+    setLocationFilter(goalLocation);
+    setHasSalaryFilter(goalSalaryFilter);
+    setSortOrder('newest');
+    setExpandedId(null);
+  };
 
   // ── apply handler ─────────────────────────────────────────────────────────
   // Ref guard catches double-clicks that land before React re-renders with the
@@ -295,6 +367,39 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             );
           })}
         </div>
+
+        {hasSavedGoals && (
+          <div className="animate-panel-expand rounded-lg border border-blue-100 bg-blue-50/80 p-3 dark:border-blue-900/50 dark:bg-blue-900/20">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-semibold text-blue-900 dark:text-blue-200">
+                  <Target className="h-4 w-4 shrink-0" />
+                  {t('browse_jobs_goal_filter_title')}
+                </div>
+                <p className="mt-1 text-sm leading-relaxed text-blue-800 dark:text-blue-300">
+                  {goalSummary
+                    ? t('browse_jobs_goal_filter_summary').replace('{summary}', goalSummary)
+                    : t('browse_jobs_goal_filter_desc')}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {goalsApplied && (
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/30 dark:text-emerald-300">
+                    {t('browse_jobs_goal_filter_active')}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={applySavedGoals}
+                  disabled={goalsApplied || loading}
+                  className="inline-flex min-h-[34px] items-center justify-center rounded-lg bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-default disabled:bg-blue-300 disabled:text-white/90 dark:disabled:bg-blue-900/60"
+                >
+                  {t('browse_jobs_goal_filter_apply')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* filter row */}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

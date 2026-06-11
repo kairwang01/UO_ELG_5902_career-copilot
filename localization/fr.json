@@ -1033,13 +1033,13 @@
   "business_page_pricing_title": "Tarification simple et transparente",
   "discover_verified_summary_default": "Les compétences de ce candidat sont vérifiées et engagées dans le vivier de talents.",
   "goals_active_banner": "Recherche avec vos préférences :",
-  "goals_feeds_ai": "Ces préférences guident votre recherche d'emploi par IA.",
+  "goals_feeds_ai": "Ces préférences orientent les correspondances, les filtres et la préparation des messages.",
   "goals_label_availability": "Disponibilité",
   "goals_label_locations": "Lieux souhaités",
   "goals_label_roles": "Postes ciblés",
   "goals_label_salary": "Salaire minimum",
   "goals_no_prefs": "Aucune préférence définie pour le moment.",
-  "goals_panel_desc": "Définissez vos préférences de recherche pour guider votre recherche d'emploi par IA.",
+  "goals_panel_desc": "Définissez vos préférences de recherche pour orienter les recommandations de postes.",
   "goals_panel_title": "Objectifs de carrière",
   "goals_placeholder_availability": "ex. Préavis de 2 semaines",
   "goals_placeholder_locations": "ex. Paris, Remote",
@@ -2103,5 +2103,10 @@
   "agency_jd_helper_posted": "Ce lot classera les CV selon le poste sélectionné.",
   "agency_jd_helper_manual": "Utilisez un poste publié, une URL ou une description collée avant de classer les candidats.",
   "agency_jd_length": "{count} caractères dans le brief de matching",
-  "agency_matching_empty_jd_hint": "Ajoutez une description de poste avant de classer les candidats."
+  "agency_matching_empty_jd_hint": "Ajoutez une description de poste avant de classer les candidats.",
+  "browse_jobs_goal_filter_title": "Utiliser les objectifs enregistrés",
+  "browse_jobs_goal_filter_desc": "Appliquez vos rôles cibles, lieux préférés et préférence salariale à cette liste.",
+  "browse_jobs_goal_filter_apply": "Appliquer",
+  "browse_jobs_goal_filter_active": "Objectifs appliqués",
+  "browse_jobs_goal_filter_summary": "Objectifs enregistrés : {summary}"
 }

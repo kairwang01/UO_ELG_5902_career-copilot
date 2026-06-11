@@ -999,7 +999,7 @@
   "applications_summary_interviews": "Interviews",
   "applications_summary_interviews_desc": "Roles currently at interview stage.",
   "goals_panel_title": "Career Goals",
-  "goals_panel_desc": "Set your job-seeking preferences to guide your AI job search.",
+  "goals_panel_desc": "Set your job-seeking preferences to guide role recommendations.",
   "goals_status_active": "Actively looking",
   "goals_status_open": "Open to opportunities",
   "goals_status_browsing": "Just browsing",
@@ -1014,7 +1014,7 @@
   "goals_placeholder_availability": "e.g. 2 weeks notice",
   "goals_save_button": "Save",
   "goals_saved_flash": "Saved ✓",
-  "goals_feeds_ai": "These preferences guide your AI job search.",
+  "goals_feeds_ai": "These preferences guide job matches, filters, and outreach prep.",
   "goals_no_prefs": "No preferences set yet.",
   "goals_active_banner": "Searching with your preferences:",
   "job_card_why_fit": "Why am I a fit?",
@@ -2199,5 +2199,10 @@
   "agency_jd_helper_posted": "This batch will rank resumes against the selected posting.",
   "agency_jd_helper_manual": "Use a posted job, URL, or pasted brief before ranking candidates.",
   "agency_jd_length": "{count} characters in matching brief",
-  "agency_matching_empty_jd_hint": "Provide a job description before ranking candidates."
+  "agency_matching_empty_jd_hint": "Provide a job description before ranking candidates.",
+  "browse_jobs_goal_filter_title": "Use saved goals",
+  "browse_jobs_goal_filter_desc": "Apply your target roles, preferred locations, and salary preference to this job list.",
+  "browse_jobs_goal_filter_apply": "Apply goals",
+  "browse_jobs_goal_filter_active": "Goals applied",
+  "browse_jobs_goal_filter_summary": "Saved goals: {summary}"
 }

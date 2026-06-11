@@ -1032,13 +1032,13 @@
   "business_page_pricing_title": "シンプルで透明な料金",
   "discover_verified_summary_default": "この候補者のスキルは検証され、人材ボールトに登録されています。",
   "goals_active_banner": "あなたの希望条件で検索中：",
-  "goals_feeds_ai": "これらの希望条件がAI求人検索をガイドします。",
+  "goals_feeds_ai": "この条件は求人マッチ、絞り込み、連絡準備に反映されます。",
   "goals_label_availability": "就業可能時期",
   "goals_label_locations": "希望勤務地",
   "goals_label_roles": "目標職種",
   "goals_label_salary": "最低希望年収",
   "goals_no_prefs": "まだ希望条件が設定されていません。",
-  "goals_panel_desc": "AI求人検索をガイドする希望条件を設定してください。",
+  "goals_panel_desc": "希望条件を設定して、より合う求人推薦に反映します。",
   "goals_panel_title": "キャリア目標",
   "goals_placeholder_availability": "例：2週間後から勤務可能",
   "goals_placeholder_locations": "例：東京、リモート",
@@ -2103,5 +2103,10 @@
   "agency_jd_helper_posted": "このバッチは選択した求人に対して履歴書をランク付けします。",
   "agency_jd_helper_manual": "候補者をランク付けする前に、公開求人、URL、または貼り付けた職務概要を使用してください。",
   "agency_jd_length": "マッチング概要 {count} 文字",
-  "agency_matching_empty_jd_hint": "候補者をランク付けする前に職務説明を入力してください。"
+  "agency_matching_empty_jd_hint": "候補者をランク付けする前に職務説明を入力してください。",
+  "browse_jobs_goal_filter_title": "保存済みの希望条件を使う",
+  "browse_jobs_goal_filter_desc": "希望職種、勤務地、給与条件をこの求人一覧に適用します。",
+  "browse_jobs_goal_filter_apply": "条件を適用",
+  "browse_jobs_goal_filter_active": "条件を適用済み",
+  "browse_jobs_goal_filter_summary": "保存済み条件: {summary}"
 }
