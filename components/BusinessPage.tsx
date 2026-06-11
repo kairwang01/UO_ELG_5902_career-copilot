@@ -8,6 +8,7 @@ import BusinessSignUpModal from './business/BusinessSignUpModal';
 import BusinessForgotPasswordModal from './business/BusinessForgotPasswordModal';
 import type { PortalPage } from './employer/EmployerPortal';
 import { businessPlanDefs, type BusinessPlanId } from './business/businessPlans';
+import { CheckCircle2, Globe2, PlusCircle, Users } from 'lucide-react';
 
 interface BusinessPageProps {
   session: Session | null;
@@ -64,6 +65,33 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     }
   };
 
+  const handleViewPricing = () => {
+    pricingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const featureCards = [
+    {
+      titleKey: 'business_page_feature_ai_title',
+      descKey: 'business_page_feature_ai_desc',
+      Icon: CheckCircle2,
+    },
+    {
+      titleKey: 'business_page_feature_engaged_title',
+      descKey: 'business_page_feature_engaged_desc',
+      Icon: Users,
+    },
+    {
+      titleKey: 'business_page_feature_simple_title',
+      descKey: 'business_page_feature_simple_desc',
+      Icon: PlusCircle,
+    },
+    {
+      titleKey: 'business_page_feature_diverse_title',
+      descKey: 'business_page_feature_diverse_desc',
+      Icon: Globe2,
+    },
+  ] as const;
+
   // Honour ?auth=signin|signup and ?start=post-job. Reads react-router's reactive
   // location.search and depends on it, so clicking the header "Sign In" link AGAIN
   // while already mounted on /portal re-opens the modal. (Previously a one-shot ref
@@ -110,28 +138,35 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Hero */}
-      <main className="max-w-[1088px] mx-auto px-6 py-16 md:py-24">
-        <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold leading-tight mb-6 text-gray-900 dark:text-gray-100 break-words">
+      <main className="mx-auto max-w-[1088px] px-4 py-14 sm:px-6 sm:py-16 md:py-24">
+        <h1 className="max-w-5xl break-words text-3xl font-bold leading-tight text-gray-900 dark:text-gray-100 sm:text-4xl md:text-6xl">
           {t('business_page_hero_title_part1')}{' '}
           <span className="text-[#1D4ED8]">{t('business_page_hero_title_part2')}</span>{t('business_page_hero_title_part3')}
         </h1>
-        <p className="text-lg mb-8 leading-relaxed max-w-3xl text-gray-600 dark:text-gray-300">
+        <p className="mt-6 max-w-3xl text-base leading-7 text-gray-600 dark:text-gray-300 sm:text-lg">
           {t('business_page_hero_subtitle')}
         </p>
-        <div className="flex flex-wrap gap-4">
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <button
             type="button"
             onClick={handlePostJob}
-            className="w-full sm:w-auto bg-[#1D4ED8] text-white px-8 py-3 rounded-md hover:bg-[#1e40af] transition-colors font-medium"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-[#1D4ED8] px-6 py-3 text-center font-semibold text-white shadow-sm transition hover:bg-[#1e40af] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40 sm:w-auto"
           >
             {t('employer_dashboard_post_job_button')}
           </button>
           <button
             type="button"
             onClick={handleDiscoverTalent}
-            className="w-full sm:w-auto border border-gray-300 text-gray-700 px-8 py-3 rounded-md hover:border-gray-400 transition-colors font-medium dark:border-slate-600 dark:text-gray-300 dark:hover:border-slate-500"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-6 py-3 text-center font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/30 dark:border-slate-600 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-slate-500 dark:hover:bg-slate-800 sm:w-auto"
           >
             {t('employer_dashboard_tab_discover')}
+          </button>
+          <button
+            type="button"
+            onClick={handleViewPricing}
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-transparent px-6 py-3 text-center font-semibold text-[#1D4ED8] transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/30 dark:text-blue-300 dark:hover:bg-blue-950/30 sm:w-auto"
+          >
+            {t('business_hero_view_pricing_button')}
           </button>
         </div>
       </main>
@@ -146,51 +181,14 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
             {t('business_page_features_subtitle')}
           </p>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                titleKey: 'business_page_feature_ai_title',
-                descKey: 'business_page_feature_ai_desc',
-                icon: (
-                  <svg className="w-6 h-6 text-[#1D4ED8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                ),
-              },
-              {
-                titleKey: 'business_page_feature_engaged_title',
-                descKey: 'business_page_feature_engaged_desc',
-                icon: (
-                  <svg className="w-6 h-6 text-[#1D4ED8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                ),
-              },
-              {
-                titleKey: 'business_page_feature_simple_title',
-                descKey: 'business_page_feature_simple_desc',
-                icon: (
-                  <svg className="w-6 h-6 text-[#1D4ED8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                ),
-              },
-              {
-                titleKey: 'business_page_feature_diverse_title',
-                descKey: 'business_page_feature_diverse_desc',
-                icon: (
-                  <svg className="w-6 h-6 text-[#1D4ED8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                ),
-              },
-            ].map((feature) => (
-              <div key={feature.titleKey} className="rounded-xl p-6 shadow-sm bg-white dark:bg-slate-800 dark:border dark:border-slate-700">
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+            {featureCards.map(({ titleKey, descKey, Icon }) => (
+              <div key={titleKey} className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200/80 transition hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-800 dark:ring-slate-700 sm:p-6">
                 <div className="w-12 h-12 rounded-md flex items-center justify-center mb-4 bg-blue-100 dark:bg-blue-900/40">
-                  {feature.icon}
+                  <Icon className="h-6 w-6 text-[#1D4ED8]" aria-hidden="true" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">{t(feature.titleKey)}</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{t(feature.descKey)}</p>
+                <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">{t(titleKey)}</h3>
+                <p className="text-sm leading-6 text-gray-600 dark:text-gray-400">{t(descKey)}</p>
               </div>
             ))}
           </div>
@@ -272,13 +270,13 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                       setModal('signup');
                     }
                   }}
-                  className={`w-full py-2.5 rounded-lg font-medium transition-colors ${
+                  className={`min-h-11 w-full rounded-lg py-2.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40 ${
                     plan.featured
                       ? 'bg-[#1D4ED8] text-white hover:bg-[#1e40af]'
-                      : 'border border-[#1D4ED8] text-[#1D4ED8] hover:bg-[#1D4ED8] hover:text-white'
+                      : 'border border-[#1D4ED8] text-[#1D4ED8] hover:bg-[#1D4ED8] hover:text-white dark:hover:text-white'
                   }`}
                 >
-                  {t('business_hero_get_started_button')}
+                  {t('business_page_plan_cta')}
                 </button>
               </div>
             ))}

@@ -69,6 +69,11 @@ export const useLocalization = (initialLanguage?: string) => {
     }, []);
 
     useEffect(() => {
+        if (typeof document === 'undefined') return;
+        document.documentElement.lang = language || 'en';
+    }, [language]);
+
+    useEffect(() => {
         let isMounted = true;
         const fetchTranslations = async () => {
             setIsLoaded(false);
