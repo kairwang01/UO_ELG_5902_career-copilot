@@ -16,11 +16,24 @@ import { listActiveEmployerJobs, type JobPosting } from "../lib/recruitingData";
 import { useToast } from "./Toast";
 import { useModalBehavior } from "../hooks/useModalBehavior";
 import {
+  BarChart3,
+  BookOpen,
+  BriefcaseBusiness,
   CheckCircle2,
   Clock3,
+  CloudUpload,
+  Eye,
+  FileText,
   History,
+  Loader2,
+  Mail,
+  Plus,
   Settings,
   SlidersHorizontal,
+  Star,
+  Trash2,
+  TrendingUp,
+  Users,
   X,
 } from "lucide-react";
 
@@ -40,6 +53,7 @@ interface HubSettings {
 
 type AgencyFilter = "all" | "complete" | "analyzing" | "error";
 type TranslationFn = (key: string) => string;
+type QueuedBulkAnalysisItem = BulkAnalysisItem & { fileObj?: File };
 
 interface AgencyFilterCounts {
   all: number;
@@ -56,6 +70,11 @@ const formatTranslation = (
     (text, [key, value]) => text.replace(`{${key}}`, String(value)),
     template,
   );
+
+const createFileId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2, 11);
 
 const buildPostedJobBrief = (job: JobPosting, t: TranslationFn) => {
   const sections = [
@@ -103,20 +122,7 @@ const AgencyHeader = ({
   <div className="bg-slate-900 text-white p-6 rounded-t-2xl flex flex-col sm:flex-row justify-between items-center shadow-lg gap-4">
     <div className="flex items-center gap-4 w-full sm:w-auto">
       <div className={`${iconColor} p-3 rounded-xl shadow-lg flex-shrink-0`}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-8 w-8 text-white"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-          />
-        </svg>
+        <BarChart3 className="h-8 w-8 text-white" />
       </div>
       <div>
         <h2 className="text-2xl font-bold tracking-wide">{title}</h2>
@@ -386,6 +392,192 @@ const AgencyHistoryModal = ({
   );
 };
 
+const workflowStepTone = (
+  state: "done" | "active" | "attention" | "idle",
+) => {
+  if (state === "done")
+    return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200";
+  if (state === "attention")
+    return "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100";
+  if (state === "active")
+    return "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100";
+  return "border-gray-200 bg-white text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300";
+};
+
+const AgencyWorkflowPanel: React.FC<{
+  mode: "general" | "matching";
+  files: BulkAnalysisItem[];
+  hasJobDescription: boolean;
+  selectedJobTitle?: string;
+  isAnalyzing: boolean;
+  t: TranslationFn;
+}> = ({ mode, files, hasJobDescription, selectedJobTitle, isAnalyzing, t }) => {
+  const pending = files.filter(
+    (file) => file.status === "queued" || file.status === "error",
+  ).length;
+  const inProgress = files.filter(
+    (file) => file.status === "parsing" || file.status === "analyzing",
+  ).length;
+  const completed = files.filter((file) => file.status === "complete").length;
+  const needsBrief = mode === "matching" && !hasJobDescription;
+
+  const steps = [
+    {
+      label: t("agency_workflow_step_brief"),
+      value:
+        mode === "matching"
+          ? hasJobDescription
+            ? selectedJobTitle || t("agency_workflow_custom_brief")
+            : t("agency_workflow_missing_brief")
+          : t("agency_workflow_market_ready"),
+      state: needsBrief ? "attention" : "done",
+      icon: BriefcaseBusiness,
+    },
+    {
+      label: t("agency_workflow_step_resumes"),
+      value:
+        files.length > 0
+          ? formatTranslation(t("agency_workflow_resume_count"), {
+              count: files.length,
+              pending,
+            })
+          : t("agency_workflow_no_resumes"),
+      state: files.length > 0 ? "done" : "idle",
+      icon: FileText,
+    },
+    {
+      label: t("agency_workflow_step_results"),
+      value: isAnalyzing
+        ? t("agency_workflow_processing")
+        : completed > 0
+          ? formatTranslation(t("agency_workflow_completed_count"), {
+              count: completed,
+            })
+          : t("agency_workflow_waiting"),
+      state: isAnalyzing ? "active" : completed > 0 ? "done" : "idle",
+      icon: CheckCircle2,
+    },
+  ] as const;
+
+  const readiness =
+    isAnalyzing
+      ? t("agency_workflow_running")
+      : files.length === 0
+        ? t("agency_workflow_add_resumes")
+        : needsBrief
+          ? t("agency_workflow_add_brief")
+          : pending > 0 || inProgress > 0
+            ? t("agency_workflow_ready_to_run")
+            : t("agency_workflow_all_done");
+
+  return (
+    <div className="border-b border-gray-100 bg-slate-50 px-6 py-4 dark:border-slate-700 dark:bg-slate-900/40">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-3">
+          {steps.map((step) => {
+            const Icon = step.icon;
+            return (
+              <div
+                key={step.label}
+                className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${workflowStepTone(step.state)}`}
+              >
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase text-current/70">
+                    {step.label}
+                  </p>
+                  <p className="truncate text-sm font-semibold">
+                    {step.value}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200">
+          {readiness}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const QueueStatusList: React.FC<{
+  files: BulkAnalysisItem[];
+  onRemove: (id: string) => void;
+  t: TranslationFn;
+}> = ({ files, onRemove, t }) => {
+  const activeFiles = files.filter(
+    (file) =>
+      file.status === "queued" ||
+      file.status === "parsing" ||
+      file.status === "analyzing",
+  );
+
+  if (activeFiles.length === 0) return null;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm animate-fade-in dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-700/40">
+        <Clock3 className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+        <div>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {t("agency_queue_in_progress_title")}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t("agency_queue_in_progress_desc")}
+          </p>
+        </div>
+      </div>
+      <div className="divide-y divide-gray-100 dark:divide-slate-700">
+        {activeFiles.map((file) => {
+          const isBusy =
+            file.status === "parsing" || file.status === "analyzing";
+          return (
+            <div
+              key={file.id}
+              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <CandidateAvatar name={file.fileName} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {file.fileName}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {isBusy
+                      ? t("agency_workflow_processing")
+                      : t("agency_workflow_resume_queue")}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 sm:flex-shrink-0">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(file.status)}`}
+                >
+                  {isBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {agencyStatusLabel(file.status, t)}
+                </span>
+                {!isBusy && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(file.id)}
+                    className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-gray-500 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                    title={t("agency_action_remove")}
+                    aria-label={t("agency_action_remove")}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const FilterTabs = ({
   currentFilter,
   setFilter,
@@ -486,20 +678,7 @@ const AnalysisResultModal = ({
             aria-label={t("job_form_close")}
             className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -693,20 +872,7 @@ const BatchInsights: React.FC<{
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
         <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
+          <Users className="h-6 w-6" />
         </div>
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
@@ -719,20 +885,7 @@ const BatchInsights: React.FC<{
       </div>
       <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
         <div className="p-3 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
+          <CheckCircle2 className="h-6 w-6" />
         </div>
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
@@ -745,20 +898,7 @@ const BatchInsights: React.FC<{
       </div>
       <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
         <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-            />
-          </svg>
+          <TrendingUp className="h-6 w-6" />
         </div>
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
@@ -784,14 +924,7 @@ const BatchInsights: React.FC<{
           </p>
         </div>
         <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-2 translate-y-2">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-24 w-24"
-            fill="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
+          <Star className="h-24 w-24" fill="currentColor" />
         </div>
       </div>
     </div>
@@ -841,20 +974,7 @@ const PitchModal: React.FC<{
             aria-label={t("job_form_close")}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <X className="h-5 w-5" />
           </button>
         </div>
         <div className="flex-grow overflow-y-auto p-6 space-y-4">
@@ -956,20 +1076,7 @@ const PrepKitModal: React.FC<{
               aria-label={t("job_form_close")}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -1063,20 +1170,7 @@ const BlindResumeModal: React.FC<{
               aria-label={t("job_form_close")}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -1189,23 +1283,24 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     setIsDragging(false);
   }, []);
 
-  const processNewFiles = (newFileList: FileList | File[]) => {
-    const newItems: BulkAnalysisItem[] = Array.from(newFileList).map(
-      (file) =>
-        ({
-          id: Math.random().toString(36).substr(2, 9),
-          fileName: file.name,
-          status: "queued",
-          fileObj: file, // Temporary property to hold the file for processing
-        }) as any,
+  const processNewFiles = useCallback((newFileList: FileList | File[]) => {
+    const newItems: QueuedBulkAnalysisItem[] = Array.from(newFileList).map(
+      (file) => ({
+        id: createFileId(),
+        fileName: file.name,
+        status: "queued",
+        fileObj: file,
+      }),
     );
+
+    if (newItems.length === 0) return;
 
     setFiles((prev) => [...prev, ...newItems]);
     addToast(
       formatTranslation(t("agency_files_added"), { count: newItems.length }),
       "info",
     );
-  };
+  }, [addToast, t]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -1213,12 +1308,13 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       processNewFiles(e.dataTransfer.files);
     }
-  }, []);
+  }, [processNewFiles]);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       processNewFiles(e.target.files);
     }
+    e.target.value = "";
   };
 
   const runBulkAnalysis = async () => {
@@ -1227,16 +1323,16 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       return;
     }
 
-    setIsAnalyzing(true);
     const queue = files.filter(
       (f) => f.status === "queued" || f.status === "error",
-    );
+    ) as QueuedBulkAnalysisItem[];
 
     if (queue.length === 0) {
       addToast(t("agency_no_new_files"), "info");
-      setIsAnalyzing(false);
       return;
     }
+
+    setIsAnalyzing(true);
 
     // Update UI to show parsing state
     setFiles((prev) =>
@@ -1245,8 +1341,12 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       ),
     );
 
-    const processFile = async (item: BulkAnalysisItem & { fileObj: File }) => {
+    const processFile = async (item: QueuedBulkAnalysisItem) => {
       try {
+        if (!item.fileObj) {
+          throw new Error("Missing queued file");
+        }
+
         // 1. Parse File
         const parsed = await parseFile(item.fileObj);
         const resumeText = parsed.text || "";
@@ -1316,7 +1416,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
 
     // Execute sequentially to avoid rate limiting
     for (const item of queue) {
-      await processFile(item as any);
+      await processFile(item);
     }
 
     setIsAnalyzing(false);
@@ -1461,6 +1561,13 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     ? internalJobs.find((job) => job.id === selectedInternalJobId) ?? null
     : null;
   const hasJobDescription = jobDescription.trim().length > 0;
+  const pendingAnalysisCount = files.filter(
+    (file) => file.status === "queued" || file.status === "error",
+  ).length;
+  const canRunAnalysis =
+    !isAnalyzing &&
+    pendingAnalysisCount > 0 &&
+    !(mode === "matching" && !hasJobDescription);
 
   const activeHeader =
     mode === "general"
@@ -1596,6 +1703,14 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             counts={counts}
             t={t}
           />
+          <AgencyWorkflowPanel
+            mode={mode}
+            files={files}
+            hasJobDescription={hasJobDescription}
+            selectedJobTitle={selectedInternalJob?.title}
+            isAnalyzing={isAnalyzing}
+            t={t}
+          />
 
           <div className="p-6 space-y-6">
             {/* JD Input for Matching Mode */}
@@ -1651,7 +1766,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                 )}
 
                 {jdSource === "url" && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <input
                       type="url"
                       value={jdUrl}
@@ -1662,10 +1777,10 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     <button
                       onClick={handleJdUrlImport}
                       disabled={isExtractingJd || !jdUrl.trim()}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isExtractingJd && (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       )}
                       {isExtractingJd
                         ? t("agency_jd_importing")
@@ -1799,20 +1914,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                   accept=".pdf,.docx,.txt,.png,.jpg"
                 />
                 <div className="bg-white dark:bg-slate-700 p-4 rounded-full inline-block shadow-sm mb-4">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-10 w-10 text-blue-600 dark:text-blue-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                    />
-                  </svg>
+                  <CloudUpload className="h-10 w-10 text-blue-600 dark:text-blue-400" />
                 </div>
                 <p className="text-xl font-medium text-gray-900 dark:text-gray-100">
                   {t("agency_drop_title")}
@@ -1826,25 +1928,12 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             ) : (
               <div className="space-y-4">
                 {/* Actions Toolbar */}
-                <div className="flex justify-between items-center bg-gray-50 dark:bg-slate-700/50 p-3 rounded-lg border border-gray-200 dark:border-slate-600">
+                <div className="flex flex-col gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200 dark:border-slate-600 dark:bg-slate-700/50 sm:flex-row sm:items-center sm:justify-between">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4v16m8-8H4"
-                      />
-                    </svg>
+                    <Plus className="h-4 w-4" />
                     {t("agency_add_more")}
                   </button>
                   <input
@@ -1856,25 +1945,21 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     accept=".pdf,.docx,.txt,.png,.jpg"
                   />
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <button
                       onClick={() => setFiles([])}
-                      className="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       disabled={isAnalyzing}
                     >
                       {t("agency_clear_all")}
                     </button>
                     <button
                       onClick={runBulkAnalysis}
-                      disabled={
-                        isAnalyzing ||
-                        files.every((f) => f.status === "complete") ||
-                        (mode === "matching" && !hasJobDescription)
-                      }
-                      className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-sm flex items-center gap-2"
+                      disabled={!canRunAnalysis}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900/50"
                     >
                       {isAnalyzing && (
-                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       )}
                       {isAnalyzing
                         ? t("agency_processing")
@@ -1889,6 +1974,17 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                     {t("agency_matching_empty_jd_hint")}
                   </div>
                 )}
+                <QueueStatusList
+                  files={displayFiles}
+                  onRemove={removeFile}
+                  t={t}
+                />
+                {currentFilter === "complete" &&
+                  !files.some((file) => file.status === "complete") && (
+                    <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500 animate-fade-in dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400">
+                      {t("agency_no_completed_results")}
+                    </div>
+                  )}
 
                 {/* Batch Insights */}
                 <BatchInsights files={files} mode={mode} t={t} />
@@ -1940,52 +2036,11 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                 title={t("agency_action_remove")}
                                 aria-label={t("agency_action_remove")}
                               >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-4 w-4"
-                                  viewBox="0 0 20 20"
-                                  fill="currentColor"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
+                                <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
                           </div>
                         ))}
-                    </div>
-                  )}
-
-                {/* Queued-but-not-started empty state */}
-                {!isAnalyzing &&
-                  !files.some((f) => f.status === "complete") &&
-                  currentFilter !== "error" && (
-                    <div className="text-center py-10 text-gray-400 dark:text-gray-500 animate-fade-in">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-10 w-10 mx-auto mb-3 opacity-40"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                        />
-                      </svg>
-                      <p className="text-sm font-medium">
-                        {formatTranslation(t("agency_files_queued"), {
-                          action:
-                            mode === "matching"
-                              ? t("agency_rank_candidates")
-                              : t("agency_analyze_queue"),
-                        })}
-                      </p>
                     </div>
                   )}
 
@@ -2106,26 +2161,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                               "agency_action_view_analysis",
                                             )}
                                           >
-                                            <svg
-                                              xmlns="http://www.w3.org/2000/svg"
-                                              className="h-4 w-4"
-                                              fill="none"
-                                              viewBox="0 0 24 24"
-                                              stroke="currentColor"
-                                            >
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                              />
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                              />
-                                            </svg>
+                                            <Eye className="h-4 w-4" />
                                           </button>
                                         )}
                                         <button
@@ -2148,22 +2184,9 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                           }
                                         >
                                           {file.isAnonymizing ? (
-                                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            <Loader2 className="h-4 w-4 animate-spin" />
                                           ) : (
-                                            <svg
-                                              xmlns="http://www.w3.org/2000/svg"
-                                              className="h-4 w-4"
-                                              fill="none"
-                                              viewBox="0 0 24 24"
-                                              stroke="currentColor"
-                                            >
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                              />
-                                            </svg>
+                                            <FileText className="h-4 w-4" />
                                           )}
                                         </button>
                                         {mode === "matching" && (
@@ -2191,22 +2214,9 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                             }
                                           >
                                             {file.isPrepping ? (
-                                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                              <Loader2 className="h-4 w-4 animate-spin" />
                                             ) : (
-                                              <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                className="h-4 w-4"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                stroke="currentColor"
-                                              >
-                                                <path
-                                                  strokeLinecap="round"
-                                                  strokeLinejoin="round"
-                                                  strokeWidth={2}
-                                                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                                                />
-                                              </svg>
+                                              <BookOpen className="h-4 w-4" />
                                             )}
                                           </button>
                                         )}
@@ -2238,22 +2248,9 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                           }
                                         >
                                           {file.isPitching ? (
-                                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            <Loader2 className="h-4 w-4 animate-spin" />
                                           ) : (
-                                            <svg
-                                              xmlns="http://www.w3.org/2000/svg"
-                                              className="h-4 w-4"
-                                              fill="none"
-                                              viewBox="0 0 24 24"
-                                              stroke="currentColor"
-                                            >
-                                              <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                                              />
-                                            </svg>
+                                            <Mail className="h-4 w-4" />
                                           )}
                                         </button>
                                         <button
@@ -2262,18 +2259,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                           title={t("agency_action_remove")}
                                           aria-label={t("agency_action_remove")}
                                         >
-                                          <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            className="h-4 w-4"
-                                            viewBox="0 0 20 20"
-                                            fill="currentColor"
-                                          >
-                                            <path
-                                              fillRule="evenodd"
-                                              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                                              clipRule="evenodd"
-                                            />
-                                          </svg>
+                                          <Trash2 className="h-4 w-4" />
                                         </button>
                                       </div>
                                     </td>
