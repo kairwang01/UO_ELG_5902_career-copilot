@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
-import { ArrowDownUp, Bell, Briefcase, CheckCircle2, Circle, RotateCcw, Search, Star, X } from 'lucide-react';
+import { ArrowDownUp, Bell, Briefcase, CheckCircle2, Circle, Clock3, MessageSquare, RotateCcw, Search, Star, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
 import {
   subscribeNotifications,
@@ -47,6 +47,14 @@ function applicationTime(row: ApplicationRow): number {
   }
 }
 
+function normalizeApplicationStatus(status: unknown): AppStatus {
+  const normalized = String(status ?? '').trim().toLowerCase();
+  if (['interviewing', 'interview', 'interview-stage', 'interview stage'].includes(normalized)) return 'Interviewing';
+  if (['hired', 'offer', 'accepted'].includes(normalized)) return 'Hired';
+  if (['rejected', 'closed', 'declined'].includes(normalized)) return 'Rejected';
+  return 'Applied';
+}
+
 const normalizeFilterText = (value: string) =>
   value
     .toLowerCase()
@@ -84,6 +92,50 @@ const STATUS_CHIP_CLASSES: Record<AppStatus, string> = {
   Hired: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
   Rejected:
     'bg-gray-100 text-gray-500 dark:bg-slate-700/50 dark:text-slate-400',
+};
+
+const STATUS_GUIDANCE: Record<
+  AppStatus,
+  {
+    titleKey: string;
+    descKey: string;
+    icon: React.ElementType;
+    className: string;
+    iconClassName: string;
+  }
+> = {
+  Applied: {
+    titleKey: 'applications_next_applied_title',
+    descKey: 'applications_next_applied_desc',
+    icon: Clock3,
+    className:
+      'border-blue-100 bg-blue-50 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200',
+    iconClassName: 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300',
+  },
+  Interviewing: {
+    titleKey: 'applications_next_interviewing_title',
+    descKey: 'applications_next_interviewing_desc',
+    icon: MessageSquare,
+    className:
+      'border-amber-100 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200',
+    iconClassName: 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300',
+  },
+  Hired: {
+    titleKey: 'applications_next_hired_title',
+    descKey: 'applications_next_hired_desc',
+    icon: CheckCircle2,
+    className:
+      'border-emerald-100 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200',
+    iconClassName: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300',
+  },
+  Rejected: {
+    titleKey: 'applications_next_rejected_title',
+    descKey: 'applications_next_rejected_desc',
+    icon: Search,
+    className:
+      'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300',
+    iconClassName: 'bg-white text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700',
+  },
 };
 
 const FILTER_STATUSES: FilterStatus[] = [
@@ -212,11 +264,13 @@ interface CardProps {
 const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
   const isRejected = app.status === 'Rejected';
   const isHired = app.status === 'Hired';
+  const guidance = STATUS_GUIDANCE[app.status];
+  const GuidanceIcon = guidance.icon;
   const [reviewOpen, setReviewOpen] = useState(false);
 
   return (
     <div
-      className={`relative rounded-2xl border p-4 shadow-sm transition-all ${
+      className={`relative rounded-2xl border p-4 shadow-sm transition-all animate-fade-in ${
         isRejected
           ? 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60'
           : 'border-gray-100 bg-white hover:border-blue-100 hover:shadow-md dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-800/50'
@@ -226,7 +280,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate leading-snug">
-            {app.job_title}
+            {app.job_title || t('applications_unknown_role')}
           </p>
           <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
             {formatDate(app)}
@@ -252,6 +306,18 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
 
       {/* 3-step stepper */}
       <Stepper status={app.status} t={t} />
+
+      <div className={`mt-3 rounded-xl border px-3 py-2.5 text-xs leading-relaxed ${guidance.className}`}>
+        <div className="flex items-start gap-2">
+          <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${guidance.iconClassName}`}>
+            <GuidanceIcon className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-semibold">{t(guidance.titleKey)}</p>
+            <p className="mt-0.5 opacity-90">{t(guidance.descKey)}</p>
+          </div>
+        </div>
+      </div>
 
       {/* Hired: review company CTA */}
       {isHired && app.employer_id && (
@@ -408,7 +474,17 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ApplicationRow));
+        const rows = snap.docs.map((d) => {
+          const data = d.data() as Record<string, unknown>;
+          return {
+            id: d.id,
+            job_title: String(data.job_title ?? ''),
+            employer_id: typeof data.employer_id === 'string' ? data.employer_id : undefined,
+            status: normalizeApplicationStatus(data.status),
+            application_date: data.application_date as ApplicationRow['application_date'],
+            compatibility_score: typeof data.compatibility_score === 'number' ? data.compatibility_score : null,
+          } satisfies ApplicationRow;
+        });
         rows.sort(
           (a, b) => (b.application_date?.toMillis?.() ?? 0) - (a.application_date?.toMillis?.() ?? 0),
         );
