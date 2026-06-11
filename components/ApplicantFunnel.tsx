@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
+    ArrowLeft,
     Clock3,
     FileWarning,
     RotateCcw,
@@ -28,11 +29,13 @@ type ScoreThreshold = 'all' | '50' | '70' | '85';
 type SortKey = 'score' | 'newest' | 'name';
 type RecencyFilter = 'all' | '7' | '30';
 type AnalysisFilter = 'all' | 'analyzed' | 'needs_review';
+type QuickFilterKey = 'all' | 'high_match' | 'recent' | 'needs_review';
 
 const SCORE_OPTIONS: ScoreThreshold[] = ['all', '50', '70', '85'];
 const SORT_OPTIONS: SortKey[] = ['score', 'newest', 'name'];
 const RECENCY_OPTIONS: RecencyFilter[] = ['all', '7', '30'];
 const ANALYSIS_OPTIONS: AnalysisFilter[] = ['all', 'analyzed', 'needs_review'];
+const SELECT_CLASS = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100';
 
 function formatTranslation(template: string, values: Record<string, string | number>): string {
     return Object.entries(values).reduce(
@@ -56,6 +59,44 @@ function isWithinDays(dateValue: string | null, days: number): boolean {
     const timestamp = new Date(dateValue).getTime();
     if (Number.isNaN(timestamp)) return false;
     return Date.now() - timestamp <= days * 24 * 60 * 60 * 1000;
+}
+
+function toApplicationTime(dateValue: string | null): number {
+    if (!dateValue) return 0;
+    const timestamp = new Date(dateValue).getTime();
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+interface SelectFieldProps<T extends string> {
+    id: string;
+    label: string;
+    value: T;
+    onChange: (value: T) => void;
+    children: React.ReactNode;
+    className?: string;
+}
+
+function SelectField<T extends string>({
+    id,
+    label,
+    value,
+    onChange,
+    children,
+    className = '',
+}: SelectFieldProps<T>) {
+    return (
+        <label className={`space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300 ${className}`}>
+            <span>{label}</span>
+            <select
+                id={id}
+                value={value}
+                onChange={(event) => onChange(event.target.value as T)}
+                className={SELECT_CLASS}
+            >
+                {children}
+            </select>
+        </label>
+    );
 }
 
 const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => {
@@ -154,7 +195,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
         if (sortKey === 'score') {
             result.sort((a, b) => (b.compatibility_score ?? 0) - (a.compatibility_score ?? 0));
         } else if (sortKey === 'newest') {
-            result.sort((a, b) => new Date(b.application_date).getTime() - new Date(a.application_date).getTime());
+            result.sort((a, b) => toApplicationTime(b.application_date) - toApplicationTime(a.application_date));
         } else {
             result.sort((a, b) => (a.candidate_name ?? '').localeCompare(b.candidate_name ?? ''));
         }
@@ -205,6 +246,45 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
         setSortKey('score');
     };
 
+    const applyQuickFilter = (filter: QuickFilterKey) => {
+        setKeyword('');
+        setStatusFilter('all');
+
+        if (filter === 'all') {
+            clearFilters();
+            return;
+        }
+
+        if (filter === 'high_match') {
+            setMinScore('85');
+            setRecencyFilter('all');
+            setAnalysisFilter('all');
+            setSortKey('score');
+            return;
+        }
+
+        if (filter === 'recent') {
+            setMinScore('all');
+            setRecencyFilter('7');
+            setAnalysisFilter('all');
+            setSortKey('newest');
+            return;
+        }
+
+        setMinScore('all');
+        setRecencyFilter('all');
+        setAnalysisFilter('needs_review');
+        setSortKey('newest');
+    };
+
+    const quickFilterIsActive = (filter: QuickFilterKey): boolean => {
+        if (filter === 'all') return activeFilterCount === 0;
+        if (keyword.trim() || statusFilter !== 'all') return false;
+        if (filter === 'high_match') return minScore === '85' && recencyFilter === 'all' && analysisFilter === 'all';
+        if (filter === 'recent') return minScore === 'all' && recencyFilter === '7' && analysisFilter === 'all';
+        return minScore === 'all' && recencyFilter === 'all' && analysisFilter === 'needs_review';
+    };
+
     const getStatusLabel = (status: string): string => {
         const normalized = status.trim().toLowerCase();
         const keyMap: Record<string, string> = {
@@ -232,10 +312,16 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
     const sortOptionLabel = (value: SortKey): string => t(`applicant_funnel_sort_${value}`);
     const recencyOptionLabel = (value: RecencyFilter): string => t(`applicant_funnel_recency_${value}`);
     const analysisOptionLabel = (value: AnalysisFilter): string => t(`applicant_funnel_analysis_${value}`);
+    const quickFilters: Array<{ key: QuickFilterKey; label: string; count: number; Icon: React.ElementType }> = [
+        { key: 'all', label: t('applicant_funnel_analysis_all'), count: applicants.length, Icon: Users },
+        { key: 'high_match', label: t('applicant_funnel_stat_high_match'), count: highMatchCount, Icon: Target },
+        { key: 'recent', label: t('applicant_funnel_stat_recent'), count: recentCount, Icon: Clock3 },
+        { key: 'needs_review', label: t('applicant_funnel_stat_needs_review'), count: needsReviewCount, Icon: FileWarning },
+    ];
 
     if (loading) {
         return (
-            <div className="flex min-h-[360px] flex-col items-center justify-center text-center">
+            <div role="status" aria-live="polite" className="flex min-h-[360px] flex-col items-center justify-center text-center">
                 <div className="h-12 w-12 rounded-full border-4 border-blue-200 border-t-blue-700 animate-spin"></div>
                 <p className="mt-4 text-base font-medium text-gray-700 dark:text-gray-300">{loadingMessage}</p>
             </div>
@@ -274,7 +360,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                 <Users className="mx-auto h-10 w-10 text-gray-300 dark:text-gray-600" />
                 <h3 className="mt-4 text-xl font-semibold text-gray-800 dark:text-gray-100">{t('applicant_funnel_empty_title')}</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500 dark:text-gray-400">{t('applicant_funnel_empty_desc')}</p>
-                <button onClick={onBack} className="mt-6 rounded-lg border border-gray-300 bg-gray-100 px-6 py-2 font-semibold text-gray-800 shadow-sm transition-all hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
+                <button type="button" onClick={onBack} className="mt-6 rounded-lg border border-gray-300 bg-gray-100 px-6 py-2 font-semibold text-gray-800 shadow-sm transition-all hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
                     {t('applicant_funnel_back')}
                 </button>
             </div>
@@ -282,22 +368,27 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
     }
 
     return (
-        <div className="animate-fade-in space-y-6">
-            <button onClick={onBack} className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-semibold">
-                {t('applicant_funnel_back')}
+        <div className="animate-view-fade space-y-6">
+            <button
+                type="button"
+                onClick={onBack}
+                className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400/40 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+                <ArrowLeft className="h-4 w-4" />
+                <span>{t('applicant_funnel_back')}</span>
             </button>
 
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
+                <div className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+                    <div className="min-w-0">
+                        <h3 className="text-xl font-bold leading-tight text-gray-900 dark:text-gray-100">
                             {formatTranslation(t('applicant_funnel_title'), { title: job.title })}
                         </h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500 dark:text-gray-400">
                             {t('applicant_funnel_subtitle')}
                         </p>
                     </div>
-                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 lg:justify-self-end">
                         <SlidersHorizontal className="h-3.5 w-3.5" />
                         {formatTranslation(t('applicant_funnel_filter_result'), {
                             shown: filteredApplicants.length,
@@ -326,7 +417,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <aside className="flex h-auto min-h-[560px] flex-col rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 lg:col-span-1 lg:h-[70vh]">
+                <aside className="flex h-auto min-h-[520px] flex-col rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 lg:col-span-1 lg:h-[72vh]">
                     <div className="mb-4 flex items-start justify-between gap-3">
                         <div>
                             <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{t('applicant_funnel_list_title')}</h3>
@@ -351,11 +442,36 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                         )}
                     </div>
 
-                    <div className="mb-4 flex-shrink-0 space-y-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
-                        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" htmlFor="applicant-search">
-                            {t('applicant_funnel_search_label')}
-                        </label>
+                    <div className="mb-4 flex-shrink-0 space-y-4 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+                        <div className="grid grid-cols-2 gap-2" role="group" aria-label={t('applicant_funnel_analysis_label')}>
+                            {quickFilters.map(({ key, label, count, Icon }) => {
+                                const active = quickFilterIsActive(key);
+                                return (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => applyQuickFilter(key)}
+                                        aria-pressed={active}
+                                        className={`min-h-[74px] rounded-lg border px-2.5 py-2 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                                            active
+                                                ? 'border-blue-500 bg-blue-50 text-blue-800 shadow-sm dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-200'
+                                                : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-200 hover:bg-blue-50/60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-blue-700 dark:hover:bg-blue-950/20'
+                                        }`}
+                                    >
+                                        <span className="flex items-center justify-between gap-2">
+                                            <Icon className={`h-4 w-4 ${active ? 'text-blue-700 dark:text-blue-300' : 'text-gray-400'}`} />
+                                            <span className="text-base font-bold tabular-nums">{count}</span>
+                                        </span>
+                                        <span className="mt-1 block truncate text-[11px] font-semibold leading-4">{label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
                         <div className="relative">
+                            <label className="sr-only" htmlFor="applicant-search">
+                                {t('applicant_funnel_search_label')}
+                            </label>
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                             <input
                                 id="applicant-search"
@@ -368,71 +484,62 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                            <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                                <span>{t('applicant_funnel_score_label')}</span>
-                                <select
-                                    value={minScore}
-                                    onChange={e => setMinScore(e.target.value as ScoreThreshold)}
-                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                                >
-                                    {SCORE_OPTIONS.map(option => (
-                                        <option key={option} value={option}>{scoreOptionLabel(option)}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <SelectField
+                                id="applicant-score-filter"
+                                label={t('applicant_funnel_score_label')}
+                                value={minScore}
+                                onChange={(value) => setMinScore(value as ScoreThreshold)}
+                            >
+                                {SCORE_OPTIONS.map(option => (
+                                    <option key={option} value={option}>{scoreOptionLabel(option)}</option>
+                                ))}
+                            </SelectField>
 
-                            <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                                <span>{t('applicant_funnel_status_label')}</span>
-                                <select
-                                    value={statusFilter}
-                                    onChange={e => setStatusFilter(e.target.value)}
-                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                                >
-                                    <option value="all">{t('applicant_funnel_status_all')}</option>
-                                    {statusOptions.map(status => (
-                                        <option key={status} value={status}>{getStatusLabel(status)}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <SelectField
+                                id="applicant-status-filter"
+                                label={t('applicant_funnel_status_label')}
+                                value={statusFilter}
+                                onChange={setStatusFilter}
+                            >
+                                <option value="all">{t('applicant_funnel_status_all')}</option>
+                                {statusOptions.map(status => (
+                                    <option key={status} value={status}>{getStatusLabel(status)}</option>
+                                ))}
+                            </SelectField>
 
-                            <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                                <span>{t('applicant_funnel_recency_label')}</span>
-                                <select
-                                    value={recencyFilter}
-                                    onChange={e => setRecencyFilter(e.target.value as RecencyFilter)}
-                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                                >
-                                    {RECENCY_OPTIONS.map(option => (
-                                        <option key={option} value={option}>{recencyOptionLabel(option)}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <SelectField
+                                id="applicant-recency-filter"
+                                label={t('applicant_funnel_recency_label')}
+                                value={recencyFilter}
+                                onChange={(value) => setRecencyFilter(value as RecencyFilter)}
+                            >
+                                {RECENCY_OPTIONS.map(option => (
+                                    <option key={option} value={option}>{recencyOptionLabel(option)}</option>
+                                ))}
+                            </SelectField>
 
-                            <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                                <span>{t('applicant_funnel_analysis_label')}</span>
-                                <select
-                                    value={analysisFilter}
-                                    onChange={e => setAnalysisFilter(e.target.value as AnalysisFilter)}
-                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                                >
-                                    {ANALYSIS_OPTIONS.map(option => (
-                                        <option key={option} value={option}>{analysisOptionLabel(option)}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <SelectField
+                                id="applicant-analysis-filter"
+                                label={t('applicant_funnel_analysis_label')}
+                                value={analysisFilter}
+                                onChange={(value) => setAnalysisFilter(value as AnalysisFilter)}
+                            >
+                                {ANALYSIS_OPTIONS.map(option => (
+                                    <option key={option} value={option}>{analysisOptionLabel(option)}</option>
+                                ))}
+                            </SelectField>
 
-                            <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300 sm:col-span-2 lg:col-span-1 xl:col-span-2">
-                                <span>{t('applicant_funnel_sort_label')}</span>
-                                <select
-                                    value={sortKey}
-                                    onChange={e => setSortKey(e.target.value as SortKey)}
-                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                                >
-                                    {SORT_OPTIONS.map(option => (
-                                        <option key={option} value={option}>{sortOptionLabel(option)}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <SelectField
+                                id="applicant-sort"
+                                label={t('applicant_funnel_sort_label')}
+                                value={sortKey}
+                                onChange={(value) => setSortKey(value as SortKey)}
+                                className="sm:col-span-2 lg:col-span-1 xl:col-span-2"
+                            >
+                                {SORT_OPTIONS.map(option => (
+                                    <option key={option} value={option}>{sortOptionLabel(option)}</option>
+                                ))}
+                            </SelectField>
                         </div>
                     </div>
 
@@ -460,6 +567,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                         key={applicant.id}
                                         type="button"
                                         onClick={() => setSelectedApplicant(applicant)}
+                                        aria-current={selectedApplicant?.id === applicant.id ? 'true' : undefined}
                                         className={`w-full rounded-xl border p-3 text-left transition-all duration-200 ${
                                             selectedApplicant?.id === applicant.id
                                                 ? 'border-blue-500 bg-blue-50 shadow-sm ring-2 ring-blue-500/10 dark:border-blue-400 dark:bg-blue-950/30'
@@ -495,46 +603,69 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                     </div>
                 </aside>
 
-                <section className="min-h-[560px] rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2 lg:h-[70vh] lg:overflow-y-auto">
+                <section className="min-h-[520px] rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2 lg:h-[72vh] lg:overflow-y-auto" aria-live="polite">
                     {!selectedApplicant ? (
                         <div className="flex h-full min-h-[360px] items-center justify-center rounded-xl border border-dashed border-gray-300 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
                             {t('applicant_funnel_select_prompt')}
                         </div>
                     ) : hasApplicantAnalysis(selectedApplicant) ? (
-                        <div className="space-y-5">
-                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center dark:border-gray-700 dark:bg-gray-900">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                                    {selectedApplicant.candidate_name || t('applicant_funnel_unnamed_candidate')}
-                                </h2>
-                                <p className={`mt-1 text-lg font-bold ${getScoreTone(selectedApplicant.compatibility_score ?? 0)}`}>
-                                    {formatTranslation(t('applicant_funnel_match_score_value'), { score: selectedApplicant.compatibility_score ?? 0 })}
-                                </p>
+                        <div key={selectedApplicant.id} className="animate-panel-expand space-y-5">
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
+                                        <h2 className="text-2xl font-bold leading-tight text-gray-900 dark:text-gray-100">
+                                            {selectedApplicant.candidate_name || t('applicant_funnel_unnamed_candidate')}
+                                        </h2>
+                                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">
+                                                {getStatusLabel(selectedApplicant.status)}
+                                            </span>
+                                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
+                                                {formatTranslation(t('applicant_funnel_applied_on'), { date: formatDate(selectedApplicant.application_date) })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-left shadow-sm dark:border-blue-900/60 dark:bg-gray-800 sm:text-right">
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{t('applicant_funnel_match_score')}</p>
+                                        <p className={`mt-1 text-3xl font-bold tabular-nums ${getScoreTone(selectedApplicant.compatibility_score ?? 0)}`}>
+                                            {selectedApplicant.compatibility_score ?? 0}%
+                                        </p>
+                                    </div>
+                                </div>
                                 {selectedApplicant.summary && (
-                                    <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-400">{selectedApplicant.summary}</p>
+                                    <p className="mt-4 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-400">{selectedApplicant.summary}</p>
                                 )}
                             </div>
 
-                            <div className="grid gap-4 xl:grid-cols-2">
-                                <div className="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/60 dark:bg-green-950/20">
-                                    <h4 className="font-semibold text-green-800 dark:text-green-200">{t('applicant_funnel_strengths')}</h4>
-                                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-green-900 dark:text-green-100">
-                                        {selectedApplicant.strengths.map((strength, index) => <li key={`${strength}-${index}`}>{strength}</li>)}
-                                    </ul>
+                            {(selectedApplicant.strengths.length > 0 || selectedApplicant.potentialGaps.length > 0) && (
+                                <div className="grid gap-4 xl:grid-cols-2">
+                                    {selectedApplicant.strengths.length > 0 && (
+                                        <div className="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/60 dark:bg-green-950/20">
+                                            <h4 className="font-semibold text-green-800 dark:text-green-200">{t('applicant_funnel_strengths')}</h4>
+                                            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-green-900 dark:text-green-100">
+                                                {selectedApplicant.strengths.map((strength, index) => <li key={`${strength}-${index}`}>{strength}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {selectedApplicant.potentialGaps.length > 0 && (
+                                        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900/60 dark:bg-yellow-950/20">
+                                            <h4 className="font-semibold text-yellow-800 dark:text-yellow-200">{t('applicant_funnel_potential_gaps')}</h4>
+                                            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-yellow-900 dark:text-yellow-100">
+                                                {selectedApplicant.potentialGaps.map((gap, index) => <li key={`${gap}-${index}`}>{gap}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900/60 dark:bg-yellow-950/20">
-                                    <h4 className="font-semibold text-yellow-800 dark:text-yellow-200">{t('applicant_funnel_potential_gaps')}</h4>
-                                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-yellow-900 dark:text-yellow-100">
-                                        {selectedApplicant.potentialGaps.map((gap, index) => <li key={`${gap}-${index}`}>{gap}</li>)}
-                                    </ul>
-                                </div>
-                            </div>
+                            )}
 
-                            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900/60 dark:bg-indigo-950/20">
-                                <h4 className="font-semibold text-indigo-800 dark:text-indigo-200">{t('applicant_funnel_questions')}</h4>
-                                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-indigo-900 dark:text-indigo-100">
-                                    {selectedApplicant.suggestedQuestions.map((question, index) => <li key={`${question}-${index}`}>{question}</li>)}
-                                </ul>
-                            </div>
+                            {selectedApplicant.suggestedQuestions.length > 0 && (
+                                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+                                    <h4 className="font-semibold text-indigo-800 dark:text-indigo-200">{t('applicant_funnel_questions')}</h4>
+                                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-indigo-900 dark:text-indigo-100">
+                                        {selectedApplicant.suggestedQuestions.map((question, index) => <li key={`${question}-${index}`}>{question}</li>)}
+                                    </ul>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="flex h-full min-h-[360px] items-center justify-center text-center text-gray-500 dark:text-gray-400">
