@@ -1,10 +1,11 @@
 
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     ArrowLeft,
     Clock3,
     FileWarning,
+    MessageSquare,
     RotateCcw,
     Search,
     SlidersHorizontal,
@@ -30,12 +31,18 @@ type SortKey = 'score' | 'newest' | 'name';
 type RecencyFilter = 'all' | '7' | '30';
 type AnalysisFilter = 'all' | 'analyzed' | 'needs_review';
 type QuickFilterKey = 'all' | 'high_match' | 'recent' | 'needs_review';
+type RecommendationTone = 'strong' | 'screen' | 'review';
 
 const SCORE_OPTIONS: ScoreThreshold[] = ['all', '50', '70', '85'];
 const SORT_OPTIONS: SortKey[] = ['score', 'newest', 'name'];
 const RECENCY_OPTIONS: RecencyFilter[] = ['all', '7', '30'];
 const ANALYSIS_OPTIONS: AnalysisFilter[] = ['all', 'analyzed', 'needs_review'];
 const SELECT_CLASS = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100';
+const RECOMMENDATION_TONE_CLASS: Record<RecommendationTone, string> = {
+    strong: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-100',
+    screen: 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-100',
+    review: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100',
+};
 
 function formatTranslation(template: string, values: Record<string, string | number>): string {
     return Object.entries(values).reduce(
@@ -105,6 +112,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
     const [error, setError] = useState<string | null>(null);
     const [applicants, setApplicants] = useState<Applicant[]>([]);
     const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null);
+    const detailRef = useRef<HTMLElement | null>(null);
 
     // ── Filter state ────────────────────────────────────────────────────────────
     const [keyword, setKeyword]         = useState('');
@@ -318,6 +326,77 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
         { key: 'recent', label: t('applicant_funnel_stat_recent'), count: recentCount, Icon: Clock3 },
         { key: 'needs_review', label: t('applicant_funnel_stat_needs_review'), count: needsReviewCount, Icon: FileWarning },
     ];
+    const activeFilterLabels = useMemo(() => {
+        const labels: string[] = [];
+        const trimmedKeyword = keyword.trim();
+
+        if (trimmedKeyword) {
+            labels.push(formatTranslation(t('applicant_funnel_filter_keyword_value'), { value: trimmedKeyword }));
+        }
+        if (minScore !== 'all') {
+            labels.push(formatTranslation(t('applicant_funnel_filter_score_value'), { value: scoreOptionLabel(minScore) }));
+        }
+        if (statusFilter !== 'all') {
+            labels.push(formatTranslation(t('applicant_funnel_filter_status_value'), { value: getStatusLabel(statusFilter) }));
+        }
+        if (recencyFilter !== 'all') {
+            labels.push(formatTranslation(t('applicant_funnel_filter_recency_value'), { value: recencyOptionLabel(recencyFilter) }));
+        }
+        if (analysisFilter !== 'all') {
+            labels.push(formatTranslation(t('applicant_funnel_filter_analysis_value'), { value: analysisOptionLabel(analysisFilter) }));
+        }
+
+        return labels;
+    }, [analysisFilter, keyword, minScore, recencyFilter, statusFilter, t]);
+
+    const selectedRecommendation = useMemo(() => {
+        if (!selectedApplicant) return null;
+
+        if (!hasApplicantAnalysis(selectedApplicant)) {
+            return {
+                title: t('applicant_funnel_next_manual_title'),
+                description: t('applicant_funnel_next_manual_desc'),
+                tone: 'review' as RecommendationTone,
+                Icon: FileWarning,
+            };
+        }
+
+        const score = selectedApplicant.compatibility_score ?? 0;
+        if (score >= 85) {
+            return {
+                title: t('applicant_funnel_next_contact_title'),
+                description: t('applicant_funnel_next_contact_desc'),
+                tone: 'strong' as RecommendationTone,
+                Icon: MessageSquare,
+            };
+        }
+
+        if (score >= 70) {
+            return {
+                title: t('applicant_funnel_next_screen_title'),
+                description: t('applicant_funnel_next_screen_desc'),
+                tone: 'screen' as RecommendationTone,
+                Icon: Target,
+            };
+        }
+
+        return {
+            title: t('applicant_funnel_next_hold_title'),
+            description: t('applicant_funnel_next_hold_desc'),
+            tone: 'review' as RecommendationTone,
+            Icon: FileWarning,
+        };
+    }, [selectedApplicant, t]);
+
+    const handleSelectApplicant = useCallback((applicant: Applicant) => {
+        setSelectedApplicant(applicant);
+        if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+            window.requestAnimationFrame(() => {
+                detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+    }, []);
+    const RecommendationIcon = selectedRecommendation?.Icon;
 
     if (loading) {
         return (
@@ -541,6 +620,24 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                 ))}
                             </SelectField>
                         </div>
+
+                        {activeFilterLabels.length > 0 && (
+                            <div className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 dark:border-blue-900/60 dark:bg-blue-950/20">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                                    {t('applicant_funnel_active_filters')}
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {activeFilterLabels.map((label) => (
+                                        <span
+                                            key={label}
+                                            className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-blue-800 ring-1 ring-blue-100 dark:bg-gray-900 dark:text-blue-200 dark:ring-blue-900/60"
+                                        >
+                                            {label}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
@@ -566,7 +663,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                     <button
                                         key={applicant.id}
                                         type="button"
-                                        onClick={() => setSelectedApplicant(applicant)}
+                                        onClick={() => handleSelectApplicant(applicant)}
                                         aria-current={selectedApplicant?.id === applicant.id ? 'true' : undefined}
                                         className={`w-full rounded-xl border p-3 text-left transition-all duration-200 ${
                                             selectedApplicant?.id === applicant.id
@@ -603,7 +700,11 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                     </div>
                 </aside>
 
-                <section className="min-h-[520px] rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2 lg:h-[72vh] lg:overflow-y-auto" aria-live="polite">
+                <section
+                    ref={detailRef}
+                    className="min-h-[520px] scroll-mt-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2 lg:h-[72vh] lg:overflow-y-auto"
+                    aria-live="polite"
+                >
                     {!selectedApplicant ? (
                         <div className="flex h-full min-h-[360px] items-center justify-center rounded-xl border border-dashed border-gray-300 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
                             {t('applicant_funnel_select_prompt')}
@@ -636,6 +737,20 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                     <p className="mt-4 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-400">{selectedApplicant.summary}</p>
                                 )}
                             </div>
+
+                            {selectedRecommendation && RecommendationIcon && (
+                                <div className={`rounded-xl border p-4 ${RECOMMENDATION_TONE_CLASS[selectedRecommendation.tone]}`}>
+                                    <div className="flex items-start gap-3">
+                                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/70 text-current shadow-sm dark:bg-gray-950/30">
+                                            <RecommendationIcon className="h-4 w-4" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h4 className="text-sm font-semibold leading-5">{selectedRecommendation.title}</h4>
+                                            <p className="mt-1 text-sm leading-6 opacity-90">{selectedRecommendation.description}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {(selectedApplicant.strengths.length > 0 || selectedApplicant.potentialGaps.length > 0) && (
                                 <div className="grid gap-4 xl:grid-cols-2">
@@ -677,6 +792,17 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                     })}
                                 </p>
                                 <p className="mx-auto mt-2 text-sm leading-6">{t('applicant_funnel_no_analysis_desc')}</p>
+                                {selectedRecommendation && RecommendationIcon && (
+                                    <div className={`mt-4 rounded-lg border p-3 text-left ${RECOMMENDATION_TONE_CLASS[selectedRecommendation.tone]}`}>
+                                        <div className="flex items-start gap-2.5">
+                                            <RecommendationIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                                            <div>
+                                                <p className="text-sm font-semibold">{selectedRecommendation.title}</p>
+                                                <p className="mt-1 text-xs leading-5 opacity-90">{selectedRecommendation.description}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
