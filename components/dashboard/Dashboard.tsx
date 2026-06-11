@@ -29,6 +29,7 @@ import { firestoreDb } from '../../lib/firebaseClient';
 import type { AppSession as Session } from '../../lib/data';
 import { generateWeeklySummary } from '../../services/aiClient';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useRecentApplications } from '../../hooks/useRecentApplications';
 
 type DashboardDestination = 'resume' | 'jobs' | 'applications' | 'interview' | 'plan';
 
@@ -67,6 +68,14 @@ const fallbackScores: ChartDataPoint[] = [
 ];
 
 const fallbackSkills = ['Product discovery', 'Stakeholder alignment', 'Roadmap prioritization', 'ATS formatting'];
+
+const getStartOfWeek = () => {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day;
+  const startOfWeek = new Date(now.setDate(diff));
+  return startOfWeek.toISOString().split('T')[0];
+};
 
 const toDate = (value: unknown): Date => {
   if (value && typeof value === 'object' && 'toDate' in value) {
@@ -158,10 +167,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
   const [topSkills, setTopSkills] = useState<string[]>([]);
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
   const { isAIMode } = useSettings();
+  const { applications, loading: applicationsLoading } = useRecentApplications(session);
 
   const fetchDashboardData = useCallback(async () => {
     if (!session?.user) {
       setLoading(false);
+      setScoreData([]);
+      setTopSkills([]);
+      setActivityFeed([]);
+      setWeeklySummary(t('dashboard_welcome_summary'));
       return;
     }
 
@@ -169,13 +183,37 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       setLoading(true);
       setError(null);
       const userId = session.user.id;
+      const startOfWeek = getStartOfWeek();
 
-      const analysesSnap = await getDocs(query(
-        collection(firestoreDb, 'users', userId, 'resume_analyses'),
-        orderBy('created_at', 'asc'),
-        limit(10),
-      ));
-      const analyses = analysesSnap.docs.map((doc) => doc.data());
+      const [analysesResult, activitiesResult, insightResult] = await Promise.allSettled([
+        getDocs(query(
+          collection(firestoreDb, 'users', userId, 'resume_analyses'),
+          orderBy('created_at', 'asc'),
+          limit(10),
+        )),
+        getDocs(query(
+          collection(firestoreDb, 'users', userId, 'tool_events'),
+          orderBy('created_at', 'desc'),
+          limit(4),
+        )),
+        getDocs(query(
+          collection(firestoreDb, 'users', userId, 'weekly_insights'),
+          where('week_start_date', '==', startOfWeek),
+          limit(1),
+        )),
+      ]);
+
+      const unavailableSections: string[] = [];
+      let analyses: Record<string, unknown>[] = [];
+      let activities: Record<string, unknown>[] = [];
+
+      if (analysesResult.status === 'fulfilled') {
+        analyses = analysesResult.value.docs.map((doc) => doc.data());
+      } else {
+        unavailableSections.push('readiness history');
+        setScoreData([]);
+        setTopSkills([]);
+      }
 
       const chartData = analyses.map((a) => ({
         label: toDate(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -190,12 +228,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         }
       }
 
-      const activitiesSnap = await getDocs(query(
-        collection(firestoreDb, 'users', userId, 'tool_events'),
-        orderBy('created_at', 'desc'),
-        limit(4),
-      ));
-      const activities = activitiesSnap.docs.map((doc) => doc.data());
+      if (activitiesResult.status === 'fulfilled') {
+        activities = activitiesResult.value.docs.map((doc) => doc.data());
+      } else {
+        unavailableSections.push('recent activity');
+        setActivityFeed([]);
+      }
 
       const feedData = activities.map((act) => {
         const toolKey = typeof act.tool_key === 'string' ? act.tool_key : 'default';
@@ -213,56 +251,53 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       });
       setActivityFeed(feedData);
 
-      const getStartOfWeek = () => {
-        const now = new Date();
-        const day = now.getDay();
-        const diff = now.getDate() - day;
-        const startOfWeek = new Date(now.setDate(diff));
-        return startOfWeek.toISOString().split('T')[0];
-      };
+      const insight = insightResult.status === 'fulfilled'
+        ? insightResult.value.docs[0]?.data()
+        : null;
+      if (insightResult.status === 'rejected') {
+        unavailableSections.push('weekly summary history');
+      }
 
-      const startOfWeek = getStartOfWeek();
-
-      const insightSnap = await getDocs(query(
-        collection(firestoreDb, 'users', userId, 'weekly_insights'),
-        where('week_start_date', '==', startOfWeek),
-        limit(1),
-      ));
-      const insight = insightSnap.docs[0]?.data();
-
-      if (insight) {
+      if (insight && typeof insight.summary_text === 'string' && insight.summary_text.trim().length > 0) {
         setWeeklySummary(insight.summary_text);
       } else if (!isAIMode) {
         setWeeklySummary('Turn on assisted tools when you want generated coaching. Your workbench still tracks resume, match, interview, and plan progress.');
       } else if (analyses.length > 0 || activities.length > 0) {
-        const { summary } = await generateWeeklySummary({
-          scores: chartData,
-                activities: activities.map((a) => a.tool_key),
-        });
-        // Guard: a truncated/unparseable AI response can yield summary === undefined.
-        // Persisting that crashed addDoc ("Unsupported field value: undefined") and
-        // the outer catch then masked ALL dashboard history behind the sample-data
-        // fallback. Only persist a real string; otherwise show the welcome copy.
-        if (typeof summary === 'string' && summary.trim().length > 0) {
-          setWeeklySummary(summary);
-          try {
-            await addDoc(collection(firestoreDb, 'users', userId, 'weekly_insights'), {
-              week_start_date: startOfWeek,
-              summary_text: summary,
-              created_at: serverTimestamp(),
-            });
-          } catch (persistErr) {
-            // Persistence is best-effort — never let it take down the dashboard.
-            console.error('weekly_insights persist failed:', persistErr);
+        try {
+          const { summary } = await generateWeeklySummary({
+            scores: chartData,
+            activities: activities.map((a) => a.tool_key),
+          });
+          // Guard: a truncated/unparseable response can yield summary === undefined.
+          // Only persist a real string; otherwise show the welcome copy.
+          if (typeof summary === 'string' && summary.trim().length > 0) {
+            setWeeklySummary(summary);
+            try {
+              await addDoc(collection(firestoreDb, 'users', userId, 'weekly_insights'), {
+                week_start_date: startOfWeek,
+                summary_text: summary,
+                created_at: serverTimestamp(),
+              });
+            } catch {
+              unavailableSections.push('saving weekly summary');
+            }
+          } else {
+            setWeeklySummary(t('dashboard_welcome_summary'));
           }
-        } else {
-          setWeeklySummary(t('dashboard_welcome_summary'));
+        } catch {
+          unavailableSections.push('generated weekly summary');
+          setWeeklySummary('Use today to tighten your resume, review the strongest matches, and complete one interview practice round.');
         }
       } else {
         setWeeklySummary(t('dashboard_welcome_summary'));
       }
+
+      setError(
+        unavailableSections.length > 0
+          ? `Some live workspace data could not be loaded (${unavailableSections.join(', ')}). The dashboard is showing the available information.`
+          : null,
+      );
     } catch (err: unknown) {
-      console.error('Dashboard fetch error:', err);
       setError(err instanceof Error ? err.message : 'Some workspace history could not be loaded.');
       setWeeklySummary('Use today to tighten your resume, review the strongest matches, and complete one interview practice round.');
     } finally {
@@ -285,6 +320,26 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
   const skills = topSkills.length > 0 ? topSkills : fallbackSkills;
   const firstName = profile?.full_name?.split(' ')[0] || 'there';
   const nextCtaLabel = hasResume ? 'Review priority fixes' : 'Upload resume';
+  const applicationPulse = applications.reduce(
+    (counts, app) => {
+      const status = app.status.toLowerCase();
+      const isClosed = status.includes('hired') || status.includes('rejected') || status.includes('closed');
+      const isInterviewing = status.includes('interview');
+      return {
+        total: counts.total + 1,
+        active: counts.active + (isClosed ? 0 : 1),
+        interviewing: counts.interviewing + (isInterviewing ? 1 : 0),
+        closed: counts.closed + (isClosed ? 1 : 0),
+      };
+    },
+    { total: 0, active: 0, interviewing: 0, closed: 0 },
+  );
+  const latestApplication = applications[0];
+  const applicationStageHelper = applicationsLoading
+    ? 'Loading status'
+    : applicationPulse.total > 0
+      ? `${applicationPulse.active} active · ${applicationPulse.interviewing} interview`
+      : 'Track status changes';
 
   const priorities = hasResume
     ? [
@@ -339,10 +394,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
     },
     {
       label: 'Applied pipeline',
-      helper: 'Track status changes',
+      helper: applicationStageHelper,
       icon: ClipboardList,
       view: 'applications' as const,
-      tone: hasResume ? 'neutral' : 'gap',
+      tone: applicationPulse.total > 0 ? 'ready' : hasResume ? 'neutral' : 'gap',
     },
     {
       label: 'Interview practice',
@@ -413,7 +468,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         })}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Resume readiness"
           value={hasResume ? `${readinessScore}` : '--'}
@@ -434,6 +489,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           helper={hasResume ? 'Ranked by evidence and missing skill risk.' : 'Matches need a resume baseline.'}
           icon={Briefcase}
           tone="green"
+        />
+        <MetricCard
+          label="Application status"
+          value={applicationsLoading ? '...' : hasResume ? `${applicationPulse.active}` : '--'}
+          helper={
+            applicationsLoading
+              ? 'Loading tracked applications.'
+              : applicationPulse.total > 0
+                ? `${applicationPulse.interviewing} interview-stage, ${applicationPulse.closed} closed.`
+                : hasResume ? 'Track applications after you start applying.' : 'Pipeline appears after resume and matches.'
+          }
+          icon={ClipboardList}
+          tone="slate"
         />
       </div>
 
@@ -494,22 +562,37 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Best match to review</h3>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Technical Product Owner · B2B SaaS</p>
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Application progress</h3>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  {applicationsLoading
+                    ? 'Loading tracked roles...'
+                    : latestApplication
+                      ? `${latestApplication.job_title || 'Recent role'} · ${latestApplication.status || 'Tracked'}`
+                      : 'No tracked applications yet'}
+                </p>
               </div>
-              <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/30 dark:text-emerald-300">
-                84%
+              <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-300">
+                {applicationsLoading ? '...' : `${applicationPulse.total} tracked`}
               </span>
             </div>
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3 text-sm text-slate-700 dark:text-slate-300">
-              Evidence: led billing workflow redesign, prioritized backlog with engineering and design, reduced support tickets.
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              {[
+                ['Active', applicationPulse.active],
+                ['Interviewing', applicationPulse.interviewing],
+                ['Closed', applicationPulse.closed],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">{label}</p>
+                  <p className="mt-1 text-xl font-semibold text-slate-950 dark:text-slate-100">{applicationsLoading ? '...' : value}</p>
+                </div>
+              ))}
             </div>
             <button
               type="button"
-              onClick={() => onNavigate?.('jobs')}
+              onClick={() => onNavigate?.(applicationPulse.total > 0 ? 'applications' : 'jobs')}
               className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
             >
-              Open job matches
+              {applicationPulse.total > 0 ? 'Open application pipeline' : 'Find roles to apply'}
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
