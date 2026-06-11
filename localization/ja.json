@@ -1767,6 +1767,7 @@
   "talent_no_posted_jobs_desc": "先に求人を公開すると精度が上がります。手動で説明を貼り付けることもできます。",
   "talent_post_job_first_button": "先に求人を投稿",
   "talent_search_ready_hint": "この検索は選択した求人説明を使用します。",
+  "talent_search_manual_ready_hint": "この検索では貼り付けた募集要項を使用します。",
   "talent_search_disabled_hint": "公開済み求人を選ぶか、募集要項を貼り付けてください。",
   "talent_verified_retry": "候補者を再読み込み",
   "talent_shortlist_next_title": "保存済み候補者をフォローできます",

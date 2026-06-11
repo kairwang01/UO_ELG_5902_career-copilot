@@ -71,6 +71,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const [jobToEdit, setJobToEdit] = useState<JobPostingWithCount | null>(null);
   const [planSaving, setPlanSaving] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [talentPoolInitialJobId, setTalentPoolInitialJobId] = useState<string | null>(null);
   const { addToast } = useToast();
   const mainRef = useRef<HTMLElement | null>(null);
   // For applicant funnel
@@ -142,6 +143,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     // Clear edit/funnel state when navigating via sidebar
     setJobToEdit(null);
     setJobForFunnel(null);
+    setTalentPoolInitialJobId(null);
     setIsMobileNavOpen(false);
     setCurrentPage(page);
   };
@@ -155,6 +157,14 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const handleViewApplicants = (job: JobPostingWithCount) => {
     setJobForFunnel(job);
     setPrevPage(currentPage);
+  };
+
+  const handleSourceCandidates = (job: JobPostingWithCount) => {
+    setJobToEdit(null);
+    setJobForFunnel(null);
+    setTalentPoolInitialJobId(job.id);
+    setIsMobileNavOpen(false);
+    setCurrentPage('talent-pool');
   };
 
   const handlePostJobSaved = async () => {
@@ -303,6 +313,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               darkMode={darkMode}
               onEditJob={handleEditJob}
               onViewApplicants={handleViewApplicants}
+              onSourceCandidates={handleSourceCandidates}
               onNavigate={navigate}
               t={t}
             />
@@ -315,6 +326,11 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               onPostJob={() => navigate('post-job')}
               onOpenShortlist={() => navigate('shortlist')}
               navigateToBusinessPricing={navigateToBusinessPricing}
+              jobPostings={jobPostings}
+              jobsLoading={loading}
+              jobsError={error}
+              onRetryJobs={fetchData}
+              initialJobId={talentPoolInitialJobId}
               t={t}
             />
           )}

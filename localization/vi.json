@@ -1767,6 +1767,7 @@
   "talent_no_posted_jobs_desc": "Đăng vị trí trước sẽ giúp ghép nối chính xác hơn, nhưng bạn vẫn có thể dán mô tả thủ công.",
   "talent_post_job_first_button": "Đăng vị trí trước",
   "talent_search_ready_hint": "Tìm kiếm này sẽ dùng mô tả của vai trò đã chọn.",
+  "talent_search_manual_ready_hint": "Lượt tìm kiếm này sẽ dùng mô tả vai trò đã dán.",
   "talent_search_disabled_hint": "Chọn một tin đã đăng hoặc dán mô tả vai trò để bắt đầu ghép nối.",
   "talent_verified_retry": "Tải lại ứng viên",
   "talent_shortlist_next_title": "Ứng viên đã lưu sẵn sàng để theo dõi",

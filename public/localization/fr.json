@@ -1767,6 +1767,7 @@
   "talent_no_posted_jobs_desc": "Publier une offre rend le matching plus précis, mais vous pouvez aussi coller un descriptif.",
   "talent_post_job_first_button": "Publier une offre",
   "talent_search_ready_hint": "Cette recherche utilisera le brief du rôle sélectionné.",
+  "talent_search_manual_ready_hint": "Cette recherche utilisera le brief collé.",
   "talent_search_disabled_hint": "Sélectionnez une offre ou collez un brief pour lancer le matching.",
   "talent_verified_retry": "Réessayer les talents",
   "talent_shortlist_next_title": "Les candidats sauvegardés sont prêts à être suivis",

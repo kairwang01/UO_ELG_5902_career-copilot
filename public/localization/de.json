@@ -1767,6 +1767,7 @@
   "talent_no_posted_jobs_desc": "Eine veröffentlichte Stelle macht das Matching präziser; Sie können aber auch manuell ein Briefing einfügen.",
   "talent_post_job_first_button": "Zuerst Stelle posten",
   "talent_search_ready_hint": "Diese Suche nutzt das Briefing der ausgewählten Rolle.",
+  "talent_search_manual_ready_hint": "Diese Suche verwendet die eingefügte Rollenbeschreibung.",
   "talent_search_disabled_hint": "Wählen Sie eine Stelle oder fügen Sie ein Rollenbriefing ein.",
   "talent_verified_retry": "Talente erneut laden",
   "talent_shortlist_next_title": "Gespeicherte Kandidaten sind bereit für die Nachverfolgung",

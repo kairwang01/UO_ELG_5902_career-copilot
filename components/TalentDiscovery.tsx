@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { discoverTalent, type DiscoveredCandidate } from '../services/aiClient';
 import type { UserProfile } from '../types';
 import EngageCandidateModal from './EngageCandidateModal';
@@ -37,6 +37,7 @@ interface MatchedCandidate extends UserProfile {
 type TranslationFn = (key: string) => string;
 
 type CandidateCardVariant = 'verified' | 'regular';
+type TalentDiscoveryJob = JobPosting & { applicant_count?: number };
 
 /**
  * The server returns only SAFE fields (no resume_text/email — privacy by design;
@@ -253,9 +254,25 @@ interface TalentDiscoveryProps {
     onPostJob?: () => void;
     onOpenShortlist?: () => void;
     navigateToBusinessPricing: () => void;
+    postedJobs?: TalentDiscoveryJob[];
+    postedJobsLoading?: boolean;
+    postedJobsError?: string | null;
+    onRetryPostedJobs?: () => void;
+    initialSelectedJobId?: string | null;
 }
 
-const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob, onOpenShortlist, navigateToBusinessPricing }) => {
+const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
+    t,
+    profile,
+    onPostJob,
+    onOpenShortlist,
+    navigateToBusinessPricing,
+    postedJobs: postedJobsProp,
+    postedJobsLoading = false,
+    postedJobsError = null,
+    onRetryPostedJobs,
+    initialSelectedJobId = null,
+}) => {
     const [jobDescription, setJobDescription] = useState('');
     const [verifiedLoading, setVerifiedLoading] = useState(false);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -268,9 +285,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
     const [candidateToEngage, setCandidateToEngage] = useState<(MatchedCandidate & { index: number }) | null>(null);
 
     // Posted-job selector state
-    const [postedJobs, setPostedJobs] = useState<JobPosting[]>([]);
-    const [jobsLoaded, setJobsLoaded] = useState(false);
-    const [jobsError, setJobsError] = useState<string | null>(null);
+    const [internalPostedJobs, setInternalPostedJobs] = useState<TalentDiscoveryJob[]>([]);
+    const [internalJobsLoaded, setInternalJobsLoaded] = useState(false);
+    const [internalJobsError, setInternalJobsError] = useState<string | null>(null);
 
     // Track which jobs are currently selected in the selector (for snapshot)
     const [selectedJobId, setSelectedJobId] = useState<string>('');
@@ -280,8 +297,18 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
     // Candidates whose shortlist write is in flight — blocks double-clicks.
     const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
     const verifiedRequestIdRef = useRef(0);
+    const appliedInitialJobIdRef = useRef<string | null>(null);
 
     const { addToast } = useSharedToast();
+    const usesExternalJobs = Array.isArray(postedJobsProp);
+    const postedJobs = useMemo(
+        () => (usesExternalJobs
+            ? (postedJobsProp ?? []).filter((job) => job.is_active)
+            : internalPostedJobs),
+        [internalPostedJobs, postedJobsProp, usesExternalJobs],
+    );
+    const jobsLoaded = usesExternalJobs ? !postedJobsLoading : internalJobsLoaded;
+    const jobsError = usesExternalJobs ? postedJobsError : internalJobsError;
     const selectedPostedJob = postedJobs.find((job) => job.id === selectedJobId) ?? null;
     const selectedPostedJobBrief = selectedPostedJob ? buildPostedJobBrief(selectedPostedJob, t) : '';
     const selectedPostedDate = selectedPostedJob ? formatPostedDate(selectedPostedJob.created_at) : '';
@@ -306,37 +333,58 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
     ];
 
     const fetchPostedJobs = useCallback(async () => {
-        if (!profile.id) {
-            setPostedJobs([]);
-            setJobsLoaded(true);
+        if (usesExternalJobs) {
+            onRetryPostedJobs?.();
             return;
         }
-        setJobsLoaded(false);
-        setJobsError(null);
+        if (!profile.id) {
+            setInternalPostedJobs([]);
+            setInternalJobsLoaded(true);
+            return;
+        }
+        setInternalJobsLoaded(false);
+        setInternalJobsError(null);
         try {
             const jobs = await listActiveEmployerJobs(profile.id);
-            setPostedJobs(jobs);
+            setInternalPostedJobs(jobs);
         } catch {
-            setPostedJobs([]);
-            setJobsError(t('talent_posted_jobs_error'));
+            setInternalPostedJobs([]);
+            setInternalJobsError(t('talent_posted_jobs_error'));
         } finally {
-            setJobsLoaded(true);
+            setInternalJobsLoaded(true);
         }
-    }, [profile.id, t]);
+    }, [onRetryPostedJobs, profile.id, t, usesExternalJobs]);
 
-    // Fetch employer's active posted jobs once on mount.
+    // Fetch employer jobs only when the portal does not provide them.
     useEffect(() => {
+        if (usesExternalJobs) return;
         fetchPostedJobs();
-    }, [fetchPostedJobs]);
+    }, [fetchPostedJobs, usesExternalJobs]);
 
-    const handleSelectPostedJob = (jobId: string) => {
+    const handleSelectPostedJob = useCallback((jobId: string) => {
         setSelectedJobId(jobId);
-        if (!jobId) return;
+        if (!jobId) {
+            setRegularResults(null);
+            return;
+        }
         const job = postedJobs.find((j) => j.id === jobId);
         if (!job) return;
         setJobDescription(buildPostedJobBrief(job, t));
+        setRegularResults(null);
         if (searchError) setSearchError(null);
-    };
+    }, [postedJobs, searchError, t]);
+
+    useEffect(() => {
+        if (!initialSelectedJobId || !jobsLoaded) return;
+        if (appliedInitialJobIdRef.current === initialSelectedJobId) return;
+        if (selectedJobId === initialSelectedJobId) {
+            appliedInitialJobIdRef.current = initialSelectedJobId;
+            return;
+        }
+        if (!postedJobs.some((job) => job.id === initialSelectedJobId)) return;
+        appliedInitialJobIdRef.current = initialSelectedJobId;
+        handleSelectPostedJob(initialSelectedJobId);
+    }, [handleSelectPostedJob, initialSelectedJobId, jobsLoaded, postedJobs, selectedJobId]);
 
     const fetchVerifiedTalent = useCallback(async () => {
         const requestId = verifiedRequestIdRef.current + 1;
@@ -570,6 +618,42 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('talent_select_posted_job')}
                         </label>
+                        <div className="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3" role="radiogroup" aria-label={t('talent_select_posted_job')}>
+                            {postedJobs.slice(0, 6).map((job) => {
+                                const selected = selectedJobId === job.id;
+                                return (
+                                    <button
+                                        key={job.id}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selected}
+                                        onClick={() => handleSelectPostedJob(job.id)}
+                                        className={`group rounded-xl border p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                                            selected
+                                                ? 'border-blue-300 bg-blue-50 shadow-sm dark:border-blue-700 dark:bg-blue-950/40'
+                                                : 'border-gray-200 bg-gray-50 hover:border-blue-200 dark:border-gray-700 dark:bg-gray-900/40 dark:hover:border-blue-800'
+                                        }`}
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className={`truncate text-sm font-semibold ${selected ? 'text-blue-950 dark:text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>
+                                                    {job.title}
+                                                </p>
+                                                <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
+                                                    {job.location || t('talent_location_remote')}
+                                                </p>
+                                            </div>
+                                            {selected && <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-700 dark:text-blue-300" />}
+                                        </div>
+                                        {typeof job.applicant_count === 'number' && (
+                                            <p className="mt-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                {job.applicant_count} {t('employer_dashboard_applicants_label')}
+                                            </p>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
                         <select
                             value={selectedJobId}
                             onChange={(e) => handleSelectPostedJob(e.target.value)}
@@ -679,7 +763,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                             ? selectedBriefEdited
                                 ? t('talent_search_edited_hint')
                                 : t('talent_search_ready_hint')
-                            : t('talent_search_disabled_hint')}
+                            : hasJobDescription
+                                ? t('talent_search_manual_ready_hint')
+                                : t('talent_search_disabled_hint')}
                     </span>
                     <span>{t('talent_jd_length').replace('{n}', String(jobDescription.trim().length))}</span>
                 </div>

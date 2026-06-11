@@ -27,6 +27,7 @@ interface PortalJobListingsProps {
   darkMode: boolean;
   onEditJob: (job: JobPostingWithCount) => void;
   onViewApplicants: (job: JobPostingWithCount) => void;
+  onSourceCandidates: (job: JobPostingWithCount) => void;
   onNavigate: (page: PortalPage) => void;
   t?: (key: string) => string;
 }
@@ -66,6 +67,7 @@ export function PortalJobListings({
   darkMode,
   onEditJob,
   onViewApplicants,
+  onSourceCandidates,
   onNavigate,
   t: tProp,
 }: PortalJobListingsProps) {
@@ -136,7 +138,7 @@ export function PortalJobListings({
       label: t('portal_listings_action_source'),
       description: t('portal_listings_next_source'),
       Icon: Search,
-      onClick: () => onNavigate('talent-pool'),
+      onClick: () => onSourceCandidates(job),
       primary: true,
     };
   };

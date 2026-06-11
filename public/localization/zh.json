@@ -1958,6 +1958,7 @@
   "talent_no_posted_jobs_desc": "先发布职位可以让匹配更准确；你也可以手动粘贴岗位说明。",
   "talent_post_job_first_button": "先发布职位",
   "talent_search_ready_hint": "本次搜索会使用已选职位说明。",
+  "talent_search_manual_ready_hint": "本次搜索会使用当前粘贴的岗位说明。",
   "talent_search_disabled_hint": "请选择已发布职位，或粘贴岗位说明后开始匹配。",
   "talent_verified_retry": "重试加载人才",
   "talent_shortlist_next_title": "已保存候选人，可继续跟进",
