@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Search,
   SlidersHorizontal,
+  RotateCcw,
   Star,
 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -29,6 +30,14 @@ interface BrowseJobsProps {
   session: Session | null;
   t: (key: string) => string;
 }
+
+const QUICK_SEARCH_KEYS = [
+  'browse_jobs_quick_software',
+  'browse_jobs_quick_product',
+  'browse_jobs_quick_data',
+  'browse_jobs_quick_marketing',
+  'browse_jobs_quick_remote',
+] as const;
 
 // ── skeleton card ──────────────────────────────────────────────────────────────
 const SkeletonCard: React.FC = () => (
@@ -90,6 +99,20 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
     debounceTimer.current = setTimeout(() => setKeyword(value.trim()), 250);
   };
   useEffect(() => () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); }, []);
+
+  const commitKeyword = (value: string) => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    setRawKeyword(value);
+    setKeyword(value.trim());
+  };
+
+  const clearFilters = () => {
+    commitKeyword('');
+    setLocationFilter('all');
+    setHasSalaryFilter(false);
+    setSortOrder('newest');
+    setExpandedId(null);
+  };
 
   // ── fetch jobs on mount (ONCE — no reactive deps; raw errors are logged and a
   //    translated generic message is rendered, so `t` stays out of the deps) ────
@@ -172,7 +195,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
     const kw = keyword.toLowerCase();
     return jobs
       .filter((j) => {
-        if (kw && !(j.title.toLowerCase().includes(kw) || (j.description ?? '').toLowerCase().includes(kw))) return false;
+        const searchable = [
+          j.title,
+          j.company_name,
+          j.location,
+          j.salary_range,
+          j.description,
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (kw && !searchable.includes(kw)) return false;
         if (locationFilter !== 'all' && j.location !== locationFilter) return false;
         if (hasSalaryFilter && !j.salary_range) return false;
         return true;
@@ -183,6 +213,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
   }, [jobs, keyword, locationFilter, hasSalaryFilter, sortOrder]);
+  const hasActiveFilters = keyword !== '' || locationFilter !== 'all' || hasSalaryFilter || sortOrder !== 'newest';
 
   // ── apply handler ─────────────────────────────────────────────────────────
   const handleApply = useCallback(async (jobId: string) => {
@@ -217,7 +248,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       </div>
 
       {/* search + filters */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm space-y-3">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm space-y-4">
         {/* search bar */}
         <div className="relative">
           <label htmlFor="browse-jobs-search" className="sr-only">
@@ -235,47 +266,86 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           />
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            {t('browse_jobs_popular_searches')}
+          </span>
+          {QUICK_SEARCH_KEYS.map((key) => {
+            const label = t(key);
+            const active = keyword.toLowerCase() === label.toLowerCase();
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => commitKeyword(label)}
+                disabled={loading}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                  active
+                    ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* filter row */}
-        <div className="flex flex-wrap items-center gap-3">
-          <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
 
-          {/* location */}
-          <select
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-            aria-label={t('browse_jobs_all_locations')}
-            disabled={loading}
-            className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
-          >
-            <option value="all">{t('browse_jobs_all_locations')}</option>
-            {locations.map((loc) => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
-
-          {/* has salary */}
-          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-700 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={hasSalaryFilter}
-              onChange={(e) => setHasSalaryFilter(e.target.checked)}
+            {/* location */}
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              aria-label={t('browse_jobs_all_locations')}
               disabled={loading}
-              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-wait"
-            />
-            {t('browse_jobs_has_salary')}
-          </label>
+              className="min-w-[150px] rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
+            >
+              <option value="all">{t('browse_jobs_all_locations')}</option>
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
 
-          {/* sort */}
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as 'newest' | 'title_az')}
-            aria-label="Sort job postings"
-            disabled={loading}
-            className="ml-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
-          >
-            <option value="newest">{t('browse_jobs_sort_newest')}</option>
-            <option value="title_az">{t('browse_jobs_sort_az')}</option>
-          </select>
+            {/* has salary */}
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={hasSalaryFilter}
+                onChange={(e) => setHasSalaryFilter(e.target.checked)}
+                disabled={loading}
+                className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-wait"
+              />
+              {t('browse_jobs_has_salary')}
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {/* sort */}
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as 'newest' | 'title_az')}
+              aria-label={t('browse_jobs_sort_label')}
+              disabled={loading}
+              className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition disabled:opacity-60 disabled:cursor-wait"
+            >
+              <option value="newest">{t('browse_jobs_sort_newest')}</option>
+              <option value="title_az">{t('browse_jobs_sort_az')}</option>
+            </select>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {t('browse_jobs_clear_filters')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -332,6 +402,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             {t('browse_jobs_no_match_desc')}
           </p>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+          >
+            <RotateCcw className="h-4 w-4" />
+            {t('browse_jobs_clear_filters')}
+          </button>
         </div>
       )}
 

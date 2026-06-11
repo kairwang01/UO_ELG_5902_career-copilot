@@ -149,7 +149,7 @@ const HTML_TEMPLATE = `
                     </div>
                 </div>
                 <div class="hero-image">
-                    <img src="https://via.placeholder.com/350" alt="Profile Image" class="profile-img">
+                    <img src="PROFILE_IMAGE_SRC" alt="Profile Image" class="profile-img">
                 </div>
             </div>
         </div>
@@ -404,6 +404,20 @@ const normalizeExternalUrl = (unsafe: string | null | undefined): string => {
     return '';
 };
 
+const buildInitialsAvatarDataUrl = (content: PortfolioContent): string => {
+    const initials = `${content.firstName?.[0] ?? ''}${content.lastName?.[0] ?? ''}`.toUpperCase() || 'ME';
+    const safeInitials = escapeHtml(initials);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="350" height="350" viewBox="0 0 350 350"><rect width="350" height="350" rx="175" fill="#2563eb"/><circle cx="175" cy="175" r="150" fill="#1d4ed8"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="96" font-weight="700" fill="#f8fafc">${safeInitials}</text></svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+
+const buildProjectPlaceholderDataUrl = (project: Project): string => {
+    const title = escapeHtml(project.title || project.category || 'Project');
+    const category = escapeHtml(project.category || 'Portfolio item');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="600" height="400" rx="24" fill="#f8fafc"/><rect x="28" y="28" width="544" height="344" rx="18" fill="#e2e8f0"/><rect x="72" y="86" width="456" height="24" rx="12" fill="#2563eb"/><rect x="72" y="140" width="280" height="18" rx="9" fill="#64748b"/><text x="72" y="232" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="700" fill="#0f172a">${title}</text><text x="72" y="282" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="600" fill="#475569">${category}</text></svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+
 const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): string => {
     let html = HTML_TEMPLATE;
     
@@ -431,8 +445,8 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     html = html.replace(/&copy; \d{4} Alex Johnson/g, `&copy; ${new Date().getFullYear()} ${escapeHtml(content.fullName)}`);
 
     // Headshot
-    const headshotSrc = headshot ? `data:${headshot.mimeType};base64,${headshot.data}` : `https://placehold.co/350x350/2563eb/f8fafc?text=${encodeURIComponent(content.firstName[0] + content.lastName[0])}`;
-    html = html.replace('https://via.placeholder.com/350', escapeAttr(headshotSrc));
+    const headshotSrc = headshot ? `data:${headshot.mimeType};base64,${headshot.data}` : buildInitialsAvatarDataUrl(content);
+    html = html.replace('PROFILE_IMAGE_SRC', escapeAttr(headshotSrc));
     html = html.replace('alt="Profile Image"', `alt="${escapeAttr(`Profile image of ${content.fullName}`)}"`);
 
     // Social Icons
@@ -469,7 +483,7 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
 
     // Projects
     const projectsHtml = projects.map(p => {
-        const projectImageSrc = p.image ? `data:${p.image.mimeType};base64,${p.image.data}` : `https://placehold.co/600x400/2563eb/f8fafc?text=${encodeURIComponent(p.title)}`;
+        const projectImageSrc = p.image ? `data:${p.image.mimeType};base64,${p.image.data}` : buildProjectPlaceholderDataUrl(p);
         const categorySlug = escapeAttr(p.category?.toLowerCase().trim().replace(/\s+/g, '-')) || 'web';
         const projectUrl = normalizeExternalUrl(p.url);
         const projectHref = projectUrl || '#portfolio';
@@ -929,8 +943,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                                 </div>
                             </div>
                             <div className="mt-6">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Project Category</label>
-                                <input type="text" value={p.category} onChange={e => handleProjectChange(p.id, 'category', e.target.value)} required placeholder="e.g., Web, App, Branding" className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_category_label')}</label>
+                                <input type="text" value={p.category} onChange={e => handleProjectChange(p.id, 'category', e.target.value)} required placeholder={t('tool_portfolio_project_category_placeholder')} className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                             </div>
                             <div className="mt-6">
                                 <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_desc_label')}</label>
