@@ -9,7 +9,7 @@ import Avatar from './Avatar';
 import { STRIPE_CUSTOMER_PORTAL_LINK, ALL_PLANS, PLAN_HIERARCHY } from '../config';
 import { ethers } from 'ethers';
 import ApiKeyManager from './ApiKeyManager';
-import { BusinessCustomApi } from './ModelSelector';
+import { BusinessCustomApi } from './BusinessCustomApi';
 import { listModels } from '../services/aiClient';
 import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
 
@@ -43,7 +43,7 @@ const TARGET_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia Chain ID in Hex
  * Both components read isBusiness from listModels(); they coordinate so that
  * a business user sees only the BYOA form and a non-business user sees only this note.
  */
-const ModelSelectorManagedNote: React.FC<{ t: (key: string) => string }> = ({ t }) => {
+const ModelRoutingManagedNote: React.FC<{ t: (key: string) => string }> = ({ t }) => {
   const [isBusiness, setIsBusiness] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -517,10 +517,10 @@ const Account: React.FC<AccountProps> = ({ session, onSetView, onSubscriptionCha
             <ApiKeyManager session={session} onViewDocs={() => onSetView('api_docs')} />
         </div>
 
-        {/* AI Model — routing is admin-controlled server-side.
+        {/* Model routing is admin-controlled server-side.
             Non-business users see a muted info line; business users keep their BYOA form. */}
         <BusinessCustomApi className="mt-10 max-w-md" t={t} />
-        <ModelSelectorManagedNote t={t} />
+        <ModelRoutingManagedNote t={t} />
 
 
         {/* Web3 Identity Section — experimental, feature-flagged */}

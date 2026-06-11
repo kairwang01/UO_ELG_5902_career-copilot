@@ -183,19 +183,16 @@ export const analyzeResume = async (
   });
 };
 
-// Model selection — only the 'custom' value is honoured on load; any other stored
-// value (stale free/paid picks like 'gemini', 'kairllm', etc.) is ignored so that
-// admin-side routing decides the model. BYOA business users must have 'custom'
-// reinstated by BusinessCustomApi.useEffect on mount.
+// Model routing is platform-managed. The only client override is the business
+// custom endpoint, represented by the reserved "custom" id.
 const MODEL_STORAGE_KEY = 'preferred_ai_model';
 const _stored = typeof localStorage !== 'undefined' ? localStorage.getItem(MODEL_STORAGE_KEY) : null;
 let currentModelId: string | undefined = _stored === 'custom' ? 'custom' : undefined;
 
-export const getAiModel = (): string | undefined => currentModelId;
 export const setAiModel = (id: string | undefined): void => {
-  currentModelId = id;
+  currentModelId = id === 'custom' ? 'custom' : undefined;
   try {
-    if (id) localStorage.setItem(MODEL_STORAGE_KEY, id);
+    if (currentModelId) localStorage.setItem(MODEL_STORAGE_KEY, currentModelId);
     else localStorage.removeItem(MODEL_STORAGE_KEY);
   } catch { /* localStorage may be unavailable */ }
 };
