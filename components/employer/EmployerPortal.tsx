@@ -313,6 +313,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               profile={profile}
               darkMode={darkMode}
               onPostJob={() => navigate('post-job')}
+              onOpenShortlist={() => navigate('shortlist')}
               navigateToBusinessPricing={navigateToBusinessPricing}
               t={t}
             />

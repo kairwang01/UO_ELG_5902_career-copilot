@@ -1,12 +1,29 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { discoverTalent, type DiscoveredCandidate } from '../services/aiClient';
 import type { UserProfile } from '../types';
 import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';
 import { listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
 import { saveToShortlist } from '../lib/shortlistData';
-import { BookmarkCheck, BookmarkPlus, Briefcase, CheckCircle2, Clock3, DollarSign, FileText, Loader2, MapPin, PlusCircle, RotateCcw, Search, XCircle } from 'lucide-react';
+import {
+    ArrowRight,
+    BookmarkCheck,
+    BookmarkPlus,
+    Briefcase,
+    CheckCircle2,
+    Clock3,
+    DollarSign,
+    FileText,
+    Loader2,
+    MapPin,
+    PlusCircle,
+    RefreshCw,
+    RotateCcw,
+    Search,
+    Users,
+    XCircle,
+} from 'lucide-react';
 import { useToast as useSharedToast } from './Toast';
 
 interface MatchedCandidate extends UserProfile {
@@ -18,6 +35,8 @@ interface MatchedCandidate extends UserProfile {
 }
 
 type TranslationFn = (key: string) => string;
+
+type CandidateCardVariant = 'verified' | 'regular';
 
 /**
  * The server returns only SAFE fields (no resume_text/email — privacy by design;
@@ -71,14 +90,172 @@ const formatPostedDate = (value: string | null | undefined): string => {
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
+function VerifiedTalentSkeleton() {
+    return (
+        <div className="space-y-3" role="status" aria-live="polite">
+            {[0, 1, 2].map((item) => (
+                <div key={item} className="rounded-lg border border-white/10 bg-white/10 p-4">
+                    <div className="animate-pulse space-y-3">
+                        <div className="h-4 w-28 rounded bg-white/20" />
+                        <div className="h-3 w-full max-w-xl rounded bg-white/15" />
+                        <div className="flex flex-wrap gap-2">
+                            <div className="h-5 w-24 rounded-full bg-white/15" />
+                            <div className="h-5 w-28 rounded-full bg-white/15" />
+                            <div className="h-5 w-20 rounded-full bg-white/15" />
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+interface CandidateMatchCardProps {
+    candidate: MatchedCandidate;
+    index: number;
+    variant: CandidateCardVariant;
+    t: TranslationFn;
+    saved: boolean;
+    saving: boolean;
+    onSave: (candidate: MatchedCandidate) => void;
+    onUnlock?: (candidate: MatchedCandidate, index: number) => void;
+}
+
+function CandidateMatchCard({
+    candidate,
+    index,
+    variant,
+    t,
+    saved,
+    saving,
+    onSave,
+    onUnlock,
+}: CandidateMatchCardProps) {
+    const verified = variant === 'verified';
+    const outerClass = verified
+        ? 'rounded-lg border border-white/20 bg-white/10 p-4 text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/15'
+        : 'rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-800';
+    const titleClass = verified ? 'text-white' : 'text-gray-800 dark:text-white';
+    const bodyClass = verified ? 'text-gray-300' : 'text-gray-600 dark:text-gray-400';
+    const scoreClass = verified ? 'text-green-400' : 'text-green-600 dark:text-green-400';
+    const gapClass = verified ? 'text-red-300' : 'text-red-600 dark:text-red-400';
+
+    return (
+        <article className={outerClass}>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <p className={`font-bold ${titleClass}`}>
+                            {t('talent_candidate_label').replace('{n}', String(index + 1))}
+                        </p>
+                        {verified && (
+                            <span className="rounded-full border border-green-500/40 bg-green-600/30 px-2 py-0.5 text-[11px] font-semibold text-green-100">
+                                {t('discover_verified_title')}
+                            </span>
+                        )}
+                    </div>
+                    <p className={`mt-1 text-sm leading-6 ${bodyClass}`}>{candidate.summary}</p>
+
+                    {candidate.strengths.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                            {candidate.strengths.slice(0, 6).map((strength, strengthIndex) => (
+                                <span
+                                    key={`${strength}-${strengthIndex}`}
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+                                        verified
+                                            ? 'border-green-500/40 bg-green-600/40 text-green-100'
+                                            : 'border-green-200 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    }`}
+                                >
+                                    {!verified && <CheckCircle2 className="h-3 w-3" />}
+                                    {strength}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {candidate.potentialGaps.length > 0 && (
+                        <div className="mt-3">
+                            {!verified && (
+                                <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                                    {t('talent_potential_gaps')}
+                                </p>
+                            )}
+                            <ul className="space-y-1">
+                                {candidate.potentialGaps.slice(0, verified ? 2 : 3).map((gap, gapIndex) => (
+                                    <li key={`${gap}-${gapIndex}`} className={`flex items-start gap-1 text-xs ${gapClass}`}>
+                                        <XCircle className="mt-0.5 h-3 w-3 flex-shrink-0" />
+                                        <span>{gap}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-between gap-3 sm:flex-shrink-0 sm:items-start sm:justify-end">
+                    {candidate.compatibilityScore > 0 && (
+                        <div className="text-right">
+                            <p className={`text-2xl font-bold ${scoreClass}`}>{candidate.compatibilityScore}%</p>
+                            <p className={`text-xs ${verified ? 'text-gray-300' : 'text-gray-500 dark:text-gray-400'}`}>
+                                {t('talent_match_label')}
+                            </p>
+                        </div>
+                    )}
+                    <div className={verified ? 'flex flex-col gap-2' : ''}>
+                        {candidate.compatibilityScore > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => onSave(candidate)}
+                                disabled={saved || saving}
+                                title={saved ? t('shortlist_already_saved') : t('shortlist_save_button')}
+                                aria-label={saved ? t('shortlist_already_saved') : t('shortlist_save_button')}
+                                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                                    verified
+                                        ? saved
+                                            ? 'cursor-not-allowed bg-white/10 text-green-300'
+                                            : saving
+                                                ? 'cursor-wait bg-white/10 text-white/70'
+                                                : 'bg-white/20 text-white hover:bg-white/30'
+                                        : saved
+                                            ? 'cursor-not-allowed border border-green-300 bg-green-50 text-green-600 dark:border-green-700 dark:bg-green-900/20 dark:text-green-400'
+                                            : saving
+                                                ? 'cursor-wait border border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500'
+                                                : 'border border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:text-gray-300 dark:hover:text-blue-400'
+                                }`}
+                            >
+                                {saved
+                                    ? <BookmarkCheck className="h-4 w-4" />
+                                    : saving
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <BookmarkPlus className="h-4 w-4" />}
+                            </button>
+                        )}
+                        {verified && onUnlock && (
+                            <button
+                                type="button"
+                                onClick={() => onUnlock(candidate, index)}
+                                className="inline-flex min-h-10 items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white/50"
+                            >
+                                {t('discover_unlock_engage_button')}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </article>
+    );
+}
+
 interface TalentDiscoveryProps {
     t: (key: string) => string;
     profile: UserProfile;
     onPostJob?: () => void;
+    onOpenShortlist?: () => void;
     navigateToBusinessPricing: () => void;
 }
 
-const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob, navigateToBusinessPricing }) => {
+const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob, onOpenShortlist, navigateToBusinessPricing }) => {
     const [jobDescription, setJobDescription] = useState('');
     const [verifiedLoading, setVerifiedLoading] = useState(false);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -102,6 +279,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
     // Candidates whose shortlist write is in flight — blocks double-clicks.
     const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+    const verifiedRequestIdRef = useRef(0);
 
     const { addToast } = useSharedToast();
     const selectedPostedJob = postedJobs.find((job) => job.id === selectedJobId) ?? null;
@@ -160,27 +338,31 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
         if (searchError) setSearchError(null);
     };
 
-    // Pre-fetch verified talent on component mount — server-side read (client
-    // reads of other users' profiles are rules-blocked by design).
-    useEffect(() => {
-        let cancelled = false;
-        const fetchVerifiedTalent = async () => {
-            setVerifiedLoading(true);
-            setVerifiedError(null);
-            try {
-                const { candidates } = await discoverTalent();
-                if (cancelled) return;
-                setVerifiedResults(candidates.map((c) => toMatchedCandidate(c, t('discover_verified_summary_default'))));
-            } catch (err) {
-                if (!cancelled) setVerifiedError(err instanceof Error ? err.message : t('talent_load_error'));
-            } finally {
-                if (!cancelled) setVerifiedLoading(false);
+    const fetchVerifiedTalent = useCallback(async () => {
+        const requestId = verifiedRequestIdRef.current + 1;
+        verifiedRequestIdRef.current = requestId;
+        setVerifiedLoading(true);
+        setVerifiedError(null);
+        try {
+            const { candidates } = await discoverTalent();
+            if (requestId !== verifiedRequestIdRef.current) return;
+            setVerifiedResults(candidates.map((c) => toMatchedCandidate(c, t('discover_verified_summary_default'))));
+        } catch (err) {
+            if (requestId !== verifiedRequestIdRef.current) return;
+            setVerifiedError(err instanceof Error ? err.message : t('talent_load_error'));
+        } finally {
+            if (requestId === verifiedRequestIdRef.current) {
+                setVerifiedLoading(false);
             }
-        };
+        }
+    }, [t]);
+
+    useEffect(() => {
         fetchVerifiedTalent();
-        return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        return () => {
+            verifiedRequestIdRef.current += 1;
+        };
+    }, [fetchVerifiedTalent]);
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -285,84 +467,69 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                         </div>
                     )}
                  </div>
+                 {verifiedLoading && <VerifiedTalentSkeleton />}
                  {verifiedError && !verifiedLoading && (
-                    <p className="text-sm rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-red-200">{verifiedError}</p>
+                    <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-4 text-sm text-red-100">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p>{verifiedError}</p>
+                            <button
+                                type="button"
+                                onClick={fetchVerifiedTalent}
+                                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-red-300/40 px-3 py-2 text-sm font-semibold text-red-50 transition-colors hover:bg-red-400/10"
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                                {t('talent_verified_retry')}
+                            </button>
+                        </div>
+                    </div>
                  )}
                  {verifiedResults.length === 0 && !verifiedLoading && !verifiedError && (
                     <p className="text-center py-4 text-gray-400">{t('discover_no_verified_talent')}</p>
                  )}
+                 {!verifiedLoading && !verifiedError && (
                  <div className="space-y-3">
                     {verifiedResults.map((candidate, index) => (
-                        <div key={candidate.id} className="p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/15">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-white">{t('talent_candidate_label').replace('{n}', String(index + 1))}</p>
-                                    <p className="text-sm text-gray-300 mt-1">{candidate.summary}</p>
-                                    {/* Strengths chips */}
-                                    {candidate.strengths.length > 0 && (
-                                        <div className="flex flex-wrap gap-1 mt-2">
-                                            {candidate.strengths.slice(0, 6).map((s, i) => (
-                                                <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-green-600/40 text-green-200 border border-green-500/40">
-                                                    {s}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {/* Potential gaps */}
-                                    {candidate.potentialGaps.length > 0 && (
-                                        <ul className="mt-2 space-y-0.5">
-                                            {candidate.potentialGaps.slice(0, 3).map((g, i) => (
-                                                <li key={i} className="flex items-start gap-1 text-xs text-red-300">
-                                                    <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                                    {g}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-                                <div className="flex items-center justify-between gap-3 sm:justify-end sm:flex-shrink-0">
-                                    {candidate.compatibilityScore > 0 && (
-                                        <div className="text-right">
-                                            <p className="text-2xl font-bold text-green-400">{candidate.compatibilityScore}%</p>
-                                            <p className="text-xs text-gray-300">{t('talent_match_label')}</p>
-                                        </div>
-                                    )}
-                                    <div className="flex flex-col gap-2">
-                                        {candidate.compatibilityScore > 0 && (
-                                            <button
-                                                onClick={() => handleSaveToShortlist(candidate)}
-                                                disabled={savedIds.has(candidate.id) || savingIds.has(candidate.id)}
-                                                title={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
-                                                aria-label={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
-                                                className={`p-2 rounded-lg transition-colors ${
-                                                    savedIds.has(candidate.id)
-                                                        ? 'bg-white/10 text-green-400 cursor-not-allowed'
-                                                        : savingIds.has(candidate.id)
-                                                          ? 'bg-white/10 text-white/70 cursor-wait'
-                                                          : 'bg-white/20 text-white hover:bg-white/30'
-                                                }`}
-                                            >
-                                                {savedIds.has(candidate.id)
-                                                    ? <BookmarkCheck className="w-4 h-4" />
-                                                    : savingIds.has(candidate.id)
-                                                      ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                      : <BookmarkPlus className="w-4 h-4" />
-                                                }
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={() => setCandidateToUnlock({ ...candidate, index })}
-                                            className="px-4 py-2 bg-white text-gray-900 font-semibold text-sm rounded-lg hover:bg-gray-200 transition-colors"
-                                        >
-                                            {t('discover_unlock_engage_button')}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <CandidateMatchCard
+                            key={candidate.id}
+                            candidate={candidate}
+                            index={index}
+                            variant="verified"
+                            t={t}
+                            saved={savedIds.has(candidate.id)}
+                            saving={savingIds.has(candidate.id)}
+                            onSave={handleSaveToShortlist}
+                            onUnlock={(nextCandidate, nextIndex) => setCandidateToUnlock({ ...nextCandidate, index: nextIndex })}
+                        />
                     ))}
                  </div>
+                 )}
             </div>
+
+            {savedIds.size > 0 && onOpenShortlist && (
+                <div className="mb-8 animate-panel-expand rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                                <Users className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-blue-950 dark:text-blue-100">{t('talent_shortlist_next_title')}</p>
+                                <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                                    {t('talent_shortlist_next_desc').replace('{n}', String(savedIds.size))}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onOpenShortlist}
+                            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                        >
+                            {t('talent_open_shortlist')}
+                            <ArrowRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <form onSubmit={handleSearch} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -542,65 +709,16 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, onPostJob
                     ) : (
                     <div className="space-y-4">
                         {regularResults.map((candidate, index) => (
-                            <div key={candidate.id} className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-gray-800 dark:text-white">{t('talent_candidate_label').replace('{n}', String(index + 1))}</p>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{candidate.summary}</p>
-                                        {/* Strengths chips */}
-                                        {candidate.strengths.length > 0 && (
-                                            <div className="flex flex-wrap gap-1 mt-2">
-                                                {candidate.strengths.slice(0, 6).map((s, i) => (
-                                                    <span key={i} className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700">
-                                                        <CheckCircle2 className="w-3 h-3" />
-                                                        {s}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {/* Potential gaps */}
-                                        {candidate.potentialGaps.length > 0 && (
-                                            <div className="mt-2">
-                                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('talent_potential_gaps')}</p>
-                                                <ul className="space-y-0.5">
-                                                    {candidate.potentialGaps.slice(0, 3).map((g, i) => (
-                                                        <li key={i} className="flex items-start gap-1 text-xs text-red-600 dark:text-red-400">
-                                                            <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                                            {g}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center justify-between gap-3 sm:items-start sm:justify-end sm:flex-shrink-0">
-                                        <div className="text-right">
-                                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{candidate.compatibilityScore}%</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">{t('talent_match_label')}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => handleSaveToShortlist(candidate)}
-                                            disabled={savedIds.has(candidate.id) || savingIds.has(candidate.id)}
-                                            title={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
-                                            aria-label={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
-                                            className={`p-2 rounded-lg transition-colors border ${
-                                                savedIds.has(candidate.id)
-                                                    ? 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 cursor-not-allowed bg-green-50 dark:bg-green-900/20'
-                                                    : savingIds.has(candidate.id)
-                                                      ? 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-wait'
-                                                      : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400'
-                                            }`}
-                                        >
-                                            {savedIds.has(candidate.id)
-                                                ? <BookmarkCheck className="w-4 h-4" />
-                                                : savingIds.has(candidate.id)
-                                                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                  : <BookmarkPlus className="w-4 h-4" />
-                                            }
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                            <CandidateMatchCard
+                                key={candidate.id}
+                                candidate={candidate}
+                                index={index}
+                                variant="regular"
+                                t={t}
+                                saved={savedIds.has(candidate.id)}
+                                saving={savingIds.has(candidate.id)}
+                                onSave={handleSaveToShortlist}
+                            />
                         ))}
                     </div>
                     )}
