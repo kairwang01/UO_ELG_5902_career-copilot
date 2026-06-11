@@ -1,5 +1,14 @@
-import React from 'react';
-import { Check, CreditCard, Zap } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowUpRight,
+  Briefcase,
+  Check,
+  CreditCard,
+  FileText,
+  Loader2,
+  Zap,
+} from 'lucide-react';
 import type { UserProfile } from '../../../types';
 import { PortalTopBar } from '../PortalTopBar';
 
@@ -8,177 +17,348 @@ interface PortalBillingProps {
   darkMode: boolean;
   activeJobs: number;
   onSelectPlan: (planKey: string) => void;
-  /** True while a plan change request is in flight — disables plan buttons. */
   planSaving?: boolean;
   navigateToBusinessPricing: () => void;
   t: (key: string) => string;
 }
 
-// Names and feature lines come from i18n: portal_plan_<key>_name / _f1.._f4
-const PLAN_DISPLAY = [
-  { key: 'free', price: '$0', period: '/month', jobLimit: 3 },
-  { key: 'starter', price: '$79', period: '/month', jobLimit: 8 },
-  { key: 'growth', price: '$199', period: '/month', jobLimit: 20 },
-  { key: 'pro', price: '$499', period: '/month', jobLimit: 100 },
+type PlanKey = 'free' | 'starter' | 'growth' | 'pro';
+type KnownPlanKey = PlanKey | 'single_post' | 'job_pack';
+
+interface PlanDisplay {
+  key: KnownPlanKey;
+  price: string;
+  period: string;
+  jobLimit: number;
+  rank: number;
+  nameKey: string;
+}
+
+const AVAILABLE_PLANS: PlanDisplay[] = [
+  { key: 'free', price: '$0', period: '/month', jobLimit: 3, rank: 0, nameKey: 'portal_plan_free_name' },
+  { key: 'starter', price: '$79', period: '/month', jobLimit: 8, rank: 2, nameKey: 'portal_plan_starter_name' },
+  { key: 'growth', price: '$199', period: '/month', jobLimit: 20, rank: 3, nameKey: 'portal_plan_growth_name' },
+  { key: 'pro', price: '$499', period: '/month', jobLimit: 100, rank: 4, nameKey: 'portal_plan_pro_name' },
 ];
+
+const LEGACY_PLAN_DISPLAY: Record<'single_post' | 'job_pack', PlanDisplay> = {
+  single_post: {
+    key: 'single_post',
+    price: '$299',
+    period: '',
+    jobLimit: 1,
+    rank: 1,
+    nameKey: 'plan_single_post_name',
+  },
+  job_pack: {
+    key: 'job_pack',
+    price: '$999',
+    period: '',
+    jobLimit: 5,
+    rank: 2,
+    nameKey: 'plan_job_pack_name',
+  },
+};
 
 const PLAN_FEATURE_SLOTS = [1, 2, 3, 4] as const;
 
-export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, planSaving = false, navigateToBusinessPricing, t }: PortalBillingProps) {
+function formatTranslation(
+  template: string,
+  values: Record<string, string | number>,
+): string {
+  return Object.entries(values).reduce(
+    (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
+    template,
+  );
+}
+
+function stripPendingPrefix(status: string): string {
+  if (status.startsWith('pending_biz_')) return status.replace('pending_biz_', '');
+  if (status.startsWith('pending_')) return status.replace('pending_', '');
+  return status;
+}
+
+function resolvePlanDisplay(rawStatus: string): PlanDisplay {
+  const planKey = stripPendingPrefix(rawStatus);
+  const availablePlan = AVAILABLE_PLANS.find((plan) => plan.key === planKey);
+  if (availablePlan) return availablePlan;
+  if (planKey === 'single_post' || planKey === 'job_pack') {
+    return LEGACY_PLAN_DISPLAY[planKey];
+  }
+  return AVAILABLE_PLANS[0];
+}
+
+function getUsageTone(activeJobs: number, planLimit: number, darkMode: boolean): string {
+  const usagePct = planLimit > 0 ? activeJobs / planLimit : 0;
+  if (usagePct > 1) return darkMode ? 'text-red-300' : 'text-red-700';
+  if (usagePct >= 0.8) return darkMode ? 'text-amber-300' : 'text-amber-700';
+  return darkMode ? 'text-emerald-300' : 'text-emerald-700';
+}
+
+function getUsageBarClass(activeJobs: number, planLimit: number): string {
+  const usagePct = planLimit > 0 ? activeJobs / planLimit : 0;
+  if (usagePct > 1) return 'bg-red-500';
+  if (usagePct >= 0.8) return 'bg-amber-500';
+  return 'bg-[#1d4ed8]';
+}
+
+export function PortalBilling({
+  profile,
+  darkMode,
+  activeJobs,
+  onSelectPlan,
+  planSaving = false,
+  navigateToBusinessPricing,
+  t,
+}: PortalBillingProps) {
   const dm = darkMode;
+  const [requestedPlanKey, setRequestedPlanKey] = useState<string | null>(null);
   const currentStatus = profile.subscription_status || 'free';
-  const card = `rounded-xl border p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`;
+  const currentPlanKey = stripPendingPrefix(currentStatus);
+  const currentPlan = resolvePlanDisplay(currentStatus);
+  const isPending = currentStatus.startsWith('pending');
+  const isActive = currentStatus !== 'free' && !isPending;
+  const isKnownAvailablePlan = AVAILABLE_PLANS.some((plan) => plan.key === currentPlanKey);
+  const planLimit = currentPlan.jobLimit;
+  const displayUsedPct = planLimit > 0 ? Math.min(100, Math.round((activeJobs / planLimit) * 100)) : 0;
+  const remainingPosts = Math.max(0, planLimit - activeJobs);
+  const overLimitCount = Math.max(0, activeJobs - planLimit);
+  const usageTone = getUsageTone(activeJobs, planLimit, dm);
+  const usageBar = getUsageBarClass(activeJobs, planLimit);
+
+  useEffect(() => {
+    if (!planSaving) setRequestedPlanKey(null);
+  }, [planSaving]);
+
+  const handleSelectPlan = (planKey: string) => {
+    setRequestedPlanKey(planKey);
+    onSelectPlan(planKey);
+  };
+
+  const card = `rounded-xl border ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`;
   const text = dm ? 'text-white' : 'text-gray-900';
   const muted = dm ? 'text-gray-400' : 'text-gray-500';
   const divider = dm ? 'border-gray-700' : 'border-gray-200';
-  // match design: text-sm (not text-xs)
-  const sectionLabel = `text-sm font-semibold uppercase tracking-widest mb-5 ${muted}`;
-
-  const currentPlanKey = currentStatus.startsWith('pending_biz_')
-    ? currentStatus.replace('pending_biz_', '')
-    : currentStatus.startsWith('pending_')
-    ? currentStatus.replace('pending_', '')
-    : currentStatus;
-
-  const currentPlanIndex = PLAN_DISPLAY.findIndex((p) => p.key === currentPlanKey);
-  const currentPlan = PLAN_DISPLAY[currentPlanIndex] ?? PLAN_DISPLAY[0];
-  const isActive = currentStatus !== 'free' && !currentStatus.startsWith('pending');
-
-  // Job Posts Used progress bar values
-  const planLimit = currentPlan.jobLimit;
-  const usedCount = Math.min(activeJobs, planLimit);
-  const usedPct = planLimit > 0 ? Math.round((usedCount / planLimit) * 100) : 0;
+  const sectionLabel = `text-sm font-semibold uppercase tracking-widest ${muted}`;
+  const currentPlanName = t(currentPlan.nameKey);
+  const usageMessage = overLimitCount > 0
+    ? formatTranslation(t('portal_billing_usage_over'), { n: overLimitCount })
+    : remainingPosts === 0
+      ? t('portal_billing_usage_full')
+      : formatTranslation(t('portal_billing_usage_ok'), { n: remainingPosts });
 
   return (
     <>
       <PortalTopBar title={t('portal_nav_billing')} darkMode={dm} />
-      <div className="max-w-[1088px] mx-auto p-8 space-y-8 animate-view-fade">
-
-        {/* Current plan */}
-        <div className={card}>
-          <p className={sectionLabel}>{t('portal_billing_current_plan')}</p>
-          <div className="flex items-start justify-between flex-wrap gap-6">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
-                <Zap size={18} className="text-[#1d4ed8]" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h2 className={`text-xl font-bold ${text}`}>
-                    {t('portal_billing_plan_title').replace('{name}', t(`portal_plan_${currentPlan.key}_name`))}
-                  </h2>
-                  {isActive && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-[#1d4ed8]">
-                      {t('portal_billing_active')}
-                    </span>
-                  )}
-                  {currentStatus.startsWith('pending') && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
-                      {t('portal_billing_pending')}
-                    </span>
-                  )}
-                </div>
-                <p className={`text-sm ${muted}`}>
-                  {currentPlan.price}{currentPlan.period}
-                  {isActive && (
-                    <> &nbsp;·&nbsp; <span className={dm ? 'text-gray-300' : 'text-gray-700'}>{t('portal_billing_billed_monthly')}</span></>
-                  )}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={navigateToBusinessPricing}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <CreditCard size={15} />
-              {t('portal_billing_manage')}
-            </button>
-          </div>
-
-          {/* Job Posts Used progress bar */}
-          <div className={`mt-5 pt-5 border-t ${divider}`}>
-            <div className="flex items-center justify-between mb-2">
-              <span className={`text-sm font-medium ${text}`}>{t('portal_billing_posts_used')}</span>
-              <span className={`text-sm font-semibold ${text}`}>{usedCount} / {planLimit}</span>
-            </div>
-            <div className={`w-full h-2 rounded-full ${dm ? 'bg-gray-700' : 'bg-gray-200'}`}>
-              <div className="h-2 rounded-full bg-[#1d4ed8]" style={{ width: `${usedPct}%` }} />
-            </div>
-            <p className={`text-sm mt-2 ${muted}`}>
-              {t('portal_billing_posts_remaining').replace('{n}', String(Math.max(0, planLimit - usedCount)))}
+      <div className="mx-auto max-w-[1088px] space-y-6 p-4 sm:p-6 lg:p-8 animate-view-fade">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className={`text-2xl font-bold ${text}`}>{t('portal_nav_billing')}</h1>
+            <p className={`mt-2 max-w-2xl text-sm leading-6 ${muted}`}>
+              {t('portal_billing_page_desc')}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={navigateToBusinessPricing}
+            className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+              dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <CreditCard size={15} />
+            {t('portal_billing_manage')}
+            <ArrowUpRight size={15} />
+          </button>
         </div>
 
-        {/* Available plans */}
-        <div>
-          <p className={sectionLabel}>{t('portal_billing_available_plans')}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {PLAN_DISPLAY.map((plan, idx) => {
-              const isCurrent = plan.key === currentPlanKey;
-              const isUpgrade = idx > currentPlanIndex;
-              return (
+        <section className={`${card} overflow-hidden`}>
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="p-5 sm:p-6">
+              <p className={sectionLabel}>{t('portal_billing_current_plan')}</p>
+              <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
+                    dm ? 'bg-blue-950/40' : 'bg-blue-50'
+                  }`}>
+                    <Zap size={19} className="text-[#1d4ed8]" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className={`text-xl font-bold ${text}`}>
+                        {formatTranslation(t('portal_billing_plan_title'), { name: currentPlanName })}
+                      </h2>
+                      {isActive && (
+                        <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-[#1d4ed8] dark:bg-blue-950/50 dark:text-blue-300">
+                          {t('portal_billing_active')}
+                        </span>
+                      )}
+                      {isPending && (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                          {t('portal_billing_pending')}
+                        </span>
+                      )}
+                    </div>
+                    <p className={`mt-1 text-sm ${muted}`}>
+                      {currentPlan.price}
+                      {currentPlan.period}
+                      {isActive && (
+                        <>
+                          {' '}·{' '}
+                          <span className={dm ? 'text-gray-300' : 'text-gray-700'}>
+                            {t('portal_billing_billed_monthly')}
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {isPending && (
+                <div className={`mt-5 animate-panel-expand rounded-lg border px-4 py-3 text-sm ${
+                  dm
+                    ? 'border-amber-800 bg-amber-950/20 text-amber-200'
+                    : 'border-amber-200 bg-amber-50 text-amber-800'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{t('portal_billing_pending_notice')}</span>
+                  </div>
+                </div>
+              )}
+
+              {!isKnownAvailablePlan && currentPlanKey !== 'single_post' && currentPlanKey !== 'job_pack' && (
+                <div className={`mt-5 animate-panel-expand rounded-lg border px-4 py-3 text-sm ${
+                  dm
+                    ? 'border-gray-700 bg-gray-900/50 text-gray-300'
+                    : 'border-gray-200 bg-gray-50 text-gray-700'
+                }`}>
+                  {formatTranslation(t('portal_billing_unrecognized_plan'), { status: currentStatus })}
+                </div>
+              )}
+            </div>
+
+            <div className={`border-t p-5 sm:p-6 lg:border-l lg:border-t-0 ${divider}`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className={`text-sm font-semibold ${text}`}>{t('portal_billing_posts_used')}</span>
+                <span className={`text-sm font-bold ${usageTone}`}>{activeJobs} / {planLimit}</span>
+              </div>
+              <div className={`mt-3 h-2.5 w-full overflow-hidden rounded-full ${dm ? 'bg-gray-700' : 'bg-gray-100'}`}>
                 <div
+                  className={`h-full rounded-full transition-all duration-500 ${usageBar}`}
+                  style={{ width: `${displayUsedPct}%` }}
+                />
+              </div>
+              <p className={`mt-3 text-sm leading-6 ${usageTone}`}>
+                {usageMessage}
+              </p>
+              <p className={`mt-2 text-xs ${muted}`}>
+                {formatTranslation(t('portal_billing_plan_jobs'), { n: planLimit })}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className={sectionLabel}>{t('portal_billing_available_plans')}</p>
+              <p className={`mt-1 text-sm ${muted}`}>{t('portal_billing_available_desc')}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {AVAILABLE_PLANS.map((plan) => {
+              const isCurrent = plan.key === currentPlanKey;
+              const isUpgrade = plan.rank > currentPlan.rank;
+              const isRequested = requestedPlanKey === plan.key && planSaving;
+              const actionLabel = isRequested
+                ? t('portal_billing_updating')
+                : isCurrent
+                  ? t('portal_billing_current_plan')
+                  : isUpgrade
+                    ? t('portal_billing_upgrade')
+                    : t('portal_billing_switch');
+
+              return (
+                <article
                   key={plan.key}
-                  className={`rounded-xl border p-5 flex flex-col transition-shadow ${
+                  className={`flex min-h-[360px] flex-col rounded-xl border p-5 transition-all duration-200 ${
                     isCurrent
-                      ? `border-[#1d4ed8] ring-2 ring-[#1d4ed8] ${dm ? 'bg-gray-800' : 'bg-white'}`
+                      ? `border-[#1d4ed8] ring-2 ring-[#1d4ed8]/20 ${dm ? 'bg-gray-800' : 'bg-white'}`
                       : dm
-                      ? 'bg-gray-800 border-gray-700'
-                      : 'bg-white border-gray-200'
+                        ? 'border-gray-700 bg-gray-800 hover:border-gray-600 hover:bg-gray-800/80'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
                   }`}
                 >
-                  <p className={`text-sm font-semibold mb-1 ${isCurrent ? 'text-[#1d4ed8]' : muted}`}>{t(`portal_plan_${plan.key}_name`)}</p>
-                  <div className="flex items-baseline gap-1 mb-4">
-                    <span className={`text-2xl font-bold ${text}`}>{plan.price}</span>
-                    <span className={`text-sm ${muted}`}>{plan.period}</span>
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                      <p className={`text-sm font-semibold ${isCurrent ? 'text-[#1d4ed8]' : muted}`}>{t(plan.nameKey)}</p>
+                      <div className="mt-2 flex items-baseline gap-1">
+                        <span className={`text-2xl font-bold ${text}`}>{plan.price}</span>
+                        <span className={`text-sm ${muted}`}>{plan.period}</span>
+                      </div>
+                    </div>
+                    {isCurrent && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-[#1d4ed8] dark:bg-blue-950/50 dark:text-blue-300">
+                        {t('portal_billing_selected_plan')}
+                      </span>
+                    )}
                   </div>
-                  <ul className="space-y-2 flex-1 mb-5">
+
+                  <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+                    dm ? 'bg-gray-900/60 text-gray-300' : 'bg-gray-50 text-gray-700'
+                  }`}>
+                    <Briefcase className="h-4 w-4 text-[#1d4ed8]" aria-hidden="true" />
+                    {formatTranslation(t('portal_billing_plan_jobs'), { n: plan.jobLimit })}
+                  </div>
+
+                  <ul className="mb-5 flex-1 space-y-2">
                     {PLAN_FEATURE_SLOTS.map((slot) => (
                       <li key={slot} className="flex items-start gap-2">
-                        <Check size={13} className="text-[#1d4ed8] mt-0.5 shrink-0" />
-                        <span className={`text-sm ${muted}`}>{t(`portal_plan_${plan.key}_f${slot}`)}</span>
+                        <Check size={13} className="mt-0.5 shrink-0 text-[#1d4ed8]" />
+                        <span className={`text-sm leading-5 ${muted}`}>{t(`portal_plan_${plan.key}_f${slot}`)}</span>
                       </li>
                     ))}
                   </ul>
-                  {isCurrent ? (
-                    <button disabled className="w-full py-2 rounded-lg text-sm font-semibold bg-[#1d4ed8] text-white cursor-default">
-                      {t('portal_billing_current_plan')}
-                    </button>
-                  ) : isUpgrade ? (
-                    <button
-                      onClick={() => onSelectPlan(plan.key)}
-                      disabled={planSaving}
-                      className="w-full py-2 rounded-lg text-sm font-semibold bg-blue-50 text-[#1d4ed8] border border-[#1d4ed8] hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {planSaving ? t('portal_billing_updating') : t('portal_billing_upgrade')}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => onSelectPlan(plan.key)}
-                      disabled={planSaving}
-                      className={`w-full py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                        dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {planSaving ? t('portal_billing_updating') : t('portal_billing_switch')}
-                    </button>
-                  )}
-                </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPlan(plan.key)}
+                    disabled={isCurrent || planSaving}
+                    className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isCurrent
+                        ? 'bg-[#1d4ed8] text-white'
+                        : isUpgrade
+                          ? 'border border-[#1d4ed8] bg-blue-50 text-[#1d4ed8] hover:bg-blue-100 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50'
+                          : dm
+                            ? 'border border-gray-600 text-gray-300 hover:bg-gray-700'
+                            : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {isRequested && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                    {actionLabel}
+                  </button>
+                </article>
               );
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Billing history placeholder */}
-        <div className={card}>
-          <p className={sectionLabel}>{t('portal_billing_history')}</p>
-          <p className={`text-sm ${muted}`}>
-            {t('portal_billing_history_empty')}
-          </p>
-        </div>
+        <section className={`${card} p-5 sm:p-6`}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className={sectionLabel}>{t('portal_billing_history')}</p>
+              <p className={`mt-3 max-w-2xl text-sm leading-6 ${muted}`}>
+                {t('portal_billing_history_empty')}
+              </p>
+            </div>
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${
+              dm ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-500'
+            }`}>
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </div>
+          </div>
+        </section>
       </div>
     </>
   );
