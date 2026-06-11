@@ -220,6 +220,23 @@ html.dark body {
 .dialog-overlay-anim[data-state='open'] { animation: dialog-overlay-in 0.18s ease-out; }
 .dialog-content-anim[data-state='open'] { animation: dialog-content-in 0.2s ease-out; }
 
+/* Onboarding completion checkmark — circle sweeps in, then the tick draws. */
+@keyframes check-stroke {
+  to { stroke-dashoffset: 0; }
+}
+.onboarding-check-circle {
+  stroke-dasharray: 202;
+  stroke-dashoffset: 202;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  animation: check-stroke 0.6s ease-out forwards;
+}
+.onboarding-check-mark {
+  stroke-dasharray: 42;
+  stroke-dashoffset: 42;
+  animation: check-stroke 0.35s ease-out 0.55s forwards;
+}
+
 .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
 .animate-slide-in-up { animation: slide-in-up 0.6s ease-out forwards; }
 .animate-slide-in-left { animation: slide-in-left 0.22s ease-out both; }

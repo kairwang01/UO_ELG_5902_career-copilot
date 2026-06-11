@@ -44,6 +44,9 @@ import VerifiedTalentSection from './components/VerifiedTalentSection';
 import ApiDocsViewer from './components/ApiDocsViewer';
 import { SiteLayout } from './marketing/components/SiteLayout';
 import { isWeb3Enabled, onWeb3FlagChange } from './config/featureFlags';
+import OnboardingFlow from './components/onboarding/OnboardingFlow';
+import WorkspaceTour from './components/onboarding/WorkspaceTour';
+import { isOnboardingDue, isTourDone, markTourDone } from './lib/onboarding';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -131,6 +134,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [portalInitialPage, setPortalInitialPage] = useState<PortalPage>('dashboard');
   // Experimental Web3 module flag — gates the Identity & Wallet view.
   const [web3Enabled, setWeb3Enabled] = useState(isWeb3Enabled());
+  // Post-signup guided setup + one-time workspace tour (candidates only).
+  const [onboardingActive, setOnboardingActive] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const roleStateKeyRef = useRef<string | null>(null);
   const resumeSaveWarningShownRef = useRef(false);
 
@@ -151,6 +157,14 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // Keep the Web3 flag in sync and bounce off the credentials view if the
   // module is switched off while the user is on it.
   useEffect(() => onWeb3FlagChange(setWeb3Enabled), []);
+
+  // Open the guided setup once for freshly-registered candidates (the pending
+  // marker is set by the sign-up form; completion clears it permanently).
+  useEffect(() => {
+    if (session?.user && isProfileLoaded && isCandidate && isOnboardingDue(session.user.id)) {
+      setOnboardingActive(true);
+    }
+  }, [session, isProfileLoaded, isCandidate]);
   useEffect(() => {
     if (!web3Enabled && dashboardView === 'credentials') setDashboardView('dashboard');
   }, [web3Enabled, dashboardView]);
@@ -468,6 +482,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         setProfile(null);
         setAnalysisResult(null);
         setResumeText('');
+        setOnboardingActive(false);
+        setShowTour(false);
         setCredits(0);
         sessionStorage.clear();
         try {
@@ -946,6 +962,28 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const renderCandidateShell = () => {
     if (!session || !profile || !isCandidate) return renderRoleFallback();
 
+    // Guided setup takes over the whole screen for fresh sign-ups; the normal
+    // shell mounts when it finishes (or is skipped) and offers the tour once.
+    if (onboardingActive) {
+      return (
+        <OnboardingFlow
+          uid={session.user.id}
+          profile={profile}
+          t={t}
+          onComplete={({ skipped, resumeText: importedResume }) => {
+            if (importedResume) {
+              // The workspace's debounced auto-save persists this to the profile.
+              setResumeText(importedResume);
+              setIsUpdatingResume(false);
+            }
+            setOnboardingActive(false);
+            getProfile();
+            if (!skipped && !isTourDone(session.user.id)) setShowTour(true);
+          }}
+        />
+      );
+    }
+
     const sidebarProps = {
       activeView: dashboardView,
       onViewChange: (v: DashboardView) => {
@@ -997,7 +1035,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               </svg>
             </button>
             <ApiStatusBanner />
-            <div className="flex items-center gap-3 ml-auto">
+            <div className="flex items-center gap-3 ml-auto" data-tour="account-menu">
               <span className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 hidden sm:block">
                 {t(DASHBOARD_VIEW_LABEL_KEYS[dashboardView])}
               </span>
@@ -1013,7 +1051,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             </div>
           </header>
           <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10">
-            <div className="max-w-6xl mx-auto">
+            <div className="max-w-6xl mx-auto" data-tour="main">
               {isUpdatingResume && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                 <div className="mt-4 animate-slide-in-up">
                   <div className="text-center mb-10">
@@ -1029,6 +1067,17 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             </div>
           </main>
         </div>
+
+        {/* One-time workspace tour, offered right after the guided setup. */}
+        {showTour && (
+          <WorkspaceTour
+            t={t}
+            onClose={() => {
+              setShowTour(false);
+              markTourDone(session.user.id);
+            }}
+          />
+        )}
       </>
     );
   };

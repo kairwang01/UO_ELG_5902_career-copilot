@@ -7,6 +7,7 @@ import { ALL_PLANS, BUSINESS_PLANS } from '@/config';
 import type { Plan } from '@/types';
 import { X } from 'lucide-react';
 import { useModalBehavior } from '../hooks/useModalBehavior';
+import { markOnboardingPending } from '../lib/onboarding';
 
 interface AuthProps {
   onClose: () => void;
@@ -163,6 +164,9 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         } catch {
           // non-fatal — profile row already has the name
         }
+        // Fresh candidate accounts go through the guided setup once the
+        // workspace mounts (employer signups land in the portal instead).
+        if (mode !== 'business') markOnboardingPending();
         setMessage('Account created successfully! You are now signed in.');
       }
     } else {

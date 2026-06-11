@@ -112,6 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 return (
                     <button
                         key={item.id}
+                        data-tour={`nav-${item.id}`}
                         onClick={() => {
                             onViewChange(item.id);
                             onToolSelect(null);
@@ -149,6 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Dedicated tools gallery — declutters the sidebar; the quick-list stays
                 one tap away via the chevron above. */}
             <button
+                data-tour="nav-toolkit"
                 onClick={() => { onViewChange('toolkit'); onToolSelect(null); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
                     activeView === 'toolkit'
@@ -196,7 +198,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Credits & Footer */}
       <div className="p-4 border-t border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50">
-        <div className="flex items-center gap-3 mb-4 px-2">
+        <div className="flex items-center gap-3 mb-4 px-2" data-tour="credits">
             <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                 <CreditCard className="h-4 w-4" />
             </div>
