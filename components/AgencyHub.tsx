@@ -9,6 +9,7 @@ import { DownloadButtons } from './tools/ToolUtils';
 import { listActiveEmployerJobs } from '../lib/recruitingData';
 import { useToast } from './Toast';
 import { useModalBehavior } from '../hooks/useModalBehavior';
+import { CheckCircle2, Clock3, History, Settings, SlidersHorizontal, X } from 'lucide-react';
 
 interface AgencyHubProps {
     session: Session;
@@ -17,6 +18,12 @@ interface AgencyHubProps {
 }
 
 // --- UI Sub-Components for the Redesign ---
+
+interface HubSettings {
+    autoOpenResult: boolean;
+    focusCompletedAfterRun: boolean;
+    denseTable: boolean;
+}
 
 const AgencyHeader = ({ onOpenSettings, onOpenHistory, title, subtitle, iconColor }: { onOpenSettings: () => void, onOpenHistory: () => void, title: string, subtitle: string, iconColor: string }) => (
     <div className="bg-slate-900 text-white p-6 rounded-t-2xl flex flex-col sm:flex-row justify-between items-center shadow-lg gap-4">
@@ -32,20 +39,151 @@ const AgencyHeader = ({ onOpenSettings, onOpenHistory, title, subtitle, iconColo
             </div>
         </div>
         <div className="flex gap-3 w-full sm:w-auto justify-end">
-            <button onClick={onOpenSettings} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-700 text-slate-200">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 01.947-2.287c1.561-.379-1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                </svg>
+            <button type="button" onClick={onOpenSettings} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-700 text-slate-200" aria-label="Open agency settings">
+                <Settings className="h-5 w-5 text-blue-400" />
                 <span className="font-medium text-sm hidden sm:inline">Settings</span>
             </button>
-            <button onClick={onOpenHistory} className="bg-green-600 hover:bg-green-700 p-2.5 rounded-full shadow-lg transition-colors border border-green-500" title="History">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
+            <button type="button" onClick={onOpenHistory} className="bg-green-600 hover:bg-green-700 p-2.5 rounded-full shadow-lg transition-colors border border-green-500" title="History" aria-label="Open agency history">
+                <History className="h-5 w-5 text-white" />
             </button>
         </div>
     </div>
 );
+
+const ToggleRow = ({ title, description, checked, onChange }: { title: string; description: string; checked: boolean; onChange: (checked: boolean) => void }) => (
+    <label className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 cursor-pointer">
+        <span>
+            <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</span>
+            <span className="mt-1 block text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{description}</span>
+        </span>
+        <input
+            type="checkbox"
+            checked={checked}
+            onChange={(event) => onChange(event.target.checked)}
+            className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+    </label>
+);
+
+const AgencySettingsModal = ({ settings, onChange, onClose }: { settings: HubSettings; onChange: (settings: HubSettings) => void; onClose: () => void }) => {
+    useModalBehavior(onClose);
+    const update = (patch: Partial<HubSettings>) => onChange({ ...settings, ...patch });
+
+    return (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+            <div className="w-full max-w-lg rounded-2xl bg-gray-50 dark:bg-slate-900 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <div className="flex items-start justify-between gap-4 border-b border-gray-200 dark:border-slate-800 p-5">
+                    <div className="flex items-start gap-3">
+                        <div className="rounded-xl bg-blue-600 p-2 text-white">
+                            <SlidersHorizontal className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Agency settings</h3>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Session preferences for this batch. Model routing stays managed by admins.</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800" aria-label="Close settings">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                <div className="space-y-3 p-5">
+                    <ToggleRow
+                        title="Open single-result report automatically"
+                        description="When one resume is analyzed in general mode, open the detailed report as soon as it completes."
+                        checked={settings.autoOpenResult}
+                        onChange={(checked) => update({ autoOpenResult: checked })}
+                    />
+                    <ToggleRow
+                        title="Focus completed results after processing"
+                        description="Switch the table filter to Done after a batch finishes, so reviewers start with actionable candidates."
+                        checked={settings.focusCompletedAfterRun}
+                        onChange={(checked) => update({ focusCompletedAfterRun: checked })}
+                    />
+                    <ToggleRow
+                        title="Compact result rows"
+                        description="Use tighter table spacing for high-volume review sessions."
+                        checked={settings.denseTable}
+                        onChange={(checked) => update({ denseTable: checked })}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const statusTone = (status: BulkAnalysisItem['status']) => {
+    if (status === 'complete') return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800';
+    if (status === 'error') return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800';
+    if (status === 'analyzing' || status === 'parsing') return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800';
+    return 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-300 dark:border-slate-700';
+};
+
+const AgencyHistoryModal = ({ files, mode, onClose }: { files: BulkAnalysisItem[]; mode: 'general' | 'matching'; onClose: () => void }) => {
+    useModalBehavior(onClose);
+    const recent = [...files].reverse();
+
+    return (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+            <div className="flex max-h-[86vh] w-full max-w-2xl flex-col rounded-2xl bg-white dark:bg-slate-900 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <div className="flex items-start justify-between gap-4 border-b border-gray-200 dark:border-slate-800 p-5">
+                    <div className="flex items-start gap-3">
+                        <div className="rounded-xl bg-green-600 p-2 text-white">
+                            <History className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Session history</h3>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Current browser session queue for {mode === 'matching' ? 'JD matching' : 'general analysis'}.</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800" aria-label="Close history">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                <div className="overflow-y-auto p-5">
+                    {recent.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-gray-300 dark:border-slate-700 p-8 text-center">
+                            <Clock3 className="mx-auto h-8 w-8 text-gray-400" />
+                            <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">No resumes in this session yet.</p>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Upload a resume batch and this panel will track each file's review state.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {recent.map((file) => {
+                                const score = mode === 'matching' ? file.matchScore : file.result?.score;
+                                return (
+                                    <div key={file.id} className="rounded-xl border border-gray-200 dark:border-slate-700 p-4">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{file.candidateName || file.fileName}</p>
+                                                <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">{file.fileName}</p>
+                                                {(file.matchSummary || file.result?.summary || file.error) && (
+                                                    <p className="mt-2 line-clamp-2 text-sm text-gray-600 dark:text-gray-300">
+                                                        {file.error || file.matchSummary || file.result?.summary}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                {typeof score === 'number' && (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                                        {score}
+                                                    </span>
+                                                )}
+                                                <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${statusTone(file.status)}`}>
+                                                    {file.status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const FilterTabs = ({ currentFilter, setFilter, counts }: { currentFilter: string, setFilter: (f: string) => void, counts: any }) => (
     <div className="flex flex-wrap gap-2 px-6 py-4 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
@@ -419,6 +557,13 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [currentFilter, setCurrentFilter] = useState('all');
     const [showDetailModal, setShowDetailModal] = useState<BulkAnalysisItem | null>(null);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [hubSettings, setHubSettings] = useState<HubSettings>({
+        autoOpenResult: true,
+        focusCompletedAfterRun: true,
+        denseTable: false,
+    });
     
     // JD Input State
     const [jdSource, setJdSource] = useState<'paste' | 'url' | 'select'>('paste');
@@ -553,7 +698,9 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                 if (mode === 'general') {
                     const result = await analyzeResume(resumeText, parsed.images || null, market);
                     setFiles(prev => prev.map(f => f.id === item.id ? { ...f, status: 'complete', result } : f));
-                    if(files.length === 1) setShowDetailModal({ ...item, status: 'complete', result } as BulkAnalysisItem);
+                    if (hubSettings.autoOpenResult && queue.length === 1) {
+                        setShowDetailModal({ ...item, status: 'complete', result } as BulkAnalysisItem);
+                    }
                 } else {
                     // Matching Mode
                     const matchResult = await calculateCompatibility(resumeText, jobDescription);
@@ -578,6 +725,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         }
         
         setIsAnalyzing(false);
+        if (hubSettings.focusCompletedAfterRun) setCurrentFilter('complete');
         addToast("Analysis complete!", 'success');
     };
 
@@ -676,6 +824,20 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             {showDetailModal && (
                 <AnalysisResultModal file={showDetailModal} onClose={() => setShowDetailModal(null)} />
             )}
+            {showSettingsModal && (
+                <AgencySettingsModal
+                    settings={hubSettings}
+                    onChange={setHubSettings}
+                    onClose={() => setShowSettingsModal(false)}
+                />
+            )}
+            {showHistoryModal && (
+                <AgencyHistoryModal
+                    files={files}
+                    mode={mode}
+                    onClose={() => setShowHistoryModal(false)}
+                />
+            )}
 
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -725,8 +887,8 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
             <div className="bg-gray-50 dark:bg-slate-900/50 p-2 rounded-2xl">
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
                     <AgencyHeader 
-                        onOpenSettings={() => addToast("Settings feature coming soon!", 'info')} 
-                        onOpenHistory={() => addToast("History feature coming soon!", 'info')}
+                        onOpenSettings={() => setShowSettingsModal(true)}
+                        onOpenHistory={() => setShowHistoryModal(true)}
                         title={activeHeader.title}
                         subtitle={activeHeader.subtitle}
                         iconColor={activeHeader.color}
@@ -957,8 +1119,8 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
 
                                                         return (
                                                             <tr key={file.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                                                                <td className="px-6 py-4 whitespace-nowrap font-medium text-center w-16">{rankBadge}</td>
-                                                                <td className="px-6 py-4">
+                                                                <td className={`px-6 ${hubSettings.denseTable ? 'py-3' : 'py-4'} whitespace-nowrap font-medium text-center w-16`}>{rankBadge}</td>
+                                                                <td className={`px-6 ${hubSettings.denseTable ? 'py-3' : 'py-4'}`}>
                                                                     <div className="flex items-center gap-3">
                                                                         <CandidateAvatar name={name} />
                                                                         <div>
@@ -967,13 +1129,13 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                                                                         </div>
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-6 py-4 align-middle">
+                                                                <td className={`px-6 ${hubSettings.denseTable ? 'py-3' : 'py-4'} align-middle`}>
                                                                     <ScoreBar score={score} />
                                                                 </td>
-                                                                <td className="px-6 py-4">
+                                                                <td className={`px-6 ${hubSettings.denseTable ? 'py-3' : 'py-4'}`}>
                                                                     <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2" title={summary}>{summary || 'Analysis pending...'}</p>
                                                                 </td>
-                                                                <td className="px-6 py-4 text-right">
+                                                                <td className={`px-6 ${hubSettings.denseTable ? 'py-3' : 'py-4'} text-right`}>
                                                                     <div className="flex items-center justify-end gap-2">
                                                                         {mode === 'general' && (
                                                                             <button
