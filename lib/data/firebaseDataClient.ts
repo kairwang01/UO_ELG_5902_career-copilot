@@ -104,7 +104,7 @@ const sanitizeProfileForFirestore = (
     if (value === undefined) return;
     if (
       value === '' &&
-      ['avatar_url', 'company_logo_url', 'company_website'].includes(key)
+      ['avatar_url', 'company_logo_url', 'company_website', 'company_size', 'industry', 'founded_year'].includes(key)
     ) {
       data[key] = null;
       return;

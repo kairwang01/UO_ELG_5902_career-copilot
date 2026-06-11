@@ -74,9 +74,9 @@ export interface UserProfile {
   company_website: string | null;
   company_description: string | null;
   company_logo_url: string | null;
-  company_size?: string;
-  industry?: string;
-  founded_year?: string;
+  company_size?: string | null;
+  industry?: string | null;
+  founded_year?: string | null;
   resume_text: string | null;
   preferred_language: string | null;
   wallet_address: string | null;
