@@ -31,15 +31,17 @@ export function PortalPostJob({
   return (
     <>
       <PortalTopBar title={existingJob ? t('portal_title_edit_job') : t('portal_nav_post_job')} darkMode={darkMode} />
-      <JobPostForm
-        session={session}
-        profile={profile}
-        existingJob={existingJob ?? null}
-        onClose={onCancel}
-        onPostCreated={onSaved}
-        t={t}
-        embedded
-      />
+      <div className="animate-view-fade">
+        <JobPostForm
+          session={session}
+          profile={profile}
+          existingJob={existingJob ?? null}
+          onClose={onCancel}
+          onPostCreated={onSaved}
+          t={t}
+          embedded
+        />
+      </div>
     </>
   );
 }

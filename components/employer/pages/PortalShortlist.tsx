@@ -19,6 +19,7 @@ import {
   type ShortlistEntry,
   type ShortlistStatus,
 } from '../../../lib/shortlistData';
+import { useToast as useSharedToast } from '../../Toast';
 
 interface PortalShortlistProps {
   session: Session;
@@ -102,47 +103,12 @@ const STATUS_STYLES: Record<ShortlistStatus, string> = {
     'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-400 dark:border-red-700',
 };
 
-function StatusChip({ status }: { status: ShortlistStatus }) {
-  const label = status.charAt(0).toUpperCase() + status.slice(1);
+function StatusChip({ status, t }: { status: ShortlistStatus; t: (key: string) => string }) {
+  const label = t(`shortlist_status_${status}`);
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_STYLES[status]}`}>
       {label}
     </span>
-  );
-}
-
-// ---- Toast (inline, no dep) -------------------------------------------------
-
-interface Toast {
-  id: number;
-  message: string;
-  type: 'success' | 'error';
-}
-
-function useToast() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const show = useCallback((message: string, type: Toast['type'] = 'success') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500);
-  }, []);
-  return { toasts, show };
-}
-
-function ToastContainer({ toasts }: { toasts: Toast[] }) {
-  return (
-    <div className="fixed bottom-6 right-6 z-50 space-y-2 pointer-events-none">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className={`px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all ${
-            t.type === 'success' ? 'bg-teal-600 text-white' : 'bg-red-600 text-white'
-          }`}
-        >
-          {t.message}
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -159,8 +125,9 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
   // inline notes editing
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState('');
+  const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
 
-  const { toasts, show: showToast } = useToast();
+  const { addToast } = useSharedToast();
 
   // ---- data fetch -----------------------------------------------------------
   const fetchEntries = useCallback(async () => {
@@ -182,31 +149,38 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
 
   // ---- actions --------------------------------------------------------------
   const handleRemove = async (id: string) => {
+    if (busyEntryId) return;
+    setBusyEntryId(id);
     try {
       await removeFromShortlist(employerUid, id);
       setEntries((prev) => prev.filter((e) => e.id !== id));
-      showToast(t('shortlist_removed'));
+      addToast(t('shortlist_removed'), 'success');
     } catch {
-      showToast(t('shortlist_action_error'), 'error');
+      addToast(t('shortlist_action_error'), 'error');
+    } finally {
+      setBusyEntryId(null);
     }
   };
 
   const handleMarkContacted = async (entry: ShortlistEntry) => {
-    if (entry.status === 'contacted') return;
+    if (entry.status === 'contacted' || busyEntryId) return;
+    setBusyEntryId(entry.id);
     try {
       await updateShortlistEntry(employerUid, entry.id, { status: 'contacted' });
       setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'contacted' } : e)));
-      showToast(t('shortlist_marked_contacted'));
+      addToast(t('shortlist_marked_contacted'), 'success');
     } catch {
-      showToast(t('shortlist_action_error'), 'error');
+      addToast(t('shortlist_action_error'), 'error');
+    } finally {
+      setBusyEntryId(null);
     }
   };
 
   const handleCopyOutreach = (entry: ShortlistEntry) => {
     const msg = buildOutreachMessage(entry);
     navigator.clipboard.writeText(msg).then(
-      () => showToast(t('shortlist_outreach_copied')),
-      () => showToast(t('shortlist_action_error'), 'error'),
+      () => addToast(t('shortlist_outreach_copied'), 'success'),
+      () => addToast(t('shortlist_action_error'), 'error'),
     );
   };
 
@@ -216,14 +190,17 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
   };
 
   const handleSaveNotes = async (id: string) => {
+    if (busyEntryId) return;
+    setBusyEntryId(id);
     try {
       await updateShortlistEntry(employerUid, id, { notes: editNotes });
       setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, notes: editNotes } : e)));
-      showToast(t('shortlist_notes_saved'));
+      addToast(t('shortlist_notes_saved'), 'success');
     } catch {
-      showToast(t('shortlist_action_error'), 'error');
+      addToast(t('shortlist_action_error'), 'error');
     } finally {
       setEditingId(null);
+      setBusyEntryId(null);
     }
   };
 
@@ -233,9 +210,8 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
   return (
     <>
       <PortalTopBar title={t('shortlist_page_title')} darkMode={dm} />
-      <ToastContainer toasts={toasts} />
 
-      <div className="max-w-[1088px] mx-auto p-8">
+      <div className="max-w-[1088px] mx-auto p-8 animate-view-fade">
         {/* Header row */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -249,6 +225,7 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
           {entries.length > 0 && (
             <button
               onClick={() => exportCSV(entries)}
+              aria-label={t('shortlist_export_csv')}
               className="flex items-center gap-2 px-4 py-2 bg-[#1d4ed8] text-white rounded-lg text-sm font-medium hover:bg-[#1a45c9] transition-colors"
             >
               <Download className="w-4 h-4" />
@@ -397,7 +374,7 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
 
                       {/* Status */}
                       <td className="px-5 py-4">
-                        <StatusChip status={entry.status} />
+                        <StatusChip status={entry.status} t={t} />
                       </td>
 
                       {/* Saved at */}
@@ -423,12 +400,14 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
                             <div className="flex gap-1">
                               <button
                                 onClick={() => handleSaveNotes(entry.id)}
-                                className="text-xs px-2 py-0.5 bg-[#1d4ed8] text-white rounded hover:bg-[#1a45c9]"
+                                disabled={busyEntryId === entry.id}
+                                className="text-xs px-2 py-0.5 bg-[#1d4ed8] text-white rounded hover:bg-[#1a45c9] disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                {t('shortlist_save_notes')}
+                                {busyEntryId === entry.id ? t('shortlist_saving_notes') : t('shortlist_save_notes')}
                               </button>
                               <button
                                 onClick={() => setEditingId(null)}
+                                disabled={busyEntryId === entry.id}
                                 className={`text-xs px-2 py-0.5 rounded border ${
                                   dm ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-600'
                                 }`}
@@ -444,6 +423,7 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
                             </span>
                             <button
                               onClick={() => handleStartEditNotes(entry)}
+                              aria-label={t('shortlist_edit_notes')}
                               className={`opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded ${
                                 dm ? 'hover:bg-gray-600' : 'hover:bg-gray-100'
                               }`}
@@ -461,10 +441,11 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
                           {/* Mark as contacted */}
                           <button
                             onClick={() => handleMarkContacted(entry)}
-                            disabled={entry.status === 'contacted'}
+                            disabled={entry.status === 'contacted' || busyEntryId === entry.id}
                             title={t('shortlist_mark_contacted')}
+                            aria-label={t('shortlist_mark_contacted')}
                             className={`p-1.5 rounded transition-colors ${
-                              entry.status === 'contacted'
+                              entry.status === 'contacted' || busyEntryId === entry.id
                                 ? dm ? 'text-gray-600 cursor-not-allowed' : 'text-gray-300 cursor-not-allowed'
                                 : dm
                                 ? 'text-teal-400 hover:bg-teal-900/30'
@@ -478,6 +459,7 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
                           <button
                             onClick={() => handleCopyOutreach(entry)}
                             title={t('shortlist_copy_outreach')}
+                            aria-label={t('shortlist_copy_outreach')}
                             className={`p-1.5 rounded transition-colors ${
                               dm ? 'text-blue-400 hover:bg-blue-900/30' : 'text-blue-600 hover:bg-blue-50'
                             }`}
@@ -489,8 +471,12 @@ export function PortalShortlist({ session, darkMode, t }: PortalShortlistProps) 
                           <button
                             onClick={() => handleRemove(entry.id)}
                             title={t('shortlist_remove')}
+                            aria-label={t('shortlist_remove')}
+                            disabled={busyEntryId === entry.id}
                             className={`p-1.5 rounded transition-colors ${
-                              dm ? 'text-red-400 hover:bg-red-900/30' : 'text-red-500 hover:bg-red-50'
+                              busyEntryId === entry.id
+                                ? dm ? 'text-gray-600 cursor-not-allowed' : 'text-gray-300 cursor-not-allowed'
+                                : dm ? 'text-red-400 hover:bg-red-900/30' : 'text-red-500 hover:bg-red-50'
                             }`}
                           >
                             <Trash2 className="w-4 h-4" />

@@ -323,7 +323,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           {currentPage === 'agency-hub' && (
             <>
               <PortalTopBar title={t('portal_nav_agency_hub')} darkMode={darkMode} />
-              <div className={`max-w-[1088px] mx-auto p-8 ${darkMode ? 'text-white' : ''}`}>
+              <div className={`max-w-[1088px] mx-auto p-8 animate-view-fade ${darkMode ? 'text-white' : ''}`}>
                 <AgencyHub session={session} profile={profile} t={t} />
               </div>
             </>

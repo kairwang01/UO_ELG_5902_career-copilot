@@ -76,7 +76,7 @@ export function PortalOrgProfile({ session, profile, darkMode, onSaved, t }: Por
   return (
     <>
       <PortalTopBar title={t('portal_nav_org_profile')} darkMode={dm} />
-      <div className="max-w-[1088px] mx-auto p-8">
+      <div className="max-w-[1088px] mx-auto p-8 animate-view-fade">
         <p className={`mb-8 ${dm ? 'text-gray-400' : 'text-gray-600'}`}>
           {t('portal_org_subtitle')}
         </p>

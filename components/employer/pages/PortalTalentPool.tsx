@@ -15,7 +15,7 @@ export function PortalTalentPool({ profile, darkMode, navigateToBusinessPricing,
   return (
     <>
       <PortalTopBar title={t('portal_nav_discover')} darkMode={darkMode} />
-      <div className={`max-w-[1088px] mx-auto p-8 ${darkMode ? 'text-white' : ''}`}>
+      <div className={`max-w-[1088px] mx-auto p-8 animate-view-fade ${darkMode ? 'text-white' : ''}`}>
         <TalentDiscovery t={t} profile={profile} navigateToBusinessPricing={navigateToBusinessPricing} />
       </div>
     </>

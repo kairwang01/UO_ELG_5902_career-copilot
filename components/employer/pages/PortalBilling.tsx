@@ -52,7 +52,7 @@ export function PortalBilling({ profile, darkMode, activeJobs, onSelectPlan, pla
   return (
     <>
       <PortalTopBar title={t('portal_nav_billing')} darkMode={dm} />
-      <div className="max-w-[1088px] mx-auto p-8 space-y-8">
+      <div className="max-w-[1088px] mx-auto p-8 space-y-8 animate-view-fade">
 
         {/* Current plan */}
         <div className={card}>

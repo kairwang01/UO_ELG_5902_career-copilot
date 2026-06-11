@@ -6,7 +6,8 @@ import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';
 import { listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
 import { saveToShortlist } from '../lib/shortlistData';
-import { BookmarkCheck, BookmarkPlus, CheckCircle2, XCircle } from 'lucide-react';
+import { BookmarkCheck, BookmarkPlus, Briefcase, CheckCircle2, Loader2, Search, XCircle } from 'lucide-react';
+import { useToast as useSharedToast } from './Toast';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -55,33 +56,12 @@ interface TalentDiscoveryProps {
     navigateToBusinessPricing: () => void;
 }
 
-// ---- inline toast -----------------------------------------------------------
-interface Toast { id: number; message: string; ok: boolean }
-function useToast() {
-    const [toasts, setToasts] = useState<Toast[]>([]);
-    const show = (message: string, ok = true) => {
-        const id = Date.now();
-        setToasts(prev => [...prev, { id, message, ok }]);
-        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
-    };
-    return { toasts, show };
-}
-function ToastContainer({ toasts }: { toasts: Toast[] }) {
-    return (
-        <div className="fixed bottom-6 right-6 z-50 space-y-2 pointer-events-none">
-            {toasts.map(t => (
-                <div key={t.id} className={`px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${t.ok ? 'bg-teal-600 text-white' : 'bg-red-600 text-white'}`}>
-                    {t.message}
-                </div>
-            ))}
-        </div>
-    );
-}
-
 const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateToBusinessPricing }) => {
     const [jobDescription, setJobDescription] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [verifiedLoading, setVerifiedLoading] = useState(false);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [verifiedError, setVerifiedError] = useState<string | null>(null);
+    const [searchError, setSearchError] = useState<string | null>(null);
     const [verifiedResults, setVerifiedResults] = useState<MatchedCandidate[]>([]);
     const [regularResults, setRegularResults] = useState<MatchedCandidate[] | null>(null);
 
@@ -98,7 +78,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
     // Session-level saved set (candidate.id) so we can disable after saving
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
-    const { toasts, show: showToast } = useToast();
+    const { addToast } = useSharedToast();
+    const selectedPostedJob = postedJobs.find((job) => job.id === selectedJobId) ?? null;
 
     // Fetch employer's active posted jobs once on mount
     useEffect(() => {
@@ -125,15 +106,16 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
     useEffect(() => {
         let cancelled = false;
         const fetchVerifiedTalent = async () => {
-            setLoading(true);
+            setVerifiedLoading(true);
+            setVerifiedError(null);
             try {
                 const { candidates } = await discoverTalent();
                 if (cancelled) return;
                 setVerifiedResults(candidates.map((c) => toMatchedCandidate(c, t('discover_verified_summary_default'))));
             } catch (err) {
-                if (!cancelled) setError(err instanceof Error ? err.message : t('talent_load_error'));
+                if (!cancelled) setVerifiedError(err instanceof Error ? err.message : t('talent_load_error'));
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) setVerifiedLoading(false);
             }
         };
         fetchVerifiedTalent();
@@ -144,11 +126,11 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!jobDescription.trim()) {
-            setError(t('talent_jd_required'));
+            setSearchError(t('talent_jd_required'));
             return;
         }
-        setLoading(true);
-        setError(null);
+        setSearchLoading(true);
+        setSearchError(null);
         setRegularResults(null);
         try {
             // One server call: candidates are read and matched server-side; only
@@ -158,9 +140,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
             setVerifiedResults(allMatched.filter(c => c.nft_staked));
             setRegularResults(allMatched.filter(c => !c.nft_staked && c.compatibilityScore >= 70));
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('talent_search_error'));
+            setSearchError(err instanceof Error ? err.message : t('talent_search_error'));
         } finally {
-            setLoading(false);
+            setSearchLoading(false);
         }
     };
 
@@ -197,29 +179,41 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                 saved_by: profile.id,
             });
             setSavedIds(prev => new Set(prev).add(candidate.id));
-            showToast(t('shortlist_saved_toast'));
+            addToast(t('shortlist_saved_toast'), 'success');
         } catch (err) {
-            showToast(err instanceof Error ? err.message : t('shortlist_save_error'), false);
+            addToast(err instanceof Error ? err.message : t('shortlist_save_error'), 'error');
         }
     };
 
-    const canUnlock = profile.subscription_status === 'job_pack';
+    const paidBusinessStatuses = new Set(['single_post', 'job_pack', 'starter', 'growth', 'pro']);
+    const canUnlock = paidBusinessStatuses.has(profile.subscription_status ?? '');
 
     return (
-        <div className="p-4 animate-fade-in">
-            <ToastContainer toasts={toasts} />
-
+        <div className="p-0 sm:p-4 animate-fade-in">
             {/* Verified Talent Section */}
-            <div className="p-6 bg-gradient-to-br from-gray-700 via-gray-800 to-black rounded-xl text-white shadow-lg mb-8">
-                 <h2 className="text-2xl font-bold mb-2">{t('discover_verified_title')}</h2>
-                 <p className="text-gray-300 mb-6 max-w-3xl">{t('discover_verified_desc')}</p>
-                 {verifiedResults.length === 0 && !loading && (
+            <div className="p-5 sm:p-6 bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-xl text-white shadow-lg mb-8">
+                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-6">
+                    <div>
+                        <h2 className="text-xl sm:text-2xl font-bold mb-2">{t('discover_verified_title')}</h2>
+                        <p className="text-sm sm:text-base text-gray-300 max-w-3xl">{t('discover_verified_desc')}</p>
+                    </div>
+                    {verifiedLoading && (
+                        <div className="inline-flex items-center gap-2 text-sm text-gray-300">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {t('talent_loading_verified')}
+                        </div>
+                    )}
+                 </div>
+                 {verifiedError && !verifiedLoading && (
+                    <p className="text-sm rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-red-200">{verifiedError}</p>
+                 )}
+                 {verifiedResults.length === 0 && !verifiedLoading && !verifiedError && (
                     <p className="text-center py-4 text-gray-400">{t('discover_no_verified_talent')}</p>
                  )}
                  <div className="space-y-3">
                     {verifiedResults.map((candidate, index) => (
                         <div key={candidate.id} className="p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg">
-                            <div className="flex items-start justify-between gap-4">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="flex-1 min-w-0">
                                     <p className="font-bold text-white">{t('talent_candidate_label').replace('{n}', String(index + 1))}</p>
                                     <p className="text-sm text-gray-300 mt-1">{candidate.summary}</p>
@@ -245,7 +239,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                         </ul>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-3 flex-shrink-0">
+                                <div className="flex items-center justify-between gap-3 sm:justify-end sm:flex-shrink-0">
                                     {candidate.compatibilityScore > 0 && (
                                         <div className="text-right">
                                             <p className="text-2xl font-bold text-green-400">{candidate.compatibilityScore}%</p>
@@ -258,6 +252,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                                 onClick={() => handleSaveToShortlist(candidate)}
                                                 disabled={savedIds.has(candidate.id)}
                                                 title={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
+                                                aria-label={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
                                                 className={`p-2 rounded-lg transition-colors ${
                                                     savedIds.has(candidate.id)
                                                         ? 'bg-white/10 text-green-400 cursor-not-allowed'
@@ -272,7 +267,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                         )}
                                         <button
                                             onClick={() => setCandidateToUnlock({ ...candidate, index })}
-                                            className="px-4 py-2 bg-white text-gray-900 font-semibold text-sm rounded-lg hover:bg-gray-200"
+                                            className="px-4 py-2 bg-white text-gray-900 font-semibold text-sm rounded-lg hover:bg-gray-200 transition-colors"
                                         >
                                             {t('discover_unlock_engage_button')}
                                         </button>
@@ -287,15 +282,21 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('discover_regular_title')}</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-6">{t('talent_search_desc')}</p>
 
-            <form onSubmit={handleSearch} className="space-y-4">
+            <form onSubmit={handleSearch} className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 {/* Posted-job selector — only shown when the employer has active postings */}
+                {!jobsLoaded && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t('talent_loading_posted_jobs')}
+                    </div>
+                )}
                 {jobsLoaded && postedJobs.length > 0 && (
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('talent_select_posted_job')}
                         </label>
                         <select
-                            defaultValue=""
+                            value={selectedJobId}
                             onChange={(e) => handleSelectPostedJob(e.target.value)}
                             className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
                         >
@@ -308,6 +309,22 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                 </option>
                             ))}
                         </select>
+                        {selectedPostedJob && (
+                            <div className="mt-3 flex flex-col gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm dark:border-blue-900/60 dark:bg-blue-950/30 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex min-w-0 items-start gap-2 text-blue-900 dark:text-blue-100">
+                                    <Briefcase className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <div className="min-w-0">
+                                        <p className="truncate font-semibold">{selectedPostedJob.title}</p>
+                                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                                            {selectedPostedJob.location || t('talent_location_remote')}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                    {t('talent_posted_job_loaded')}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 )}
                 {jobsLoaded && postedJobs.length === 0 && (
@@ -322,13 +339,14 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                     className="w-full bg-white dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600 border border-gray-300 rounded-lg shadow-sm p-4 focus:ring-blue-500 focus:border-blue-500"
                     placeholder={t('talent_jd_placeholder')}
                 />
-                 {error && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm">{error}</div>}
-                 <button type="submit" disabled={loading} className="w-full sm:w-auto px-8 py-3 bg-blue-700 text-white font-bold rounded-lg shadow-md hover:bg-blue-800 disabled:bg-blue-400">
-                    {loading ? t('talent_searching') : t('talent_search_button')}
+                 {searchError && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm">{searchError}</div>}
+                 <button type="submit" disabled={searchLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-8 py-3 font-bold text-white shadow-md transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400 sm:w-auto">
+                    {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    {searchLoading ? t('talent_searching') : t('talent_search_button')}
                 </button>
             </form>
 
-            {loading && (
+            {searchLoading && (
                 <div className="text-center mt-8">
                     <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"></div>
                     <p className="mt-3 text-gray-600 dark:text-gray-400">{t('talent_analyzing_pool')}</p>
@@ -343,7 +361,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                     <div className="space-y-4">
                         {regularResults.map((candidate, index) => (
                             <div key={candidate.id} className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-sm">
-                                <div className="flex items-start justify-between gap-4">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-gray-800 dark:text-white">{t('talent_candidate_label').replace('{n}', String(index + 1))}</p>
                                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{candidate.summary}</p>
@@ -373,7 +391,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex items-start gap-3 flex-shrink-0">
+                                    <div className="flex items-center justify-between gap-3 sm:items-start sm:justify-end sm:flex-shrink-0">
                                         <div className="text-right">
                                             <p className="text-2xl font-bold text-green-600 dark:text-green-400">{candidate.compatibilityScore}%</p>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">{t('talent_match_label')}</p>
@@ -382,6 +400,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({ t, profile, navigateT
                                             onClick={() => handleSaveToShortlist(candidate)}
                                             disabled={savedIds.has(candidate.id)}
                                             title={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
+                                            aria-label={savedIds.has(candidate.id) ? t('shortlist_already_saved') : t('shortlist_save_button')}
                                             className={`p-2 rounded-lg transition-colors border ${
                                                 savedIds.has(candidate.id)
                                                     ? 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 cursor-not-allowed bg-green-50 dark:bg-green-900/20'

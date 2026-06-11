@@ -66,7 +66,7 @@ export function PortalDashboard({
   return (
     <>
       <PortalTopBar title={t('portal_nav_dashboard')} darkMode={dm} />
-      <div className="max-w-[1088px] mx-auto p-8">
+      <div className="max-w-[1088px] mx-auto p-8 animate-view-fade">
         <div className="mb-8">
           <p className={`text-lg font-medium ${dm ? 'text-white' : 'text-gray-900'}`}>
             {companyName
