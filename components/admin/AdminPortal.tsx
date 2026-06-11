@@ -675,8 +675,11 @@ const AdminPortal: React.FC = () => {
   // super:    everything + Admins management + Models & Keys + Publish/Rollback
 
   const role = adminRole ?? 'admin'; // default to admin while loading
-  const isSuper = role === 'super';
   const isReviewer = role === 'reviewer';
+  // Derived capabilities — single source: lib/access/permissions.ts.
+  const canWriteModels = hasAdminPermission(role, 'admin.models.write');
+  const canPublishPrompts = hasAdminPermission(role, 'admin.prompts.publish');
+  const canManageAdmins = hasAdminPermission(role, 'admin.admins.manage');
 
   // ── tab definitions ───────────────────────────────────────────────────────
   // Visibility is driven by the central registry (lib/access/permissions.ts);
@@ -799,7 +802,7 @@ const AdminPortal: React.FC = () => {
                         <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
                           {t('admin.dashboard.model_routing_default')}
                         </p>
-                        {isSuper ? (
+                        {canWriteModels ? (
                           <div className="space-y-1.5">
                             <select
                               value={defaultModelId ?? ''}
@@ -1886,7 +1889,7 @@ const AdminPortal: React.FC = () => {
                                     {t('admin.model.default_badge')}
                                   </span>
                                 ) : (
-                                  isSuper && (
+                                  canWriteModels && (
                                     <button
                                       type="button"
                                       disabled={!m.enabled}
@@ -2290,8 +2293,8 @@ const AdminPortal: React.FC = () => {
                                                       </span>
                                                     )}
                                                   </div>
-                                                  {/* Publish / Rollback — super only */}
-                                                  {isSuper && (
+                                                  {/* Publish / Rollback — requires admin.prompts.publish */}
+                                                  {canPublishPrompts && (
                                                     <div className="flex items-center gap-2">
                                                       {v.status === 'draft' && (
                                                         <button
@@ -2726,7 +2729,7 @@ const AdminPortal: React.FC = () => {
         )}
 
         {/* ── ADMINS ────────────────────────────────────────────────────── */}
-        {tab === 'admins' && isSuper && (
+        {tab === 'admins' && canManageAdmins && (
           <div className="max-w-4xl space-y-5">
             <PermissionMatrix />
             <ProductRoleOverview />

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card, EmptyState, FieldLabel, PrimaryButton, SectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
+import { at } from './adminText';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { API_KEY_SCOPES, type ApiKeyScope } from '../../lib/access/permissions';
 import {
@@ -16,7 +17,8 @@ import {
  * Manages third-party applications and their scoped keys against the
  * apiPlatformClient service contract. Currently mock-backed (clearly labelled
  * in the banner); the UI is final so wiring the Cloud Functions later is a
- * service-layer swap only.
+ * service-layer swap only. Backend contract:
+ * functions/src/handlers/apiPlatform.contract.md
  */
 
 const ENV_BADGE: Record<'development' | 'production', string> = {
@@ -30,7 +32,7 @@ const STATUS_BADGE: Record<PlatformApiKey['status'], string> = {
   revoked: 'bg-red-50 text-red-700 border border-red-200',
 };
 
-const fmtDate = (iso: string | null) => (iso ? iso.slice(0, 10) : 'Never');
+const fmtDate = (iso: string | null) => (iso ? iso.slice(0, 10) : at('api.keys.never'));
 
 export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }) => {
   const [apps, setApps] = useState<ApiApplication[]>([]);
@@ -39,6 +41,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   const [requests, setRequests] = useState<ApiRequestLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // create-app form
   const [showAppForm, setShowAppForm] = useState(false);
@@ -52,7 +55,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   const [keyName, setKeyName] = useState('');
   const [keyScopes, setKeyScopes] = useState<ApiKeyScope[]>(['jobs.read']);
   const [creatingKey, setCreatingKey] = useState(false);
-  // show-once secret modal
+  // show-once secret modal (transient — secret lives only in this state)
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [secretCopied, setSecretCopied] = useState(false);
   const [busyKeyId, setBusyKeyId] = useState<string | null>(null);
@@ -64,10 +67,10 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
     setLoadError(false);
     try {
       const [a, k, u, r] = await Promise.all([
-        apiPlatform.listApps(),
-        apiPlatform.listKeys(),
-        apiPlatform.getUsage(),
-        apiPlatform.listRecentRequests(),
+        apiPlatform.listApplications(),
+        apiPlatform.listApiKeys(),
+        apiPlatform.getUsageSummary(),
+        apiPlatform.listUsageLogs(),
       ]);
       setApps(a);
       setKeys(k);
@@ -82,15 +85,21 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
 
   useEffect(() => { load(); }, [load]);
 
+  const reportError = (err: unknown) =>
+    setActionError(err instanceof Error ? err.message : 'The action failed. Please retry.');
+
   const createApp = async () => {
     if (!appName.trim()) return;
     setCreatingApp(true);
+    setActionError(null);
     try {
-      await apiPlatform.createApp({ name: appName.trim(), description: appDesc.trim(), environment: appEnv });
+      await apiPlatform.createApplication({ name: appName.trim(), description: appDesc.trim(), environment: appEnv });
       setAppName('');
       setAppDesc('');
       setShowAppForm(false);
       await load();
+    } catch (err) {
+      reportError(err);
     } finally {
       setCreatingApp(false);
     }
@@ -98,9 +107,12 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
 
   const createKey = async () => {
     if (!keyModalApp || !keyName.trim() || keyScopes.length === 0) return;
+    // Production keys count against live quotas — require an explicit confirm.
+    if (keyModalApp.environment === 'production' && !window.confirm(at('api.modal.prod_confirm'))) return;
     setCreatingKey(true);
+    setActionError(null);
     try {
-      const result = await apiPlatform.createKey({
+      const result = await apiPlatform.createApiKey({
         app_id: keyModalApp.id,
         name: keyName.trim(),
         environment: keyModalApp.environment,
@@ -110,6 +122,8 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       setSecretCopied(false);
       setKeyName('');
       await load();
+    } catch (err) {
+      reportError(err);
     } finally {
       setCreatingKey(false);
     }
@@ -125,17 +139,22 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   };
 
   const revokeKey = async (key: PlatformApiKey) => {
-    if (!window.confirm(`Revoke "${key.name}" (${key.prefix}…)? Calls with this key stop working immediately. This cannot be undone.`)) return;
+    if (!window.confirm(`${at('api.revoke.confirm_prefix')} "${key.name}" (${key.prefix}…)? ${at('api.revoke.confirm_suffix')}`)) return;
     setBusyKeyId(key.id);
-    try { await apiPlatform.revokeKey(key.id); await load(); } finally { setBusyKeyId(null); }
+    setActionError(null);
+    try { await apiPlatform.revokeApiKey(key.id); await load(); }
+    catch (err) { reportError(err); }
+    finally { setBusyKeyId(null); }
   };
 
   const toggleKeyStatus = async (key: PlatformApiKey) => {
     setBusyKeyId(key.id);
+    setActionError(null);
     try {
-      await apiPlatform.setKeyStatus(key.id, key.status === 'active' ? 'disabled' : 'active');
+      await apiPlatform.updateApiKeyStatus(key.id, key.status === 'active' ? 'disabled' : 'active');
       await load();
-    } finally { setBusyKeyId(null); }
+    } catch (err) { reportError(err); }
+    finally { setBusyKeyId(null); }
   };
 
   if (loading && apps.length === 0) {
@@ -149,9 +168,9 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   if (loadError) {
     return (
       <Card className="p-6 text-center">
-        <p className="text-sm text-red-700">Could not load the API platform data.</p>
+        <p className="text-sm text-red-700">{at('api.error.load')}</p>
         <button type="button" onClick={load} className="mt-3 text-sm font-semibold text-blue-700 hover:underline">
-          Retry
+          {at('api.error.retry')}
         </button>
       </Card>
     );
@@ -163,21 +182,28 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       <div className="flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         <span className="mt-0.5 shrink-0" aria-hidden="true">ⓘ</span>
         <p>
-          <span className="font-semibold">Developer preview.</span>{' '}
-          The console below runs against a local sample service while the platform callables are
-          finalized — keys created here are not yet honored by production endpoints. Secrets follow
-          the final contract: generated once, hashed at rest, never shown again.
+          <span className="font-semibold">{at('api.banner.title')}</span>{' '}
+          {at('api.banner.body')}
         </p>
       </div>
+
+      {/* Mutation error banner */}
+      {actionError && (
+        <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 animate-panel-expand">
+          <span className="mt-0.5 shrink-0">✕</span>
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="ml-auto shrink-0 text-red-600 hover:text-red-800" aria-label="Dismiss error">✕</button>
+        </div>
+      )}
 
       {/* Usage summary */}
       {usage && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Requests this month', value: `${usage.month_requests.toLocaleString()} / ${usage.month_quota.toLocaleString()}` },
-            { label: 'Errors this month', value: String(usage.month_errors) },
-            { label: 'Applications', value: String(apps.length) },
-            { label: 'Active keys', value: String(keys.filter((k) => k.status === 'active').length) },
+            { label: at('api.stats.requests'), value: `${usage.month_requests.toLocaleString()} / ${usage.month_quota.toLocaleString()}` },
+            { label: at('api.stats.errors'), value: String(usage.month_errors) },
+            { label: at('api.stats.apps'), value: String(apps.length) },
+            { label: at('api.stats.active_keys'), value: String(keys.filter((k) => k.status === 'active').length) },
           ].map((c) => (
             <Card key={c.label} className="p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{c.label}</p>
@@ -191,14 +217,12 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 pb-3">
           <div>
-            <SectionHeading>Applications</SectionHeading>
-            <p className="mt-1 text-xs text-gray-500">
-              An application groups the keys of one integration partner per environment.
-            </p>
+            <SectionHeading>{at('api.apps.title')}</SectionHeading>
+            <p className="mt-1 text-xs text-gray-500">{at('api.apps.subtitle')}</p>
           </div>
           {canManage && (
             <PrimaryButton onClick={() => setShowAppForm((v) => !v)}>
-              {showAppForm ? 'Cancel' : 'Create application'}
+              {showAppForm ? at('api.apps.cancel') : at('api.apps.create')}
             </PrimaryButton>
           )}
         </div>
@@ -207,20 +231,20 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
           <div className="mx-5 mb-4 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-3 animate-panel-expand">
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <FieldLabel htmlFor="app-name">Name</FieldLabel>
-                <input id="app-name" type="text" value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="e.g. ITviec integration" className={textInput} />
+                <FieldLabel htmlFor="app-name">{at('api.apps.name')}</FieldLabel>
+                <input id="app-name" type="text" value={appName} onChange={(e) => setAppName(e.target.value)} placeholder={at('api.apps.name_ph')} className={textInput} />
               </div>
               <div>
-                <FieldLabel htmlFor="app-env">Environment</FieldLabel>
+                <FieldLabel htmlFor="app-env">{at('api.apps.env')}</FieldLabel>
                 <select id="app-env" value={appEnv} onChange={(e) => setAppEnv(e.target.value as 'development' | 'production')} className={textInput}>
-                  <option value="development">Development</option>
-                  <option value="production">Production</option>
+                  <option value="development">{at('api.apps.env_dev')}</option>
+                  <option value="production">{at('api.apps.env_prod')}</option>
                 </select>
               </div>
             </div>
             <div>
-              <FieldLabel htmlFor="app-desc">Description</FieldLabel>
-              <input id="app-desc" type="text" value={appDesc} onChange={(e) => setAppDesc(e.target.value)} placeholder="What does this integration do?" className={textInput} />
+              <FieldLabel htmlFor="app-desc">{at('api.apps.desc')}</FieldLabel>
+              <input id="app-desc" type="text" value={appDesc} onChange={(e) => setAppDesc(e.target.value)} placeholder={at('api.apps.desc_ph')} className={textInput} />
             </div>
             <button
               type="button"
@@ -229,22 +253,22 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
               className="inline-flex items-center gap-2 rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 disabled:opacity-50 transition-colors"
             >
               {creatingApp && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-              Create
+              {at('api.apps.submit')}
             </button>
           </div>
         )}
 
         {apps.length === 0 ? (
-          <EmptyState message="No applications yet. Create one to issue API keys." />
+          <EmptyState message={at('api.apps.empty')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-t border-gray-100">
               <thead>
                 <tr className="bg-gray-50/80">
-                  <th className={tableHead}>Application</th>
-                  <th className={tableHead}>Environment</th>
-                  <th className={tableHead}>Keys</th>
-                  <th className={tableHead}>Created</th>
+                  <th className={tableHead}>{at('api.apps.col_app')}</th>
+                  <th className={tableHead}>{at('api.apps.col_env')}</th>
+                  <th className={tableHead}>{at('api.apps.col_keys')}</th>
+                  <th className={tableHead}>{at('api.apps.col_created')}</th>
                   {canManage && <th className={tableHead}></th>}
                 </tr>
               </thead>
@@ -269,7 +293,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                           onClick={() => { setKeyModalApp(app); setKeyName(''); setKeyScopes(['jobs.read']); }}
                           className="text-sm font-semibold text-blue-700 hover:underline"
                         >
-                          Issue key
+                          {at('api.apps.issue_key')}
                         </button>
                       </td>
                     )}
@@ -284,23 +308,22 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       {/* Keys */}
       <Card className="overflow-hidden">
         <div className="px-5 pt-5 pb-3">
-          <SectionHeading>API keys</SectionHeading>
-          <p className="mt-1 text-xs text-gray-500">
-            Only the prefix is stored for display — full secrets are shown once at creation.
-          </p>
+          <SectionHeading>{at('api.keys.title')}</SectionHeading>
+          <p className="mt-1 text-xs text-gray-500">{at('api.keys.subtitle')}</p>
         </div>
         {keys.length === 0 ? (
-          <EmptyState message="No keys issued yet." />
+          <EmptyState message={at('api.keys.empty')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-t border-gray-100">
               <thead>
                 <tr className="bg-gray-50/80">
-                  <th className={tableHead}>Name</th>
-                  <th className={tableHead}>Key</th>
-                  <th className={tableHead}>Scopes</th>
-                  <th className={tableHead}>Status</th>
-                  <th className={tableHead}>Last used</th>
+                  <th className={tableHead}>{at('api.keys.col_name')}</th>
+                  <th className={tableHead}>{at('api.keys.col_key')}</th>
+                  <th className={tableHead}>{at('api.keys.col_scopes')}</th>
+                  <th className={tableHead}>{at('api.keys.col_status')}</th>
+                  <th className={tableHead}>{at('api.keys.col_limits')}</th>
+                  <th className={tableHead}>{at('api.keys.col_last_used')}</th>
                   {canManage && <th className={tableHead}></th>}
                 </tr>
               </thead>
@@ -326,6 +349,9 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                         {key.status}
                       </span>
                     </td>
+                    <td className={`${tableCell} font-mono text-xs whitespace-nowrap`}>
+                      {key.rate_limit_per_min}/min · {key.monthly_quota.toLocaleString()}/mo
+                    </td>
                     <td className={`${tableCell} font-mono text-xs`}>{fmtDate(key.last_used_at)}</td>
                     {canManage && (
                       <td className={`${tableCell} text-right whitespace-nowrap`}>
@@ -337,7 +363,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                               disabled={busyKeyId === key.id}
                               className="text-sm font-semibold text-gray-600 hover:text-gray-900 hover:underline disabled:opacity-50 mr-3"
                             >
-                              {key.status === 'active' ? 'Disable' : 'Enable'}
+                              {key.status === 'active' ? at('api.keys.disable') : at('api.keys.enable')}
                             </button>
                             <button
                               type="button"
@@ -345,7 +371,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                               disabled={busyKeyId === key.id}
                               className="text-sm font-semibold text-red-600 hover:text-red-800 hover:underline disabled:opacity-50"
                             >
-                              Revoke
+                              {at('api.keys.revoke')}
                             </button>
                           </>
                         )}
@@ -363,21 +389,21 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       <div className="grid lg:grid-cols-[1.4fr_0.6fr] gap-4 items-start">
         <Card className="overflow-hidden">
           <div className="px-5 pt-5 pb-3">
-            <SectionHeading>Recent requests</SectionHeading>
-            <p className="mt-1 text-xs text-gray-500">Sample feed — per-request logs land with the backend.</p>
+            <SectionHeading>{at('api.logs.title')}</SectionHeading>
+            <p className="mt-1 text-xs text-gray-500">{at('api.logs.subtitle')}</p>
           </div>
           {requests.length === 0 ? (
-            <EmptyState message="No requests recorded." />
+            <EmptyState message={at('api.logs.empty')} />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-t border-gray-100">
                 <thead>
                   <tr className="bg-gray-50/80">
-                    <th className={tableHead}>Time</th>
-                    <th className={tableHead}>Key</th>
-                    <th className={tableHead}>Endpoint</th>
-                    <th className={tableHead}>Status</th>
-                    <th className={tableHead}>Latency</th>
+                    <th className={tableHead}>{at('api.logs.col_time')}</th>
+                    <th className={tableHead}>{at('api.logs.col_key')}</th>
+                    <th className={tableHead}>{at('api.logs.col_endpoint')}</th>
+                    <th className={tableHead}>{at('api.logs.col_status')}</th>
+                    <th className={tableHead}>{at('api.logs.col_latency')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -399,19 +425,15 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
         </Card>
 
         <Card className="p-5">
-          <SectionHeading>Documentation</SectionHeading>
-          <p className="mt-2 text-xs leading-relaxed text-gray-600">
-            Endpoint reference and request examples live with the user-facing API docs.
-            End users issue personal keys from Account → API Access; the applications on
-            this page are for partner-level integrations.
-          </p>
+          <SectionHeading>{at('api.docs.title')}</SectionHeading>
+          <p className="mt-2 text-xs leading-relaxed text-gray-600">{at('api.docs.body')}</p>
           <a
             href="/docs/api.md"
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-block text-sm font-semibold text-blue-700 hover:underline"
           >
-            Open API reference
+            {at('api.docs.link')}
           </a>
         </Card>
       </div>
@@ -419,15 +441,15 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       {/* Issue-key modal */}
       {keyModalApp && !createdSecret && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 animate-fade-in" onClick={() => setKeyModalApp(null)}>
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <SectionHeading>Issue key — {keyModalApp.name}</SectionHeading>
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <SectionHeading>{at('api.modal.issue_title')} — {keyModalApp.name}</SectionHeading>
             <div className="mt-4 space-y-4">
               <div>
-                <FieldLabel htmlFor="new-key-name">Key name</FieldLabel>
-                <input id="new-key-name" type="text" value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder="e.g. Server-to-server" className={textInput} />
+                <FieldLabel htmlFor="new-key-name">{at('api.modal.key_name')}</FieldLabel>
+                <input id="new-key-name" type="text" value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder={at('api.modal.key_name_ph')} className={textInput} />
               </div>
               <div>
-                <FieldLabel>Scopes</FieldLabel>
+                <FieldLabel>{at('api.modal.scopes')}</FieldLabel>
                 <div className="space-y-2">
                   {API_KEY_SCOPES.map((scope) => (
                     <label key={scope.id} className="flex items-start gap-2 cursor-pointer">
@@ -448,7 +470,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
             </div>
             <div className="mt-5 flex justify-end gap-3">
               <button type="button" onClick={() => setKeyModalApp(null)} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Cancel
+                {at('api.modal.cancel')}
               </button>
               <button
                 type="button"
@@ -457,20 +479,21 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                 className="inline-flex items-center gap-2 rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
               >
                 {creatingKey && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-                Generate key
+                {at('api.modal.generate')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Show-once secret modal */}
+      {/* Show-once secret modal — no backdrop/ESC close: storing the key must
+          be acknowledged explicitly before the secret disappears for good. */}
       {createdSecret && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 animate-fade-in">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <SectionHeading>Copy your new key</SectionHeading>
+            <SectionHeading>{at('api.secret.title')}</SectionHeading>
             <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              This secret is shown once. After closing, only the prefix remains visible.
+              {at('api.secret.warning')}
             </p>
             <div className="mt-3 flex items-center gap-2">
               <input readOnly value={createdSecret} className="flex-1 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 font-mono text-xs text-gray-800" />
@@ -479,7 +502,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                 onClick={() => { navigator.clipboard.writeText(createdSecret).then(() => setSecretCopied(true)).catch(() => {}); }}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                {secretCopied ? 'Copied ✓' : 'Copy'}
+                {secretCopied ? at('api.secret.copied') : at('api.secret.copy')}
               </button>
             </div>
             <button
@@ -487,7 +510,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
               onClick={closeSecretModal}
               className="mt-4 w-full rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
             >
-              I have stored this key
+              {at('api.secret.confirm')}
             </button>
           </div>
         </div>

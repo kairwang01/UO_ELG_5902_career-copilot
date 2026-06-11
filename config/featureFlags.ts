@@ -15,8 +15,12 @@
 const WEB3_FLAG_KEY = 'feature_web3_enabled';
 const FLAG_EVENT = 'featureflag:web3';
 
-/** Default ON — preserves the existing demo flow until the team decides otherwise. */
-const WEB3_DEFAULT = true;
+/**
+ * Default OFF — Web3 is an experimental opt-in. Enable it from the admin
+ * console (Web3 tab) for demos; the toggle persists per browser, so the
+ * candidate-side surfaces appear in the same browser session immediately.
+ */
+const WEB3_DEFAULT = false;
 
 export const isWeb3Enabled = (): boolean => {
   try {

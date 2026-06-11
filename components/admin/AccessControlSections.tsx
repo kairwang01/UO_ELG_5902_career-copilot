@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, SectionHeading, tableCell, tableHead, tableRow } from './adminUi';
+import { at } from './adminText';
 import {
   ADMIN_PERMISSION_MATRIX,
   ADMIN_ROLE_DESCRIPTIONS,
@@ -24,11 +25,8 @@ const ROLE_LABELS: Record<AdminRole, string> = {
 export const PermissionMatrix: React.FC = () => (
   <Card className="overflow-hidden">
     <div className="px-5 pt-5 pb-3">
-      <SectionHeading>Roles & permissions</SectionHeading>
-      <p className="mt-1 text-xs text-gray-500">
-        Predefined roles — the server enforces every action; this matrix mirrors the
-        registry in <code className="font-mono text-[11px]">lib/access/permissions.ts</code>.
-      </p>
+      <SectionHeading>{at('access.matrix.title')}</SectionHeading>
+      <p className="mt-1 text-xs text-gray-500">{at('access.matrix.subtitle')}</p>
     </div>
     <div className="px-5 pb-4 grid sm:grid-cols-3 gap-3">
       {ROLE_ORDER.map((role) => (
@@ -42,7 +40,7 @@ export const PermissionMatrix: React.FC = () => (
       <table className="w-full border-t border-gray-100">
         <thead>
           <tr className="bg-gray-50/80">
-            <th className={tableHead}>Capability</th>
+            <th className={tableHead}>{at('access.matrix.col_capability')}</th>
             {ROLE_ORDER.map((role) => (
               <th key={role} className={`${tableHead} text-center`}>{ROLE_LABELS[role]}</th>
             ))}
@@ -78,11 +76,8 @@ export const PermissionMatrix: React.FC = () => (
 /** Product-side role overview: what each signed-in role can reach in the app. */
 export const ProductRoleOverview: React.FC = () => (
   <Card className="p-5">
-    <SectionHeading>Product roles</SectionHeading>
-    <p className="mt-1 text-xs text-gray-500">
-      Application-side access by account type. Enforced by route guards and the
-      server-side model tier gate (resolveProvider).
-    </p>
+    <SectionHeading>{at('access.product.title')}</SectionHeading>
+    <p className="mt-1 text-xs text-gray-500">{at('access.product.subtitle')}</p>
     <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {Object.entries(PRODUCT_ROLE_ACCESS).map(([id, def]) => (
         <div key={id} className="rounded-md border border-gray-200 px-3 py-2.5">

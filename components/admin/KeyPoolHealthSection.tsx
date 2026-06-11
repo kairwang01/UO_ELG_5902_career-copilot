@@ -1,6 +1,25 @@
 import React from 'react';
 import { Card, SectionHeading, tableCell, tableHead, tableRow } from './adminUi';
+import { at } from './adminText';
 import type { ModelEntry } from '../../services/adminClient';
+
+/** Human-readable hint for the availability-error codes the router records. */
+const ERROR_HINTS: Record<string, string> = {
+  '401': 'invalid key',
+  '403': 'forbidden',
+  '429': 'rate limited',
+  '500': 'provider error',
+  '502': 'provider error',
+  '503': 'provider unavailable',
+  timeout: 'timed out',
+  quota: 'quota exhausted',
+  empty: 'empty response',
+};
+
+const describeError = (code: string): string => {
+  const hint = ERROR_HINTS[code.toLowerCase()];
+  return hint ? `${code} · ${hint}` : code;
+};
 
 /**
  * Key-pool health overview for the Models & Keys tab.
@@ -26,24 +45,20 @@ export const KeyPoolHealthSection: React.FC<{ models: ModelEntry[] }> = ({ model
   return (
     <Card className="overflow-hidden">
       <div className="px-5 pt-5 pb-3">
-        <SectionHeading>Key pool health</SectionHeading>
-        <p className="mt-1 text-xs text-gray-500">
-          Live rotation state per model. Failed keys cool down for 10 minutes and are skipped
-          automatically; on 401/403/429/timeouts the router rotates to the next key, then walks
-          the fallback chain. Every switch is recorded in <code className="font-mono text-[11px]">key_health</code>.
-        </p>
+        <SectionHeading>{at('pool.title')}</SectionHeading>
+        <p className="mt-1 text-xs text-gray-500">{at('pool.subtitle')}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full border-t border-gray-100">
           <thead>
             <tr className="bg-gray-50/80">
-              <th className={tableHead}>Model</th>
-              <th className={tableHead}>Keys</th>
-              <th className={tableHead}>Status</th>
-              <th className={tableHead}>Failures</th>
-              <th className={tableHead}>Cooldown until</th>
-              <th className={tableHead}>Last error</th>
-              <th className={tableHead}>Fallback route</th>
+              <th className={tableHead}>{at('pool.col_model')}</th>
+              <th className={tableHead}>{at('pool.col_keys')}</th>
+              <th className={tableHead}>{at('pool.col_status')}</th>
+              <th className={tableHead}>{at('pool.col_failures')}</th>
+              <th className={tableHead}>{at('pool.col_cooldown')}</th>
+              <th className={tableHead}>{at('pool.col_last_error')}</th>
+              <th className={tableHead}>{at('pool.col_route')}</th>
             </tr>
           </thead>
           <tbody>
@@ -61,24 +76,24 @@ export const KeyPoolHealthSection: React.FC<{ models: ModelEntry[] }> = ({ model
                   <td className={tableCell}>
                     {!hasData ? (
                       <span className="inline-block text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded bg-gray-100 text-gray-500">
-                        no data
+                        {at('pool.status_no_data')}
                       </span>
                     ) : cooled ? (
                       <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
-                        cooling
+                        {at('pool.status_cooling')}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                        healthy
+                        {at('pool.status_healthy')}
                       </span>
                     )}
                   </td>
                   <td className={tableCell}>{h?.failureCount ?? '—'}</td>
                   <td className={`${tableCell} font-mono text-xs`}>{fmtTime(h?.cooldownUntil)}</td>
                   <td className={`${tableCell} font-mono text-xs`}>
-                    {h?.lastErrorCode ?? '—'}
+                    {h?.lastErrorCode ? describeError(h.lastErrorCode) : '—'}
                     {h?.lastFailureAt && (
                       <span className="block text-[10px] text-gray-400">{fmtTime(h.lastFailureAt)}</span>
                     )}
@@ -86,7 +101,7 @@ export const KeyPoolHealthSection: React.FC<{ models: ModelEntry[] }> = ({ model
                   <td className={`${tableCell} font-mono text-[11px]`}>
                     {m.fallbackChain && m.fallbackChain.length > 0
                       ? `${m.id} → ${m.fallbackChain.join(' → ')}`
-                      : 'auto (priority order)'}
+                      : at('pool.route_auto')}
                   </td>
                 </tr>
               );

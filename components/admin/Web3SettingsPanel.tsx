@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, SectionHeading } from './adminUi';
+import { at } from './adminText';
 import { isWeb3Enabled, onWeb3FlagChange, setWeb3Enabled } from '../../config/featureFlags';
 
 /**
@@ -23,27 +24,22 @@ export const Web3SettingsPanel: React.FC = () => {
       <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <span className="mt-0.5 shrink-0" aria-hidden="true">⚠</span>
         <p>
-          <span className="font-semibold">Experimental module.</span>{' '}
-          Runs on the Sepolia testnet only. No real funds are involved and the core
-          product never requires a wallet.
+          <span className="font-semibold">{at('web3.banner.title')}</span>{' '}
+          {at('web3.banner.body')}
         </p>
       </div>
 
       <Card className="p-5 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <SectionHeading>Web3 identity module</SectionHeading>
-            <p className="mt-1 text-xs leading-relaxed text-gray-500">
-              Controls the candidate-facing surface: the wallet section in Account and the
-              Identity &amp; Wallet workspace view (Proof-of-Talent credential, staking, rewards).
-              When off, both are hidden entirely — sign-in, payments and all AI features are unaffected.
-            </p>
+            <SectionHeading>{at('web3.toggle.title')}</SectionHeading>
+            <p className="mt-1 text-xs leading-relaxed text-gray-500">{at('web3.toggle.desc')}</p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={enabled}
-            aria-label="Toggle Web3 module"
+            aria-label={at('web3.toggle.aria')}
             onClick={toggle}
             className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
           >
@@ -51,18 +47,15 @@ export const Web3SettingsPanel: React.FC = () => {
           </button>
         </div>
         <p className={`text-xs font-medium ${enabled ? 'text-emerald-700' : 'text-gray-500'}`}>
-          {enabled ? 'Enabled — candidates can see the wallet and credential surfaces.' : 'Disabled — all Web3 surfaces are hidden from the product.'}
+          {enabled ? at('web3.toggle.on') : at('web3.toggle.off')}
         </p>
         <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] leading-relaxed text-gray-500">
-          Scope note: this switch currently persists per browser (demo mode). Platform-wide
-          persistence moves to <code className="font-mono">platform_config</code> together with the
-          API platform callables — <code className="font-mono">config/featureFlags.ts</code> is the
-          single swap point.
+          {at('web3.toggle.scope_note')}
         </p>
       </Card>
 
       <Card className="p-5 space-y-4">
-        <SectionHeading>What Web3 is used for here</SectionHeading>
+        <SectionHeading>{at('web3.usage.title')}</SectionHeading>
         <ul className="space-y-2.5">
           {[
             ['Wallet connection (live)', 'Optional identity link on the candidate Account page. Connection failures fall back to the normal account — nothing is blocked.'],
@@ -79,14 +72,14 @@ export const Web3SettingsPanel: React.FC = () => {
       </Card>
 
       <Card className="p-5">
-        <SectionHeading>Contract</SectionHeading>
+        <SectionHeading>{at('web3.contract.title')}</SectionHeading>
         <dl className="mt-3 space-y-2 text-xs">
           <div className="flex flex-wrap gap-x-3">
-            <dt className="text-gray-500 shrink-0">Network</dt>
+            <dt className="text-gray-500 shrink-0">{at('web3.contract.network')}</dt>
             <dd className="font-mono text-gray-800">Sepolia testnet (chain 11155111)</dd>
           </div>
           <div className="flex flex-wrap gap-x-3">
-            <dt className="text-gray-500 shrink-0">Proof-of-Talent</dt>
+            <dt className="text-gray-500 shrink-0">{at('web3.contract.address')}</dt>
             <dd className="font-mono text-gray-800 break-all">0x2A3b1A43842238321a22542a035921A362358189</dd>
           </div>
         </dl>
