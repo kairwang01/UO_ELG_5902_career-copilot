@@ -533,7 +533,19 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                 {t('analysis_apply_safety_note')}
               </div>
             )}
-            {optimizationError && <p className="text-xs text-red-300 mt-2">{optimizationError}</p>}
+            {optimizationError && (
+              <div className="mt-3 flex flex-col gap-2 rounded-lg border border-red-300/40 bg-red-500/15 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-red-100">{optimizationError}</p>
+                <button
+                  type="button"
+                  onClick={handleApplySuggestions}
+                  disabled={isOptimizing}
+                  className="self-start text-xs font-semibold text-white underline disabled:opacity-60 sm:self-auto"
+                >
+                  {t('action_retry')}
+                </button>
+              </div>
+            )}
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

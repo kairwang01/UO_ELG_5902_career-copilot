@@ -1837,6 +1837,11 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const [market, setMarket] = useState<string>(DEFAULT_MARKET);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // Let a long bulk run be stopped, and never setState / keep processing after
+  // the recruiter navigates away mid-batch.
+  const cancelBulkRef = useRef(false);
+  const isMountedRef = useRef(true);
+  useEffect(() => () => { isMountedRef.current = false; cancelBulkRef.current = true; }, []);
   const [currentFilter, setCurrentFilter] = useState<AgencyFilter>("all");
   const [showDetailModal, setShowDetailModal] =
     useState<BulkAnalysisItem | null>(null);
@@ -1894,11 +1899,15 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     setIsExtractingJd(true);
     try {
       const result = await extractTextFromUrl(jdUrl);
-      if (result.extractedText) {
+      if (result.extractedText && result.extractedText.trim()) {
         setSelectedInternalJobId("");
         setJobDescription(result.extractedText);
         setJdSource("paste"); // Switch to paste mode to show result
         addToast(t("agency_jd_import_success"), "success");
+      } else {
+        // The page had no extractable job description — tell the user instead of
+        // silently doing nothing.
+        addToast(t("agency_jd_import_empty"), "error");
       }
     } catch {
       addToast(t("agency_jd_import_failed"), "error");
@@ -1994,6 +2003,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       return;
     }
 
+    cancelBulkRef.current = false;
     setIsAnalyzing(true);
 
     // Update UI to show parsing state
@@ -2076,14 +2086,22 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       }
     };
 
-    // Execute sequentially to avoid rate limiting
+    // Execute sequentially to avoid rate limiting. Stop early if the recruiter
+    // hit Stop or navigated away.
     for (const item of queue) {
+      if (cancelBulkRef.current || !isMountedRef.current) break;
       await processFile(item);
     }
 
+    if (!isMountedRef.current) return;
+    const wasCancelled = cancelBulkRef.current;
+    cancelBulkRef.current = false;
     setIsAnalyzing(false);
     if (hubSettings.focusCompletedAfterRun) setCurrentFilter("complete");
-    addToast(t("agency_analysis_complete"), "success");
+    addToast(
+      wasCancelled ? t("agency_analysis_stopped") : t("agency_analysis_complete"),
+      wasCancelled ? "info" : "success",
+    );
   };
 
   const handleAnonymize = async (id: string) => {
@@ -2732,12 +2750,21 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <button
                       type="button"
-                      onClick={() => setFiles([])}
+                      onClick={() => { if (files.length > 0 && window.confirm(t("agency_clear_all_confirm"))) setFiles([]); }}
                       className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       disabled={isAnalyzing}
                     >
                       {t("agency_clear_all")}
                     </button>
+                    {isAnalyzing && (
+                      <button
+                        type="button"
+                        onClick={() => { cancelBulkRef.current = true; }}
+                        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                      >
+                        {t("agency_stop")}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={runBulkAnalysis}

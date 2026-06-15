@@ -477,7 +477,7 @@ export const generateCandidatePrepKit = (resumeText: string, jobDescription: str
 // ---- Image generation & URL extraction (dedicated callables) ---------------
 export const generateProfessionalHeadshot = async (imageBase64: string): Promise<string[]> => {
   // Legacy production name is generateProfessionalHeadshot (IAM already set).
-  const fn = httpsCallable<any, { images: string[] }>(firebaseFunctions, 'generateProfessionalHeadshot');
+  const fn = httpsCallable<any, { images: string[] }>(firebaseFunctions, 'generateProfessionalHeadshot', { timeout: 190_000 });
   const res = await fn({ imageBase64 });
   return res.data.images;
 };

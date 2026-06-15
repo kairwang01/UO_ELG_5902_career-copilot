@@ -608,18 +608,29 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     }
   };
 
+  // Bumped on each generate/cancel so a late (or cancelled) result is ignored —
+  // the user can never be trapped on the "Generating…" spinner.
+  const headshotRunRef = useRef(0);
   const handleGenerateHeadshots = async () => {
     if (!uploadedImage) {
       setHeadshotError(t('tool_portfolio_photo_required'));
       return;
     }
+    const runId = ++headshotRunRef.current;
     setHeadshotStep('generating');
     setHeadshotError(null);
     try {
-        const results = await generateProfessionalHeadshot(uploadedImage.data);
+        // Client watchdog: even if the call hangs, resolve to a retryable error.
+        const results = await Promise.race([
+            generateProfessionalHeadshot(uploadedImage.data),
+            new Promise<string[]>((_, reject) =>
+                setTimeout(() => reject(new Error(t('tool_portfolio_headshot_timeout'))), 120_000)),
+        ]);
+        if (headshotRunRef.current !== runId) return; // cancelled / superseded
         setGeneratedImages(results.map(imgData => ({ mimeType: 'image/jpeg', data: imgData })));
         setHeadshotStep('generated');
     } catch (err) {
+        if (headshotRunRef.current !== runId) return;
         setHeadshotError(err instanceof Error ? err.message : 'Failed to generate avatars. The image might not be suitable.');
         setHeadshotStep('photo_uploaded');
     }
@@ -812,7 +823,9 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
              return (
                  <div className="text-center p-8">
                     <p className="text-xl text-gray-800 dark:text-gray-100 font-semibold mb-2">{t('tool_portfolio_generating_avatars_message') || 'Generating...'}</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">{t('tool_portfolio_generating_avatars_hint')}</p>
                     <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"></div>
+                    <button type="button" onClick={() => { headshotRunRef.current++; setHeadshotStep('photo_uploaded'); }} className="mt-6 text-sm text-gray-600 dark:text-slate-400 hover:underline">{t('tool_portfolio_cancel')}</button>
                  </div>
              );
         case 'generated':
