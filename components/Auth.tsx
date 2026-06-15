@@ -9,6 +9,7 @@ import { X } from 'lucide-react';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { markOnboardingPending } from '../lib/onboarding';
 import { setUserSubscription } from '../services/subscriptionClient';
+import { useToast } from './Toast';
 
 interface AuthProps {
   onClose: () => void;
@@ -74,6 +75,7 @@ const getAuthErrorMessage = (message: string): string => {
 };
 
 const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }) => {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -190,6 +192,10 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           // Fresh candidate accounts go through the guided setup once the
           // workspace mounts (employer signups land in the portal instead).
           if (mode !== 'business') markOnboardingPending();
+          // The auth listener navigates away (unmounting this modal) the instant
+          // the account is created, so the inline message would never be seen —
+          // show the verify-your-email notice as a global toast that persists.
+          addToast(t('auth_signup_success_verify'), 'info');
           setMessage(t('auth_signup_success_verify'));
         }
       } catch (err) {

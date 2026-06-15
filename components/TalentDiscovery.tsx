@@ -524,6 +524,10 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         handleSelectPostedJob(initialSelectedJobId);
     }, [handleSelectPostedJob, initialSelectedJobId, jobsLoaded, postedJobs, selectedJobId]);
 
+    // Read t via a ref so this metered fetch keeps a stable identity — otherwise a
+    // language switch (which gives a new t) would re-fire discoverTalent() each time.
+    const tRef = useRef(t);
+    tRef.current = t;
     const fetchVerifiedTalent = useCallback(async () => {
         const requestId = verifiedRequestIdRef.current + 1;
         verifiedRequestIdRef.current = requestId;
@@ -532,16 +536,16 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         try {
             const { candidates } = await discoverTalent();
             if (requestId !== verifiedRequestIdRef.current) return;
-            setVerifiedResults(candidates.map((c) => toMatchedCandidate(c, t('discover_verified_summary_default'))));
+            setVerifiedResults(candidates.map((c) => toMatchedCandidate(c, tRef.current('discover_verified_summary_default'))));
         } catch (err) {
             if (requestId !== verifiedRequestIdRef.current) return;
-            setVerifiedError(err instanceof Error ? err.message : t('talent_load_error'));
+            setVerifiedError(err instanceof Error ? err.message : tRef.current('talent_load_error'));
         } finally {
             if (requestId === verifiedRequestIdRef.current) {
                 setVerifiedLoading(false);
             }
         }
-    }, [t]);
+    }, []);
 
     useEffect(() => {
         fetchVerifiedTalent();

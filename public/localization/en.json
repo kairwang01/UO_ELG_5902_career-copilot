@@ -1959,6 +1959,7 @@
   "analysis_apply_edits": "Apply edits",
   "action_cancel": "Cancel",
   "action_retry": "Retry",
+  "action_back": "Back",
   "workspace_draft_cover_letter": "Draft cover letter",
   "workspace_prepare_outreach": "Prepare outreach",
   "error_login_required_interview": "You must be logged in to start an interview.",

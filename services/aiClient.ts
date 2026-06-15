@@ -49,22 +49,24 @@ export function formatCallableError(err: unknown): string {
     detailsStr.includes('quota') ||
     detailsStr.includes('resource_exhausted');
 
+  // User-facing copy only — no internal/infra jargon (model keys, Cloud Run,
+  // Admin), which end users (candidates/recruiters) should never see.
   if (isQuota) {
-    return 'The platform AI service is temporarily rate-limited or out of quota. Wait ~30s and retry. Business admins can verify the configured model key and billing in Admin.';
+    return 'Our AI service is busy right now. Please wait about 30 seconds and try again.';
   }
   if (code === 'functions/unauthenticated') {
     return 'Please sign in to use AI features.';
   }
   if (code === 'functions/permission-denied' || lower.includes('not authenticated')) {
-    return 'AI service access denied. Ask the project owner to grant Cloud Run invoker on new functions.';
+    return 'You do not have access to this feature. Please sign in again, or contact support if this keeps happening.';
   }
   if (code === 'functions/not-found') {
-    return message || 'User profile not found. Sign out and sign back in.';
+    return 'We could not load your profile. Please sign out and sign back in.';
   }
   if (code === 'functions/internal' && (lower === 'internal' || message === 'INTERNAL')) {
-    return 'AI request failed on the server. Retry in ~30s. Business admins can verify the configured model key in Admin.';
+    return 'The AI request failed. Please try again in a moment.';
   }
-  return message || 'An error occurred while calling the AI service.';
+  return message || 'Something went wrong with the AI service. Please try again.';
 }
 
 function reportStatusFromError(err: any): void {

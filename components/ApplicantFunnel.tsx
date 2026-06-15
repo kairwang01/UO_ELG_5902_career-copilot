@@ -403,6 +403,14 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
             <div role="status" aria-live="polite" className="flex min-h-[360px] flex-col items-center justify-center text-center">
                 <div className="h-12 w-12 rounded-full border-4 border-blue-200 border-t-blue-700 animate-spin"></div>
                 <p className="mt-4 text-base font-medium text-gray-700 dark:text-gray-300">{loadingMessage}</p>
+                {/* Keep an exit available — scoring many applicants can take a minute. */}
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="mt-6 text-sm font-semibold text-gray-600 underline hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100"
+                >
+                    {t('action_back')}
+                </button>
             </div>
         );
     }

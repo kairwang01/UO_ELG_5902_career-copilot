@@ -1959,6 +1959,7 @@
   "analysis_apply_edits": "应用修改",
   "action_cancel": "取消",
   "action_retry": "重试",
+  "action_back": "返回",
   "workspace_draft_cover_letter": "写求职信",
   "workspace_prepare_outreach": "准备沟通",
   "error_login_required_interview": "请先登录再开始面试。",
