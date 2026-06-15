@@ -51,6 +51,7 @@ interface ChartDataPoint {
 }
 
 interface ActivityItem {
+  id: string;
   type: string;
   details: string;
 }
@@ -233,7 +234,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
 
       const unavailableSections: string[] = [];
       let analyses: Record<string, unknown>[] = [];
-      let activities: Record<string, unknown>[] = [];
+      let activities: (Record<string, unknown> & { id: string })[] = [];
 
       if (analysesResult.status === 'fulfilled') {
         analyses = analysesResult.value.docs.map((doc) => doc.data());
@@ -266,13 +267,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       }
 
       if (activitiesResult.status === 'fulfilled') {
-        activities = activitiesResult.value.docs.map((doc) => doc.data());
+        activities = activitiesResult.value.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
       } else {
         unavailableSections.push(t('dashboard_section_recent_activity'));
         setActivityFeed([]);
       }
 
-      const feedData = activities.map((act) => {
+      const feedData = activities.map((act, index) => {
         const toolKey = typeof act.tool_key === 'string' ? act.tool_key : 'default';
         const toolInfo = toolMetadataMap[toolKey] || toolMetadataMap.default;
         const toolName = t(toolInfo.nameKey);
@@ -289,6 +293,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           }
         }
         return {
+          id: act.id || `${toolKey}-${toDate(act.created_at).getTime()}-${index}`,
           type: toolName,
           details,
         };
@@ -734,7 +739,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
             {activityFeed.length > 0 ? (
               <div className="space-y-3">
                 {activityFeed.map((item) => (
-                  <div key={`${item.type}-${item.details}`} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
+                  <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
                     <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.type}</p>
                     <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{item.details}</p>
                   </div>
