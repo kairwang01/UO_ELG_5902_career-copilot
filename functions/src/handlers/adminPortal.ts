@@ -46,7 +46,7 @@ import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 
 /** Plan keys an admin may assign (mirror of setSubscriptionStatus / config.ts). */
 const CANDIDATE_PLANS = new Set(["free", "essentials", "accelerator", "executive"]);
-const BUSINESS_PLANS = new Set(["single_post", "job_pack"]);
+const BUSINESS_PLANS = new Set(["starter", "growth", "pro", "single_post", "job_pack"]);
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -569,10 +569,13 @@ export const adminSetSubscriptionFunction = onCall({ invoker: "public" }, async 
   if (!snap.exists) throw new HttpsError("not-found", "User not found.");
   const previous = snap.get(USER_FIELDS.subscriptionStatus) ?? null;
 
-  await userRef.update({
+  const patch: Record<string, unknown> = {
     [USER_FIELDS.subscriptionStatus]: plan,
     [USER_FIELDS.updatedAt]: new Date().toISOString(),
-  });
+  };
+  if (BUSINESS_PLANS.has(plan)) patch[USER_FIELDS.role] = "employer";
+
+  await userRef.update(patch);
   await logAdminAction({
     admin_uid: adminUid,
     action: "set_subscription",

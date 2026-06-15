@@ -100,7 +100,7 @@ service cloud.firestore {
         status.size() <= 80 &&
         (
           status == "free" ||
-          status in ["essentials", "accelerator", "executive", "single_post", "job_pack"] ||
+          status in ["essentials", "accelerator", "executive", "starter", "growth", "pro", "single_post", "job_pack"] ||
           status.matches("^pending_[a-z0-9_]+$") ||
           status.matches("^pending_biz_[a-z0-9_]+$")
         );

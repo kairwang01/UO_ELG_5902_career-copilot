@@ -9,7 +9,7 @@
  *   free     — Gemini + KairLLM (our shared gateway). Daily run cap enforced.
  *   paid     — free + DeepSeek (our API key). Subscriptions: essentials/accelerator/executive.
  *   business — free models + custom bring-your-own API. Roles: employer OR
- *              subscriptions: single_post/job_pack.
+ *              subscriptions: starter/growth/pro/single_post/job_pack.
  *
  * The "auto" kairllm option (id "auto") is preserved for backward-compat with
  * existing paid-tier clients that may have "auto" stored as their preferred
@@ -180,6 +180,9 @@ export function tierFromSubscription(status: string | undefined): Tier {
       return "paid";
     // Business subscriptions — tier is "free" for model-rank purposes but
     // isBusinessUser() returns true (which unlocks BYOA "custom").
+    case "starter":
+    case "growth":
+    case "pro":
     case "single_post":
     case "job_pack":
       return "free";
@@ -197,7 +200,13 @@ export function isBusinessUser(
   subscriptionStatus: string | undefined
 ): boolean {
   if (role === "employer") return true;
-  if (subscriptionStatus === "single_post" || subscriptionStatus === "job_pack")
+  if (
+    subscriptionStatus === "starter" ||
+    subscriptionStatus === "growth" ||
+    subscriptionStatus === "pro" ||
+    subscriptionStatus === "single_post" ||
+    subscriptionStatus === "job_pack"
+  )
     return true;
   return false;
 }

@@ -1,7 +1,7 @@
 /**
  * businessLlm — User-facing callables for business-tier custom LLM config.
  *
- * Business users (role "employer" OR subscription "single_post"/"job_pack") may
+ * Business users (role "employer" OR business subscription) may
  * supply their own OpenAI-compatible API endpoint. The config is stored in
  * users/{uid}.custom_provider = { base_url, api_key, model } via the Admin SDK
  * (server-only write — this field is NOT listed in Firestore security rules as
