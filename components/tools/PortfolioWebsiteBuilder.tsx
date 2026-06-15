@@ -741,8 +741,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const renderTemplateSelection = () => (
     <div className="space-y-8 animate-fade-in py-4">
         <div className="text-center">
-            <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Choose Your Showcase Style</h3>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">Pick a template to start building your professional digital presence.</p>
+            <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{t('tool_portfolio_choose_style_title')}</h3>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">{t('tool_portfolio_choose_style_subtitle')}</p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
@@ -774,7 +774,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                     <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">{t_template.description}</p>
                     
                     <div className="mt-auto flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm group-hover:translate-x-1 transition-transform">
-                        <span>Select Template</span>
+                        <span>{t('tool_portfolio_select_template')}</span>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                     </div>
                 </button>
@@ -860,12 +860,12 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       <StagedLoader
         icon={<Globe />}
         accent="pink"
-        title="Building your website"
+        title={t('tool_portfolio_building_title')}
         steps={[
-          'Reading your resume…',
-          'Designing the layout…',
-          'Generating each section…',
-          'Assembling your page…',
+          t('tool_portfolio_building_step1'),
+          t('tool_portfolio_building_step2'),
+          t('tool_portfolio_building_step3'),
+          t('tool_portfolio_building_step4'),
         ]}
         onCancel={cancel}
       />
@@ -878,7 +878,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                Back to Styles
+                {t('tool_portfolio_back_to_styles')}
             </button>
             <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-full text-xs font-bold border border-blue-100 dark:border-blue-800/50">
                 Template: {PORTFOLIO_TEMPLATES.find(t => t.key === details.theme)?.name}

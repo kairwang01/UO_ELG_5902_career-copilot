@@ -177,7 +177,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
         } catch (dbError) {
             console.error("Failed to update streak in database:", dbError);
             // Only surface the error if the run was not cancelled.
-            if (!alive || alive()) setError("Could not save your practice progress. Your analysis is still available.");
+            if (!alive || alive()) setError(t('tool_english_pro_streak_save_error'));
         }
     }, [session, profile, refreshProfile, dailyGoalComplete]);
 
@@ -219,7 +219,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     
     // Spoken
     const runSpokenAnalysis = useCallback(async (finalTranscript: string, duration: number) => {
-        if (!finalTranscript.trim()) { setError("No speech was detected."); return; }
+        if (!finalTranscript.trim()) { setError(t('tool_english_pro_no_speech')); return; }
         const alive = begin(); setError(null); setTranscript(finalTranscript);
         try {
             const res = await analyzeSpokenEnglish(finalTranscript, duration, targetIeltsBand);
@@ -295,7 +295,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
     const toggleListening = useCallback(() => {
         if (!isSpeechSupported) {
-            setError("Speech recognition is not supported in this browser.");
+            setError(t('tool_english_pro_not_supported'));
             return;
         }
         if (isListening) {
@@ -323,7 +323,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             setSpeakingTopics(topics);
             setCurrentTopic(topics[0] || 'Tell me about your most recent project.');
         } catch (e) {
-            setError("Could not fetch a new topic. Please try again.");
+            setError(t('tool_english_pro_topic_fetch_error'));
             setCurrentTopic('Tell me about your most recent project.');
         } finally {
             setIsFetchingTopic(false);
@@ -332,7 +332,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
     // Reading
     const runReadingAnalysis = async () => {
-        if (!readingUserInput.trim()) { setError("Please paste some text to analyze."); return; }
+        if (!readingUserInput.trim()) { setError(t('tool_english_pro_paste_required')); return; }
         const alive = begin(); setError(null); setReadingEvaluation(null); setUserAnswers([]);
         try {
             const res = await analyzeEnglishReading(readingUserInput, targetIeltsBand);
@@ -384,7 +384,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
     // Listening
     const runListeningAnalysis = async () => {
-        if (!userTranscription.trim()) { setError("Please type what you heard."); return; }
+        if (!userTranscription.trim()) { setError(t('tool_english_pro_type_heard_required')); return; }
         const alive = begin(); setError(null);
         try {
             const res = await analyzeEnglishListening(currentClip.text, userTranscription, targetIeltsBand);
@@ -509,7 +509,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 <>
                     {/* Topic card */}
                     <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-                        <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-2">Speaking Topic</h4>
+                        <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-2">{t('tool_english_pro_speaking_topic')}</h4>
                         {currentTopic ? (
                             <p className="text-gray-700 dark:text-gray-300 text-sm italic">"{currentTopic}"</p>
                         ) : (
@@ -551,7 +551,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                 <span className="text-xs">{isListening ? t('tool_english_pro_spoken_stop_mic') : t('tool_english_pro_spoken_start_mic')}</span>
                             </button>
                             {isListening && (
-                                <p className="text-xs text-red-600 dark:text-red-400 font-medium animate-pulse">Recording… speak now</p>
+                                <p className="text-xs text-red-600 dark:text-red-400 font-medium animate-pulse">{t('tool_english_pro_recording_hint')}</p>
                             )}
                         </div>
                     )}
@@ -664,7 +664,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         ))}
 
                         {/* Vocabulary list (only on analyzed user text) */}
-                        {!practiceResult?.passage && (practiceResult as EnglishReadingAnalysisResult | null)?.vocabularyList?.length ? renderResultCard('Key Vocabulary', (
+                        {!practiceResult?.passage && (practiceResult as EnglishReadingAnalysisResult | null)?.vocabularyList?.length ? renderResultCard(t('tool_english_pro_key_vocabulary'), (
                             <table className="w-full text-xs">
                                 <thead><tr className="text-left text-gray-500 dark:text-gray-400 border-b dark:border-slate-600"><th className="pb-1 pr-2">Word</th><th className="pb-1 pr-2">Definition</th><th className="pb-1">Example</th></tr></thead>
                                 <tbody>
@@ -681,7 +681,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
                         {/* Summary (analyzed text only) */}
                         {!practiceResult?.passage && (practiceResult as EnglishReadingAnalysisResult | null)?.summary
-                            ? renderResultCard('Summary', <p>{(practiceResult as EnglishReadingAnalysisResult).summary}</p>)
+                            ? renderResultCard(t('tool_english_pro_summary'), <p>{(practiceResult as EnglishReadingAnalysisResult).summary}</p>)
                             : null
                         }
 
@@ -705,7 +705,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                             />
                                         ) : (
                                             <div className={`p-3 rounded-md text-sm ${readingEvaluation[i]?.isCorrect ? 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700'}`}>
-                                                <p className="font-semibold">{readingEvaluation[i]?.isCorrect ? '✓ Correct' : '✗ Incorrect'}</p>
+                                                <p className="font-semibold">{readingEvaluation[i]?.isCorrect ? t('tool_english_pro_correct') : t('tool_english_pro_incorrect')}</p>
                                                 <p className="text-gray-600 dark:text-gray-300">{readingEvaluation[i]?.feedback}</p>
                                                 {!readingEvaluation[i]?.isCorrect && (
                                                     <p className="mt-1"><span className="font-medium">{t('tool_english_pro_reading_correct_answer')}:</span> {q.answer}</p>
@@ -753,7 +753,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 return <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">{t('tool_english_pro_generating_button')}</p>;
             }
             if (flashcards.length === 0) {
-                return <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">No flashcards loaded.</p>;
+                return <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">{t('tool_english_pro_no_flashcards')}</p>;
             }
 
             const isComplete = currentCardIndex >= flashcards.length;
@@ -953,7 +953,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                             </button>
                         </div>
                         {!isSpeechSynthesisSupported && (
-                            <p className="text-xs text-center text-yellow-700 dark:text-yellow-400">Audio playback is not supported in this browser.</p>
+                            <p className="text-xs text-center text-yellow-700 dark:text-yellow-400">{t('tool_english_pro_audio_unsupported')}</p>
                         )}
 
                         {/* Transcription input */}
@@ -1030,7 +1030,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 <StagedLoader
                     icon={<Languages />}
                     accent="purple"
-                    title="Analyzing your English"
+                    title={t('tool_english_pro_analyzing_title')}
                     steps={[
                         'Reading your submission…',
                         'Checking grammar & clarity…',
