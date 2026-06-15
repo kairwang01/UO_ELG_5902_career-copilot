@@ -526,6 +526,7 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
       prompt: buildPrompt("generateJobDescription", {
         jobTitle: p.jobTitle,
         companyName: p.companyName,
+        companyDescription: p.companyDescription || "the company",
         keyResponsibilities: p.keyResponsibilities,
       }),
       responseSchema: {
@@ -539,10 +540,14 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   analyzeSalary: {
     creditKey: null,
     build: (p) => ({
+      // The frontend sends a job description for context; append it so the
+      // estimate can account for seniority/scope instead of title alone.
       prompt: buildPrompt("analyzeSalary", {
         jobTitle: p.jobTitle,
         location: p.location,
-      }),
+      }) + (p.jobDescription
+        ? `\n\nTarget-role context (use it to refine seniority and scope; do not quote it back):\n${p.jobDescription}`
+        : ""),
       responseSchema: {
         type: Type.OBJECT,
         properties: { yearlySalary: { type: Type.STRING }, monthlySalary: { type: Type.STRING } },

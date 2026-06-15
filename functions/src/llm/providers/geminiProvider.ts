@@ -116,12 +116,19 @@ export class GeminiProvider implements LLMProvider {
     // Build the config object
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const config: Record<string, any> = {};
-    if (req.responseSchema) {
+    if (req.useGoogleSearch) {
+      // Google Search grounding and structured output (responseSchema /
+      // responseMimeType) CANNOT be combined in one Gemini request — the API
+      // rejects the pair with HTTP 400, which is not a quota error so the quota
+      // fallback never fires and the whole tool call throws. When grounding is on
+      // we send only the search tool and recover JSON from the response text via
+      // extractJson() below (req.responseSchema still drives that parse), so
+      // callers that asked for JSON + grounding (findOpportunities,
+      // findIndustryEvents) keep working and return live-sourced results.
+      config.tools = [{ googleSearch: {} }];
+    } else if (req.responseSchema) {
       config.responseMimeType = "application/json";
       config.responseSchema = req.responseSchema;
-    }
-    if (req.useGoogleSearch) {
-      config.tools = [{ googleSearch: {} }];
     }
     if (req.temperature !== undefined) {
       config.temperature = req.temperature;
