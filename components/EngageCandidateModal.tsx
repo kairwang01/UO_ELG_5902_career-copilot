@@ -65,12 +65,22 @@ const EngageCandidateModal: React.FC<EngageCandidateModalProps> = ({ candidate, 
                             </div>
                         </div>
                     )}
-                    <div>
-                        <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">{t('engage_resume_title')}</h4>
-                        <div className="h-[40vh]">
-                            <ResumePreview resumeText={candidate.resume_text || t('engage_resume_unavailable')} market="" t={t} />
+                    {candidate.resume_text ? (
+                        <div>
+                            <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">{t('engage_resume_title')}</h4>
+                            <div className="h-[40vh]">
+                                <ResumePreview resumeText={candidate.resume_text} market="" t={t} />
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        // The full resume stays private by design (other profiles are
+                        // not client-readable). Explain that instead of showing an empty
+                        // "resume unavailable" panel that looks broken after engaging.
+                        <div className="rounded-lg border border-dashed border-gray-300 dark:border-slate-600 p-4 text-center">
+                            <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">{t('engage_resume_title')}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{t('engage_resume_private_note')}</p>
+                        </div>
+                    )}
                 </div>
                 <div className="flex-shrink-0 flex justify-between items-center p-4 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 rounded-b-xl">
                     <p className="text-xs text-gray-500 dark:text-gray-400">{t('engage_privacy_note')}</p>

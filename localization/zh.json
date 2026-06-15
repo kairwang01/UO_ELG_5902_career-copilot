@@ -2126,6 +2126,7 @@
   "engage_wallet_address": "已验证钱包地址",
   "engage_resume_title": "候选人完整简历",
   "engage_resume_unavailable": "暂无简历文本。",
+  "engage_resume_private_note": "在候选人回复之前，其完整简历将保持私密。请参考上方的匹配摘要并主动联系——候选人回复后可分享完整简历。",
   "engage_privacy_note": "候选人联系方式会保持私密，直到你开始沟通。",
   "engage_draft_outreach_button": "起草沟通消息",
   "unlock_modal_fee_loading": "加载中...",

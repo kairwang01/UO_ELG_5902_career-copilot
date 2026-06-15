@@ -2126,6 +2126,7 @@
   "engage_wallet_address": "Verified wallet address",
   "engage_resume_title": "Candidate's full resume",
   "engage_resume_unavailable": "No resume text available.",
+  "engage_resume_private_note": "This candidate's full resume stays private until they respond. Use the match summary above and reach out — they can share their full resume when they reply.",
   "engage_privacy_note": "Candidate contact information stays private until you start outreach.",
   "engage_draft_outreach_button": "Draft outreach message",
   "unlock_modal_fee_loading": "Loading...",
