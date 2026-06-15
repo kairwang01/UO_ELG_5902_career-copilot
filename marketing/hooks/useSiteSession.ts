@@ -88,8 +88,9 @@ export function useSiteSession(): SiteSessionState {
 
   const isBusiness =
     profile?.role === 'employer' ||
-    profile?.subscription_status === 'single_post' ||
-    profile?.subscription_status === 'job_pack';
+    ['starter', 'growth', 'pro', 'single_post', 'job_pack'].includes(
+      profile?.subscription_status?.replace('pending_biz_', '') ?? '',
+    );
 
   const ready = sessionResolved && profileSettled;
 

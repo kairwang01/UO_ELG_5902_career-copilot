@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { data } from '../../lib/data';
+import { setUserSubscription } from '../../services/subscriptionClient';
 import AgencyHub from '../AgencyHub';
 import ApplicantFunnel from '../ApplicantFunnel';
 import { PortalSidebar, type PortalPage } from './PortalSidebar';
@@ -183,15 +184,12 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     if (planSaving) return;
     setPlanSaving(true);
     try {
-      const { error } = await data.profiles.update(session.user.id, {
-        subscription_status: `pending_biz_${planKey}`,
-      });
-      if (error) {
-        addToast(t('portal_toast_plan_update_failed').replace('{error}', error.message), 'error');
-        return;
-      }
+      await setUserSubscription(`pending_biz_${planKey}`);
       await refreshProfile();
       addToast(t('portal_toast_plan_updated'), 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      addToast(t('portal_toast_plan_update_failed').replace('{error}', message), 'error');
     } finally {
       setPlanSaving(false);
     }

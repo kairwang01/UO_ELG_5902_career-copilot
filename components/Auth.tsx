@@ -8,6 +8,7 @@ import type { Plan } from '@/types';
 import { X } from 'lucide-react';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { markOnboardingPending } from '../lib/onboarding';
+import { setUserSubscription } from '../services/subscriptionClient';
 
 interface AuthProps {
   onClose: () => void;
@@ -17,7 +18,14 @@ interface AuthProps {
 }
 
 const PlanSelectorCard: React.FC<{ plan: Plan & { key: string }; isSelected: boolean; onSelect: () => void; t: (key: string) => string; }> = ({ plan, isSelected, onSelect, t }) => {
-    const priceDescription = t(`plan_${plan.key}_price_desc`);
+    const periodKey = `plan_${plan.key}_period_desc`;
+    const translatedPeriod = t(periodKey);
+    const priceDescription = translatedPeriod === periodKey ? t(`plan_${plan.key}_price_desc`) : translatedPeriod;
+    const featureLabel = (index: number, fallback: string) => {
+        const key = `plan_${plan.key}_feature_${index + 1}`;
+        const translated = t(key);
+        return translated === key ? fallback : translated;
+    };
     
     return (
         <button
@@ -34,7 +42,7 @@ const PlanSelectorCard: React.FC<{ plan: Plan & { key: string }; isSelected: boo
                 {plan.features.slice(0, 3).map((feature, index) => (
                     <li key={index} className="flex items-start">
                         <svg className="h-4 w-4 mr-2 mt-0.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                        <span>{feature}</span>
+                        <span>{featureLabel(index, feature)}</span>
                     </li>
                 ))}
             </ul>
@@ -125,7 +133,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setError(null);
     setMessage(null);
 
-    const statusForDb = mode === 'business'
+    const planKeyForServer = mode === 'business'
         ? `pending_biz_${selectedPlan}`
         : selectedPlan === 'free' ? 'free' : `pending_${selectedPlan}`;
 
@@ -143,31 +151,37 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     }
 
     if (authData) {
-      // onUserCreated trigger auto-creates users/{uid} with 100 credits.
-      // We upsert additional profile fields (role, subscription_status) on top.
-      const { error: profileError } = await data.profiles.upsert({
-        id: authData.id,
-        subscription_status: statusForDb,
-        full_name: trimmedName,
-        role: mode === 'business' ? 'employer' : 'candidate',
-        updated_at: new Date().toISOString(),
-      });
+      try {
+        await setUserSubscription(planKeyForServer);
 
-      if (profileError) {
-        setError(`Account created, but we failed to set up your profile. Error: ${profileError.message}`);
-      } else {
-        // Best-effort: set Firebase Auth displayName (non-fatal if it fails).
-        try {
-          if (firebaseAuth.currentUser) {
-            await updateProfile(firebaseAuth.currentUser, { displayName: trimmedName });
+        // onUserCreated trigger usually creates users/{uid}; setUserSubscription
+        // also creates the doc if the trigger is still in flight. The client only
+        // writes profile fields allowed by Firestore rules.
+        const { error: profileError } = await data.profiles.upsert({
+          id: authData.id,
+          full_name: trimmedName,
+          role: mode === 'business' ? 'employer' : 'candidate',
+          updated_at: new Date().toISOString(),
+        });
+
+        if (profileError) {
+          setError(`Account created, but we failed to set up your profile. Error: ${profileError.message}`);
+        } else {
+          // Best-effort: set Firebase Auth displayName (non-fatal if it fails).
+          try {
+            if (firebaseAuth.currentUser) {
+              await updateProfile(firebaseAuth.currentUser, { displayName: trimmedName });
+            }
+          } catch {
+            // non-fatal — profile row already has the name
           }
-        } catch {
-          // non-fatal — profile row already has the name
+          // Fresh candidate accounts go through the guided setup once the
+          // workspace mounts (employer signups land in the portal instead).
+          if (mode !== 'business') markOnboardingPending();
+          setMessage('Account created successfully! You are now signed in.');
         }
-        // Fresh candidate accounts go through the guided setup once the
-        // workspace mounts (employer signups land in the portal instead).
-        if (mode !== 'business') markOnboardingPending();
-        setMessage('Account created successfully! You are now signed in.');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t('auth_unexpected_error'));
       }
     } else {
       setError('User account was not created successfully. Please try again.');

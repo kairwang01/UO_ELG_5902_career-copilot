@@ -87,6 +87,36 @@ export const ALL_PLANS: { [key: string]: Plan & { key: string } } = {
 };
 
 export const BUSINESS_PLANS: { [key: string]: Plan & { key: string } } = {
+  starter: {
+    key: 'starter',
+    name: 'Starter',
+    price: '$79',
+    priceDescription: 'CAD per month',
+    features: ['8 active job posts', 'AI job description generator', 'Basic candidate matching', 'Custom AI endpoint'],
+    analysisLimit: 0,
+    creditsPerMonth: 0,
+    stripeLink: STRIPE_ESSENTIALS_PLAN_LINK,
+  },
+  growth: {
+    key: 'growth',
+    name: 'Growth',
+    price: '$199',
+    priceDescription: 'CAD per month',
+    features: ['20 active job posts', 'Advanced candidate matching', 'Company branding analytics', 'Custom AI endpoint'],
+    analysisLimit: 0,
+    creditsPerMonth: 0,
+    stripeLink: STRIPE_ACCELERATOR_PLAN_LINK,
+  },
+  pro: {
+    key: 'pro',
+    name: 'Pro / Enterprise',
+    price: '$499',
+    priceDescription: 'CAD per month',
+    features: ['100 active job posts', 'Verified talent access', 'Priority support and insights', 'Custom AI endpoint'],
+    analysisLimit: 0,
+    creditsPerMonth: 0,
+    stripeLink: STRIPE_EXECUTIVE_PLAN_LINK,
+  },
   single_post: {
     key: 'single_post',
     name: 'Single Job Post',

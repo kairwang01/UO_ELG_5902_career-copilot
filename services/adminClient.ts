@@ -86,6 +86,9 @@ export const SUBSCRIPTION_PLANS = [
   'essentials',
   'accelerator',
   'executive',
+  'starter',
+  'growth',
+  'pro',
   'single_post',
   'job_pack',
 ] as const;

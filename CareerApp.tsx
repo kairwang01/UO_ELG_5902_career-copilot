@@ -6,11 +6,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
 import { analyzeResume, setApiStatusUpdater, setAiModel } from './services/aiClient';
 import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
-import { httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { firebaseFunctions, firestoreDb } from './lib/firebaseClient';
+import { firestoreDb } from './lib/firebaseClient';
 import { data, type AppSession as Session } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
+import { setUserSubscription } from './services/subscriptionClient';
 import { useLocalization } from './hooks/useLocalization';
 import { ToastProvider, useToast } from './components/Toast';
 import { useCredits } from './contexts/CreditsContext';
@@ -30,6 +30,7 @@ import Auth from './components/Auth';
 import Account from './components/Account';
 import Dashboard from './components/dashboard/Dashboard';
 import {
+  CandidateBillingPage,
   CareerPlanPage,
   InterviewPracticePage,
   JobMatchPage,
@@ -63,7 +64,8 @@ interface AppContentProps {
 
 type DashboardView =
   | 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications'
-  | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
+  | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
+type CandidatePlanKey = 'free' | 'essentials' | 'accelerator' | 'executive';
 
 // Breadcrumb i18n keys for the workspace header (mirrors Sidebar labels).
 const DASHBOARD_VIEW_LABEL_KEYS: Record<DashboardView, string> = {
@@ -75,6 +77,7 @@ const DASHBOARD_VIEW_LABEL_KEYS: Record<DashboardView, string> = {
   interview: 'ws_nav_interview',
   plan: 'ws_nav_plan',
   portfolio: 'ws_nav_portfolio',
+  billing: 'ws_nav_billing',
   account: 'ws_nav_account',
   credentials: 'ws_nav_credentials',
 };
@@ -127,6 +130,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [dashboardView, setDashboardView] = useState<DashboardView>('dashboard');
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [candidatePlanSaving, setCandidatePlanSaving] = useState<CandidatePlanKey | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -309,8 +313,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             const planKey = pendingMode === 'business'
               ? `pending_biz_${pendingPlan}`
               : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`;
-            const setSubscriptionStatus = httpsCallable(firebaseFunctions, 'setSubscriptionStatus');
-            await setSubscriptionStatus({ planKey });
+            await setUserSubscription(planKey);
           }
 
           if (p.role !== role) {
@@ -423,8 +426,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 setIsRedirecting(false);
             }, 1500);
         } else {
-            const setSubscriptionStatus = httpsCallable(firebaseFunctions, 'setSubscriptionStatus');
-            await setSubscriptionStatus({ planKey: targetPlanKey });
+            await setUserSubscription(planKey);
 
             if (isBiz) {
                 await data.profiles.update(session.user.id, { role: 'employer' });
@@ -442,11 +444,24 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const handleBusinessPlanSelection = async (planKey: string) => {
     if (!session) return;
     try {
-      const setSubscriptionStatus = httpsCallable(firebaseFunctions, 'setSubscriptionStatus');
-      await setSubscriptionStatus({ planKey: `pending_biz_${planKey}` });
+      await setUserSubscription(`pending_biz_${planKey}`);
       await getProfile();
     } catch (error) {
       addToast(`Failed to set plan: ${(error as Error).message}`, 'error');
+    }
+  };
+
+  const handleCandidatePlanSelection = async (planKey: CandidatePlanKey) => {
+    if (!session || candidatePlanSaving) return;
+    setCandidatePlanSaving(planKey);
+    try {
+      await setUserSubscription(planKey === 'free' ? 'free' : `pending_${planKey}`);
+      await getProfile();
+      addToast(t('portal_toast_plan_updated'), 'success');
+    } catch (error) {
+      addToast(t('portal_toast_plan_update_failed').replace('{error}', (error as Error).message), 'error');
+    } finally {
+      setCandidatePlanSaving(null);
     }
   };
 
@@ -880,6 +895,19 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                         setActiveTool={(tool) => setActiveTool(tool)}
                     />
                  )}
+            </div>
+        )}
+
+        {dashboardView === 'billing' && profile && (
+            <div id="billing-panel">
+              <CandidateBillingPage
+                profile={profile}
+                credits={credits}
+                t={t}
+                onSelectPlan={handleCandidatePlanSelection}
+                savingPlan={candidatePlanSaving}
+                onViewPricing={navigateToPricing}
+              />
             </div>
         )}
 

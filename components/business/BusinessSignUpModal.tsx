@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { data } from '@/lib/data';
+import { setUserSubscription } from '@/services/subscriptionClient';
 import {
   Dialog,
   DialogContent,
@@ -67,10 +68,10 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
       }
 
       if (authData) {
-        const statusForDb = selectedPlan === 'free' ? 'free' : `pending_biz_${selectedPlan}`;
+        await setUserSubscription(`pending_biz_${selectedPlan}`);
+
         const { error: profileError } = await data.profiles.upsert({
           id: authData.id,
-          subscription_status: statusForDb,
           full_name: trimmedContactName,
           company_name: trimmedOrgName || null,
           role: 'employer',

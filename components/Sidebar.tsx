@@ -21,7 +21,7 @@ import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import LanguageSwitcher from './LanguageSwitcher';
 import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
 
-type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'account' | 'credentials';
+type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
 
 interface SidebarProps {
   activeView: SidebarView;
@@ -67,6 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'interview', label: t('ws_nav_interview'), icon: MessageSquare },
     { id: 'plan', label: t('ws_nav_plan'), icon: CalendarCheck },
     { id: 'portfolio', label: t('ws_nav_portfolio'), icon: Globe },
+    { id: 'billing', label: t('ws_nav_billing'), icon: CreditCard },
     { id: 'credentials', label: t('ws_nav_credentials'), icon: ShieldCheck },
   ];
   const workspaceItems = web3Enabled

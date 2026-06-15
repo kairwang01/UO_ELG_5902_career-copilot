@@ -71,6 +71,9 @@ const PLAN_COLORS: Record<string, string> = {
   essentials: 'bg-blue-50 text-blue-800',
   accelerator: 'bg-indigo-50 text-indigo-800',
   executive: 'bg-violet-50 text-violet-800',
+  starter: 'bg-sky-50 text-sky-800',
+  growth: 'bg-emerald-50 text-emerald-800',
+  pro: 'bg-purple-50 text-purple-800',
   single_post: 'bg-teal-50 text-teal-800',
   job_pack: 'bg-cyan-50 text-cyan-800',
 };
