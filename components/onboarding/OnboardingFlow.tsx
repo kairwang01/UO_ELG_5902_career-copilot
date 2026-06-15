@@ -19,7 +19,7 @@ import {
  * career fields (optional), then asks for privacy consent BEFORE anything is
  * persisted — until the final step every answer lives only in component state.
  * Persistence stays inside existing channels: profile.full_name, the
- * workspace resume auto-save (via onComplete) and JobPreferences.
+ * user-reviewed resume_text and JobPreferences.
  */
 
 interface OnboardingFlowProps {
@@ -62,6 +62,10 @@ const splitFullName = (value?: string | null): { firstName: string; lastName: st
 
 const onboardingNameSource = (profile: UserProfile): string =>
   profile.full_name?.trim() || loadPendingOnboardingName();
+
+const FIRESTORE_RESUME_TEXT_LIMIT = 200_000;
+
+const reviewedResumeText = (text: string): string => text.trim().slice(0, FIRESTORE_RESUME_TEXT_LIMIT);
 
 /** Spinner + line used by the intro and the two inter-step transitions. */
 const TransitionScreen: React.FC<{ line: string }> = ({ line }) => (
@@ -161,6 +165,18 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
       });
       if (error) throw new Error(error.message);
 
+      // 1b) Reviewed resume text → profile. This must be saved before leaving
+      // onboarding; relying on the workspace debounce lets getProfile() reload an
+      // empty resume_text and wipe the just-imported draft from local state.
+      const resumeTextToSave = resumeSource ? reviewedResumeText(resumeDraft) : '';
+      if (resumeTextToSave) {
+        const { error: resumeError } = await data.profiles.update(uid, {
+          resume_text: resumeTextToSave,
+          updated_at: new Date().toISOString(),
+        });
+        if (resumeError) throw new Error(resumeError.message);
+      }
+
       // 2) Career fields → existing JobPreferences (drives AI search + job goals).
       const roleTexts = selectedFields
         .map((id) => CAREER_FIELDS.find((f) => f.id === id)?.roleText ?? '')
@@ -201,7 +217,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
 
   const enterWorkspace = () => {
     markOnboardingDone(uid);
-    onComplete({ skipped: false, resumeText: resumeSource ? resumeDraft : undefined });
+    onComplete({ skipped: false, resumeText: resumeSource ? reviewedResumeText(resumeDraft) : undefined });
   };
 
   return (

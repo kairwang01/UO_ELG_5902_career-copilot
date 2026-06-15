@@ -82,6 +82,9 @@ const DASHBOARD_VIEW_LABEL_KEYS: Record<DashboardView, string> = {
   credentials: 'ws_nav_credentials',
 };
 
+const FIRESTORE_RESUME_TEXT_LIMIT = 200_000;
+const resumeTextForProfile = (text: string): string => text.trim().slice(0, FIRESTORE_RESUME_TEXT_LIMIT);
+
 const buildLocalProfile = (
   userId: string,
   patch: Partial<UserProfile>,
@@ -262,7 +265,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           addToast(t('dashboard_resume_save_warning'), 'info');
         };
         try {
-          const { error } = await data.profiles.update(session.user.id, { resume_text: resumeText });
+          const { error } = await data.profiles.update(session.user.id, { resume_text: resumeTextForProfile(resumeText) });
           if (error) {
             showResumeSaveWarning();
           }
@@ -652,7 +655,18 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       
       setAnalysisResult(result);
       if (result.extractedText) {
-          setResumeText(result.extractedText);
+          const extractedResumeText = resumeTextForProfile(result.extractedText);
+          setResumeText(extractedResumeText);
+          if (session?.user && extractedResumeText) {
+            try {
+              await data.profiles.update(session.user.id, {
+                resume_text: extractedResumeText,
+                updated_at: new Date().toISOString(),
+              });
+            } catch {
+              addToast(t('dashboard_resume_save_warning'), 'info');
+            }
+          }
       }
       setIsUpdatingResume(false);
 
@@ -685,7 +699,18 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   };
 
   const handleApplyImprovements = (newText: string) => {
-    setResumeText(newText);
+    const reviewedText = resumeTextForProfile(newText);
+    setResumeText(reviewedText);
+    if (session?.user && reviewedText) {
+      data.profiles
+        .update(session.user.id, {
+          resume_text: reviewedText,
+          updated_at: new Date().toISOString(),
+        })
+        .catch(() => {
+          addToast(t('dashboard_resume_save_warning'), 'info');
+        });
+    }
     handleReset();
   };
 

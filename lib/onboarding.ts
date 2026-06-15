@@ -5,8 +5,8 @@
  * allowlist (firestore.rules validUser — adding fields there requires a rules
  * deploy):
  *  - full_name  → users/{uid} profile (allowlisted)
- *  - resume     → users/{uid}.resume_text via the workspace's existing
- *                 debounced auto-save (CareerApp owns that write)
+ *  - resume     → users/{uid}.resume_text after user review/import; workspace
+ *                 edits continue to auto-save from CareerApp
  *  - interest   → JobPreferences (localStorage) — feeds the AI job search and
  *                 the Browse-jobs goal banner that already exist
  *  - birthday + completion flag → per-uid localStorage. Birthday is optional
