@@ -216,6 +216,9 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const [currentIndex, setCurrentIndex] = useState(0);
     const [phase, setPhase] = useState<'prep' | 'answer'>('prep');
     const [prepLeft, setPrepLeft] = useState(PREP_SECONDS);
+    // The 15s prep clock only begins once the question has finished being read
+    // aloud — otherwise a long question gets cut off by the timer.
+    const [prepArmed, setPrepArmed] = useState(true);
     const [answerLeft, setAnswerLeft] = useState(ANSWER_SECONDS);
     const [answerDraft, setAnswerDraft] = useState('');
     const answersRef = useRef<string[]>([]);
@@ -283,9 +286,9 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         } catch { /* noop */ }
     };
 
-    const speak = (text: string) => {
+    const speak = (text: string, onDone?: () => void) => {
         const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
-        if (!synth) return;
+        if (!synth) { onDone?.(); return; } // no TTS → don't block the prep timer
         try {
             const start = () => {
                 const u = new SpeechSynthesisUtterance(text);
@@ -294,8 +297,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                 const voice = pickVoice();
                 if (voice) u.voice = voice;
                 u.onstart = () => setAvatarSpeaking(true);
-                u.onend = () => setAvatarSpeaking(false);
-                u.onerror = () => setAvatarSpeaking(false);
+                // onDone fires when the question has finished being read aloud,
+                // which is when the 15s prep clock should start.
+                u.onend = () => { setAvatarSpeaking(false); onDone?.(); };
+                u.onerror = () => { setAvatarSpeaking(false); onDone?.(); };
                 synth.speak(u);
             };
             if (synth.speaking || synth.pending) {
@@ -306,7 +311,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             } else {
                 start();
             }
-        } catch { /* TTS unsupported — avatar just stays idle */ }
+        } catch { onDone?.(); /* TTS unsupported — don't block the prep timer */ }
     };
     const cancelSpeech = () => {
         try { window.speechSynthesis.cancel(); } catch { /* noop */ }
@@ -439,17 +444,20 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             setAnswerDraft('');
             setPhase('prep');
             setPrepLeft(PREP_SECONDS);
+            setPrepArmed(false);
             setStage('interviewing');
-            speak(generated[0].question);
+            speak(generated[0].question, () => setPrepArmed(true));
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to start interview session.");
             setStage('setup');
         }
     };
 
-    // Prep countdown → auto-start answering
+    // Prep countdown → auto-start answering. Held until the question has been
+    // fully read aloud (prepArmed), so long questions are never cut off.
     useEffect(() => {
         if (stage !== 'interviewing' || phase !== 'prep') return;
+        if (!prepArmed) return;
         if (prepLeft <= 0) {
             setPhase('answer');
             setAnswerLeft(ANSWER_SECONDS);
@@ -458,7 +466,20 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         }
         const id = setTimeout(() => setPrepLeft((s) => s - 1), 1000);
         return () => clearTimeout(id);
-    }, [stage, phase, prepLeft]);
+    }, [stage, phase, prepLeft, prepArmed]);
+
+    // Safety net: speechSynthesis occasionally never fires onend (a known
+    // Chromium quirk). Arm the prep clock anyway after a generous read-time
+    // estimate so the interview can never stall waiting for the voice. Cleared
+    // the moment the question is actually read or we advance, so it can't leak
+    // across questions.
+    useEffect(() => {
+        if (stage !== 'interviewing' || phase !== 'prep' || prepArmed) return;
+        const text = questions[currentIndex]?.question ?? '';
+        const estMs = Math.min(45000, 6000 + text.length * 120);
+        const id = setTimeout(() => setPrepArmed(true), estMs);
+        return () => clearTimeout(id);
+    }, [stage, phase, prepArmed, currentIndex, questions]);
 
     // Answer countdown → auto-submit
     useEffect(() => {
@@ -555,7 +576,8 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
             setCurrentIndex(next);
             setPhase('prep');
             setPrepLeft(PREP_SECONDS);
-            speak(questions[next].question);
+            setPrepArmed(false);
+            speak(questions[next].question, () => setPrepArmed(true));
             submittingRef.current = false;
         } else {
             const qa = questions.map((q, i) => ({ question: q.question, answer: answersRef.current[i] ?? '' }));
