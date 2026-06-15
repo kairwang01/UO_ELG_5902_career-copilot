@@ -37,20 +37,38 @@ export const generateHeadshotFunction = onCall({ invoker: "public" }, async (req
   // Firestore value (this handler reads the key directly, not via resolveProvider).
   await ensurePlatformCaches();
   const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-image",
-    contents: {
-      parts: [
-        { inlineData: { data: imageBase64, mimeType: "image/jpeg" } },
-        {
-          text:
-            "Generate 3 variations of this image as a professional corporate headshot. " +
-            "Maintain the person's identity. Provide a neutral, soft-focus background. " +
-            "Ensure a professional and polished look.",
-        },
-      ],
-    },
-  });
+  let response;
+  try {
+    response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-image",
+      contents: {
+        parts: [
+          { inlineData: { data: imageBase64, mimeType: "image/jpeg" } },
+          {
+            text:
+              "Generate 3 variations of this image as a professional corporate headshot. " +
+              "Maintain the person's identity. Provide a neutral, soft-focus background. " +
+              "Ensure a professional and polished look.",
+          },
+        ],
+      },
+    });
+  } catch (err) {
+    // The image-generation model has no free-tier quota (limit 0) — without
+    // billing enabled on the Gemini key every call 429s. Surface a clear message
+    // instead of a bare 500 INTERNAL so the UI can explain it.
+    const msg = ((err as { message?: string })?.message ?? "").toLowerCase();
+    if (msg.includes("429") || msg.includes("quota") || msg.includes("resource_exhausted")) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "AI avatar generation is temporarily unavailable (image-generation quota reached). Please try again later.",
+      );
+    }
+    throw new HttpsError(
+      "internal",
+      "Couldn't generate avatars from this photo. Try a clearer, front-facing image.",
+    );
+  }
 
   const images: string[] = [];
   for (const part of response.candidates?.[0]?.content?.parts ?? []) {
