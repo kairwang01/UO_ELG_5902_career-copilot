@@ -9,10 +9,9 @@ import type { AppSession as Session } from '../../lib/data';
 import { useToast } from '../Toast';
 import {
   collection,
-  doc,
-  getDoc,
   getDocs,
   getFirestore,
+  limit,
   query,
   where,
 } from 'firebase/firestore';
@@ -27,6 +26,22 @@ interface OpportunityFinderProps {
   openTool: (tool: string, input?: string) => void;
   session: Session | null;
   t: (key: string) => string;
+}
+
+// Lightweight, instant keyword-overlap estimate for platform postings, so internal
+// job cards show an at-a-glance match%. The on-demand "Why am I a fit?" button still
+// computes the precise AI-grounded score.
+const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'you', 'your', 'our', 'are', 'that', 'this', 'will', 'have', 'from', 'their', 'they', 'about', 'into', 'over', 'such', 'what', 'when', 'which', 'were', 'been', 'who', 'has', 'not', 'but', 'all', 'can', 'use']);
+function quickMatchScore(resume: string, posting: string): number {
+  const tokens = (s: string): Set<string> =>
+    new Set((s.toLowerCase().match(/[a-z][a-z0-9+#.]{2,}/g) ?? ([] as string[])).filter((w) => w.length > 2 && !STOP_WORDS.has(w)));
+  const r = tokens(resume);
+  const p = tokens(posting);
+  if (r.size === 0 || p.size === 0) return 0;
+  let hits = 0;
+  p.forEach((w) => { if (r.has(w)) hits += 1; });
+  const overlap = hits / p.size; // fraction of the posting's keywords present in the resume
+  return Math.max(45, Math.min(96, Math.round(50 + overlap * 90)));
 }
 
 const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, market, openTool, session, t }) => {
@@ -98,45 +113,87 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     }
   }, [sessionUserId, t]);
 
+  // Active platform postings (employer-posted jobs). Candidates may read active
+  // job_postings per Firestore rules, so we surface them in the results with a
+  // one-click Apply, a salary chip, and an at-a-glance match estimate — alongside
+  // the AI's external suggestions. Additive and free; never blocks external search.
+  const fetchInternalJobs = useCallback(async (): Promise<{
+    opps: Opportunity[];
+    meta: Map<string, { salary_range?: string; location?: string }>;
+  }> => {
+    const empty = { opps: [] as Opportunity[], meta: new Map<string, { salary_range?: string; location?: string }>() };
+    if (!sessionUserId) return empty;
+    try {
+      const db = getFirestore(firebaseApp);
+      const snap = await getDocs(
+        query(collection(db, 'job_postings'), where('is_active', '==', true), limit(25)),
+      );
+      const opps: Opportunity[] = [];
+      const meta = new Map<string, { salary_range?: string; location?: string }>();
+      snap.docs.forEach((docSnap) => {
+        const d = docSnap.data() as Record<string, unknown>;
+        const id = docSnap.id;
+        const title = (d.title as string) ?? 'Open role';
+        const description = (d.description as string) ?? '';
+        opps.push({
+          jobTitle: title,
+          company: (d.company_name as string) ?? '',
+          location: (d.location as string) ?? '',
+          url: `#internal-job-${id}`,
+          summary: description,
+          isInternal: true,
+          compatibilityScore: resumeText.trim() ? quickMatchScore(resumeText, `${title} ${description}`) : undefined,
+        });
+        meta.set(id, {
+          salary_range: d.salary_range as string | undefined,
+          location: d.location as string | undefined,
+        });
+      });
+      return { opps, meta };
+    } catch (err) {
+      console.error('Could not fetch internal jobs:', err);
+      return empty; // additive — never block the external results if this read fails
+    }
+  }, [sessionUserId, resumeText]);
+
   const runTool = useCallback(async () => {
     const alive = begin();
     setError(null);
     try {
       await fetchAppliedJobs();
+
+      // Platform postings: a fast, free, additive Firestore read (returns [] on any
+      // failure) — fetched first so they still show even if the AI search errors.
+      const internal = await fetchInternalJobs();
+
       // Feed job preferences into the AI search (4a)
       const prefs = loadJobPreferences();
       const resumeForSearch = prefs
         ? preferencesToPromptBlock(prefs) + '\n\n---\n\n' + resumeText
         : resumeText;
-      // findOpportunities accepts session for legacy signature compatibility;
-      // the closure value is fine here — we only fix deps to use the primitive.
-      const apiResult = await findOpportunities(resumeForSearch, market, session);
-      if (!alive()) return;
-      setResult(apiResult);
-      // FIX 2: fetchAppliedJobs failure sets an error, but we have a good AI
-      // result now — clear the non-fatal side-error so results render correctly.
-      setError(null);
 
-      // 4b: fetch salary/location data for internal job cards
-      const internalIds = apiResult.opportunities
-        .filter((o: Opportunity) => o.isInternal)
-        .map((o: Opportunity) => o.url.replace('#internal-job-', ''));
-      if (internalIds.length > 0) {
-        const db = getFirestore(firebaseApp);
-        const snaps = await Promise.allSettled(
-          internalIds.map((id: string) => getDoc(doc(db, 'job_postings', id))),
-        );
-        const map = new Map<string, { salary_range?: string; location?: string }>();
-        snaps.forEach((settled, idx) => {
-          if (settled.status === 'fulfilled' && settled.value.exists()) {
-            const d = settled.value.data() as Record<string, unknown>;
-            map.set(internalIds[idx], {
-              salary_range: d.salary_range as string | undefined,
-              location: d.location as string | undefined,
-            });
-          }
-        });
-        if (alive()) setInternalJobData(map);
+      try {
+        // findOpportunities accepts session for legacy signature compatibility;
+        // the closure value is fine here — we only fix deps to use the primitive.
+        const apiResult = await findOpportunities(resumeForSearch, market, session);
+        if (!alive()) return;
+        // Internal platform jobs first (one-click apply + tracked status), then the
+        // AI's external web suggestions.
+        setResult({ ...apiResult, opportunities: [...internal.opps, ...apiResult.opportunities] });
+        setInternalJobData(internal.meta);
+        // FIX 2: clear any non-fatal side-error (e.g. fetchAppliedJobs) now that we
+        // have a good result so the cards render.
+        setError(null);
+      } catch (extErr) {
+        // External AI search failed (e.g. quota). Still surface platform jobs if any.
+        if (!alive()) return;
+        if (internal.opps.length > 0) {
+          setResult({ opportunities: internal.opps, jobSearchStrategies: [], groundingChunks: undefined });
+          setInternalJobData(internal.meta);
+          setError(null);
+        } else {
+          throw extErr;
+        }
       }
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -146,7 +203,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     // FIX 1: use sessionUserId (primitive) instead of session (object) so that
     // token-refresh events that recreate the session object do not refire this
     // callback (and therefore the expensive AI search + double credit spend).
-  }, [resumeText, market, sessionUserId, fetchAppliedJobs, begin, end]);
+  }, [resumeText, market, sessionUserId, fetchAppliedJobs, fetchInternalJobs, begin, end]);
   
   // Auto-run guard: this effect triggers a CREDIT-CHARGING AI search, so it must
   // be idempotent per input set. Callback identity churn (e.g. a dependency like
