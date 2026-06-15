@@ -371,7 +371,23 @@ service cloud.firestore {
     }
 
     function validApplicationStatus(status) {
-      return status in ["Applied", "Interviewing", "Rejected", "Hired"];
+      return status in [
+        "Applied",
+        "Interviewing",
+        "Group Interview",
+        "First Interview",
+        "Second Interview",
+        "Decision Maker Interview",
+        "HR Interview",
+        "Offer",
+        "Hiring Evaluation",
+        "Intent Letter",
+        "Offer Confirmed",
+        "Tripartite Agreement",
+        "Signed",
+        "Rejected",
+        "Hired"
+      ];
     }
 
     function validJobApplication(data) {

@@ -29,6 +29,11 @@ import { firestoreDb } from '../../lib/firebaseClient';
 import type { AppSession as Session } from '../../lib/data';
 import { generateWeeklySummary } from '../../services/aiClient';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
+import {
+  getApplicationStatusLabelKey,
+  isApplicationClosedStatus,
+  isApplicationInterviewStatus,
+} from '../../lib/applicationPipeline';
 
 type DashboardDestination = 'resume' | 'jobs' | 'applications' | 'interview' | 'plan';
 
@@ -360,9 +365,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
     : hasResume ? t('dashboard_readiness_empty_cta') : t('ws_upload_resume');
   const applicationPulse = applications.reduce(
     (counts, app) => {
-      const status = app.status.toLowerCase();
-      const isClosed = status.includes('hired') || status.includes('rejected') || status.includes('closed');
-      const isInterviewing = status.includes('interview');
+      const isClosed = isApplicationClosedStatus(app.status);
+      const isInterviewing = isApplicationInterviewStatus(app.status);
       return {
         total: counts.total + 1,
         active: counts.active + (isClosed ? 0 : 1),
@@ -648,7 +652,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
                     : latestApplication
                       ? formatCopy(t('dashboard_application_progress_latest'), {
                           role: latestApplication.job_title || t('dashboard_recent_role_fallback'),
-                          status: latestApplication.status || t('dashboard_tracked_status_fallback'),
+                          status: t(getApplicationStatusLabelKey(latestApplication.status)) || t('dashboard_tracked_status_fallback'),
                         })
                       : t('dashboard_application_progress_empty')}
                 </p>

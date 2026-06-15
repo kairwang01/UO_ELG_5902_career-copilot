@@ -4,7 +4,8 @@
  * createCompanyReviewFunction:
  *   Server-only writes with employer-verification gate.
  *   A candidate is a "verified employee" of employer X iff they have a
- *   job_applications doc where candidate_id==caller, employer_id==X, status=='Hired'.
+ *   job_applications doc where candidate_id==caller, employer_id==X, status is
+ *   a completed hire state.
  *
  * Review doc id is `${employerId}_${uid}` — one review per candidate per company,
  * revisions allowed via set(..., {merge:true}).
@@ -84,9 +85,10 @@ export const createCompanyReviewFunction = onCall(
       .limit(10)
       .get();
 
-    const isVerified = hiredSnap.docs.some(
-      (d) => d.data().status === "Hired"
-    );
+    const isVerified = hiredSnap.docs.some((d) => {
+      const status = d.data().status;
+      return status === "Hired" || status === "Signed";
+    });
 
     if (!isVerified) {
       throw new HttpsError(

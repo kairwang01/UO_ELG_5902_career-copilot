@@ -1,6 +1,7 @@
 
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { doc, updateDoc } from 'firebase/firestore';
 import {
     ArrowLeft,
     Clock3,
@@ -14,6 +15,15 @@ import {
 } from 'lucide-react';
 import { listJobApplicants, type JobApplicant } from '../services/aiClient';
 import FunnelChart from './FunnelChart';
+import { firestoreDb } from '../lib/firebaseClient';
+import {
+    APPLICATION_PIPELINE_STAGES,
+    getApplicationStatusIndex,
+    getApplicationStatusLabelKey,
+    isApplicationRejectedStatus,
+    normalizeApplicationStatus,
+    type ApplicationPipelineStatus,
+} from '../lib/applicationPipeline';
 import type { JobPosting } from '../lib/recruitingData';
 
 interface ApplicantFunnelProps {
@@ -110,6 +120,8 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
     const [loading, setLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState(t('applicant_funnel_loading_initial'));
     const [error, setError] = useState<string | null>(null);
+    const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
+    const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
     const [applicants, setApplicants] = useState<Applicant[]>([]);
     const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null);
     const detailRef = useRef<HTMLElement | null>(null);
@@ -150,16 +162,18 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
     }, [fetchApplicants]);
 
     // ── Real funnel stages derived from actual data ─────────────────────────────
-    const funnelData = useMemo(() => [
-        { stage: t('applicant_funnel_stage_applied'), count: applicants.length },
-        { stage: t('applicant_funnel_stage_screened'), count: applicants.filter(a => (a.compatibility_score ?? 0) >= 70).length },
-        { stage: t('applicant_funnel_stage_high_match'), count: applicants.filter(a => (a.compatibility_score ?? 0) >= 85).length },
-    ], [applicants, t]);
+    const funnelData = useMemo(() => APPLICATION_PIPELINE_STAGES.map((stage, index) => ({
+        stage: `${t(stage.labelKey)}${'optional' in stage && stage.optional ? ` (${t('applications_stage_optional')})` : ''}`,
+        count: applicants.filter((applicant) => {
+            if (isApplicationRejectedStatus(applicant.status)) return false;
+            const applicantIndex = getApplicationStatusIndex(applicant.status);
+            return applicantIndex >= index;
+        }).length,
+    })), [applicants, t]);
 
-    const statusOptions = useMemo(() => {
-        const values = Array.from(new Set(applicants.map((applicant) => applicant.status).filter(Boolean)));
-        return values.sort((a, b) => a.localeCompare(b));
-    }, [applicants]);
+    const statusOptions = useMemo<ApplicationPipelineStatus[]>(() => {
+        return [...APPLICATION_PIPELINE_STAGES.map((stage) => stage.status), 'Rejected'];
+    }, []);
 
     // ── Filtered + sorted list ──────────────────────────────────────────────────
     const filteredApplicants = useMemo(() => {
@@ -187,7 +201,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
         }
 
         if (statusFilter !== 'all') {
-            result = result.filter((applicant) => applicant.status === statusFilter);
+            result = result.filter((applicant) => normalizeApplicationStatus(applicant.status) === statusFilter);
         }
 
         if (recencyFilter !== 'all') {
@@ -293,16 +307,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
         return minScore === 'all' && recencyFilter === 'all' && analysisFilter === 'needs_review';
     };
 
-    const getStatusLabel = (status: string): string => {
-        const normalized = status.trim().toLowerCase();
-        const keyMap: Record<string, string> = {
-            applied: 'applications_status_applied',
-            interviewing: 'applications_status_interviewing',
-            hired: 'applications_status_hired',
-            rejected: 'applications_status_rejected',
-        };
-        return keyMap[normalized] ? t(keyMap[normalized]) : status;
-    };
+    const getStatusLabel = (status: string): string => t(getApplicationStatusLabelKey(status));
 
     const formatDate = (value: string | null): string => {
         if (!value) return t('applicant_funnel_date_unknown');
@@ -396,6 +401,32 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
             });
         }
     }, []);
+
+    const handleStatusChange = useCallback(async (applicant: Applicant, nextStatusValue: string) => {
+        const nextStatus = normalizeApplicationStatus(nextStatusValue);
+        const previousApplicants = applicants;
+        const previousSelected = selectedApplicant;
+
+        setStatusUpdateError(null);
+        setStatusSavingId(applicant.id);
+        setApplicants((current) =>
+            current.map((entry) => entry.id === applicant.id ? { ...entry, status: nextStatus } : entry),
+        );
+        setSelectedApplicant((current) =>
+            current?.id === applicant.id ? { ...current, status: nextStatus } : current,
+        );
+
+        try {
+            await updateDoc(doc(firestoreDb, 'job_applications', applicant.id), { status: nextStatus });
+        } catch {
+            setApplicants(previousApplicants);
+            setSelectedApplicant(previousSelected);
+            setStatusUpdateError(t('applicant_funnel_status_update_error'));
+        } finally {
+            setStatusSavingId(null);
+        }
+    }, [applicants, selectedApplicant, t]);
+
     const RecommendationIcon = selectedRecommendation?.Icon;
 
     if (loading) {
@@ -477,6 +508,11 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
+                {statusUpdateError && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                        {statusUpdateError}
+                    </div>
+                )}
                 <div className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
                     <div className="min-w-0">
                         <h3 className="text-xl font-bold leading-tight text-gray-900 dark:text-gray-100">
@@ -752,6 +788,23 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                         </p>
                                     </div>
                                 </div>
+                                <div className="mt-4 max-w-sm">
+                                    <SelectField<ApplicationPipelineStatus>
+                                        id={`applicant-stage-${selectedApplicant.id}`}
+                                        label={t('applicant_funnel_stage_control_label')}
+                                        value={normalizeApplicationStatus(selectedApplicant.status)}
+                                        onChange={(value) => handleStatusChange(selectedApplicant, value)}
+                                    >
+                                        {statusOptions.map(status => (
+                                            <option key={status} value={status}>{getStatusLabel(status)}</option>
+                                        ))}
+                                    </SelectField>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        {statusSavingId === selectedApplicant.id
+                                            ? t('applicant_funnel_status_updating')
+                                            : t('applicant_funnel_stage_control_helper')}
+                                    </p>
+                                </div>
                                 {selectedApplicant.summary && (
                                     <p className="mt-4 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-400">{selectedApplicant.summary}</p>
                                 )}
@@ -822,6 +875,23 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                         </div>
                                     </div>
                                 )}
+                                <div className="mt-4 text-left">
+                                    <SelectField<ApplicationPipelineStatus>
+                                        id={`applicant-stage-${selectedApplicant.id}`}
+                                        label={t('applicant_funnel_stage_control_label')}
+                                        value={normalizeApplicationStatus(selectedApplicant.status)}
+                                        onChange={(value) => handleStatusChange(selectedApplicant, value)}
+                                    >
+                                        {statusOptions.map(status => (
+                                            <option key={status} value={status}>{getStatusLabel(status)}</option>
+                                        ))}
+                                    </SelectField>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        {statusSavingId === selectedApplicant.id
+                                            ? t('applicant_funnel_status_updating')
+                                            : t('applicant_funnel_stage_control_helper')}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}

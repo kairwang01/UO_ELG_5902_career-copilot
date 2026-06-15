@@ -51,6 +51,7 @@ interface SafeApplicant {
 }
 
 interface ApplicationRow {
+  application_id: string;
   candidate_id: string;
   candidate_name: string;
   application_date: string | null;
@@ -82,7 +83,7 @@ function isoFromTimestamp(value: unknown): string | null {
 
 function emptyApplicant(a: ApplicationRow): SafeApplicant {
   return {
-    id: a.candidate_id,
+    id: a.application_id,
     candidate_name: a.candidate_name,
     application_date: a.application_date,
     status: a.status,
@@ -131,6 +132,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
     .map((d) => {
       const data = d.data();
       return {
+        application_id: d.id,
         candidate_id: typeof data.candidate_id === "string" ? data.candidate_id : "",
         candidate_name: typeof data.candidate_name === "string" ? data.candidate_name : "Candidate",
         application_date: isoFromTimestamp(data.application_date),
@@ -182,7 +184,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
       ? applications.filter((a) => (resumeById.get(a.candidate_id) ?? "").trim().length > 0)
       : [];
   const pool = analyzable.slice(0, MATCH_CANDIDATE_CAP);
-  const poolIds = new Set(pool.map((a) => a.candidate_id));
+  const poolIds = new Set(pool.map((a) => a.application_id));
 
   const analyzed = await Promise.all(
     pool.map(async (a): Promise<SafeApplicant> => {
@@ -196,7 +198,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
           return emptyApplicant(a);
         }
         return {
-          id: a.candidate_id,
+          id: a.application_id,
           candidate_name: a.candidate_name,
           application_date: a.application_date,
           status: a.status,
@@ -213,7 +215,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
     }),
   );
 
-  const unanalyzed = applications.filter((a) => !poolIds.has(a.candidate_id)).map(emptyApplicant);
+  const unanalyzed = applications.filter((a) => !poolIds.has(a.application_id)).map(emptyApplicant);
 
   const applicants = [...analyzed, ...unanalyzed].sort(
     (x, y) => y.compatibility_score - x.compatibility_score,

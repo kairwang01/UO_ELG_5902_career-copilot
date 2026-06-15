@@ -5,26 +5,38 @@ import type { AppSession as Session } from '../lib/data';
 import { ArrowDownUp, Bell, Briefcase, CheckCircle2, Circle, Clock3, MessageSquare, RotateCcw, Search, Star, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
 import {
+  APPLICATION_FILTER_GROUPS,
+  APPLICATION_FILTER_LABEL_KEYS,
+  APPLICATION_PIPELINE_STAGES,
+  applicationMatchesFilter,
+  getApplicationStatusGroup,
+  getApplicationStatusIndex,
+  getApplicationStatusLabelKey,
+  isApplicationClosedStatus,
+  isApplicationHiredStatus,
+  isApplicationRejectedStatus,
+  normalizeApplicationStatus,
+  type ApplicationFilterGroup,
+  type ApplicationPipelineStatus,
+  type ApplicationStatusGroup,
+} from '../lib/applicationPipeline';
+import {
   subscribeNotifications,
   markNotificationRead,
   unreadCount,
   type AppNotification,
 } from '../lib/notificationsData';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type AppStatus = 'Applied' | 'Interviewing' | 'Rejected' | 'Hired';
-
 interface ApplicationRow {
   id: string;
   job_title: string;
   employer_id?: string;
-  status: AppStatus;
+  status: ApplicationPipelineStatus;
   application_date?: { toMillis?: () => number; toDate?: () => Date };
   compatibility_score?: number | null;
 }
 
-type FilterStatus = 'All' | AppStatus;
+type FilterStatus = ApplicationFilterGroup;
 type ApplicationSortKey = 'newest' | 'match' | 'title';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -47,14 +59,6 @@ function applicationTime(row: ApplicationRow): number {
   }
 }
 
-function normalizeApplicationStatus(status: unknown): AppStatus {
-  const normalized = String(status ?? '').trim().toLowerCase();
-  if (['interviewing', 'interview', 'interview-stage', 'interview stage'].includes(normalized)) return 'Interviewing';
-  if (['hired', 'offer', 'accepted'].includes(normalized)) return 'Hired';
-  if (['rejected', 'closed', 'declined'].includes(normalized)) return 'Rejected';
-  return 'Applied';
-}
-
 const normalizeFilterText = (value: string) =>
   value
     .toLowerCase()
@@ -69,33 +73,20 @@ function formatTranslation(template: string, values: Record<string, string | num
   );
 }
 
-/** Map a status to the 3-step stepper's active step index (0-based) */
-function stepIndexForStatus(status: AppStatus): number {
-  if (status === 'Applied') return 0;
-  if (status === 'Interviewing') return 1;
-  // Hired or Rejected → step 2
-  return 2;
-}
-
-const STATUS_LABEL_KEYS: Record<AppStatus, string> = {
-  Applied: 'applications_status_applied',
-  Interviewing: 'applications_status_interviewing',
-  Hired: 'applications_status_hired',
-  Rejected: 'applications_status_rejected',
-};
-
-const STATUS_CHIP_CLASSES: Record<AppStatus, string> = {
-  Applied:
+const STATUS_CHIP_CLASSES: Record<ApplicationStatusGroup, string> = {
+  applied:
     'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  Interviewing:
+  interview:
     'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  Hired: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  Rejected:
+  offer:
+    'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  hired: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  rejected:
     'bg-gray-100 text-gray-500 dark:bg-slate-700/50 dark:text-slate-400',
 };
 
 const STATUS_GUIDANCE: Record<
-  AppStatus,
+  ApplicationStatusGroup,
   {
     titleKey: string;
     descKey: string;
@@ -104,7 +95,7 @@ const STATUS_GUIDANCE: Record<
     iconClassName: string;
   }
 > = {
-  Applied: {
+  applied: {
     titleKey: 'applications_next_applied_title',
     descKey: 'applications_next_applied_desc',
     icon: Clock3,
@@ -112,7 +103,7 @@ const STATUS_GUIDANCE: Record<
       'border-blue-100 bg-blue-50 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200',
     iconClassName: 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300',
   },
-  Interviewing: {
+  interview: {
     titleKey: 'applications_next_interviewing_title',
     descKey: 'applications_next_interviewing_desc',
     icon: MessageSquare,
@@ -120,7 +111,15 @@ const STATUS_GUIDANCE: Record<
       'border-amber-100 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200',
     iconClassName: 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300',
   },
-  Hired: {
+  offer: {
+    titleKey: 'applications_next_offer_title',
+    descKey: 'applications_next_offer_desc',
+    icon: MessageSquare,
+    className:
+      'border-indigo-100 bg-indigo-50 text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200',
+    iconClassName: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300',
+  },
+  hired: {
     titleKey: 'applications_next_hired_title',
     descKey: 'applications_next_hired_desc',
     icon: CheckCircle2,
@@ -128,7 +127,7 @@ const STATUS_GUIDANCE: Record<
       'border-emerald-100 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200',
     iconClassName: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300',
   },
-  Rejected: {
+  rejected: {
     titleKey: 'applications_next_rejected_title',
     descKey: 'applications_next_rejected_desc',
     icon: Search,
@@ -138,18 +137,12 @@ const STATUS_GUIDANCE: Record<
   },
 };
 
-const FILTER_STATUSES: FilterStatus[] = [
-  'All',
-  'Applied',
-  'Interviewing',
-  'Hired',
-  'Rejected',
-];
+const FILTER_STATUSES: FilterStatus[] = APPLICATION_FILTER_GROUPS;
 
 const SORT_OPTIONS: ApplicationSortKey[] = ['newest', 'match', 'title'];
 
 function filterLabel(status: FilterStatus, t: (k: string) => string): string {
-  return status === 'All' ? t('applications_filter_all') : t(STATUS_LABEL_KEYS[status]);
+  return t(APPLICATION_FILTER_LABEL_KEYS[status]);
 }
 
 function sortLabel(sort: ApplicationSortKey, t: (k: string) => string): string {
@@ -159,40 +152,28 @@ function sortLabel(sort: ApplicationSortKey, t: (k: string) => string): string {
 // ─── Stepper ──────────────────────────────────────────────────────────────────
 
 interface StepperProps {
-  status: AppStatus;
+  status: ApplicationPipelineStatus;
   t: (k: string) => string;
 }
 
 const Stepper: React.FC<StepperProps> = ({ status, t }) => {
-  const current = stepIndexForStatus(status);
-  const isHired = status === 'Hired';
-  const isRejected = status === 'Rejected';
-
-  const steps = [
-    t('applications_step_applied'),
-    t('applications_step_interviewing'),
-    isHired
-      ? t('applications_status_hired')
-      : isRejected
-      ? t('applications_status_rejected')
-      : t('applications_step_decision'),
-  ];
+  const current = getApplicationStatusIndex(status);
+  const isComplete = isApplicationHiredStatus(status);
+  const isRejected = isApplicationRejectedStatus(status);
 
   return (
-    <div className="mt-4 flex items-center gap-0" aria-label={t('applications_timeline_label')}>
-      {steps.map((label, i) => {
-        const isDone = i < current || (i === current && (isHired || isRejected));
-        const isCurrent = i === current && !isHired && !isRejected;
+    <div className="mt-4 overflow-x-auto pb-2" aria-label={t('applications_timeline_label')}>
+      <div className="flex min-w-max items-start gap-0 pr-2">
+      {APPLICATION_PIPELINE_STAGES.map((step, i) => {
+        const isDone = !isRejected && (i < current || (i === current && isComplete));
+        const isCurrent = !isRejected && i === current && !isComplete;
         const isPending = i > current;
 
         // Color logic
         let circleClass = '';
-        if (isHired && i === 2) {
+        if (isComplete && i === current) {
           circleClass =
             'bg-green-600 border-green-600 text-white dark:bg-green-500 dark:border-green-500';
-        } else if (isRejected && i === 2) {
-          circleClass =
-            'bg-gray-400 border-gray-400 text-white dark:bg-slate-500 dark:border-slate-500';
         } else if (isDone) {
           circleClass =
             'bg-blue-600 border-blue-600 text-white dark:bg-blue-500 dark:border-blue-500';
@@ -205,10 +186,10 @@ const Stepper: React.FC<StepperProps> = ({ status, t }) => {
         }
 
         let labelClass = '';
-        if (isHired && i === 2) {
+        if (isComplete && i === current) {
           labelClass = 'text-green-600 dark:text-green-400 font-semibold';
-        } else if (isRejected && i === 2) {
-          labelClass = 'text-gray-400 dark:text-slate-500';
+        } else if (isRejected) {
+          labelClass = 'text-gray-400 dark:text-slate-500 line-through decoration-slate-300 dark:decoration-slate-600';
         } else if (isCurrent) {
           labelClass = 'text-blue-600 dark:text-blue-400 font-semibold';
         } else if (isPending) {
@@ -218,8 +199,8 @@ const Stepper: React.FC<StepperProps> = ({ status, t }) => {
         }
 
         return (
-          <React.Fragment key={i}>
-            <div className="flex min-w-0 flex-col items-center gap-1" style={{ flex: '0 0 auto', maxWidth: '7rem' }}>
+          <React.Fragment key={step.status}>
+            <div className="flex w-20 shrink-0 flex-col items-center gap-1">
               <div
                 className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${circleClass}`}
               >
@@ -232,12 +213,17 @@ const Stepper: React.FC<StepperProps> = ({ status, t }) => {
                 )}
               </div>
               <span className={`w-full text-center text-[10px] leading-tight sm:text-[11px] ${labelClass}`}>
-                {label}
+                {t(step.labelKey)}
+                {'optional' in step && step.optional && (
+                  <span className="mt-0.5 block text-[9px] font-medium text-slate-400 dark:text-slate-500">
+                    {t('applications_stage_optional')}
+                  </span>
+                )}
               </span>
             </div>
 
             {/* Connector line between steps */}
-            {i < steps.length - 1 && (
+            {i < APPLICATION_PIPELINE_STAGES.length - 1 && (
               <div
                 className={`flex-1 h-0.5 mb-4 mx-1 rounded-full transition-colors ${
                   i < current
@@ -249,6 +235,7 @@ const Stepper: React.FC<StepperProps> = ({ status, t }) => {
           </React.Fragment>
         );
       })}
+      </div>
     </div>
   );
 };
@@ -262,9 +249,10 @@ interface CardProps {
 }
 
 const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
-  const isRejected = app.status === 'Rejected';
-  const isHired = app.status === 'Hired';
-  const guidance = STATUS_GUIDANCE[app.status];
+  const statusGroup = getApplicationStatusGroup(app.status);
+  const isRejected = isApplicationRejectedStatus(app.status);
+  const isHired = isApplicationHiredStatus(app.status);
+  const guidance = STATUS_GUIDANCE[statusGroup];
   const GuidanceIcon = guidance.icon;
   const [reviewOpen, setReviewOpen] = useState(false);
 
@@ -290,9 +278,9 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           {/* Status chip */}
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_CHIP_CLASSES[app.status]}`}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_CHIP_CLASSES[statusGroup]}`}
           >
-            {t(STATUS_LABEL_KEYS[app.status])}
+            {t(getApplicationStatusLabelKey(app.status))}
           </span>
 
           {/* Match % badge */}
@@ -397,23 +385,24 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   // ── Counts, search, sort ──────────────────────────────────────────────────
   const counts: Record<FilterStatus, number> = useMemo(() => ({
     All: apps.length,
-    Applied: apps.filter((a) => a.status === 'Applied').length,
-    Interviewing: apps.filter((a) => a.status === 'Interviewing').length,
-    Hired: apps.filter((a) => a.status === 'Hired').length,
-    Rejected: apps.filter((a) => a.status === 'Rejected').length,
+    applied: apps.filter((a) => getApplicationStatusGroup(a.status) === 'applied').length,
+    interview: apps.filter((a) => getApplicationStatusGroup(a.status) === 'interview').length,
+    offer: apps.filter((a) => getApplicationStatusGroup(a.status) === 'offer').length,
+    hired: apps.filter((a) => getApplicationStatusGroup(a.status) === 'hired').length,
+    rejected: apps.filter((a) => getApplicationStatusGroup(a.status) === 'rejected').length,
   }), [apps]);
 
-  const activeCount = counts.Applied + counts.Interviewing;
+  const activeCount = apps.filter((app) => !isApplicationClosedStatus(app.status)).length;
   const hasActiveFilters = filter !== 'All' || queryText.trim().length > 0;
 
   const visible = useMemo(() => {
     const keyword = normalizeFilterText(queryText);
     const rows = apps.filter((app) => {
-      if (filter !== 'All' && app.status !== filter) return false;
+      if (!applicationMatchesFilter(app.status, filter)) return false;
       if (!keyword) return true;
       return normalizeFilterText([
         app.job_title ?? '',
-        app.status ?? '',
+        t(getApplicationStatusLabelKey(app.status)),
         String(app.compatibility_score ?? ''),
       ].join(' ')).includes(keyword);
     });
@@ -536,7 +525,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   const summaryCards = [
     { label: t('applications_summary_total'), value: counts.All, helper: t('applications_summary_total_desc') },
     { label: t('applications_summary_active'), value: activeCount, helper: t('applications_summary_active_desc') },
-    { label: t('applications_summary_interviews'), value: counts.Interviewing, helper: t('applications_summary_interviews_desc') },
+    { label: t('applications_summary_interviews'), value: counts.interview, helper: t('applications_summary_interviews_desc') },
   ];
 
   return (
@@ -618,7 +607,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
                           {n.job_title ?? t('notifications_unknown_job')}
                         </p>
                         <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
-                          {t('notifications_status_changed').replace('{status}', n.status ?? '')}
+                          {t('notifications_status_changed').replace('{status}', t(getApplicationStatusLabelKey(n.status)))}
                         </p>
                       </div>
                       {!n.read && (
