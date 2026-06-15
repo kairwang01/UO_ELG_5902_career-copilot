@@ -6,6 +6,7 @@ import { parseFile } from '../../services/fileHelpers';
 import { loadJobPreferences, saveJobPreferences } from '../../hooks/useJobPreferences';
 import {
   CAREER_FIELDS,
+  loadPendingOnboardingName,
   markOnboardingDone,
   saveBirthdayLocal,
   suggestCareerFields,
@@ -51,6 +52,17 @@ const PROGRESS: Partial<Record<Phase, number>> = {
   done: 100,
 };
 
+const splitFullName = (value?: string | null): { firstName: string; lastName: string } => {
+  const parts = (value ?? '').trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? '',
+    lastName: parts.slice(1).join(' '),
+  };
+};
+
+const onboardingNameSource = (profile: UserProfile): string =>
+  profile.full_name?.trim() || loadPendingOnboardingName();
+
 /** Spinner + line used by the intro and the two inter-step transitions. */
 const TransitionScreen: React.FC<{ line: string }> = ({ line }) => (
   <div className="flex flex-col items-center justify-center gap-5 py-16 animate-fade-in" role="status">
@@ -63,9 +75,9 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
   const [phase, setPhase] = useState<Phase>('intro');
 
   // ── collected answers (in memory until consent) ───────────────────────────
-  const prefillParts = (profile.full_name ?? '').trim().split(/\s+/);
-  const [firstName, setFirstName] = useState(prefillParts[0] ?? '');
-  const [lastName, setLastName] = useState(prefillParts.slice(1).join(' '));
+  const initialName = splitFullName(onboardingNameSource(profile));
+  const [firstName, setFirstName] = useState(initialName.firstName);
+  const [lastName, setLastName] = useState(initialName.lastName);
   const [birthday, setBirthday] = useState('');
   const [resumeDraft, setResumeDraft] = useState('');
   const [resumeSource, setResumeSource] = useState<string | null>(null); // filename or 'paste'
@@ -78,6 +90,17 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameTouchedRef = useRef(false);
+
+  // Profile creation and subscription setup can finish after the workspace has
+  // mounted. Backfill the sign-up name only while the user has not typed here.
+  useEffect(() => {
+    if (nameTouchedRef.current || firstName.trim() || lastName.trim()) return;
+    const nextName = splitFullName(onboardingNameSource(profile));
+    if (!nextName.firstName && !nextName.lastName) return;
+    setFirstName(nextName.firstName);
+    setLastName(nextName.lastName);
+  }, [profile.full_name, firstName, lastName]);
 
   // Auto-advance the intro and the two transition screens.
   useEffect(() => {
@@ -226,13 +249,34 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
                   <label htmlFor="ob-first" className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     {t('ob_first_name')} <span className="text-red-500">*</span>
                   </label>
-                  <input id="ob-first" type="text" value={firstName} maxLength={60} onChange={(e) => setFirstName(e.target.value)} className={inputCls} autoFocus />
+                  <input
+                    id="ob-first"
+                    type="text"
+                    value={firstName}
+                    maxLength={60}
+                    onChange={(e) => {
+                      nameTouchedRef.current = true;
+                      setFirstName(e.target.value);
+                    }}
+                    className={inputCls}
+                    autoFocus
+                  />
                 </div>
                 <div>
                   <label htmlFor="ob-last" className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                     {t('ob_last_name')} <span className="text-red-500">*</span>
                   </label>
-                  <input id="ob-last" type="text" value={lastName} maxLength={60} onChange={(e) => setLastName(e.target.value)} className={inputCls} />
+                  <input
+                    id="ob-last"
+                    type="text"
+                    value={lastName}
+                    maxLength={60}
+                    onChange={(e) => {
+                      nameTouchedRef.current = true;
+                      setLastName(e.target.value);
+                    }}
+                    className={inputCls}
+                  />
                 </div>
               </div>
               <div className="mt-4">

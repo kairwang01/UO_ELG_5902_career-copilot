@@ -191,7 +191,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           }
           // Fresh candidate accounts go through the guided setup once the
           // workspace mounts (employer signups land in the portal instead).
-          if (mode !== 'business') markOnboardingPending();
+          if (mode !== 'business') markOnboardingPending(trimmedName);
           // The auth listener navigates away (unmounting this modal) the instant
           // the account is created, so the inline message would never be seen —
           // show the verify-your-email notice as a global toast that persists.

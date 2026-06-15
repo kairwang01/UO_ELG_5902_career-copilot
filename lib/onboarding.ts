@@ -15,6 +15,7 @@
  */
 
 const PENDING_KEY = 'onboarding_pending';
+const PENDING_NAME_KEY = 'onboarding_pending_full_name';
 const doneKey = (uid: string) => `onboarding_done_${uid}`;
 const birthdayKey = (uid: string) => `onboarding_birthday_${uid}`;
 const tourDoneKey = (uid: string) => `workspace_tour_done_${uid}`;
@@ -30,7 +31,14 @@ const safeRemove = (key: string): void => {
 };
 
 /** Set right after a successful candidate sign-up (Auth.tsx). */
-export const markOnboardingPending = (): void => safeSet(PENDING_KEY, '1');
+export const markOnboardingPending = (fullName?: string): void => {
+  safeSet(PENDING_KEY, '1');
+  const trimmedName = fullName?.trim();
+  if (trimmedName) safeSet(PENDING_NAME_KEY, trimmedName);
+};
+
+/** Best-effort bridge for the first workspace mount while the profile doc catches up. */
+export const loadPendingOnboardingName = (): string => safeGet(PENDING_NAME_KEY)?.trim() ?? '';
 
 /** True only for the freshly-registered user who hasn't finished or skipped. */
 export const isOnboardingDue = (uid: string): boolean =>
@@ -39,6 +47,7 @@ export const isOnboardingDue = (uid: string): boolean =>
 export const markOnboardingDone = (uid: string): void => {
   safeSet(doneKey(uid), '1');
   safeRemove(PENDING_KEY);
+  safeRemove(PENDING_NAME_KEY);
 };
 
 export const saveBirthdayLocal = (uid: string, isoDate: string): void => {

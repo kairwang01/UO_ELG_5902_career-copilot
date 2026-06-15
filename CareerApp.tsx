@@ -47,7 +47,7 @@ import { SiteLayout } from './marketing/components/SiteLayout';
 import { isWeb3Enabled, onWeb3FlagChange } from './config/featureFlags';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import WorkspaceTour from './components/onboarding/WorkspaceTour';
-import { isOnboardingDue, isTourDone, markTourDone } from './lib/onboarding';
+import { isOnboardingDue, isTourDone, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -315,7 +315,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`;
             // Carry the OAuth display name so it persists even if the doc is
             // created by this call rather than the onUserCreated trigger.
-            await setUserSubscription(planKey, { fullName: user.user_metadata?.full_name });
+            await setUserSubscription(planKey, {
+              fullName: user.user_metadata?.full_name || loadPendingOnboardingName(),
+            });
           }
 
           if (p.role !== role) {
@@ -350,9 +352,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               ? `pending_biz_${pendingPlan}`
               : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`
             : 'free';
+          const pendingOnboardingName = loadPendingOnboardingName();
           const now = new Date().toISOString();
           const fallbackProfile = buildLocalProfile(user.id, {
-            full_name: user.user_metadata?.full_name || '',
+            full_name: user.user_metadata?.full_name || pendingOnboardingName || '',
             avatar_url: user.user_metadata?.avatar_url || null,
             subscription_status: subscriptionStatus,
             resume_text: '',
