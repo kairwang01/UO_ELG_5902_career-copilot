@@ -250,18 +250,62 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     // ── TTS: the avatar "speaks" each question (approximate mouth animation is
     //    driven by these lifecycle events — see InterviewerAvatar for the
     //    lip-sync design note) ──
-    const speak = (text: string) => {
+    // ── TTS hardening ───────────────────────────────────────────────────────
+    // The Web Speech API has two cold-start glitches that made the FIRST question
+    // "tear"/stutter while later ones were fine:
+    //   1. cancel() called synchronously right before speak() clips the next
+    //      utterance in Chromium — so we only cancel when audio is actually
+    //      playing, and let the engine reset before the next speak.
+    //   2. getVoices() is empty until the async 'voiceschanged' event fires, so
+    //      the first utterance fell back to a different default voice — we
+    //      pre-load voices on mount and warm the engine up on the start gesture.
+
+    // Pre-load voices so pickVoice() has data before the first question speaks.
+    useEffect(() => {
+        const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+        if (!synth) return;
+        synth.getVoices();
+        const onVoices = () => { synth.getVoices(); };
+        synth.addEventListener?.('voiceschanged', onVoices);
+        return () => synth.removeEventListener?.('voiceschanged', onVoices);
+    }, []);
+
+    // Prime the cold TTS engine with a silent utterance from inside the start
+    // gesture, so the first real question doesn't stutter on a cold start.
+    const warmUpTts = () => {
         try {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'en-US';
-            u.rate = 1;
-            const voice = pickVoice();
-            if (voice) u.voice = voice;
-            u.onstart = () => setAvatarSpeaking(true);
-            u.onend = () => setAvatarSpeaking(false);
-            u.onerror = () => setAvatarSpeaking(false);
-            window.speechSynthesis.speak(u);
+            const synth = window.speechSynthesis;
+            if (!synth) return;
+            synth.cancel();
+            const warm = new SpeechSynthesisUtterance(' ');
+            warm.volume = 0;
+            synth.speak(warm);
+        } catch { /* noop */ }
+    };
+
+    const speak = (text: string) => {
+        const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+        if (!synth) return;
+        try {
+            const start = () => {
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = 'en-US';
+                u.rate = 1;
+                const voice = pickVoice();
+                if (voice) u.voice = voice;
+                u.onstart = () => setAvatarSpeaking(true);
+                u.onend = () => setAvatarSpeaking(false);
+                u.onerror = () => setAvatarSpeaking(false);
+                synth.speak(u);
+            };
+            if (synth.speaking || synth.pending) {
+                // Cancel, then start only after the engine has reset — a
+                // synchronous cancel()+speak() clips/tears the next utterance.
+                synth.cancel();
+                window.setTimeout(start, 120);
+            } else {
+                start();
+            }
         } catch { /* TTS unsupported — avatar just stays idle */ }
     };
     const cancelSpeech = () => {
@@ -382,6 +426,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
 
     const beginInterview = async () => {
         setShowDisclaimer(false);
+        warmUpTts(); // prime TTS now so the engine is warm by the time Q1 is spoken
         setStage('loading');
         setError(null);
         try {
