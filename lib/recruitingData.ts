@@ -152,6 +152,14 @@ export const saveJobPosting = async (
   });
 };
 
+/** Close (deactivate) or reopen a job posting. Owner-only per Firestore rules. */
+export const setJobPostingActive = async (jobId: string, isActive: boolean): Promise<void> => {
+  await updateDoc(doc(firestoreDb, 'job_postings', jobId), {
+    is_active: isActive,
+    updated_at: serverTimestamp(),
+  });
+};
+
 export const listAllActiveJobPostings = async (): Promise<JobPosting[]> => {
   const activeQuery = query(
     collection(firestoreDb, 'job_postings'),

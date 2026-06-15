@@ -28,6 +28,7 @@ interface PortalJobListingsProps {
   onEditJob: (job: JobPostingWithCount) => void;
   onViewApplicants: (job: JobPostingWithCount) => void;
   onSourceCandidates: (job: JobPostingWithCount) => void;
+  onSetJobActive: (job: JobPostingWithCount, isActive: boolean) => void;
   onNavigate: (page: PortalPage) => void;
   t?: (key: string) => string;
 }
@@ -68,6 +69,7 @@ export function PortalJobListings({
   onEditJob,
   onViewApplicants,
   onSourceCandidates,
+  onSetJobActive,
   onNavigate,
   t: tProp,
 }: PortalJobListingsProps) {
@@ -234,6 +236,23 @@ export function PortalJobListings({
               >
                 <Edit className="w-4 h-4" />
                 {t('employer_dashboard_edit_button')}
+              </button>
+              <button
+                onClick={() => {
+                  if (job.is_active) {
+                    if (window.confirm(t('portal_listings_close_confirm').replace('{title}', job.title))) onSetJobActive(job, false);
+                  } else {
+                    onSetJobActive(job, true);
+                  }
+                }}
+                aria-label={job.is_active ? t('portal_listings_close_job') : t('portal_listings_reopen_job')}
+                className={`inline-flex min-h-10 items-center justify-center gap-1.5 px-3 py-2 text-sm border rounded-lg transition-colors ${
+                  job.is_active
+                    ? (dm ? 'border-red-700 text-red-300 hover:bg-red-900/20' : 'border-red-200 text-red-600 hover:bg-red-50')
+                    : (dm ? 'border-green-700 text-green-300 hover:bg-green-900/20' : 'border-green-300 text-green-700 hover:bg-green-50')
+                }`}
+              >
+                {job.is_active ? t('portal_listings_close_job') : t('portal_listings_reopen_job')}
               </button>
             </div>
           </div>

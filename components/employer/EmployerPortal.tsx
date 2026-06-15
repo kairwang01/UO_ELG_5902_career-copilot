@@ -19,6 +19,7 @@ import { PortalShortlist } from './pages/PortalShortlist';
 import {
   listApplicationsForJobs,
   listEmployerJobsWithCounts,
+  setJobPostingActive,
   type JobPosting,
   type JobPostingWithCount,
 } from '../../lib/recruitingData';
@@ -153,6 +154,16 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     setJobToEdit(job);
     setPrevPage(currentPage);
     setCurrentPage('post-job');
+  };
+
+  const handleSetJobActive = async (job: JobPostingWithCount, isActive: boolean) => {
+    try {
+      await setJobPostingActive(job.id, isActive);
+      addToast(isActive ? t('portal_toast_job_reopened') : t('portal_toast_job_closed'), 'success');
+      await fetchData();
+    } catch (err) {
+      addToast(t('portal_toast_job_status_failed').replace('{error}', err instanceof Error ? err.message : 'error'), 'error');
+    }
   };
 
   const handleViewApplicants = (job: JobPostingWithCount) => {
@@ -312,6 +323,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               onEditJob={handleEditJob}
               onViewApplicants={handleViewApplicants}
               onSourceCandidates={handleSourceCandidates}
+              onSetJobActive={handleSetJobActive}
               onNavigate={navigate}
               t={t}
             />
