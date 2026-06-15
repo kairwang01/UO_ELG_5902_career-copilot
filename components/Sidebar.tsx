@@ -107,8 +107,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               <h1 className="text-xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
                   Career CoPilot
               </h1>
-              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 font-bold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1">
-                  <ChevronRight className="h-2.5 w-2.5 rotate-180" /> {t('ws_nav_home')}
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 font-bold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  Career Studio
               </p>
           </div>
         </button>

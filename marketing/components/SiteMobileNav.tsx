@@ -48,16 +48,16 @@ export const SiteMobileNav: React.FC = () => {
       {open && (
         <nav className="absolute left-0 right-0 top-16 border-b border-[var(--site-border)] bg-[var(--site-surface)] px-4 shadow-sm z-40">
           <Link to={workflowHref} className={linkClass} onClick={() => setOpen(false)}>
-            {isEmployerSurface ? t('site_nav_hiring_workflow') : t('site_nav_how_it_works')}
+            {t('site_nav_how_it_works')}
           </Link>
           {!isEmployerSurface && (
-            <Link to={SITE_ROUTES.sampleReport} className={linkClass} onClick={() => setOpen(false)}>
-              {t('site_nav_sample_report')}
+            <Link to={SITE_ROUTES.workspace} className={linkClass} onClick={() => setOpen(false)}>
+              {t('site_nav_job_search')}
             </Link>
           )}
           {isEmployerSurface && (
-            <Link to={`${SITE_ROUTES.portal}?start=post-job`} className={linkClass} onClick={() => setOpen(false)}>
-              {t('site_cta_post_job')}
+            <Link to={SITE_ROUTES.portal} className={linkClass} onClick={() => setOpen(false)}>
+              {t('site_nav_discover_talent')}
             </Link>
           )}
           <Link

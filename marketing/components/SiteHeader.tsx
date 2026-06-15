@@ -14,7 +14,7 @@ export const SiteHeader: React.FC = () => {
   const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
-  const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : SITE_ROUTES.workspace;
+  const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : `${SITE_ROUTES.workspace}?auth=signup`;
 
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--site-border)] bg-[var(--site-surface)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--site-surface)]/85">
@@ -37,16 +37,16 @@ export const SiteHeader: React.FC = () => {
 
         <nav className="hidden lg:flex items-center gap-7 text-sm font-medium">
           <Link to={workflowHref} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-            {isEmployerSurface ? t('site_nav_hiring_workflow') : t('site_nav_how_it_works')}
+            {t('site_nav_how_it_works')}
           </Link>
           {!isEmployerSurface && (
-            <Link to={SITE_ROUTES.sampleReport} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-              {t('site_nav_sample_report')}
+            <Link to={SITE_ROUTES.workspace} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+              {t('site_nav_job_search')}
             </Link>
           )}
           {isEmployerSurface && (
-            <Link to={`${SITE_ROUTES.portal}?start=post-job`} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
-              {t('site_cta_post_job')}
+            <Link to={SITE_ROUTES.portal} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+              {t('site_nav_discover_talent')}
             </Link>
           )}
           <Link
@@ -117,7 +117,7 @@ export const SiteHeader: React.FC = () => {
                 to={primaryCtaHref}
                 className="hidden sm:inline-flex min-h-[40px] items-center justify-center rounded-[var(--site-radius)] bg-[var(--site-action)] px-4 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)] whitespace-nowrap"
               >
-                {isEmployerSurface ? t('business_hero_get_started_button') : t('site_cta_analyze_resume')}
+                {t('business_hero_get_started_button')}
               </Link>
             </>
           )}
