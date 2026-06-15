@@ -43,6 +43,24 @@ const INITIAL_CREDITS = 100;
 
 interface SetSubscriptionStatusRequest {
   planKey: string;
+  /**
+   * Optional profile fields captured at signup. Writing them here (Admin SDK,
+   * server-side) is the authoritative, race-free path: the client's own
+   * profiles.upsert can be rejected by Firestore rules when it races the
+   * onUserCreated trigger (a merge-write on a not-yet-created doc becomes a
+   * CREATE that lacks credits/created_at and fails validUser). Setting the
+   * name here at doc-creation guarantees it persists.
+   */
+  fullName?: string;
+  companyName?: string;
+}
+
+/** Trims and length-caps an optional free-text profile string from the client. */
+function cleanName(raw: unknown, maxLen: number): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLen);
 }
 
 /**
@@ -81,41 +99,59 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
     throw new HttpsError("invalid-argument", `Unknown plan key: ${rawKey}`);
   }
 
+  const fullName = cleanName(data?.fullName, 120);
+  const companyName = cleanName(data?.companyName, 160);
+
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
-  const snap = await userRef.get();
-  if (!snap.exists) {
+
+  // Transaction so this can't race the onUserCreated trigger (which may create the
+  // doc with the default role:'candidate'). Whichever writer commits first wins the
+  // read; the second aborts+retries, re-reads, and takes the no-clobber update path
+  // — so a business account can never settle back to role:'candidate'.
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
     const now = admin.firestore.FieldValue.serverTimestamp();
-    await userRef.set({
-      [USER_FIELDS.credits]: INITIAL_CREDITS,
-      [USER_FIELDS.role]: audience === "business" ? "employer" : "candidate",
+
+    if (!snap.exists) {
+      const doc: Record<string, unknown> = {
+        [USER_FIELDS.credits]: INITIAL_CREDITS,
+        [USER_FIELDS.role]: audience === "business" ? "employer" : "candidate",
+        [USER_FIELDS.subscriptionStatus]: plan,
+        [USER_FIELDS.createdAt]: now,
+        [USER_FIELDS.updatedAt]: now,
+      };
+      if (fullName) doc[USER_FIELDS.fullName] = fullName;
+      if (audience === "business" && companyName) doc[USER_FIELDS.companyName] = companyName;
+      tx.set(userRef, doc);
+      return {
+        subscription_status: plan,
+        credits: INITIAL_CREDITS,
+        role: audience === "business" ? "employer" : "candidate",
+      };
+    }
+
+    const patch: Record<string, unknown> = {
       [USER_FIELDS.subscriptionStatus]: plan,
-      [USER_FIELDS.createdAt]: now,
       [USER_FIELDS.updatedAt]: now,
-    });
+    };
+    if (snap.get(USER_FIELDS.credits) == null) patch[USER_FIELDS.credits] = INITIAL_CREDITS;
+    if (snap.get(USER_FIELDS.createdAt) == null) patch[USER_FIELDS.createdAt] = now;
+    if (audience === "business") patch[USER_FIELDS.role] = "employer";
+    // Backfill name/org from signup only when the doc doesn't already carry one,
+    // so a later plan change can never wipe a name the user has since edited.
+    if (fullName && !snap.get(USER_FIELDS.fullName)) patch[USER_FIELDS.fullName] = fullName;
+    if (audience === "business" && companyName && !snap.get(USER_FIELDS.companyName)) {
+      patch[USER_FIELDS.companyName] = companyName;
+    }
+
+    tx.set(userRef, patch, { merge: true });
+
+    // Return the authoritative values so the frontend can sync its local state.
+    const credits: number = snap.get(USER_FIELDS.credits) ?? INITIAL_CREDITS;
     return {
       subscription_status: plan,
-      credits: INITIAL_CREDITS,
-      role: audience === "business" ? "employer" : "candidate",
+      credits,
+      role: audience === "business" ? "employer" : snap.get(USER_FIELDS.role),
     };
-  }
-
-  const patch: Record<string, unknown> = {
-    [USER_FIELDS.subscriptionStatus]: plan,
-    [USER_FIELDS.updatedAt]: admin.firestore.FieldValue.serverTimestamp(),
-  };
-  if (snap.get(USER_FIELDS.credits) == null) patch[USER_FIELDS.credits] = INITIAL_CREDITS;
-  if (snap.get(USER_FIELDS.createdAt) == null) {
-    patch[USER_FIELDS.createdAt] = admin.firestore.FieldValue.serverTimestamp();
-  }
-  if (audience === "business") patch[USER_FIELDS.role] = "employer";
-
-  await userRef.set(patch, { merge: true });
-
-  // Return the authoritative values so the frontend can sync its local state.
-  const credits: number = snap.get(USER_FIELDS.credits) ?? INITIAL_CREDITS;
-  return {
-    subscription_status: plan,
-    credits,
-    role: audience === "business" ? "employer" : snap.get(USER_FIELDS.role),
-  };
+  });
 });

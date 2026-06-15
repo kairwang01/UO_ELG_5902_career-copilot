@@ -1295,6 +1295,33 @@ const AgencyResultActions: React.FC<{
   </div>
 );
 
+// Lets a recruiter read a candidate's full summary inline — important in matching
+// mode, where there is no per-row analysis modal (file.result is general-mode only).
+const ExpandableSummary: React.FC<{
+  text: string;
+  clampClass: string;
+  t: TranslationFn;
+}> = ({ text, clampClass, t }) => {
+  const [open, setOpen] = React.useState(false);
+  const isLong = (text?.length ?? 0) > 140;
+  return (
+    <>
+      <p className={`text-sm leading-6 text-gray-600 dark:text-gray-300 ${open ? "" : clampClass}`}>
+        {text || t("agency_analysis_pending")}
+      </p>
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400"
+        >
+          {open ? t("agency_summary_show_less") : t("agency_summary_show_more")}
+        </button>
+      )}
+    </>
+  );
+};
+
 const CompletedResultsList: React.FC<{
   files: BulkAnalysisItem[];
   mode: "general" | "matching";
@@ -1376,9 +1403,9 @@ const CompletedResultsList: React.FC<{
                   <ScoreBar score={score} />
                 </div>
               </div>
-              <p className="mt-3 line-clamp-3 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                {summary || t("agency_analysis_pending")}
-              </p>
+              <div className="mt-3">
+                <ExpandableSummary text={summary} clampClass="line-clamp-3" t={t} />
+              </div>
               <div className="mt-4 flex flex-col gap-2 border-t border-gray-100 pt-3 dark:border-slate-700">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   {t("agency_mobile_actions_label")}
@@ -1391,7 +1418,7 @@ const CompletedResultsList: React.FC<{
       </div>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[720px] text-left">
+        <table className="w-full min-w-[640px] text-left">
           <thead className="bg-gray-50 text-xs font-semibold uppercase text-gray-700 dark:bg-slate-700/50 dark:text-gray-200">
             <tr>
               <th className="px-6 py-4">{t("agency_table_rank")}</th>
@@ -1446,12 +1473,7 @@ const CompletedResultsList: React.FC<{
                     <ScoreBar score={score} />
                   </td>
                   <td className={`px-6 ${denseTable ? "py-3" : "py-4"}`}>
-                    <p
-                      className="line-clamp-2 text-sm text-gray-600 dark:text-gray-300"
-                      title={summary}
-                    >
-                      {summary || t("agency_analysis_pending")}
-                    </p>
+                    <ExpandableSummary text={summary} clampClass="line-clamp-2" t={t} />
                   </td>
                   <td
                     className={`px-6 text-right ${denseTable ? "py-3" : "py-4"}`}

@@ -24,24 +24,34 @@ const db = admin.firestore();
 const INITIAL_CREDITS = 100;
 
 export const onUserCreatedFunction = functions.auth.user().onCreate(async (user) => {
-  const now = admin.firestore.FieldValue.serverTimestamp();
   const ref = db.collection(USERS_COLLECTION).doc(user.uid);
 
   try {
-    const snap = await ref.get();
-    if (!snap.exists) {
-      await ref.set({
-        [USER_FIELDS.credits]: INITIAL_CREDITS,
-        [USER_FIELDS.role]: "candidate",
-        [USER_FIELDS.subscriptionStatus]: "free",
-        [USER_FIELDS.fullName]: user.displayName ?? null,
-        [USER_FIELDS.avatarUrl]: user.photoURL ?? null,
-        [USER_FIELDS.createdAt]: now,
-        [USER_FIELDS.updatedAt]: now,
-      });
-    } else {
-      // Client (e.g. business signup) may have already set role:'employer'.
-      // Never clobber role/subscription_status — only guarantee credits exist.
+    // Run inside a transaction. This trigger races the client signup flow's
+    // setSubscriptionStatus callable (which may have already written role:'employer'
+    // for a business account). A plain read+set() could clobber that role if this
+    // trigger's write landed last. In a transaction, Firestore aborts+retries our
+    // commit if the doc we read as absent was created concurrently — so we re-read
+    // and take the no-clobber "fill the gaps only" path instead.
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      if (!snap.exists) {
+        tx.set(ref, {
+          [USER_FIELDS.credits]: INITIAL_CREDITS,
+          [USER_FIELDS.role]: "candidate",
+          [USER_FIELDS.subscriptionStatus]: "free",
+          [USER_FIELDS.fullName]: user.displayName ?? null,
+          [USER_FIELDS.avatarUrl]: user.photoURL ?? null,
+          [USER_FIELDS.createdAt]: now,
+          [USER_FIELDS.updatedAt]: now,
+        });
+        return;
+      }
+
+      // Doc already created by the signup flow (e.g. business signup set
+      // role:'employer'). Never clobber role/subscription_status — only fill gaps.
       const existing = snap.data() || {};
       const patch: Record<string, unknown> = { [USER_FIELDS.updatedAt]: now };
       if (existing[USER_FIELDS.credits] == null) patch[USER_FIELDS.credits] = INITIAL_CREDITS;
@@ -51,8 +61,14 @@ export const onUserCreatedFunction = functions.auth.user().onCreate(async (user)
       // Firestore orderBy('created_at') silently drops field-less docs, which would
       // make such users invisible in the admin user list.
       if (existing[USER_FIELDS.createdAt] == null) patch[USER_FIELDS.createdAt] = now;
-      await ref.set(patch, { merge: true });
-    }
+      if (existing[USER_FIELDS.fullName] == null && user.displayName) {
+        patch[USER_FIELDS.fullName] = user.displayName;
+      }
+      if (existing[USER_FIELDS.avatarUrl] == null && user.photoURL) {
+        patch[USER_FIELDS.avatarUrl] = user.photoURL;
+      }
+      tx.set(ref, patch, { merge: true });
+    });
     console.log(`onUserCreated: provisioned users/${user.uid} with ${INITIAL_CREDITS} credits`);
   } catch (err) {
     console.error(`onUserCreated: failed to provision users/${user.uid}`, err);

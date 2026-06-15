@@ -1,9 +1,13 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { getAuth } from 'firebase/auth';
-import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/storage';
 import { Building2, Loader2, Pencil } from 'lucide-react';
 import { app } from '../lib/firebaseClient';
 import { useToast } from './Toast';
+
+// Watchdog so a hung upload can never leave the control stuck on "Uploading…".
+const UPLOAD_TIMEOUT_MS = 30000;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 interface CompanyLogoProps {
   url: string | null;
@@ -28,6 +32,7 @@ const CompanyLogo: React.FC<CompanyLogoProps> = ({
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const uploadId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setLogoUrl(url && url.startsWith('http') ? url : null);
@@ -46,12 +51,30 @@ const CompanyLogo: React.FC<CompanyLogoProps> = ({
       if (!uid) throw new Error(signInRequiredMessage);
 
       const file = event.target.files[0];
+      if (file.size > MAX_UPLOAD_BYTES) {
+        throw new Error('Image must be smaller than 5 MB.');
+      }
       const fileExt = file.name.split('.').pop();
       const filePath = `${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}.${fileExt}`;
       const storage = getStorage(app);
       const storageRef = ref(storage, `company-logos/${uid}/${filePath}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(snapshot.ref);
+
+      const downloadUrl = await new Promise<string>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file, { contentType: file.type });
+        const timer = setTimeout(() => {
+          task.cancel();
+          reject(new Error('Upload timed out. Check your connection and try again.'));
+        }, UPLOAD_TIMEOUT_MS);
+        task.on(
+          'state_changed',
+          undefined,
+          (err) => { clearTimeout(timer); reject(err); },
+          () => {
+            clearTimeout(timer);
+            getDownloadURL(task.snapshot.ref).then(resolve).catch(reject);
+          },
+        );
+      });
 
       setLogoUrl(downloadUrl);
       onUpload?.(downloadUrl);
@@ -59,6 +82,7 @@ const CompanyLogo: React.FC<CompanyLogoProps> = ({
       addToast((error as Error).message, 'error');
     } finally {
       setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -92,6 +116,7 @@ const CompanyLogo: React.FC<CompanyLogoProps> = ({
               {uploading ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : <Pencil className="h-5 w-5" aria-hidden="true" />}
             </label>
             <input
+              ref={fileInputRef}
               className="sr-only"
               type="file"
               id={uploadId}

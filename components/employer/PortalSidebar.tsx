@@ -8,7 +8,6 @@ import {
   User,
   CreditCard,
   ChevronRight,
-  Settings,
   BookmarkCheck,
 } from 'lucide-react';
 import type { UserProfile } from '../../types';
@@ -116,7 +115,8 @@ export function PortalSidebar({
         <div className="pt-6 space-y-2">
           <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{t('portal_nav_settings_group')}</div>
           {navItem('company-profile', t('portal_nav_org_profile'), User)}
-          {navItem('account-settings', t('portal_nav_account'), Settings)}
+          {/* Personal "Account Settings" lives in the top-right account menu only — the
+              same single access point the candidate workspace uses (no sidebar duplicate). */}
           {navItem('billing', t('portal_nav_billing'), CreditCard)}
         </div>
 

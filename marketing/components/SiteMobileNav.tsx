@@ -60,7 +60,11 @@ export const SiteMobileNav: React.FC = () => {
               {t('site_cta_post_job')}
             </Link>
           )}
-          <Link to={SITE_ROUTES.pricing} className={linkClass} onClick={() => setOpen(false)}>
+          <Link
+            to={isEmployerSurface ? `${SITE_ROUTES.pricing}?audience=employer` : SITE_ROUTES.pricing}
+            className={linkClass}
+            onClick={() => setOpen(false)}
+          >
             {t('site_nav_pricing')}
           </Link>
           {/* ONE audience switch per surface (no self-referential "Business"

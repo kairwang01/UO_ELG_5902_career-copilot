@@ -1,6 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
+import { sendEmailVerification } from 'firebase/auth';
 import { data } from '@/lib/data';
+import { firebaseAuth } from '@/lib/firebaseClient';
 import { setUserSubscription } from '@/services/subscriptionClient';
 import {
   Dialog,
@@ -68,7 +70,12 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
       }
 
       if (authData) {
-        await setUserSubscription(`pending_biz_${selectedPlan}`);
+        // Write the contact name + organization server-side at doc creation
+        // (race-free). The client upsert below is a fallback once the doc exists.
+        await setUserSubscription(`pending_biz_${selectedPlan}`, {
+          fullName: trimmedContactName,
+          companyName: trimmedOrgName,
+        });
 
         const { error: profileError } = await data.profiles.upsert({
           id: authData.id,
@@ -81,6 +88,14 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
         if (profileError) {
           setError(`${t('auth_profile_setup_failed')} ${profileError.message}`);
         } else {
+          // Send a verification email (non-blocking, production-readiness step).
+          try {
+            if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
+              await sendEmailVerification(firebaseAuth.currentUser);
+            }
+          } catch {
+            // non-fatal — verification can be re-triggered later
+          }
           // The account was successfully created. Swallow any transient error from
           // the post-signup callback (e.g. refreshProfile network failure) so the
           // form does not freeze — the success message is still shown to the user.

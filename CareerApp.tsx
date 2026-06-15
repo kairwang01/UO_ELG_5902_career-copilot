@@ -313,7 +313,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             const planKey = pendingMode === 'business'
               ? `pending_biz_${pendingPlan}`
               : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`;
-            await setUserSubscription(planKey);
+            // Carry the OAuth display name so it persists even if the doc is
+            // created by this call rather than the onUserCreated trigger.
+            await setUserSubscription(planKey, { fullName: user.user_metadata?.full_name });
           }
 
           if (p.role !== role) {
@@ -1008,6 +1010,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         setDashboardView(v);
         setIsUpdatingResume(false);
         setIsMobileNavOpen(false);
+        // Sidebar navigation must take over the main panel immediately. A lingering
+        // analysisResult would otherwise keep the analysis screen mounted (renderContent
+        // short-circuits on it), making the sidebar feel inactive after an analysis.
+        setAnalysisResult(null);
       },
       profile,
       credits,
@@ -1022,6 +1028,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       t,
       currentLang,
       onLanguageChange: changeLanguage,
+      onHome: () => { setIsMobileNavOpen(false); navigate('/'); },
     };
 
     return (

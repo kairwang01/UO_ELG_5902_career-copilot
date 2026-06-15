@@ -36,6 +36,8 @@ interface SidebarProps {
   t: (key: string) => string;
   currentLang: string;
   onLanguageChange: (lang: string) => void;
+  /** Returns to the public homepage from inside the workspace. */
+  onHome?: () => void;
   /** Rendered inside the mobile drawer overlay (always visible, fills the drawer height). */
   mobile?: boolean;
 }
@@ -50,6 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   t,
   currentLang,
   onLanguageChange,
+  onHome,
   mobile = false,
 }) => {
   // Default collapsed: the full tool list is long, so the sidebar leads with a single
@@ -89,17 +92,26 @@ const Sidebar: React.FC<SidebarProps> = ({
         mobile ? 'flex w-72 max-w-[85vw] h-full' : 'hidden lg:flex w-64 h-screen sticky top-0'
       } flex-shrink-0 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex-col`}
     >
-      {/* Brand */}
-      <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3">
-        <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-500/20">
-            <Zap className="h-6 w-6" />
-        </div>
-        <div>
-            <h1 className="text-xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                Career Studio
-            </h1>
-            <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 font-bold">Career Workbench</p>
-        </div>
+      {/* Brand — a single product name; clicking it returns to the public homepage. */}
+      <div className="p-6 border-b border-gray-100 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={onHome}
+          className="flex items-center gap-3 w-full text-left group"
+          aria-label={t('ws_nav_home')}
+        >
+          <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-500/20">
+              <Zap className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+                  Career CoPilot
+              </h1>
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 font-bold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-center gap-1">
+                  <ChevronRight className="h-2.5 w-2.5 rotate-180" /> {t('ws_nav_home')}
+              </p>
+          </div>
+        </button>
       </div>
 
       {/* Navigation */}

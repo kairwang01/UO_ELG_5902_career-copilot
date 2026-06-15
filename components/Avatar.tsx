@@ -1,8 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getAuth } from 'firebase/auth';
-import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/storage';
 import { app } from '../lib/firebaseClient';
 import { useToast } from './Toast';
+
+// A hung upload (storage CORS / bucket misconfig / rules not deployed) must never
+// leave the button stuck on "Uploading…". This watchdog turns an indefinite hang
+// into a visible, retryable error.
+const UPLOAD_TIMEOUT_MS = 30000;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 interface AvatarProps {
   url: string | null;
@@ -33,12 +39,30 @@ const Avatar: React.FC<AvatarProps> = ({ url, size, onUpload }) => {
       if (!uid) throw new Error('You must be signed in to upload an avatar.');
 
       const file = event.target.files[0];
+      if (file.size > MAX_UPLOAD_BYTES) {
+        throw new Error('Image must be smaller than 5 MB.');
+      }
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}.${fileExt}`;
       const storage = getStorage(app);
       const storageRef = ref(storage, `avatars/${uid}/${fileName}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(snapshot.ref);
+
+      const downloadUrl = await new Promise<string>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file, { contentType: file.type });
+        const timer = setTimeout(() => {
+          task.cancel();
+          reject(new Error('Upload timed out. Check your connection and try again.'));
+        }, UPLOAD_TIMEOUT_MS);
+        task.on(
+          'state_changed',
+          undefined,
+          (err) => { clearTimeout(timer); reject(err); },
+          () => {
+            clearTimeout(timer);
+            getDownloadURL(task.snapshot.ref).then(resolve).catch(reject);
+          },
+        );
+      });
 
       setAvatarUrl(downloadUrl);
       onUpload?.(downloadUrl);
@@ -46,6 +70,8 @@ const Avatar: React.FC<AvatarProps> = ({ url, size, onUpload }) => {
       addToast((error as Error).message, 'error');
     } finally {
       setUploading(false);
+      // Reset so re-selecting the same file still fires onChange.
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 

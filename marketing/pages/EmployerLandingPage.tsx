@@ -38,7 +38,7 @@ export const EmployerLandingPage: React.FC = () => {
               <SiteButton to={SITE_ROUTES.portal} className="w-full sm:w-auto justify-center">
                 {t('site_cta_post_job')}
               </SiteButton>
-              <SiteButton variant="secondary" to={SITE_ROUTES.pricing} className="w-full sm:w-auto justify-center">
+              <SiteButton variant="secondary" to={`${SITE_ROUTES.pricing}?audience=employer`} className="w-full sm:w-auto justify-center">
                 {t('site_cta_employer_pricing')}
               </SiteButton>
             </div>

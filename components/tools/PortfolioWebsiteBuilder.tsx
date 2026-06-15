@@ -916,7 +916,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_url_label')}</label>
-                                    <input type="url" value={p.url} onChange={e => handleProjectChange(p.id, 'url', e.target.value)} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                    <input type="url" value={p.url} onChange={e => handleProjectChange(p.id, 'url', e.target.value)} placeholder={t('tool_portfolio_project_url_placeholder')} className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                    <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">{t('tool_portfolio_project_url_hint')}</p>
                                 </div>
                             </div>
                             <div className="mt-6">

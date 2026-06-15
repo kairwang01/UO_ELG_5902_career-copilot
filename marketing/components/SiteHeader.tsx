@@ -49,7 +49,10 @@ export const SiteHeader: React.FC = () => {
               {t('site_cta_post_job')}
             </Link>
           )}
-          <Link to={SITE_ROUTES.pricing} className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]">
+          <Link
+            to={isEmployerSurface ? `${SITE_ROUTES.pricing}?audience=employer` : SITE_ROUTES.pricing}
+            className="text-[var(--site-text-muted)] hover:text-[var(--site-text)]"
+          >
             {t('site_nav_pricing')}
           </Link>
           {/* ONE audience switch per surface, visually separated from content nav —

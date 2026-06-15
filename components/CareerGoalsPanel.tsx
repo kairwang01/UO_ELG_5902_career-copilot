@@ -29,6 +29,25 @@ const DEFAULT_PREFS: JobPreferences = {
   availability: '',
 };
 
+// Curated suggestion lists so role/location entries converge on canonical values
+// instead of inconsistent free text. The fields stay comma-separated multi-value
+// (a combobox), so users can still add anything not on the list.
+const ROLE_SUGGESTIONS = [
+  'Software Engineer', 'Frontend Engineer', 'Backend Engineer', 'Full-Stack Engineer',
+  'Mobile Developer', 'DevOps Engineer', 'Cloud Engineer', 'Data Analyst', 'Data Scientist',
+  'Data Engineer', 'Machine Learning Engineer', 'QA Engineer', 'Cybersecurity Analyst',
+  'Product Manager', 'Project Manager', 'Business Analyst', 'UX Designer', 'UI Designer',
+  'Product Designer', 'Marketing Manager', 'Sales Representative', 'Account Manager',
+  'Financial Analyst', 'HR Specialist', 'Operations Manager',
+];
+
+const LOCATION_SUGGESTIONS = [
+  'Remote', 'Hybrid', 'On-site',
+  'Toronto', 'Vancouver', 'Ottawa', 'Montreal', 'Calgary',
+  'New York', 'San Francisco', 'Seattle', 'Austin',
+  'London', 'Berlin', 'Paris', 'Singapore', 'Tokyo', 'Sydney',
+];
+
 const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
   // Identity fallback — returns the English label for the key when no t() provided
   const t = tProp ?? ((key: string) => {
@@ -146,11 +165,15 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
               </label>
               <input
                 type="text"
+                list="cg-role-suggestions"
                 value={form.roles}
                 onChange={(e) => setForm((f) => ({ ...f, roles: e.target.value }))}
                 placeholder={t('goals_placeholder_roles')}
                 className="w-full rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
               />
+              <datalist id="cg-role-suggestions">
+                {ROLE_SUGGESTIONS.map((r) => <option key={r} value={r} />)}
+              </datalist>
             </div>
 
             {/* Preferred locations */}
@@ -160,11 +183,15 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
               </label>
               <input
                 type="text"
+                list="cg-location-suggestions"
                 value={form.locations}
                 onChange={(e) => setForm((f) => ({ ...f, locations: e.target.value }))}
                 placeholder={t('goals_placeholder_locations')}
                 className="w-full rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
               />
+              <datalist id="cg-location-suggestions">
+                {LOCATION_SUGGESTIONS.map((l) => <option key={l} value={l} />)}
+              </datalist>
             </div>
 
             {/* Minimum salary */}

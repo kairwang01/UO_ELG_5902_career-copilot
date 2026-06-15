@@ -26,6 +26,7 @@ export const USER_FIELDS = {
   role: "role",
   subscriptionStatus: "subscription_status",
   fullName: "full_name",
+  companyName: "company_name",
   avatarUrl: "avatar_url",
   createdAt: "created_at",
   updatedAt: "updated_at",

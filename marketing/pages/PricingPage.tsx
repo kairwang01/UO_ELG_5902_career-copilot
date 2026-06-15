@@ -5,6 +5,7 @@ import { SiteButton } from '../components/SiteButton';
 import { SiteCard } from '../components/SiteCard';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
+import { useSiteSession } from '../hooks/useSiteSession';
 import { employerAddOnPlans, employerPlans, jobseekerPlans, planKey, type BetaPlanConfig } from '../config/pricingPlans';
 import { CREDIT_PACKS } from '../../config/credits';
 
@@ -89,13 +90,31 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, ctaHref, t }) => (
 export const PricingPage: React.FC = () => {
   const { t } = useMarketingI18n();
   const location = useLocation();
-  const [audience, setAudience] = useState<'jobseeker' | 'employer'>('jobseeker');
+  const { isBusiness } = useSiteSession();
+
+  // Open on the plan set that matches where the visitor came from: an explicit
+  // ?audience=, the business upsell banner, or a signed-in business account. A
+  // business user must never land on job-seeker pricing by default.
+  const params = new URLSearchParams(location.search);
+  const explicitAudience = params.get('audience');
+  const fromBusinessUpsell = params.get('from') === 'business-upsell';
+  const [audience, setAudience] = useState<'jobseeker' | 'employer'>(
+    explicitAudience === 'employer' || fromBusinessUpsell ? 'employer' : 'jobseeker',
+  );
+  const [userPickedAudience, setUserPickedAudience] = useState(false);
+
+  // A signed-in business account on bare /pricing should switch to employer plans
+  // once the session hydrates — unless the visitor has toggled it themselves.
+  React.useEffect(() => {
+    if (!userPickedAudience && !explicitAudience && !fromBusinessUpsell && isBusiness) {
+      setAudience('employer');
+    }
+  }, [isBusiness, userPickedAudience, explicitAudience, fromBusinessUpsell]);
+
   const [upsellDismissed, setUpsellDismissed] = useState(false);
   const plans = audience === 'jobseeker' ? jobseekerPlans : employerPlans;
   const ctaHref = audience === 'jobseeker' ? SITE_ROUTES.workspace : SITE_ROUTES.portal;
-  const showBusinessUpsell =
-    !upsellDismissed &&
-    new URLSearchParams(location.search).get('from') === 'business-upsell';
+  const showBusinessUpsell = !upsellDismissed && fromBusinessUpsell;
 
   return (
     <SiteLayout pageId="pricing">
@@ -135,7 +154,7 @@ export const PricingPage: React.FC = () => {
               <button
                 key={option}
                 type="button"
-                onClick={() => setAudience(option)}
+                onClick={() => { setUserPickedAudience(true); setAudience(option); }}
                 className={`min-h-[42px] flex-1 rounded-full px-4 text-sm font-semibold transition-colors ${
                   audience === option
                     ? 'bg-[var(--site-text)] text-white'

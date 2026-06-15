@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { updateProfile } from 'firebase/auth';
+import { sendEmailVerification, updateProfile } from 'firebase/auth';
 import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
 import { ALL_PLANS, BUSINESS_PLANS } from '@/config';
@@ -152,7 +152,10 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
 
     if (authData) {
       try {
-        await setUserSubscription(planKeyForServer);
+        // Pass the name to the callable so it is written server-side at doc
+        // creation (race-free). The client upsert below is a belt-and-suspenders
+        // that only succeeds once the doc already exists.
+        await setUserSubscription(planKeyForServer, { fullName: trimmedName });
 
         // onUserCreated trigger usually creates users/{uid}; setUserSubscription
         // also creates the doc if the trigger is still in flight. The client only
@@ -175,10 +178,19 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           } catch {
             // non-fatal — profile row already has the name
           }
+          // Send a verification email. Non-blocking: the account is usable now,
+          // but confirming ownership is the expected production-readiness step.
+          try {
+            if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
+              await sendEmailVerification(firebaseAuth.currentUser);
+            }
+          } catch {
+            // non-fatal — the user can re-trigger verification later
+          }
           // Fresh candidate accounts go through the guided setup once the
           // workspace mounts (employer signups land in the portal instead).
           if (mode !== 'business') markOnboardingPending();
-          setMessage('Account created successfully! You are now signed in.');
+          setMessage(t('auth_signup_success_verify'));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : t('auth_unexpected_error'));
