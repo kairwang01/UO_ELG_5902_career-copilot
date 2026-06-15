@@ -570,6 +570,10 @@ const AgencyCommandCenter: React.FC<{
 }) => {
   const needsBrief = mode === "matching" && !hasJobDescription;
   const needsFiles = files.length === 0;
+  // When the only suggested action is "Upload resumes" the dropzone right below
+  // already does that — the button would just duplicate it, so hide it. Keep it
+  // for the distinct states (Add brief / Run queue / Review results).
+  const showPrimaryAction = needsBrief || !needsFiles;
   const primaryDisabled =
     isAnalyzing ||
     (!needsBrief && !needsFiles && pendingAnalysisCount > 0 && !canRunAnalysis);
@@ -656,23 +660,25 @@ const AgencyCommandCenter: React.FC<{
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
-          <span className="font-semibold text-gray-900 dark:text-gray-100">
-            {t("agency_command_next_action")}
-          </span>{" "}
-          {primaryLabel}
-        </p>
-        <button
-          type="button"
-          onClick={onPrimaryAction}
-          disabled={primaryDisabled}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600 dark:disabled:bg-slate-700 dark:disabled:text-gray-400"
-        >
-          <PrimaryIcon className={`h-4 w-4 ${isAnalyzing ? "animate-spin" : ""}`} />
-          {primaryLabel}
-        </button>
-      </div>
+      {showPrimaryAction && (
+        <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+            <span className="font-semibold text-gray-900 dark:text-gray-100">
+              {t("agency_command_next_action")}
+            </span>{" "}
+            {primaryLabel}
+          </p>
+          <button
+            type="button"
+            onClick={onPrimaryAction}
+            disabled={primaryDisabled}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600 dark:disabled:bg-slate-700 dark:disabled:text-gray-400"
+          >
+            <PrimaryIcon className={`h-4 w-4 ${isAnalyzing ? "animate-spin" : ""}`} />
+            {primaryLabel}
+          </button>
+        </div>
+      )}
     </section>
   );
 };
@@ -1301,22 +1307,53 @@ const ExpandableSummary: React.FC<{
   text: string;
   clampClass: string;
   t: TranslationFn;
-}> = ({ text, clampClass, t }) => {
+  name?: string;
+}> = ({ text, clampClass, t, name }) => {
   const [open, setOpen] = React.useState(false);
   const isLong = (text?.length ?? 0) > 140;
   return (
     <>
-      <p className={`text-sm leading-6 text-gray-600 dark:text-gray-300 ${open ? "" : clampClass}`}>
+      <p className={`text-sm leading-6 text-gray-600 dark:text-gray-300 ${clampClass}`}>
         {text || t("agency_analysis_pending")}
       </p>
       {isLong && (
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen(true)}
           className="mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400"
         >
-          {open ? t("agency_summary_show_less") : t("agency_summary_show_more")}
+          {t("agency_summary_show_more")}
         </button>
+      )}
+      {/* Full summary in a modal (not inline) so it never pushes the candidate
+          list down — mirrors the Blind Resume / Prep Kit modal experience. */}
+      {open && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
+          onClick={() => setOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-2xl animate-fade-scale dark:bg-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 p-4 dark:border-slate-700">
+              <h3 className="font-bold text-gray-900 dark:text-gray-100">{name || t("agency_table_summary")}</h3>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label={t("agency_summary_show_less")}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto whitespace-pre-wrap p-5 text-sm leading-6 text-gray-700 dark:text-gray-300">
+              {text}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -1404,7 +1441,7 @@ const CompletedResultsList: React.FC<{
                 </div>
               </div>
               <div className="mt-3">
-                <ExpandableSummary text={summary} clampClass="line-clamp-3" t={t} />
+                <ExpandableSummary text={summary} clampClass="line-clamp-3" t={t} name={name} />
               </div>
               <div className="mt-4 flex flex-col gap-2 border-t border-gray-100 pt-3 dark:border-slate-700">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -1473,7 +1510,7 @@ const CompletedResultsList: React.FC<{
                     <ScoreBar score={score} />
                   </td>
                   <td className={`px-6 ${denseTable ? "py-3" : "py-4"}`}>
-                    <ExpandableSummary text={summary} clampClass="line-clamp-2" t={t} />
+                    <ExpandableSummary text={summary} clampClass="line-clamp-2" t={t} name={name} />
                   </td>
                   <td
                     className={`px-6 text-right ${denseTable ? "py-3" : "py-4"}`}
