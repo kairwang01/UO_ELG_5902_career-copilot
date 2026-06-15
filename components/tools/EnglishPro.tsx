@@ -47,6 +47,14 @@ const isYesterday = (date1: Date, date2: Date) => {
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 
+/** Prefer a clear English voice; voices load async so fall back gracefully. */
+const pickEnglishVoice = (): SpeechSynthesisVoice | null => {
+    try {
+        const voices = window.speechSynthesis.getVoices();
+        return voices.find((v) => v.lang === 'en-US') ?? voices.find((v) => v.lang.startsWith('en')) ?? null;
+    } catch { return null; }
+};
+
 const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshProfile }) => {
     const { loading, begin, end, cancel } = useCancellableLoading();
     const [error, setError] = useState<string | null>(null);
@@ -71,6 +79,12 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     const [spokenResult, setSpokenResult] = useState<SpokenEnglishAnalysisResult | null>(null);
     const recognitionRef = useRef<any>(null);
     const recordingStartTime = useRef<number | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    // Mirrors of state read inside the speech-recognition onend handler (which is
+    // bound once and cannot see fresh state directly).
+    const isListeningRef = useRef(false);
+    const transcriptRef = useRef('');
+    const runSpokenAnalysisRef = useRef<(finalTranscript: string, duration: number) => void>(() => {});
     const [speakingTopics, setSpeakingTopics] = useState<string[]>([]);
     const [currentTopic, setCurrentTopic] = useState<string | null>(null);
     const [isFetchingTopic, setIsFetchingTopic] = useState(false);
@@ -170,6 +184,12 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
     const handleStartNewPractice = () => {
         cancel();
+        // Stop any live mic + narration before returning to the hub.
+        try { recognitionRef.current?.stop?.(); } catch { /* noop */ }
+        try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+        setIsListening(false);
+        setIsPlaying(false);
+        recordingStartTime.current = null;
         setError(null);
         setPracticeMode('hub');
         // Reset all sub-modes and results
@@ -231,9 +251,47 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 console.error("Speech recognition error:", event.error);
                 setError(`${t('tool_english_pro_speech_error')} ${event.error}`);
                 setIsListening(false);
+                recordingStartTime.current = null;
+            };
+
+            recognition.onend = () => {
+                // The engine can stop on its own (silence gap / network blip /
+                // ~60s timeout even with continuous=true). If we still think we're
+                // recording, finalize: flip the UI off so the mic never gets stuck
+                // on "Recording…", and analyse whatever speech was captured.
+                if (!isListeningRef.current) return;
+                setIsListening(false);
+                const t0 = recordingStartTime.current;
+                const duration = t0 ? (Date.now() - t0) / 1000 : 0;
+                recordingStartTime.current = null;
+                const finalT = transcriptRef.current;
+                if (finalT.trim()) runSpokenAnalysisRef.current(finalT, duration);
             };
         }
     }, [t]);
+
+    // Keep the refs the onend handler reads in sync with current state.
+    useEffect(() => { isListeningRef.current = isListening; }, [isListening]);
+    useEffect(() => { transcriptRef.current = transcript; }, [transcript]);
+    useEffect(() => { runSpokenAnalysisRef.current = runSpokenAnalysis; }, [runSpokenAnalysis]);
+
+    // Pre-load TTS voices so the first listening clip uses the intended voice
+    // instead of a glitchy default (getVoices() is empty until voiceschanged).
+    useEffect(() => {
+        const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+        if (!synth) return;
+        synth.getVoices();
+        const onVoices = () => { synth.getVoices(); };
+        synth.addEventListener?.('voiceschanged', onVoices);
+        return () => synth.removeEventListener?.('voiceschanged', onVoices);
+    }, []);
+
+    // Tear down the mic and any narration when the tool unmounts, so the
+    // microphone never stays live and audio never keeps playing after leaving.
+    useEffect(() => () => {
+        try { recognitionRef.current?.abort?.(); } catch { /* noop */ }
+        try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+    }, []);
 
     const toggleListening = useCallback(() => {
         if (!isSpeechSupported) {
@@ -821,14 +879,29 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     };
 
     // --- Listening Mode ---
+    const stopClip = () => {
+        try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+        setIsPlaying(false);
+    };
     const playClip = () => {
+        const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+        if (!synth) return;
         try {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(currentClip.text);
-            u.lang = 'en-US';
-            u.rate = 0.95;
-            window.speechSynthesis.speak(u);
-        } catch {}
+            const start = () => {
+                const u = new SpeechSynthesisUtterance(currentClip.text);
+                u.lang = 'en-US';
+                u.rate = 0.95;
+                const v = pickEnglishVoice();
+                if (v) u.voice = v;
+                u.onstart = () => setIsPlaying(true);
+                u.onend = () => setIsPlaying(false);
+                u.onerror = () => setIsPlaying(false);
+                synth.speak(u);
+            };
+            // Avoid the synchronous cancel()→speak() race that tears the first clip.
+            if (synth.speaking || synth.pending) { synth.cancel(); window.setTimeout(start, 120); }
+            else start();
+        } catch { setIsPlaying(false); }
     };
 
     const renderListeningMode = () => {
@@ -862,15 +935,21 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         {/* Play button */}
                         <div className="flex justify-center">
                             <button
-                                onClick={playClip}
+                                onClick={isPlaying ? stopClip : playClip}
                                 disabled={!isSpeechSynthesisSupported}
                                 title={isSpeechSynthesisSupported ? undefined : 'Speech synthesis not supported in this browser'}
-                                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-full shadow-lg"
+                                className={`flex items-center gap-2 ${isPlaying ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-700 hover:bg-blue-800'} disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-colors`}
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                                {t('tool_english_pro_listening_play_audio')}
+                                {isPlaying ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                        <rect x="6" y="6" width="12" height="12" rx="1.5" />
+                                    </svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                )}
+                                {isPlaying ? t('tool_english_pro_listening_stop') : t('tool_english_pro_listening_play_audio')}
                             </button>
                         </div>
                         {!isSpeechSynthesisSupported && (

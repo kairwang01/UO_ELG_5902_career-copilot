@@ -551,7 +551,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                         {t('analysis_strengths_title')}
                     </h3>
                     <ul className="list-disc list-inside space-y-2 text-green-900 dark:text-green-200">
-                        {result.strengths.map((item, i) => <li key={i}>{item}</li>)}
+                        {(result.strengths ?? []).map((item, i) => <li key={i}>{item}</li>)}
                     </ul>
                 </div>
 
@@ -562,7 +562,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                         {t('analysis_improvements_title')}
                     </h3>
                     <ul className="space-y-3 text-yellow-900 dark:text-yellow-200">
-                        {result.improvements.map((item, i) => (
+                        {(result.improvements ?? []).map((item, i) => (
                             <li key={i}><strong className="font-semibold">{item.area}:</strong> {item.suggestion}</li>
                         ))}
                     </ul>
@@ -577,7 +577,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                     {t('analysis_keywords_title')}
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                    {result.keywords.map((item, i) => (
+                    {(result.keywords ?? []).map((item, i) => (
                         <span key={i} className="bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 text-sm font-medium px-3 py-1.5 rounded-full">{item}</span>
                     ))}
                 </div>

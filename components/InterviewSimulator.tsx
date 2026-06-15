@@ -317,7 +317,11 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         try { window.speechSynthesis.cancel(); } catch { /* noop */ }
         setAvatarSpeaking(false);
     };
-    useEffect(() => () => cancelSpeech(), []);
+    useEffect(() => () => {
+        cancelSpeech();
+        // Release the mic too, so it is never left live after the room unmounts.
+        try { recognitionRef.current?.stop?.(); } catch { /* noop */ }
+    }, []);
 
     const handleJobSourcePick = (value: string) => {
         if (!value) return;
@@ -394,6 +398,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                 setError(`${t('tool_mock_interview_speech_error')} ${event.error}`);
                 setIsListening(false);
             };
+
+            // The engine can stop on its own (silence/network/timeout); reset the
+            // mic indicator so it never shows a live mic after dictation stopped.
+            recognitionRef.current.onend = () => setIsListening(false);
         }
     }, [t]);
 

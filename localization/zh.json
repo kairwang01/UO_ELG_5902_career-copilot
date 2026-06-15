@@ -658,6 +658,7 @@
   "tool_english_pro_listening_practice": "听力练习",
   "tool_english_pro_listening_desc": "听短音频片段并输入您听到的内容以测试您的理解。",
   "tool_english_pro_listening_play_audio": "播放音频",
+  "tool_english_pro_listening_stop": "停止",
   "tool_english_pro_listening_placeholder": "在此处输入您听到的内容...",
   "tool_english_pro_listening_check_button": "检查我的转录",
   "tool_english_pro_listening_results_title": "听力理解分析",

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PenLine } from 'lucide-react';
 import { generateCoverLetter } from '../../services/aiClient';
 import type { CoverLetter } from '../../types';
@@ -66,11 +66,18 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   // Recent applications for the job-context selector
   const { applications } = useRecentApplications(session);
 
+  // Guard so the paid auto-generate fires at most once per (job, resume) input
+  // set — resumeText loading in (a new object/length) must never re-charge a
+  // second cover letter without the user asking.
+  const lastAutoRunKey = useRef<string | null>(null);
   useEffect(() => {
     setJobDescription(initialInput);
     // Only auto-run once the resume is available — otherwise the call fails
-    // server-side (no resume) and wastes a credit. Re-runs when resumeText loads.
+    // server-side (no resume) and wastes a credit.
     if (initialInput && resumeText?.trim()) {
+        const key = `${initialInput}|${resumeText.length}`;
+        if (lastAutoRunKey.current === key) return;
+        lastAutoRunKey.current = key;
         runTool(initialInput);
     }
   }, [initialInput, resumeText]);
