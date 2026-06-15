@@ -180,6 +180,17 @@ service cloud.firestore {
         (!hasField(data, "custom_provider") || data.custom_provider is map);
     }
 
+    function validLegacyUserProfileUpdate(data) {
+      return data.diff(resource.data).affectedKeys().hasOnly([
+          "full_name",
+          "avatar_url",
+          "updated_at"
+        ]) &&
+        optionalString(data, "full_name", 120) &&
+        optionalUrl(data, "avatar_url", 2048) &&
+        optionalTimestamp(data, "updated_at");
+    }
+
     function validCareerPath(data) {
       return data.keys().hasOnly([
           "desired_role",
@@ -452,8 +463,11 @@ service cloud.firestore {
       // Update: owner may change profile fields, but credits, subscription_status
       // and created_at are server-only / immutable from the client.
       allow update: if isOwner(userId)
-        && validUser(request.resource.data)
-        && unchanged(["credits", "subscription_status", "created_at", "custom_provider"]);
+        && unchanged(["credits", "subscription_status", "created_at", "custom_provider"])
+        && (
+          validUser(request.resource.data) ||
+          validLegacyUserProfileUpdate(request.resource.data)
+        );
 
       allow delete: if false;
 
