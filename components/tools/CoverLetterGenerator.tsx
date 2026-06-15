@@ -84,11 +84,11 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
   const runTool = async (input: string) => {
     if (apiStatus !== 'online') {
-        setError("The AI is currently unavailable. Please try again later.");
+        setError(t('tool_cover_letter_ai_unavailable_error'));
         return;
     }
     if (!resumeText?.trim()) {
-        setError('Please upload your resume first.');
+        setError(t('tool_resume_required_error'));
         return;
     }
     if (!input) {
@@ -131,8 +131,8 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   const renderFallback = () => (
     <div className="space-y-4">
         <div className="p-4 bg-yellow-50 dark:bg-amber-900/20 border-l-4 border-yellow-400">
-            <h4 className="font-bold text-yellow-800 dark:text-amber-300">AI Not Available</h4>
-            <p className="text-sm text-yellow-700 dark:text-amber-300 mt-1">The AI service is currently unavailable. You can use this professional template to get started on your cover letter.</p>
+            <h4 className="font-bold text-yellow-800 dark:text-amber-300">{t('tool_cover_letter_ai_unavailable_title')}</h4>
+            <p className="text-sm text-yellow-700 dark:text-amber-300 mt-1">{t('tool_cover_letter_ai_unavailable_desc')}</p>
         </div>
         <textarea
           value={COVER_LETTER_TEMPLATE}

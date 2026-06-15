@@ -627,11 +627,16 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 setTimeout(() => reject(new Error(t('tool_portfolio_headshot_timeout'))), 120_000)),
         ]);
         if (headshotRunRef.current !== runId) return; // cancelled / superseded
+        if (!Array.isArray(results) || results.length === 0) {
+          setHeadshotError(t('tool_portfolio_headshot_empty'));
+          setHeadshotStep('photo_uploaded');
+          return;
+        }
         setGeneratedImages(results.map(imgData => ({ mimeType: 'image/jpeg', data: imgData })));
         setHeadshotStep('generated');
     } catch (err) {
         if (headshotRunRef.current !== runId) return;
-        setHeadshotError(err instanceof Error ? err.message : 'Failed to generate avatars. The image might not be suitable.');
+        setHeadshotError(err instanceof Error ? err.message : t('tool_portfolio_headshot_failed'));
         setHeadshotStep('photo_uploaded');
     }
   };
@@ -645,7 +650,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         setHeadshotStep('photo_uploaded');
         setHeadshotError(null);
     } catch (err) {
-        setHeadshotError("Failed to process image. Please try another one.");
+        setHeadshotError(t('tool_portfolio_image_process_failed'));
         console.error(err);
     }
   };
@@ -658,7 +663,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setHeadshotError(null);
     } catch (err) {
       console.error("Camera Error:", err);
-      setHeadshotError("Could not access camera. Please check permissions and ensure you're on a secure (HTTPS) connection.");
+      setHeadshotError(t('tool_portfolio_camera_access_failed'));
     }
   };
 

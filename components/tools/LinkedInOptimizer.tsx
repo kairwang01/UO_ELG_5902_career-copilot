@@ -52,6 +52,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
             options.additionalUrl
         );
       } else {
+        if (!resumeText?.trim()) throw new Error(t('tool_resume_required_error'));
         apiResult = await optimizeLinkedInProfile(resumeText, market);
       }
       if (!alive()) return;

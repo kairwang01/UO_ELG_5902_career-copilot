@@ -64,11 +64,12 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
       goals_placeholder_locations: 'e.g. Ottawa, Remote',
       goals_label_salary:     'Minimum salary',
       goals_placeholder_salary: 'e.g. 80k CAD',
+      goals_salary_hint:      'Use a yearly amount plus currency, for example 80000 CAD.',
       goals_label_availability: 'Availability',
       goals_placeholder_availability: 'e.g. 2 weeks notice',
       goals_save_button:      'Save',
       goals_saved_flash:      'Saved ✓',
-      goals_feeds_ai:         'These preferences guide your AI job search.',
+      goals_feeds_ai:         'Saved on this device and used to guide job matches, filters, and outreach prep.',
       goals_no_prefs:         'No preferences set yet.',
     };
     return map[key] ?? key;
@@ -200,12 +201,16 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
                 {t('goals_label_salary')}
               </label>
               <input
-                type="text"
+                type="number"
+                min="0"
+                step="1000"
+                inputMode="numeric"
                 value={form.salaryMin}
                 onChange={(e) => setForm((f) => ({ ...f, salaryMin: e.target.value }))}
                 placeholder={t('goals_placeholder_salary')}
                 className="w-full rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
               />
+              <p className="mt-1 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{t('goals_salary_hint')}</p>
             </div>
 
             {/* Availability */}

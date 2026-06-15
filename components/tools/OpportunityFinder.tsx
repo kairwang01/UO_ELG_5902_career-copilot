@@ -45,9 +45,7 @@ function quickMatchScore(resume: string, posting: string): number {
 }
 
 const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, market, openTool, session, t }) => {
-  // Initialise true: this tool auto-fetches on mount, so the loader should show
-  // immediately (preserves the pre-refactor useState(true) behaviour).
-  const { loading, begin, end, cancel } = useCancellableLoading(true);
+  const { loading, begin, end, cancel } = useCancellableLoading(false);
   const { addToast } = useToast();
   const [error, setError] = useState<string | null>(null);
   // FIX 1: derive a stable primitive so auth token-refresh (which creates a new
@@ -55,6 +53,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // refire the expensive AI search.
   const sessionUserId = session?.user?.id ?? null;
   const [result, setResult] = useState<OpportunityResult | null>(null);
+  const [platformLoading, setPlatformLoading] = useState(false);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [opportunityFilters, setOpportunityFilters] = useState<{ company: string, location: string }>({ company: 'all', location: 'all' });
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
@@ -72,7 +71,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
 
   const applyToInternalJob = async (jobId: string, compatibilityScore: number | undefined) => {
     if (!session?.user) {
-        addToast('You must be signed in to apply.', 'error');
+        addToast(t('tool_opportunity_finder_signin_required'), 'error');
         return;
     }
 
@@ -204,20 +203,38 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     // token-refresh events that recreate the session object do not refire this
     // callback (and therefore the expensive AI search + double credit spend).
   }, [resumeText, market, sessionUserId, fetchAppliedJobs, fetchInternalJobs, begin, end]);
-  
-  // Auto-run guard: this effect triggers a CREDIT-CHARGING AI search, so it must
-  // be idempotent per input set. Callback identity churn (e.g. a dependency like
-  // t/session regaining a new reference on parent re-renders) must never re-fire
-  // a paid search — that previously looped: deduct → live credits snapshot →
-  // re-render → effect refires → deduct again. The ref keys the run on the actual
-  // inputs; "Search again" calls runTool() directly and is unaffected.
-  const lastAutoRunKey = useRef<string | null>(null);
+
+  // Free platform-posting load only. The external AI search is credit-charging, so
+  // it must be started by an explicit click instead of auto-running on page entry.
+  const loadPlatformJobs = useCallback(async () => {
+    setPlatformLoading(true);
+    setError(null);
+    try {
+      await fetchAppliedJobs();
+      const internal = await fetchInternalJobs();
+      setInternalJobData(internal.meta);
+      setResult(internal.opps.length > 0
+        ? {
+            opportunities: internal.opps,
+            jobSearchStrategies: [],
+            groundingChunks: undefined,
+            notice: t('tool_opportunity_finder_platform_only_notice'),
+          }
+        : null);
+    } catch {
+      setResult(null);
+    } finally {
+      setPlatformLoading(false);
+    }
+  }, [fetchAppliedJobs, fetchInternalJobs, t]);
+
+  const lastPlatformRunKey = useRef<string | null>(null);
   useEffect(() => {
     const runKey = `${sessionUserId ?? 'anon'}|${market}|${resumeText.length}`;
-    if (lastAutoRunKey.current === runKey) return;
-    lastAutoRunKey.current = runKey;
-    runTool();
-  }, [runTool, sessionUserId, market, resumeText]);
+    if (lastPlatformRunKey.current === runKey) return;
+    lastPlatformRunKey.current = runKey;
+    loadPlatformJobs();
+  }, [loadPlatformJobs, sessionUserId, market, resumeText]);
 
   // 4c: Why am I a fit?
   const handleWhyFit = useCallback(async (job: Opportunity) => {
@@ -228,11 +245,11 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
       const res = await calculateCompatibility(resumeText, jobDesc);
       setWhyFitCache((prev) => ({ ...prev, [job.url]: res }));
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Error', 'error');
+      addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
     } finally {
       setWhyFitLoading((prev) => ({ ...prev, [job.url]: false }));
     }
-  }, [resumeText, whyFitCache, whyFitLoading, addToast]);
+  }, [resumeText, whyFitCache, whyFitLoading, addToast, t]);
 
   // 4c: Intro message
   const handleIntroMessage = useCallback(async (job: Opportunity) => {
@@ -255,25 +272,50 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
       );
       setIntroCache((prev) => ({ ...prev, [job.url]: res }));
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Error', 'error');
+      addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
     } finally {
       setIntroLoading((prev) => ({ ...prev, [job.url]: false }));
     }
-  }, [resumeText, market, introCache, introLoading, addToast]);
+  }, [resumeText, market, introCache, introLoading, addToast, t]);
 
-  if (loading) return <StagedLoader title="Finding opportunities" steps={["Reading your resume…","Searching live job postings…","Matching & ranking roles…","Building search strategies…"]} onCancel={cancel} icon={<Search />} accent="fuchsia" />;
+  if (loading) return (
+    <StagedLoader
+      title={t('tool_opportunity_finder_loading_title')}
+      steps={[
+        t('tool_opportunity_finder_loading_step1'),
+        t('tool_opportunity_finder_loading_step2'),
+        t('tool_opportunity_finder_loading_step3'),
+        t('tool_opportunity_finder_loading_step4'),
+      ]}
+      onCancel={cancel}
+      cancelLabel={t('tool_loader_hide_button')}
+      cancelHint={t('tool_loader_hide_hint')}
+      icon={<Search />}
+      accent="fuchsia"
+    />
+  );
   if (error) return <ToolError message={error} onRetry={() => runTool()} retryLabel={t('tool_opportunity_finder_search_again')} />;
-  // No result yet (e.g. the user cancelled the auto-fetch) — offer a graceful retry
-  // instead of a blank screen, since this tool has no input form to fall back to.
+
+  if (platformLoading) return (
+    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center text-center my-24 gap-3 animate-fade-in">
+      <div className="h-10 w-10 rounded-full border-4 border-fuchsia-100 border-t-fuchsia-600 animate-spin" />
+      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{t('tool_opportunity_finder_platform_loading')}</p>
+    </div>
+  );
+
   if (!result) return (
-    <div className="flex flex-col items-center justify-center text-center my-24 gap-4 animate-fade-in">
-      <p className="text-gray-500 dark:text-gray-400">{t('tool_opportunity_finder_cancelled')}</p>
+    <div className="mx-auto my-20 flex max-w-xl flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-fuchsia-200 bg-fuchsia-50/60 p-8 text-center dark:border-fuchsia-900/60 dark:bg-fuchsia-950/20 animate-fade-in">
+      <Search className="h-9 w-9 text-fuchsia-600 dark:text-fuchsia-300" aria-hidden="true" />
+      <div>
+        <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_opportunity_finder_start_title')}</h4>
+        <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{t('tool_opportunity_finder_start_desc')}</p>
+      </div>
       <button
         type="button"
         onClick={() => runTool()}
         className="inline-flex items-center gap-2 rounded-lg bg-blue-700 hover:bg-blue-800 px-5 py-2.5 text-white font-semibold transition-colors"
       >
-        {t('tool_opportunity_finder_search_again')}
+        {t('tool_opportunity_finder_start_button')}
       </button>
     </div>
   );
@@ -319,6 +361,20 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
           <p>{notice}</p>
         </div>
       )}
+
+      {jobSearchStrategies.length === 0 && (
+        <div className="flex flex-col gap-3 rounded-lg border border-fuchsia-100 bg-fuchsia-50 p-4 text-sm text-fuchsia-950 dark:border-fuchsia-900/60 dark:bg-fuchsia-950/20 dark:text-fuchsia-100 sm:flex-row sm:items-center sm:justify-between">
+          <p>{t('tool_opportunity_finder_ai_search_prompt')}</p>
+          <button
+            type="button"
+            onClick={() => runTool()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-fuchsia-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-fuchsia-800"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+            {t('tool_opportunity_finder_start_button')}
+          </button>
+        </div>
+      )}
       
       {jobSearchStrategies && jobSearchStrategies.length > 0 && (
         <div className="p-4 mb-6 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 rounded-r-lg">
@@ -345,7 +401,28 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
           {locationOptions.map(l => <option key={l} value={l}>{l === 'all' ? t('tool_opportunity_finder_filter_all_locations') : l}</option>)}
         </select>
       </div>
-      {filteredOpportunities.length === 0 && <p className="text-gray-600 dark:text-gray-400">{t('tool_opportunity_finder_no_results')}</p>}
+      {filteredOpportunities.length === 0 && (
+        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center dark:border-slate-700 dark:bg-slate-800">
+          <h5 className="font-semibold text-gray-900 dark:text-gray-100">{t('tool_opportunity_finder_empty_title')}</h5>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-gray-600 dark:text-gray-300">{t('tool_opportunity_finder_no_results')}</p>
+          <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setOpportunityFilters({ company: 'all', location: 'all' })}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-200 dark:hover:bg-slate-700"
+            >
+              {t('tool_opportunity_finder_reset_filters')}
+            </button>
+            <button
+              type="button"
+              onClick={() => runTool()}
+              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+            >
+              {t('tool_opportunity_finder_search_again')}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
         {filteredOpportunities.map((job, i) => {
             const isExpanded = expandedUrl === job.url;

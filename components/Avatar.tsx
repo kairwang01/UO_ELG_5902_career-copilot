@@ -14,9 +14,27 @@ interface AvatarProps {
   url: string | null;
   size: number;
   onUpload?: (url: string) => void;
+  altText?: string;
+  uploadLabel?: string;
+  uploadingLabel?: string;
+  selectImageMessage?: string;
+  signInRequiredMessage?: string;
+  maxSizeMessage?: string;
+  timeoutMessage?: string;
 }
 
-const Avatar: React.FC<AvatarProps> = ({ url, size, onUpload }) => {
+const Avatar: React.FC<AvatarProps> = ({
+  url,
+  size,
+  onUpload,
+  altText = 'Avatar',
+  uploadLabel = 'Upload a new photo',
+  uploadingLabel = 'Uploading...',
+  selectImageMessage = 'You must select an image to upload.',
+  signInRequiredMessage = 'You must be signed in to upload an avatar.',
+  maxSizeMessage = 'Image must be smaller than 5 MB.',
+  timeoutMessage = 'Upload timed out. Check your connection and try again.',
+}) => {
   const { addToast } = useToast();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -31,16 +49,16 @@ const Avatar: React.FC<AvatarProps> = ({ url, size, onUpload }) => {
       setUploading(true);
 
       if (!event.target.files || event.target.files.length === 0) {
-        throw new Error('You must select an image to upload.');
+        throw new Error(selectImageMessage);
       }
 
       const auth = getAuth(app);
       const uid = auth.currentUser?.uid;
-      if (!uid) throw new Error('You must be signed in to upload an avatar.');
+      if (!uid) throw new Error(signInRequiredMessage);
 
       const file = event.target.files[0];
       if (file.size > MAX_UPLOAD_BYTES) {
-        throw new Error('Image must be smaller than 5 MB.');
+        throw new Error(maxSizeMessage);
       }
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}.${fileExt}`;
@@ -51,7 +69,7 @@ const Avatar: React.FC<AvatarProps> = ({ url, size, onUpload }) => {
         const task = uploadBytesResumable(storageRef, file, { contentType: file.type });
         const timer = setTimeout(() => {
           task.cancel();
-          reject(new Error('Upload timed out. Check your connection and try again.'));
+          reject(new Error(timeoutMessage));
         }, UPLOAD_TIMEOUT_MS);
         task.on(
           'state_changed',
@@ -84,7 +102,7 @@ const Avatar: React.FC<AvatarProps> = ({ url, size, onUpload }) => {
         {avatarUrl ? (
           <img
             src={avatarUrl}
-            alt="Avatar"
+            alt={altText}
             className="rounded-full object-cover"
             style={{ height: size, width: size }}
           />
@@ -115,7 +133,7 @@ const Avatar: React.FC<AvatarProps> = ({ url, size, onUpload }) => {
         )}
       </span>
       {onUpload && (
-        <p className="text-sm text-gray-500">{uploading ? 'Uploading...' : 'Upload a new photo'}</p>
+        <p className="text-sm text-gray-500">{uploading ? uploadingLabel : uploadLabel}</p>
       )}
     </span>
   );

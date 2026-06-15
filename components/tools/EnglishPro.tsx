@@ -55,6 +55,20 @@ const pickEnglishVoice = (): SpeechSynthesisVoice | null => {
     } catch { return null; }
 };
 
+const speechErrorKey = (code?: string): string => {
+    switch (code) {
+        case 'not-allowed':
+        case 'service-not-allowed':
+            return 'tool_english_pro_speech_mic_blocked';
+        case 'audio-capture':
+            return 'tool_english_pro_speech_mic_unavailable';
+        case 'no-speech':
+            return 'tool_english_pro_no_speech';
+        default:
+            return 'tool_english_pro_speech_start_failed';
+    }
+};
+
 const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshProfile }) => {
     const { loading, begin, end, cancel } = useCancellableLoading();
     const [error, setError] = useState<string | null>(null);
@@ -249,7 +263,8 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             
             recognition.onerror = (event: any) => {
                 console.error("Speech recognition error:", event.error);
-                setError(`${t('tool_english_pro_speech_error')} ${event.error}`);
+                try { recognition.stop(); } catch { /* noop */ }
+                setError(t(speechErrorKey(event.error)));
                 setIsListening(false);
                 recordingStartTime.current = null;
             };
@@ -299,7 +314,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             return;
         }
         if (isListening) {
-            recognitionRef.current.stop();
+            try { recognitionRef.current?.stop?.(); } catch { /* noop */ }
             setIsListening(false);
             if (recordingStartTime.current) {
                 const duration = (Date.now() - recordingStartTime.current) / 1000;
@@ -310,11 +325,18 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             setSpokenResult(null);
             setTranscript('');
             setError(null);
-            recognitionRef.current.start();
-            setIsListening(true);
-            recordingStartTime.current = Date.now();
+            try {
+                recognitionRef.current?.start?.();
+                setIsListening(true);
+                recordingStartTime.current = Date.now();
+            } catch (err) {
+                console.error('Speech recognition start failed:', err);
+                setIsListening(false);
+                recordingStartTime.current = null;
+                setError(t('tool_english_pro_speech_start_failed'));
+            }
         }
-    }, [isListening, transcript, runSpokenAnalysis]);
+    }, [isListening, transcript, runSpokenAnalysis, t]);
     
     const fetchNewSpeakingTopic = async () => {
         setIsFetchingTopic(true);
@@ -358,10 +380,14 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     const checkReadingAnswers = async () => {
         const res = readingComprehensionResult as EnglishReadingAnalysisResult;
         const textToUse = (res as any).passage || readingUserInput;
-        if (!res || !res.comprehensionQuestions || userAnswers.length !== res.comprehensionQuestions.length) return;
+        if (!res || !res.comprehensionQuestions?.length) {
+            setError(t('tool_english_pro_reading_no_questions'));
+            return;
+        }
+        const normalizedAnswers = res.comprehensionQuestions.map((_, index) => userAnswers[index]?.trim() ?? '');
         const alive = begin(); setError(null);
         try {
-            const evaluation = await evaluateReadingComprehension(textToUse, res.comprehensionQuestions, userAnswers);
+            const evaluation = await evaluateReadingComprehension(textToUse, res.comprehensionQuestions, normalizedAnswers);
             if (!alive()) return;
             setReadingEvaluation(evaluation);
             await handlePracticeCompletion(alive);
@@ -560,7 +586,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                     {(transcript || isListening) && (
                         <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
                             <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{t('tool_english_pro_spoken_live_transcript')}</h5>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 min-h-[3rem]">{transcript || <span className="italic text-gray-400">Listening…</span>}</p>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 min-h-[3rem]">{transcript || <span className="italic text-gray-400">{t('tool_english_pro_spoken_listening_placeholder')}</span>}</p>
                         </div>
                     )}
                 </>
@@ -626,7 +652,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 space-y-3">
                                 <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_english_pro_reading_generate_practice')}</h5>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">AI will generate a reading passage matched to your target IELTS band.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{t('tool_english_pro_reading_generate_desc')}</p>
                                 <button
                                     onClick={generateReadingPractice}
                                     disabled={loading}
@@ -666,7 +692,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         {/* Vocabulary list (only on analyzed user text) */}
                         {!practiceResult?.passage && (practiceResult as EnglishReadingAnalysisResult | null)?.vocabularyList?.length ? renderResultCard(t('tool_english_pro_key_vocabulary'), (
                             <table className="w-full text-xs">
-                                <thead><tr className="text-left text-gray-500 dark:text-gray-400 border-b dark:border-slate-600"><th className="pb-1 pr-2">Word</th><th className="pb-1 pr-2">Definition</th><th className="pb-1">Example</th></tr></thead>
+                                <thead><tr className="text-left text-gray-500 dark:text-gray-400 border-b dark:border-slate-600"><th className="pb-1 pr-2">{t('tool_english_pro_vocab_word')}</th><th className="pb-1 pr-2">{t('tool_english_pro_vocab_definition')}</th><th className="pb-1">{t('tool_english_pro_vocab_example')}</th></tr></thead>
                                 <tbody>
                                     {(practiceResult as EnglishReadingAnalysisResult).vocabularyList.map((v, i) => (
                                         <tr key={i} className="border-b dark:border-slate-700 last:border-0">
@@ -716,12 +742,17 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                 ))}
                             </ol>
                         ))}
+                        {questions.length === 0 && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100">
+                                {t('tool_english_pro_reading_no_questions')}
+                            </div>
+                        )}
 
                         {/* Check / practice again */}
-                        {!readingEvaluation ? (
+                        {!readingEvaluation && questions.length > 0 ? (
                             <button
                                 onClick={checkReadingAnswers}
-                                disabled={loading || userAnswers.filter(Boolean).length !== questions.length}
+                                disabled={loading}
                                 className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg"
                             >
                                 {loading ? t('tool_english_pro_checking_button') : t('tool_english_pro_reading_check_answers')}
@@ -937,7 +968,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                             <button
                                 onClick={isPlaying ? stopClip : playClip}
                                 disabled={!isSpeechSynthesisSupported}
-                                title={isSpeechSynthesisSupported ? undefined : 'Speech synthesis not supported in this browser'}
+                                title={isSpeechSynthesisSupported ? undefined : t('tool_english_pro_tts_not_supported')}
                                 className={`flex items-center gap-2 ${isPlaying ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-700 hover:bg-blue-800'} disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-colors`}
                             >
                                 {isPlaying ? (
@@ -1032,12 +1063,14 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                     accent="purple"
                     title={t('tool_english_pro_analyzing_title')}
                     steps={[
-                        'Reading your submission…',
-                        'Checking grammar & clarity…',
-                        'Scoring against your target band…',
-                        'Writing your feedback…',
+                        t('tool_english_pro_loader_step1'),
+                        t('tool_english_pro_loader_step2'),
+                        t('tool_english_pro_loader_step3'),
+                        t('tool_english_pro_loader_step4'),
                     ]}
                     onCancel={cancel}
+                    cancelLabel={t('tool_loader_hide_button')}
+                    cancelHint={t('tool_loader_hide_hint')}
                 />
             ) : (
                 <>

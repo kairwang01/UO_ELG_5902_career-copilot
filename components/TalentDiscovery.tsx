@@ -570,7 +570,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
             const { candidates } = await discoverTalent(jobDescription);
             const allMatched = candidates.map((c) => toMatchedCandidate(c));
             setVerifiedResults(allMatched.filter(c => c.nft_staked));
-            setRegularResults(allMatched.filter(c => !c.nft_staked && c.compatibilityScore >= 70));
+            setRegularResults(allMatched.filter(c => !c.nft_staked));
         } catch (err) {
             setSearchError(err instanceof Error ? err.message : t('talent_search_error'));
         } finally {
@@ -584,9 +584,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
             const job = postedJobs.find(j => j.id === selectedJobId);
             if (job) return { job_id: job.id, job_title: job.title };
         }
-        // Fall back to extracting the first line of the description as job title
-        const firstLine = jobDescription.split('\n')[0].trim().slice(0, 200);
-        return { job_id: 'manual', job_title: firstLine || t('talent_unspecified_role') };
+        return { job_id: 'manual', job_title: t('talent_manual_role_label') };
     };
 
     const handleSaveToShortlist = async (candidate: MatchedCandidate) => {

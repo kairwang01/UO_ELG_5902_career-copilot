@@ -36,11 +36,13 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   const [generatingProjectForSkill, setGeneratingProjectForSkill] = useState<string | null>(null);
   const [generatedProject, setGeneratedProject] = useState<SkillBridgeProject | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
+  const [lastProjectSkill, setLastProjectSkill] = useState<string | null>(null);
 
   // SmartSuggest: derive role chips from resume (pure, no AI)
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
 
   const handleGenerateProject = async (skill: string) => {
+    setLastProjectSkill(skill);
     setGeneratingProjectForSkill(skill);
     setGeneratedProject(null);
     setProjectError(null);
@@ -48,7 +50,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
         const project = await generateSkillBridgeProject(resumeText, desiredRole, skill);
         setGeneratedProject(project);
     } catch (err) {
-        setProjectError(err instanceof Error ? err.message : 'Failed to generate project idea.');
+        setProjectError(err instanceof Error ? err.message : t('tool_career_path_project_failed'));
     } finally {
         setGeneratingProjectForSkill(null);
     }
@@ -60,7 +62,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
       return;
     }
     if (!session) {
-        setError("You must be logged in to use this tool.");
+        setError(t('error_login_required'));
         return;
     }
     const alive = begin();
@@ -172,7 +174,21 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   };
 
   const renderResult = () => {
-    if (loading) return <StagedLoader icon={<Compass />} accent="teal" title="Mapping your path" steps={["Analyzing your experience…","Exploring career paths…","Building your roadmap…"]} onCancel={cancel} />;
+    if (loading) return (
+      <StagedLoader
+        icon={<Compass />}
+        accent="teal"
+        title={t('tool_career_path_loader_title')}
+        steps={[
+          t('tool_career_path_loader_step1'),
+          t('tool_career_path_loader_step2'),
+          t('tool_career_path_loader_step3'),
+        ]}
+        onCancel={cancel}
+        cancelLabel={t('tool_loader_hide_button')}
+        cancelHint={t('tool_loader_hide_hint')}
+      />
+    );
 
     if (!result) return null;
 
@@ -214,7 +230,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                         <div className="flex justify-between items-start">
                            <span><strong>{gap.skill}:</strong> {gap.reason}</span>
                            <button onClick={() => handleGenerateProject(gap.skill)} disabled={generatingProjectForSkill === gap.skill} className="ml-2 flex-shrink-0 text-xs bg-yellow-100 dark:bg-amber-900/20 text-yellow-800 dark:text-amber-300 font-semibold px-2 py-1 rounded-full hover:bg-yellow-200 dark:hover:bg-amber-900/30 disabled:opacity-50">
-                               {generatingProjectForSkill === gap.skill ? '...' : 'Project'}
+                               {generatingProjectForSkill === gap.skill ? '...' : t('tool_career_path_project_button')}
                            </button>
                         </div>
                     </li>
@@ -231,26 +247,39 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
         {(generatedProject || projectError) && (
             <div className="p-4 border-2 border-dashed border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 rounded-lg animate-fade-in">
-                 <h3 className="font-bold text-lg text-blue-800 dark:text-blue-300 mb-3">Skill Bridge Project Idea</h3>
-                 {projectError && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-lg">{projectError}</div>}
+                 <h3 className="font-bold text-lg text-blue-800 dark:text-blue-300 mb-3">{t('tool_career_path_project_title')}</h3>
+                 {projectError && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-300">
+                      <p className="text-sm">{projectError}</p>
+                      {lastProjectSkill && (
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateProject(lastProjectSkill)}
+                          className="mt-3 rounded-md bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+                        >
+                          {t('try_again')}
+                        </button>
+                      )}
+                    </div>
+                 )}
                  {generatedProject && (
                      <div className="space-y-3">
                         <h4 className="font-semibold text-blue-900 dark:text-blue-300">{generatedProject.projectTitle}</h4>
                         <p className="text-sm italic text-gray-600 dark:text-gray-400">{generatedProject.objective}</p>
                         <div>
-                            <p className="text-sm font-semibold">Key Features:</p>
-                            <ul className="list-disc list-inside text-sm ml-4">{generatedProject.keyFeatures.map((f, i) => <li key={i}>{f}</li>)}</ul>
+                            <p className="text-sm font-semibold">{t('tool_career_path_project_features')}</p>
+                            <ul className="list-disc list-inside text-sm ml-4">{(generatedProject.keyFeatures ?? []).map((f, i) => <li key={i}>{f}</li>)}</ul>
                         </div>
                          <div>
-                            <p className="text-sm font-semibold">Suggested Tools:</p>
-                            <p className="text-sm">{generatedProject.suggestedTechStack.join(', ')}</p>
+                            <p className="text-sm font-semibold">{t('tool_career_path_project_tools')}</p>
+                            <p className="text-sm">{(generatedProject.suggestedTechStack ?? []).join(', ')}</p>
                         </div>
                         <div>
-                            <p className="text-sm font-semibold">Showcase Challenge:</p>
+                            <p className="text-sm font-semibold">{t('tool_career_path_project_showcase')}</p>
                             <p className="text-sm">{generatedProject.showcaseChallenge}</p>
                         </div>
                         <button onClick={() => openTool('website-builder', JSON.stringify(generatedProject))} className="mt-2 text-sm bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-700">
-                           Add to My Portfolio &rarr;
+                           {t('tool_career_path_add_to_portfolio')} &rarr;
                         </button>
                      </div>
                  )}
@@ -259,7 +288,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
         {/* Roadmap Timeline */}
         <div>
-            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4 text-center">Your Personal Roadmap</h3>
+            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4 text-center">{t('tool_career_path_roadmap_title')}</h3>
             <div className="relative border-l-2 border-blue-200 dark:border-blue-800 ml-4 py-4">
             {roadmap.map((phase, index) => (
                 <div key={index} className="mb-10 ml-8 relative">
@@ -274,7 +303,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                         <p className="text-sm italic text-gray-600 dark:text-gray-400 mb-4">{phase.goal}</p>
 
                         <div className="space-y-4">
-                           <h6 className="font-semibold text-gray-700 dark:text-gray-300">Actionable Steps:</h6>
+                           <h6 className="font-semibold text-gray-700 dark:text-gray-300">{t('tool_career_path_actionable_steps')}</h6>
                             {phase.actionableSteps.map((step, stepIndex) => (
                                 <div key={stepIndex} className="text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md border dark:border-slate-600">
                                     <div className="flex items-center gap-2 font-semibold text-gray-800 dark:text-gray-200">
@@ -283,12 +312,12 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                                     </div>
                                     <p className="mt-1 pl-7 dark:text-gray-300">{step.description}</p>
                                     {step.resources && step.resources.length > 0 && (
-                                        <p className="text-xs mt-2 pl-7 text-gray-500 dark:text-gray-400"><strong>Resources:</strong> {step.resources.join(', ')}</p>
+                                        <p className="text-xs mt-2 pl-7 text-gray-500 dark:text-gray-400"><strong>{t('tool_career_path_resources')}:</strong> {step.resources.join(', ')}</p>
                                     )}
                                 </div>
                             ))}
 
-                            <h6 className="font-semibold text-gray-700 dark:text-gray-300 pt-2">Milestones:</h6>
+                            <h6 className="font-semibold text-gray-700 dark:text-gray-300 pt-2">{t('tool_career_path_milestones')}</h6>
                              <ul className="list-none space-y-2">
                                 {phase.milestones.map((milestone, msIndex) => (
                                 <li key={msIndex} className="flex items-start text-sm">
@@ -307,7 +336,21 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
     );
   };
 
-  if (loading) return <StagedLoader icon={<Compass />} accent="teal" title="Mapping your path" steps={["Analyzing your experience…","Exploring career paths…","Building your roadmap…"]} onCancel={cancel} />;
+  if (loading) return (
+    <StagedLoader
+      icon={<Compass />}
+      accent="teal"
+      title={t('tool_career_path_loader_title')}
+      steps={[
+        t('tool_career_path_loader_step1'),
+        t('tool_career_path_loader_step2'),
+        t('tool_career_path_loader_step3'),
+      ]}
+      onCancel={cancel}
+      cancelLabel={t('tool_loader_hide_button')}
+      cancelHint={t('tool_loader_hide_hint')}
+    />
+  );
 
   return result ? renderResult() : renderInput();
 };

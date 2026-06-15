@@ -42,6 +42,10 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const [targetMarket, setTargetMarket] = useState<string>(market);
 
   const runTool = async (options: { coverLetter?: string } = {}) => {
+    if (!resumeText?.trim()) {
+      setError(t('tool_resume_required_error'));
+      return;
+    }
     const alive = begin();
     setError(null);
     setResult(null);

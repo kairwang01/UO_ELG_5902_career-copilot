@@ -223,6 +223,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const [answerDraft, setAnswerDraft] = useState('');
     const answersRef = useRef<string[]>([]);
     const submittingRef = useRef(false);
+    const evaluatingRef = useRef(false);
     const [avatarSpeaking, setAvatarSpeaking] = useState(false);
     const [report, setReport] = useState<InterviewSessionReport | null>(null);
     const [lockedReport, setLockedReport] = useState<LockedSessionReport | null>(null);
@@ -419,8 +420,14 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         if (isListening) {
             stopListening();
         } else {
-            recognitionRef.current.start();
-            setIsListening(true);
+            try {
+                recognitionRef.current?.start?.();
+                setIsListening(true);
+            } catch (err) {
+                console.error('Speech recognition start failed:', err);
+                setIsListening(false);
+                setError(t('tool_mock_interview_speech_start_failed'));
+            }
         }
     };
 
@@ -509,6 +516,8 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     };
 
     const finishAndEvaluate = async (qa: { question: string; answer: string }[]) => {
+        if (evaluatingRef.current) return;
+        evaluatingRef.current = true;
         setStage('evaluating');
         try {
             const res = await evaluateInterviewSession(qa, assembleContext(), resumeText);
@@ -526,6 +535,8 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             setReport(null);
             setLockedReport(null);
             setStage('report'); // report stage renders the error + retry
+        } finally {
+            evaluatingRef.current = false;
         }
     };
 

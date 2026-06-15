@@ -52,6 +52,8 @@ interface StagedLoaderProps {
   onCancel?: () => void;
   /** Label for the cancel button (default "Cancel"). */
   cancelLabel?: string;
+  /** Optional helper copy shown under the cancel button. */
+  cancelHint?: string;
   /** Appended as the final held step for a consistent finish across all tools.
    *  Default "Almost done…". Pass null to disable. */
   finalStep?: string | null;
@@ -80,6 +82,7 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
   intervalMs = 1800,
   onCancel,
   cancelLabel = 'Cancel',
+  cancelHint,
   finalStep = 'Almost done…',
   showTips = true,
   tipIntervalMs = 5000,
@@ -266,17 +269,24 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
 
       {/* Cancel / exit affordance */}
       {onCancel && (
-        <button
-          type="button"
-          onClick={onCancel}
-          className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-slate-600 px-4 py-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/50"
-          aria-label={cancelLabel}
-        >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-          </svg>
-          {cancelLabel}
-        </button>
+        <div className="mt-1 flex flex-col items-center gap-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-slate-600 px-4 py-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/50"
+            aria-label={cancelLabel}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            {cancelLabel}
+          </button>
+          {cancelHint && (
+            <p className="max-w-xs text-center text-xs leading-relaxed text-gray-400 dark:text-gray-500">
+              {cancelHint}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
