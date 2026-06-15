@@ -5,12 +5,15 @@ import {
   Briefcase,
   CalendarCheck,
   CheckCircle2,
+  CreditCard,
   FileText,
   ListFilter,
+  Loader2,
   Mail,
   MessageSquare,
   Send,
   Target,
+  Zap,
 } from 'lucide-react';
 import ResumePreview from '../ResumePreview';
 import CareerGoalsPanel from '../CareerGoalsPanel';
@@ -19,8 +22,10 @@ import { sampleReport } from '../../marketing/mock/sampleReport';
 import { interviewFeedback } from '../../marketing/mock/interviewFeedback';
 import { careerPathPlan } from '../../marketing/mock/careerPath';
 import type { AppSession as Session } from '../../lib/data';
+import type { UserProfile } from '../../types';
+import { ALL_PLANS, PLAN_HIERARCHY } from '../../config';
 
-type WorkspaceView = 'dashboard' | 'resume' | 'jobs' | 'interview' | 'plan' | 'toolkit';
+type WorkspaceView = 'dashboard' | 'resume' | 'jobs' | 'interview' | 'plan' | 'toolkit' | 'billing';
 
 interface WorkspacePageProps {
   resumeText: string;
@@ -95,6 +100,9 @@ const practiceQuestionKeys = [
   'ws_interview_question_incomplete_info',
   'ws_interview_question_data_decision',
 ];
+
+const candidatePlanKeys = ['free', 'essentials', 'accelerator', 'executive'] as const;
+type CandidatePlanKey = typeof candidatePlanKeys[number];
 
 const formatWorkspaceCopy = (template: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce((copy, [key, value]) => copy.replaceAll(`{${key}}`, String(value)), template);
@@ -673,6 +681,168 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, t, on
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+interface CandidateBillingPageProps {
+  profile: UserProfile;
+  credits: number;
+  t: (key: string) => string;
+  onSelectPlan: (planKey: CandidatePlanKey) => void;
+  savingPlan: CandidatePlanKey | null;
+  onViewPricing: () => void;
+}
+
+const normalizePlanStatus = (status: string) => status.replace('pending_biz_', '').replace('pending_', '');
+const getPlanPeriodLabel = (planKey: string, t: (key: string) => string) => {
+  const periodKey = `plan_${planKey}_period_desc`;
+  const translated = t(periodKey);
+  return translated === periodKey ? t(`plan_${planKey}_price_desc`) : translated;
+};
+
+const getPlanFeatureLabel = (planKey: string, index: number, fallback: string, t: (key: string) => string) => {
+  const featureKey = `plan_${planKey}_feature_${index + 1}`;
+  const translated = t(featureKey);
+  return translated === featureKey ? fallback : translated;
+};
+
+export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
+  profile,
+  credits,
+  t,
+  onSelectPlan,
+  savingPlan,
+  onViewPricing,
+}) => {
+  const currentStatus = profile.subscription_status || 'free';
+  const currentPlanKey = normalizePlanStatus(currentStatus) as CandidatePlanKey;
+  const currentPlan = ALL_PLANS[currentPlanKey] ?? ALL_PLANS.free;
+  const currentLevel = PLAN_HIERARCHY[currentPlanKey] ?? 0;
+  const isPending = currentStatus.startsWith('pending_');
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        label={t('ws_billing_label')}
+        title={t('ws_billing_title')}
+        description={t('ws_billing_desc')}
+        icon={CreditCard}
+        primaryLabel={t('ws_billing_view_public_pricing')}
+        onPrimary={onViewPricing}
+      />
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <Panel title={t('ws_billing_current_plan')} description={t('ws_billing_current_desc')}>
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-300">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-xl font-semibold text-slate-950 dark:text-slate-100">
+                    {t(`plan_${currentPlan.key}_name`)}
+                  </h3>
+                  <StatusPill tone={isPending ? 'gap' : currentLevel > 0 ? 'ready' : 'neutral'}>
+                    {isPending ? t('ws_billing_pending') : currentLevel > 0 ? t('ws_billing_active') : t('ws_plan_free')}
+                  </StatusPill>
+                </div>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  {currentPlan.price} · {getPlanPeriodLabel(currentPlan.key, t)}
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-right dark:border-slate-700 dark:bg-slate-800/60">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">{t('ws_credits_label')}</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-slate-100">{credits.toLocaleString()} CR</p>
+            </div>
+          </div>
+          {isPending && (
+            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
+              {t('ws_billing_pending_notice')}
+            </div>
+          )}
+        </Panel>
+
+        <Panel title={t('ws_billing_usage_title')} description={t('ws_billing_usage_desc')}>
+          <div className="space-y-3">
+            {[
+              [t('studio_phase_resume'), t('studio_stat_resume_helper')],
+              [t('studio_phase_matching'), t('studio_stat_match_helper')],
+              [t('studio_phase_interview'), t('studio_stat_interview_helper')],
+            ].map(([label, helper]) => (
+              <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{label}</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{helper}</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      <Panel title={t('ws_billing_available_plans')} description={t('ws_billing_available_desc')}>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {candidatePlanKeys.map((planKey) => {
+            const plan = ALL_PLANS[planKey];
+            const planLevel = PLAN_HIERARCHY[planKey] ?? 0;
+            const isCurrent = planKey === currentPlanKey;
+            const isSaving = savingPlan === planKey;
+            const isUpgrade = planLevel > currentLevel;
+            const actionLabel = isSaving
+              ? t('ws_billing_updating')
+              : isCurrent
+                ? t('ws_billing_selected_plan')
+                : isUpgrade
+                  ? t('ws_billing_upgrade')
+                  : t('ws_billing_switch');
+
+            return (
+              <article
+                key={planKey}
+                className={`flex min-h-[330px] flex-col rounded-lg border p-5 transition ${
+                  isCurrent
+                    ? 'border-blue-300 bg-blue-50/50 ring-2 ring-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:ring-blue-900/30'
+                    : 'border-slate-200 bg-white hover:border-blue-200 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800'
+                }`}
+              >
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">{t(`plan_${plan.key}_name`)}</p>
+                  <div className="mt-2 flex items-baseline gap-1">
+                    <span className="text-3xl font-bold text-slate-950 dark:text-slate-100">{plan.price}</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">{getPlanPeriodLabel(plan.key, t)}</span>
+                  </div>
+                </div>
+
+                <ul className="mb-5 flex-1 space-y-2">
+                  {plan.features.map((feature, featureIndex) => (
+                    <li key={feature} className="flex gap-2 text-sm leading-5 text-slate-600 dark:text-slate-400">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span>{getPlanFeatureLabel(plan.key, featureIndex, feature, t)}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectPlan(planKey)}
+                  disabled={isCurrent || savingPlan !== null}
+                  className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isCurrent
+                      ? 'bg-blue-700 text-white'
+                      : isUpgrade
+                        ? 'border border-blue-700 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50'
+                        : 'border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {isSaving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  {actionLabel}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      </Panel>
     </div>
   );
 };
