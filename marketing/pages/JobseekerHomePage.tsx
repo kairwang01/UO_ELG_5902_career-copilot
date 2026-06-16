@@ -11,7 +11,7 @@ import { WorkflowSteps } from '../components/WorkflowSteps';
 import { FeatureShowcase } from '../components/FeatureShowcase';
 import { ToolLibrary } from '../components/ToolLibrary';
 import { SiteVerifiedTalent } from '../components/SiteVerifiedTalent';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { useSiteSession } from '../hooks/useSiteSession';
@@ -19,11 +19,14 @@ import { useSiteSession } from '../hooks/useSiteSession';
 export const JobseekerHomePage: React.FC = () => {
   const { t } = useMarketingI18n();
   const { session, ready, isBusiness } = useSiteSession();
+  const { search } = useLocation();
 
-  // A signed-in user has no reason to sit on the marketing home — route them to
-  // their workspace (or the hiring portal for business accounts). This is also why
-  // they no longer see a stale "Sign In" here.
-  if (ready && session) {
+  // A signed-in user landing on bare "/" is routed to their workspace (or the
+  // hiring portal) — they have no reason to sit on the marketing home. BUT the
+  // workspace "home" button passes ?home=1 to explicitly VIEW the public homepage,
+  // so that path must not redirect (otherwise "return to homepage" bounces back).
+  const forceHomeView = new URLSearchParams(search).get('home') === '1';
+  if (ready && session && !forceHomeView) {
     return <Navigate to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace} replace />;
   }
   const proofPoints = [

@@ -1056,7 +1056,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       t,
       currentLang,
       onLanguageChange: changeLanguage,
-      onHome: () => { setIsMobileNavOpen(false); navigate('/'); },
+      onHome: () => { setIsMobileNavOpen(false); navigate('/?home=1'); },
     };
 
     return (
