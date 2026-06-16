@@ -54,11 +54,26 @@ export const generateHeadshotFunction = onCall({ invoker: "public" }, async (req
       },
     });
   } catch (err) {
+    // Preserve the underlying SDK/API error in Cloud Logging. Without this every
+    // distinct failure (bad/missing key, billing disabled, network, malformed
+    // image) collapses into the same opaque message and the feature becomes
+    // undebuggable in production.
+    console.error("generateHeadshot failed", err);
     // The image-generation model has no free-tier quota (limit 0) — without
-    // billing enabled on the Gemini key every call 429s. Surface a clear message
+    // billing enabled on the Gemini key every call 429s. The SDK carries the 429
+    // on err.status/err.code at least as often as in the message, so mirror the
+    // structured check used by isQuotaError() elsewhere. Surface a clear message
     // instead of a bare 500 INTERNAL so the UI can explain it.
-    const msg = ((err as { message?: string })?.message ?? "").toLowerCase();
-    if (msg.includes("429") || msg.includes("quota") || msg.includes("resource_exhausted")) {
+    const e = (err ?? {}) as { message?: string; status?: number; code?: number | string };
+    const msg = (e.message ?? "").toLowerCase();
+    if (
+      e.status === 429 ||
+      e.code === 429 ||
+      e.code === "resource-exhausted" ||
+      msg.includes("429") ||
+      msg.includes("quota") ||
+      msg.includes("resource_exhausted")
+    ) {
       throw new HttpsError(
         "resource-exhausted",
         "AI avatar generation is temporarily unavailable (image-generation quota reached). Please try again later.",

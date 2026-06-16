@@ -38,7 +38,6 @@ import {
 } from './components/dashboard/CandidateWorkspacePages';
 import Sidebar from './components/Sidebar';
 import MyApplications from './components/MyApplications';
-import AccountMenu from './components/AccountMenu';
 import type { PortalPage } from './components/employer/EmployerPortal';
 import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';

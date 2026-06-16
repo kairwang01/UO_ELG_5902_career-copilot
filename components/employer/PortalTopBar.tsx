@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { Menu } from 'lucide-react';
-import AccountMenu from '../AccountMenu';
 import type { UserProfile } from '../../types';
 import { usePortalAccountMenu } from './PortalAccountMenuContext';
 

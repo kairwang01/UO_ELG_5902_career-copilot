@@ -105,12 +105,13 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         );
         setAppliedJobs(new Set(snap.docs.map((app) => app.data().job_id as string)));
     } catch (err) {
+        // Non-fatal side-fetch (it only powers the "Applied" badges). It must NOT
+        // raise the tool's error gate: a transient read hiccup here would otherwise
+        // hide the platform jobs that loaded fine behind a full-screen error — which
+        // the runTool path guarded against but the auto-load path did not. Log only.
         console.error("Could not fetch applied jobs:", err);
-        // Note: this is a non-fatal side-fetch; error is surfaced but does not
-        // block the main result (runTool clears it after setResult — see FIX 2).
-        setError(t('tool_opportunity_finder_error_fetch_applied'));
     }
-  }, [sessionUserId, t]);
+  }, [sessionUserId]);
 
   // Active platform postings (employer-posted jobs). Candidates may read active
   // job_postings per Firestore rules, so we surface them in the results with a

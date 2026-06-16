@@ -198,7 +198,9 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
     const handleStartNewPractice = () => {
         cancel();
-        // Stop any live mic + narration before returning to the hub.
+        // Stop any live mic + narration before returning to the hub. Disarm onend
+        // first so stop()'s 'end' event doesn't fire a paid analysis on the way out.
+        isListeningRef.current = false;
         try { recognitionRef.current?.stop?.(); } catch { /* noop */ }
         try { window.speechSynthesis.cancel(); } catch { /* noop */ }
         setIsListening(false);
@@ -263,6 +265,10 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             
             recognition.onerror = (event: any) => {
                 console.error("Speech recognition error:", event.error);
+                // Disarm onend synchronously (the ref otherwise only flips on the
+                // next render's effect) so the stop()-triggered 'end' event can't
+                // spend a credit analysing a no-speech/abort error.
+                isListeningRef.current = false;
                 try { recognition.stop(); } catch { /* noop */ }
                 setError(t(speechErrorKey(event.error)));
                 setIsListening(false);
@@ -304,6 +310,11 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     // Tear down the mic and any narration when the tool unmounts, so the
     // microphone never stays live and audio never keeps playing after leaving.
     useEffect(() => () => {
+        // Disarm the onend guard BEFORE aborting — abort() fires the recognition
+        // 'end' event, and onend would otherwise dispatch a paid analysis (and run
+        // setState) on a component the user has already left.
+        isListeningRef.current = false;
+        recordingStartTime.current = null;
         try { recognitionRef.current?.abort?.(); } catch { /* noop */ }
         try { window.speechSynthesis.cancel(); } catch { /* noop */ }
     }, []);
@@ -314,12 +325,16 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             return;
         }
         if (isListening) {
+            // Disarm onend synchronously (the ref otherwise only flips on the next
+            // render's effect) so stop()'s 'end' event can't fire a SECOND paid
+            // analysis on top of the explicit one below.
+            isListeningRef.current = false;
             try { recognitionRef.current?.stop?.(); } catch { /* noop */ }
             setIsListening(false);
             if (recordingStartTime.current) {
                 const duration = (Date.now() - recordingStartTime.current) / 1000;
-                runSpokenAnalysis(transcript, duration);
                 recordingStartTime.current = null;
+                runSpokenAnalysis(transcript, duration);
             }
         } else {
             setSpokenResult(null);
@@ -949,6 +964,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                     {!listeningResult && (
                         <button
                             onClick={() => {
+                                stopClip(); // cancel any in-flight narration + reset isPlaying
                                 const nextIndex = (clipIndex + 1) % LISTENING_CLIPS.length;
                                 setCurrentClip(LISTENING_CLIPS[nextIndex]);
                                 setUserTranscription('');
@@ -1037,6 +1053,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
                         <button
                             onClick={() => {
+                                stopClip(); // cancel any in-flight narration + reset isPlaying
                                 const nextIndex = (clipIndex + 1) % LISTENING_CLIPS.length;
                                 setCurrentClip(LISTENING_CLIPS[nextIndex]);
                                 setUserTranscription('');
