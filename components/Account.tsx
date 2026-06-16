@@ -1005,47 +1005,8 @@ const Account: React.FC<AccountProps> = ({
         </div>
       </form>
 
-      <div className="space-y-2 mt-10">
-        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
-          {t('account_subscription_title')}
-        </h2>
-        <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg flex justify-between items-center">
-          <div>
-            <p className="font-medium text-gray-800 dark:text-gray-200">
-              {t('account_current_plan')}
-            </p>
-            <p
-              className={`text-lg font-bold ${userLevel > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-300'}`}
-            >
-              {t(`plan_${currentPlan.key}_name`)}
-            </p>
-          </div>
-          <button
-            onClick={handleManageSubscription}
-            disabled={subscriptionBusy || profileLoading}
-            className={`px-4 py-2 font-semibold rounded-md shadow-sm transition-colors disabled:bg-gray-400 ${
-              userLevel > 0
-                ? 'bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600'
-                : 'bg-blue-700 text-white hover:bg-blue-800'
-            }`}
-          >
-            {getSubscriptionButtonText()}
-          </button>
-        </div>
-        {userLevel > 0 && (
-          <div className="text-center pt-2 text-sm text-gray-600 dark:text-gray-400">
-            <p>
-              {t('account_change_plan_prompt')}{' '}
-              <button
-                onClick={navigateToPricing}
-                className="text-blue-600 dark:text-blue-400 hover:underline font-semibold"
-              >
-                {t('account_view_all_plans_link')}
-              </button>
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Subscription / plan management lives on the dedicated "Billing & Plan"
+          page (sidebar) — removed here to avoid a redundant second entry point. */}
     </div>
   );
 };
