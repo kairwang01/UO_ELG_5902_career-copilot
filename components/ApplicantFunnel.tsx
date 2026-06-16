@@ -5,6 +5,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import {
     ArrowLeft,
     Clock3,
+    Download,
     FileWarning,
     MessageSquare,
     RotateCcw,
@@ -14,7 +15,7 @@ import {
     Target,
     Users,
 } from 'lucide-react';
-import { listJobApplicants, type JobApplicant } from '../services/aiClient';
+import { listJobApplicants, getApplicantResumeFile, type JobApplicant } from '../services/aiClient';
 import { saveToShortlist } from '../lib/shortlistData';
 import { useToast } from './Toast';
 import FunnelChart from './FunnelChart';
@@ -131,7 +132,56 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null);
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
     const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+    const [downloadingResumeId, setDownloadingResumeId] = useState<string | null>(null);
     const detailRef = useRef<HTMLElement | null>(null);
+
+    // Download the original resume FILE of an applicant (server verifies the
+    // caller owns the job the candidate applied to). Applicants who only pasted
+    // text — and pre-feature applicants — return { available:false } gracefully.
+    const handleDownloadResume = async (applicant: Applicant) => {
+        if (downloadingResumeId) return;
+        setDownloadingResumeId(applicant.id);
+        try {
+            const res = await getApplicantResumeFile(applicant.id);
+            if (!res.available) {
+                addToast(t('applicant_funnel_no_resume_file'), 'info');
+                return;
+            }
+            // Preferred path: a short-lived signed URL (any file size). The server's
+            // Content-Disposition forces the download with the original filename.
+            if (res.url) {
+                const a = document.createElement('a');
+                a.href = res.url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                return;
+            }
+            // Fallback: inline base64 (small files / no URL signing available).
+            if (res.base64) {
+                const byteChars = atob(res.base64);
+                const bytes = new Uint8Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i += 1) bytes[i] = byteChars.charCodeAt(i);
+                const blob = new Blob([bytes], { type: res.contentType || 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = res.fileName || 'resume';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                return;
+            }
+            addToast(t('applicant_funnel_no_resume_file'), 'info');
+        } catch (err) {
+            addToast(err instanceof Error ? err.message : t('applicant_funnel_resume_download_error'), 'error');
+        } finally {
+            setDownloadingResumeId(null);
+        }
+    };
 
     // Save an applicant to the recruiter's shortlist (Biz12) — bookmark candidates
     // of interest from the review page so they appear in the Shortlist section.
@@ -843,6 +893,17 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                                     ? t('applicant_funnel_saved')
                                                     : t('applicant_funnel_save_candidate')}
                                         </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDownloadResume(selectedApplicant)}
+                                            disabled={downloadingResumeId === selectedApplicant.id}
+                                            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            {downloadingResumeId === selectedApplicant.id
+                                                ? t('applicant_funnel_downloading')
+                                                : t('applicant_funnel_download_resume')}
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="mt-4 max-w-sm">
@@ -921,6 +982,17 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                     })}
                                 </p>
                                 <p className="mx-auto mt-2 text-sm leading-6">{t('applicant_funnel_no_analysis_desc')}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDownloadResume(selectedApplicant)}
+                                    disabled={downloadingResumeId === selectedApplicant.id}
+                                    className="mx-auto mt-4 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    {downloadingResumeId === selectedApplicant.id
+                                        ? t('applicant_funnel_downloading')
+                                        : t('applicant_funnel_download_resume')}
+                                </button>
                                 {selectedRecommendation && RecommendationIcon && (
                                     <div className={`mt-4 rounded-lg border p-3 text-left ${RECOMMENDATION_TONE_CLASS[selectedRecommendation.tone]}`}>
                                         <div className="flex items-start gap-2.5">

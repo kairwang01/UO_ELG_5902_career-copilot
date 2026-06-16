@@ -311,6 +311,27 @@ export const listJobApplicants = (jobId: string): Promise<ListJobApplicantsResul
     return res.data;
   });
 
+export interface ApplicantResumeFile {
+  available: boolean;
+  url?: string;
+  fileName?: string;
+  contentType?: string;
+  base64?: string;
+}
+
+/**
+ * Downloads the original resume FILE of a candidate who applied to a job the
+ * caller owns (verified server-side). Returns { available: false } when the
+ * applicant only submitted text and never uploaded a file. Talent-discovery
+ * (passive) candidates are not downloadable — applicants only.
+ */
+export const getApplicantResumeFile = (applicationId: string): Promise<ApplicantResumeFile> =>
+  callDedicated(async () => {
+    const fn = httpsCallable<{ applicationId: string }, ApplicantResumeFile>(firebaseFunctions, 'getApplicantResumeFile', { timeout: 120_000 });
+    const res = await fn({ applicationId });
+    return res.data;
+  });
+
 /**
  * Dispatches a long-tail tool through the consolidated `aiProxy` callable, which
  * applies tier-gated model routing (Gemini / KairLLM / DeepSeek / custom). The

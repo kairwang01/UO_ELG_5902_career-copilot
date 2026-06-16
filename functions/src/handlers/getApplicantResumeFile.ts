@@ -1,0 +1,131 @@
+/**
+ * getApplicantResumeFile — lets an employer download the ORIGINAL resume file of
+ * a candidate who APPLIED to one of their jobs.
+ *
+ * WHY A FUNCTION: resume files live at resumes/{uid}/… with OWNER-ONLY Storage
+ * rules (PII). Employers cannot read them directly. This callable enforces the
+ * same relationship the inbound-applicant funnel uses (listJobApplicants.ts):
+ * the caller must own the job the candidate applied to. Talent-discovery
+ * (passive) candidates are deliberately NOT downloadable — only people who chose
+ * to apply to this employer.
+ *
+ * The file is returned inline as base64 (resumes are capped at <10 MB on upload,
+ * comfortably within the callable response limit) so there is no signed-URL IAM
+ * dependency. resume_text continues to stay server-side; this is the file only.
+ */
+
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
+import { requireAuth } from "../middleware/auth";
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
+
+// The resume files were uploaded by the client to this bucket
+// (VITE_FIREBASE_STORAGE_BUCKET). Target it explicitly so we never read the
+// wrong (e.g. legacy *.appspot.com) default bucket.
+const RESUME_BUCKET = process.env.RESUME_STORAGE_BUCKET || "career-copilot-a3168.firebasestorage.app";
+
+const SIGNED_URL_TTL_MS = 5 * 60 * 1000; // short-lived download link
+// base64 of a 7 MB file ≈ 9.33 MB, which (plus the JSON envelope) stays under the
+// ~10 MB callable response limit. Larger files must go via the signed URL.
+const MAX_INLINE_BYTES = 7 * 1024 * 1024;
+
+interface ApplicantResumeFileResult {
+  available: boolean;
+  url?: string;
+  fileName?: string;
+  contentType?: string;
+  base64?: string;
+}
+
+export const getApplicantResumeFileFunction = onCall(
+  { invoker: "public", memory: "512MiB" },
+  async (request): Promise<ApplicantResumeFileResult> => {
+    const uid = requireAuth(request);
+
+    const raw = (request.data ?? {}) as { applicationId?: unknown };
+    const applicationId = typeof raw.applicationId === "string" ? raw.applicationId.trim() : "";
+    if (!applicationId) {
+      throw new HttpsError("invalid-argument", "applicationId is required.");
+    }
+
+    // 1. Load the application → candidate + job it targets.
+    const appSnap = await db.collection("job_applications").doc(applicationId).get();
+    if (!appSnap.exists) {
+      throw new HttpsError("not-found", "Application not found.");
+    }
+    const appData = appSnap.data()!;
+    const candidateId = typeof appData.candidate_id === "string" ? appData.candidate_id : "";
+    const jobId = typeof appData.job_id === "string" ? appData.job_id : "";
+    if (!candidateId || !jobId) {
+      throw new HttpsError("failed-precondition", "Application is missing a candidate or job reference.");
+    }
+
+    // 2. Authorize: the caller must own the job this candidate applied to. The
+    //    employer_id is read from the authoritative job_postings doc, never trusted
+    //    from input (mirrors listJobApplicants.ts).
+    const jobSnap = await db.collection("job_postings").doc(jobId).get();
+    if (!jobSnap.exists || jobSnap.data()!.employer_id !== uid) {
+      throw new HttpsError("permission-denied", "You do not own the job for this application.");
+    }
+
+    // 3. Read the candidate's stored resume-file reference (Admin SDK; owner-only
+    //    Firestore rules are bypassed server-side).
+    const userSnap = await db.collection("users").doc(candidateId).get();
+    const userData = userSnap.exists ? userSnap.data()! : undefined;
+    const path = typeof userData?.resume_file_path === "string" ? userData.resume_file_path : "";
+    const storedName = typeof userData?.resume_file_name === "string" ? userData.resume_file_name : "";
+
+    // Defense-in-depth: only ever serve a file inside THIS candidate's own
+    // namespace, regardless of what the doc claims (the field is client-written).
+    if (!path || !path.startsWith(`resumes/${candidateId}/`)) {
+      return { available: false };
+    }
+
+    // 4. Return the file. Prefer a short-lived signed URL (no response-size ceiling,
+    //    works for any allowed file size). If URL signing isn't available on the
+    //    runtime service account (no Token Creator IAM role), fall back to inline
+    //    base64 — bounded so it can never exceed the callable response limit.
+    const file = admin.storage().bucket(RESUME_BUCKET).file(path);
+    const [exists] = await file.exists();
+    if (!exists) {
+      return { available: false };
+    }
+
+    let contentType = "application/octet-stream";
+    let size = 0;
+    try {
+      const [meta] = await file.getMetadata();
+      if (typeof meta.contentType === "string" && meta.contentType) contentType = meta.contentType;
+      size = Number(meta.size) || 0;
+    } catch {
+      /* non-fatal: fall back to octet-stream / unknown size */
+    }
+    const fileName = storedName || path.split("/").pop() || "resume";
+    // Sanitize for the Content-Disposition header (ASCII, no quotes).
+    const safeName = fileName.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "");
+
+    try {
+      const [url] = await file.getSignedUrl({
+        action: "read",
+        expires: Date.now() + SIGNED_URL_TTL_MS,
+        responseDisposition: `attachment; filename="${safeName}"`,
+      });
+      return { available: true, url, fileName, contentType };
+    } catch (signErr) {
+      // Signing unavailable (no signBlob IAM). Inline base64 fallback, bounded.
+      if (size > MAX_INLINE_BYTES) {
+        console.warn("getApplicantResumeFile: signed URL unavailable and file too large for inline fallback:", signErr);
+        throw new HttpsError(
+          "resource-exhausted",
+          "This résumé is too large to download in-app right now. Please try again later.",
+        );
+      }
+      const [buf] = await file.download();
+      return { available: true, fileName, contentType, base64: buf.toString("base64") };
+    }
+  },
+);
