@@ -2223,6 +2223,7 @@
   "ws_billing_usage_desc": "积分可用于简历、职位匹配、面试和职业规划流程。",
   "ws_billing_available_plans": "可选套餐",
   "ws_billing_available_desc": "在真实支付处理接入前，切换套餐会立即更新工作区状态。",
+  "account_billing_portal_unavailable": "订阅管理即将上线。如需更改套餐，请联系客服。",
   "ws_billing_selected_plan": "已选择",
   "ws_billing_upgrade": "升级",
   "ws_billing_switch": "切换套餐",

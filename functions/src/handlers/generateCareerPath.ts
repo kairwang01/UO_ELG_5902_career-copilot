@@ -158,6 +158,10 @@ export const generateCareerPathFunction = onCall({ invoker: "public", timeoutSec
     return result.raw as CareerPathResult;
   } catch (err) {
     await refundCredits(uid, TOOL_CREDIT_COSTS["career-path"]);
-    throw err;
+    // A plain Error reaches the client as a bare "INTERNAL" with no detail. Wrap
+    // it so the failure message survives (preserve a meaningful HttpsError code).
+    if (err instanceof HttpsError) throw err;
+    const message = err instanceof Error ? err.message : "Career path generation failed.";
+    throw new HttpsError("internal", message);
   }
 });

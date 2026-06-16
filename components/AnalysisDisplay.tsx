@@ -551,7 +551,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-4 flex flex-col items-center space-y-6 bg-white dark:bg-slate-800 p-6 rounded-xl border border-gray-200 dark:border-slate-700 shadow-md">
             <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">{t('analysis_score_title')}</h3>
-            <ScoreCircle score={result.score} t={t} />
+            <ScoreCircle score={Number.isFinite(result.score) ? result.score : 0} t={t} />
             <p className="text-center text-gray-600 dark:text-gray-400">{t('analysis_score_description').replace('{market}', market)}</p>
             </div>
             

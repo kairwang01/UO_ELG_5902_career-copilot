@@ -72,6 +72,10 @@ export const generateCoverLetterFunction = onCall({ invoker: "public", timeoutSe
     return result.raw as CoverLetter;
   } catch (err) {
     await refundCredits(uid, TOOL_CREDIT_COSTS["cover-letter"]);
-    throw err;
+    // A plain Error reaches the client as a bare "INTERNAL" with no detail. Wrap
+    // it so the failure message survives (preserve a meaningful HttpsError code).
+    if (err instanceof HttpsError) throw err;
+    const message = err instanceof Error ? err.message : "Cover letter generation failed.";
+    throw new HttpsError("internal", message);
   }
 });

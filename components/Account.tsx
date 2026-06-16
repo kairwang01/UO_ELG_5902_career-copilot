@@ -322,7 +322,14 @@ const Account: React.FC<AccountProps> = ({
   const handleManageSubscription = async () => {
     const userLevel = PLAN_HIERARCHY[subscriptionStatus] ?? 0;
     if (userLevel > 0) {
-      // Any paid plan
+      // Any paid plan — open the Stripe customer portal, but only when a real
+      // (non-test) portal link is configured. The placeholder test link would
+      // navigate the user out of the app to a dead page (mirrors the same
+      // `/test_` guard the plan-purchase flow already uses).
+      if (!STRIPE_CUSTOMER_PORTAL_LINK || STRIPE_CUSTOMER_PORTAL_LINK.includes('/test_')) {
+        setMessage({ type: 'info', text: t('account_billing_portal_unavailable') });
+        return;
+      }
       setSubscriptionBusy(true);
       const portalUrl = new URL(STRIPE_CUSTOMER_PORTAL_LINK);
       if (session.user.email) {

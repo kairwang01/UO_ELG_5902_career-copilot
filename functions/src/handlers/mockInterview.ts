@@ -236,7 +236,11 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       return result.raw as GenerateResult;
     } catch (err) {
       await refundCredits(uid, TOOL_CREDIT_COSTS["mock-interview"]);
-      throw err;
+      // A plain Error reaches the client as a bare "INTERNAL" with no detail. Wrap
+      // it so the failure message survives (preserve a meaningful HttpsError code).
+      if (err instanceof HttpsError) throw err;
+      const message = err instanceof Error ? err.message : "Mock interview generation failed.";
+      throw new HttpsError("internal", message);
     }
 
   } else if (data.mode === "evaluate") {
