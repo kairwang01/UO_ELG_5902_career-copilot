@@ -271,6 +271,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
             <div className="mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8">
               <ApplicantFunnel
                 job={jobForFunnel}
+                employerUid={session.user.id}
                 onBack={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
                 t={t}
               />

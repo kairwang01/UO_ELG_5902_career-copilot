@@ -10,10 +10,13 @@ import {
     RotateCcw,
     Search,
     SlidersHorizontal,
+    Star,
     Target,
     Users,
 } from 'lucide-react';
 import { listJobApplicants, type JobApplicant } from '../services/aiClient';
+import { saveToShortlist } from '../lib/shortlistData';
+import { useToast } from './Toast';
 import FunnelChart from './FunnelChart';
 import { firestoreDb } from '../lib/firebaseClient';
 import {
@@ -28,6 +31,7 @@ import type { JobPosting } from '../lib/recruitingData';
 
 interface ApplicantFunnelProps {
   job: JobPosting;
+  employerUid: string;
   onBack: () => void;
   t: (key: string) => string;
 }
@@ -116,7 +120,8 @@ function SelectField<T extends string>({
     );
 }
 
-const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => {
+const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onBack, t }) => {
+    const { addToast } = useToast();
     const [loading, setLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState(t('applicant_funnel_loading_initial'));
     const [error, setError] = useState<string | null>(null);
@@ -124,7 +129,40 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
     const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
     const [applicants, setApplicants] = useState<Applicant[]>([]);
     const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null);
+    const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+    const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
     const detailRef = useRef<HTMLElement | null>(null);
+
+    // Save an applicant to the recruiter's shortlist (Biz12) — bookmark candidates
+    // of interest from the review page so they appear in the Shortlist section.
+    const handleSaveCandidate = async (applicant: Applicant) => {
+        if (savedIds.has(applicant.id) || savingIds.has(applicant.id)) return;
+        setSavingIds((prev) => new Set(prev).add(applicant.id));
+        try {
+            await saveToShortlist(employerUid, {
+                candidate_name: applicant.candidate_name || t('applicant_funnel_unnamed_candidate'),
+                candidate_snapshot: {
+                    summary: applicant.summary,
+                    skills: (applicant.strengths ?? []).slice(0, 10),
+                    current_role: undefined,
+                },
+                job_id: job.id,
+                job_title: job.title,
+                match_score: applicant.compatibility_score ?? 0,
+                match_reasons: (applicant.strengths ?? []).slice(0, 10),
+                missing_requirements: (applicant.potentialGaps ?? []).slice(0, 10),
+                notes: '',
+                status: 'saved',
+                saved_by: employerUid,
+            });
+            setSavedIds((prev) => new Set(prev).add(applicant.id));
+            addToast(t('shortlist_saved_toast'), 'success');
+        } catch (err) {
+            addToast(err instanceof Error ? err.message : t('shortlist_save_error'), 'error');
+        } finally {
+            setSavingIds((prev) => { const n = new Set(prev); n.delete(applicant.id); return n; });
+        }
+    };
 
     // ── Filter state ────────────────────────────────────────────────────────────
     const [keyword, setKeyword]         = useState('');
@@ -781,11 +819,30 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, onBack, t }) => 
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-left shadow-sm dark:border-blue-900/60 dark:bg-gray-800 sm:text-right">
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{t('applicant_funnel_match_score')}</p>
-                                        <p className={`mt-1 text-3xl font-bold tabular-nums ${getScoreTone(selectedApplicant.compatibility_score ?? 0)}`}>
-                                            {selectedApplicant.compatibility_score ?? 0}%
-                                        </p>
+                                    <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                                        <div className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-left shadow-sm dark:border-blue-900/60 dark:bg-gray-800 sm:text-right">
+                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{t('applicant_funnel_match_score')}</p>
+                                            <p className={`mt-1 text-3xl font-bold tabular-nums ${getScoreTone(selectedApplicant.compatibility_score ?? 0)}`}>
+                                                {selectedApplicant.compatibility_score ?? 0}%
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSaveCandidate(selectedApplicant)}
+                                            disabled={savedIds.has(selectedApplicant.id) || savingIds.has(selectedApplicant.id)}
+                                            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                                                savedIds.has(selectedApplicant.id)
+                                                    ? 'cursor-default bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                                    : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60'
+                                            }`}
+                                        >
+                                            <Star className={`h-4 w-4 ${savedIds.has(selectedApplicant.id) ? 'fill-current' : ''}`} />
+                                            {savingIds.has(selectedApplicant.id)
+                                                ? t('applicant_funnel_saving')
+                                                : savedIds.has(selectedApplicant.id)
+                                                    ? t('applicant_funnel_saved')
+                                                    : t('applicant_funnel_save_candidate')}
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="mt-4 max-w-sm">
