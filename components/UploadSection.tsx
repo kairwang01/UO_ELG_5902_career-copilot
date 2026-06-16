@@ -19,6 +19,12 @@ interface UploadSectionProps {
   setMarket: (market: string) => void;
   t: (key: string) => string;
   variant?: 'site' | 'workspace';
+  /** Workspace only: persist the original uploaded file to Storage (logged-in candidate). */
+  onResumeFileSelected?: (file: File) => void;
+  /** The resume file already saved for this user, if any. */
+  storedResumeFile?: { name: string | null; url: string; uploadedAt?: string | null } | null;
+  onRemoveResumeFile?: () => void;
+  isSavingResumeFile?: boolean;
 }
 
 const InputMethodButton: React.FC<{
@@ -54,6 +60,10 @@ const UploadSection: React.FC<UploadSectionProps> = ({
   market,
   setMarket,
   t,
+  onResumeFileSelected,
+  storedResumeFile,
+  onRemoveResumeFile,
+  isSavingResumeFile,
 }) => {
   const [activeTab, setActiveTab] = useState<'paste' | 'upload' | 'url'>('paste');
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -136,6 +146,10 @@ const UploadSection: React.FC<UploadSectionProps> = ({
         } else {
             throw new Error(t('upload_file_no_content'));
         }
+        // Persist the original file to Storage (workspace + signed-in only). The
+        // extracted text above is already feeding the tools; this keeps a
+        // downloadable copy of exactly what the user submitted.
+        onResumeFileSelected?.(file);
     } catch (parseError) {
         setError(parseError instanceof Error ? parseError.message : t('upload_file_parse_failed'));
         setInfoMessage(null);
@@ -194,6 +208,40 @@ const UploadSection: React.FC<UploadSectionProps> = ({
             </select>
         </div>
 
+        {(storedResumeFile || isSavingResumeFile) && (
+          <div className="flex items-center gap-3 rounded-[var(--site-radius)] border border-[var(--site-border)] bg-[var(--site-surface-muted)] p-3 text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 shrink-0 text-[var(--site-action)]" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" /></svg>
+            {isSavingResumeFile ? (
+              <span className="min-w-0 flex-1 text-[var(--site-text-muted)]">{t('resume_file_saving')}</span>
+            ) : (
+              <>
+                <span className="min-w-0 flex-1 truncate text-[var(--site-text)]" title={storedResumeFile?.name ?? undefined}>
+                  {storedResumeFile?.name || t('resume_file_stored_label')}
+                </span>
+                {storedResumeFile?.url && (
+                  <a
+                    href={storedResumeFile.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 font-semibold text-[var(--site-action)] hover:underline"
+                  >
+                    {t('resume_file_download')}
+                  </a>
+                )}
+                {onRemoveResumeFile && (
+                  <button
+                    type="button"
+                    onClick={onRemoveResumeFile}
+                    className="shrink-0 text-[var(--site-text-muted)] hover:text-[var(--site-risk)] hover:underline"
+                  >
+                    {t('resume_file_remove')}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         <div className="mb-6 grid grid-cols-1 gap-2 rounded-[var(--site-radius)] bg-[var(--site-surface-muted)] p-1.5 sm:grid-cols-3 sm:gap-3">
             <InputMethodButton label={t('upload_tab_paste')} active={activeTab==='paste'} onClick={() => handleTabChange('paste')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 11-2 0V4H6v12a1 1 0 11-2 0V4zm5 2a1 1 0 00-1 1v6a1 1 0 102 0V7a1 1 0 00-1-1z" clipRule="evenodd" /></svg>} />
             <InputMethodButton label={t('upload_tab_upload')} active={activeTab==='upload'} onClick={() => handleTabChange('upload')} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>} />
@@ -225,13 +273,13 @@ const UploadSection: React.FC<UploadSectionProps> = ({
             </div>
           )}
             {activeTab === 'upload' && (
-                <div className="w-full animate-fade-in">
+                <div className="w-full animate-fade-in space-y-3">
                     <input
                       type="file"
                       ref={fileInputRef}
                       onChange={handleFileChange}
                       className="hidden"
-                      accept=".txt,.png,.jpg,.jpeg,.pdf,.docx"
+                      accept=".txt,.png,.jpg,.jpeg,.pdf,.docx,.doc"
                       aria-label={t('upload_file_input_aria')}
                     />
                     {resumeImages && resumeImages.length > 0 ? (

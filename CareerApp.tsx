@@ -22,6 +22,7 @@ import { INITIAL_USER_CREDITS, TOOL_CREDIT_COSTS } from './config/credits';
 
 import CookieConsent from './components/CookieConsent';
 import UploadSection from './components/UploadSection';
+import { uploadResumeFile, deleteResumeFile, MAX_RESUME_BYTES, isSupportedResumeFile } from './services/resumeStorage';
 import EmptyState from './components/EmptyState';
 import AnalysisDisplay from './components/AnalysisDisplay';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -121,6 +122,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [authMode, setAuthMode] = useState<'candidate' | 'business'>('candidate');
 
   const [resumeText, setResumeText] = useState<string>('');
+  const [isSavingResumeFile, setIsSavingResumeFile] = useState(false);
   const [resumeImages, setResumeImages] = useState<ResumeImage[] | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -392,6 +394,74 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         setIsProfileLoaded(true);
     }
   }, [session, setCredits, addToast]);
+
+  // Persist the ORIGINAL uploaded resume file to Storage (keeps a downloadable
+  // copy of exactly what the candidate submitted). Text extraction + the
+  // resume_text auto-save are unchanged; this is purely additive and never
+  // blocks analysis. Replacing a file cleans up the previous object.
+  const handleResumeFileSelected = useCallback(async (file: File) => {
+    if (!session?.user) return;
+    const uid = session.user.id;
+    if (file.size >= MAX_RESUME_BYTES) {
+      addToast(t('resume_file_too_large'), 'error');
+      return;
+    }
+    if (!isSupportedResumeFile(file)) {
+      addToast(t('resume_file_unsupported'), 'error');
+      return;
+    }
+    setIsSavingResumeFile(true);
+    const previousPath = profile?.resume_file_path ?? null;
+    try {
+      const meta = await uploadResumeFile(uid, file);
+      const { error } = await data.profiles.update(uid, { ...meta, updated_at: new Date().toISOString() });
+      if (error) throw new Error(error.message);
+      if (previousPath && previousPath !== meta.resume_file_path) {
+        await deleteResumeFile(previousPath);
+      }
+      // Patch the profile locally rather than re-fetching: getProfile() would
+      // reset resumeText to the persisted value, which can lag the just-parsed
+      // text behind the 1.5s debounce and visibly revert the textarea.
+      setProfile((prev) => (prev ? { ...prev, ...meta } : prev));
+      addToast(t('resume_file_saved_toast'), 'success');
+    } catch (err) {
+      // Non-fatal — the extracted text is already saved; only the file copy failed.
+      addToast(t('resume_file_upload_failed'), 'error');
+      console.error('Resume file upload failed:', err);
+    } finally {
+      setIsSavingResumeFile(false);
+    }
+  }, [session, profile?.resume_file_path, addToast, t]);
+
+  const handleRemoveResumeFile = useCallback(async () => {
+    if (!session?.user) return;
+    const uid = session.user.id;
+    const path = profile?.resume_file_path ?? null;
+    try {
+      const { error } = await data.profiles.update(uid, {
+        resume_file_url: null,
+        resume_file_name: null,
+        resume_file_path: null,
+        resume_file_size: null,
+        resume_file_uploaded_at: null,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw new Error(error.message);
+      await deleteResumeFile(path);
+      setProfile((prev) => (prev ? {
+        ...prev,
+        resume_file_url: null,
+        resume_file_name: null,
+        resume_file_path: null,
+        resume_file_size: null,
+        resume_file_uploaded_at: null,
+      } : prev));
+      addToast(t('resume_file_removed_toast'), 'info');
+    } catch (err) {
+      addToast(t('resume_file_upload_failed'), 'error');
+      console.error('Resume file removal failed:', err);
+    }
+  }, [session, profile?.resume_file_path, addToast, t]);
 
   // Employers render in their own dashboard shell (see the employer branch in the
   // main layout), so no default-view redirect is needed here.
@@ -739,6 +809,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           market={market}
           setMarket={setMarket}
           variant={uploadVariant}
+          onResumeFileSelected={handleResumeFileSelected}
+          isSavingResumeFile={isSavingResumeFile}
+          storedResumeFile={profile?.resume_file_url
+            ? { name: profile.resume_file_name ?? null, url: profile.resume_file_url, uploadedAt: profile.resume_file_uploaded_at ?? null }
+            : null}
+          onRemoveResumeFile={handleRemoveResumeFile}
         />
       </div>
     </>

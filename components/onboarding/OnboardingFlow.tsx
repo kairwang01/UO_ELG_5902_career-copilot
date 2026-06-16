@@ -3,6 +3,7 @@ import { CalendarDays, FileText, Sparkles, Upload, Zap } from 'lucide-react';
 import { data } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { parseFile } from '../../services/fileHelpers';
+import { uploadResumeFile, deleteResumeFile, type ResumeFileMeta } from '../../services/resumeStorage';
 import { loadJobPreferences, saveJobPreferences } from '../../hooks/useJobPreferences';
 import {
   CAREER_FIELDS,
@@ -85,6 +86,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
   const [birthday, setBirthday] = useState('');
   const [resumeDraft, setResumeDraft] = useState('');
   const [resumeSource, setResumeSource] = useState<string | null>(null); // filename or 'paste'
+  const [resumeFileMeta, setResumeFileMeta] = useState<ResumeFileMeta | null>(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
@@ -142,6 +144,14 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
         setResumeDraft(parsed.text);
         setResumeSource(file.name);
         setShowPaste(false);
+        // Keep a downloadable copy of the original file (best-effort; the
+        // reviewed text is the source of truth and is saved in finish()).
+        try {
+          setResumeFileMeta(await uploadResumeFile(uid, file));
+        } catch (err) {
+          console.warn('Could not save original resume file during onboarding:', err);
+          setResumeFileMeta(null);
+        }
       } else {
         setParseError(true);
       }
@@ -172,6 +182,8 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
       if (resumeTextToSave) {
         const { error: resumeError } = await data.profiles.update(uid, {
           resume_text: resumeTextToSave,
+          // Persist the original-file references too, when the upload succeeded.
+          ...(resumeFileMeta ?? {}),
           updated_at: new Date().toISOString(),
         });
         if (resumeError) throw new Error(resumeError.message);
@@ -348,7 +360,15 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setResumeDraft(''); setResumeSource(null); }}
+                    onClick={() => {
+                      // Clear the file meta too, else a later paste would be saved
+                      // alongside this removed file's references (text/file mismatch).
+                      const orphan = resumeFileMeta?.resume_file_path;
+                      setResumeDraft('');
+                      setResumeSource(null);
+                      setResumeFileMeta(null);
+                      if (orphan) void deleteResumeFile(orphan);
+                    }}
                     className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300"
                   >
                     {t('ob_resume_remove')}

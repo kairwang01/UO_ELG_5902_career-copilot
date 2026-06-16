@@ -28,6 +28,30 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // resumes/{userId}/{fileName}
+    // Resume files are PII — ONLY the owner may read, upload, replace or delete
+    // them. Employers never receive the file; talent discovery serves
+    // server-extracted text via a Cloud Function (Admin SDK), not these objects.
+    match /resumes/{userId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && (
+                     // delete (request.resource is null on delete)
+                     request.resource == null ||
+                     (
+                       request.resource.size < 10 * 1024 * 1024   // max 10 MB
+                       && (
+                         request.resource.contentType == 'application/pdf'
+                         || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                         || request.resource.contentType == 'application/msword'
+                         || request.resource.contentType.matches('text/.*')
+                         || request.resource.contentType.matches('image/.*')
+                         || request.resource.contentType == 'application/octet-stream'
+                       )
+                     )
+                   );
+    }
+
     // Everything else denied by default.
     match /{allPaths=**} {
       allow read, write: if false;

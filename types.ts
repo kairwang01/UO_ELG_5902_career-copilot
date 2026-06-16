@@ -78,6 +78,13 @@ export interface UserProfile {
   industry?: string | null;
   founded_year?: string | null;
   resume_text: string | null;
+  // Original uploaded resume file persisted to Firebase Storage (resumes/{uid}/…),
+  // owner-read-only. resume_text remains the canonical text for AI/talent tools.
+  resume_file_url?: string | null;
+  resume_file_name?: string | null;
+  resume_file_path?: string | null;
+  resume_file_size?: number | null;
+  resume_file_uploaded_at?: string | null;
   preferred_language: string | null;
   wallet_address: string | null;
   nft_minted: boolean | null;

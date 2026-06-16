@@ -125,6 +125,11 @@ service cloud.firestore {
           "avatar_url",
           "subscription_status",
           "resume_text",
+          "resume_file_url",
+          "resume_file_name",
+          "resume_file_path",
+          "resume_file_size",
+          "resume_file_uploaded_at",
           "company_name",
           "company_description",
           "company_logo_url",
@@ -158,6 +163,12 @@ service cloud.firestore {
         optionalUrl(data, "avatar_url", 2048) &&
         optionalString(data, "subscription_status", 80) &&
         optionalString(data, "resume_text", 200000) &&
+        // Original resume file (stored in Storage; these are just the references).
+        optionalUrl(data, "resume_file_url", 2048) &&
+        optionalString(data, "resume_file_name", 255) &&
+        optionalString(data, "resume_file_path", 1024) &&
+        optionalNumber(data, "resume_file_size", 0, 52428800) &&
+        optionalString(data, "resume_file_uploaded_at", 40) &&
         optionalString(data, "company_name", 160) &&
         optionalString(data, "company_size", 20) &&
         optionalString(data, "industry", 80) &&
