@@ -14,7 +14,11 @@ import {
   ChevronDown,
   ShieldCheck,
   Briefcase,
-  ClipboardList
+  ClipboardList,
+  Settings,
+  LogOut,
+  Sun,
+  Moon
 } from 'lucide-react';
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
@@ -47,6 +51,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   onViewChange,
   profile,
   credits,
+  theme,
+  onToggleTheme,
+  onLogout,
   activeTool,
   onToolSelect,
   t,
@@ -223,24 +230,53 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
         </div>
 
-        <div className="mt-1 pt-3 flex items-center gap-3 border-t border-gray-200/50 dark:border-slate-800/50">
-            {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt={t('ws_profile_avatar_alt')} className="h-7 w-7 rounded-lg object-cover" />
-            ) : (
-                <div className="h-7 w-7 rounded-lg bg-gray-200 dark:bg-slate-800 flex items-center justify-center">
-                    <UserIcon className="h-3.5 w-3.5 text-gray-500" />
-                </div>
-            )}
-            <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-bold text-gray-900 dark:text-white truncate">
-                    {profile?.full_name || profile?.company_name || t('ws_profile_fallback')}
-                </p>
-                <div className="flex items-center gap-1.5">
-                    <div className="h-1 w-1 rounded-full bg-green-500 animate-pulse"></div>
+        {/* My Profile — the single profile access point (the old top-right account
+            menu was removed). Opens Account Settings; theme + sign-out sit below. */}
+        <div className="mt-1 pt-3 border-t border-gray-200/50 dark:border-slate-800/50" data-tour="account-menu">
+            <button
+                type="button"
+                onClick={() => { onViewChange('account'); onToolSelect(null); }}
+                aria-current={activeView === 'account' ? 'page' : undefined}
+                className={`w-full flex items-center gap-3 rounded-lg p-1.5 text-left transition-colors ${
+                    activeView === 'account'
+                        ? 'bg-blue-50 dark:bg-blue-900/20'
+                        : 'hover:bg-gray-100 dark:hover:bg-slate-800/50'
+                }`}
+            >
+                {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt={t('ws_profile_avatar_alt')} className="h-7 w-7 rounded-lg object-cover" />
+                ) : (
+                    <div className="h-7 w-7 rounded-lg bg-gray-200 dark:bg-slate-800 flex items-center justify-center">
+                        <UserIcon className="h-3.5 w-3.5 text-gray-500" />
+                    </div>
+                )}
+                <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold text-gray-900 dark:text-white truncate">
+                        {profile?.full_name || profile?.company_name || t('ws_profile_fallback')}
+                    </p>
                     <p className="text-[9px] text-gray-400 truncate uppercase tracking-tight">
-                        {formatPlanStatus(profile?.subscription_status)}
+                        {t('menu_account_settings')}
                     </p>
                 </div>
+                <Settings className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            </button>
+            <div className="mt-2 grid grid-cols-2 gap-1">
+                <button
+                    type="button"
+                    onClick={onToggleTheme}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800/50"
+                >
+                    {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                    {theme === 'dark' ? t('menu_light_mode') : t('menu_dark_mode')}
+                </button>
+                <button
+                    type="button"
+                    onClick={onLogout}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                    <LogOut className="h-3.5 w-3.5" />
+                    {t('menu_sign_out')}
+                </button>
             </div>
         </div>
       </div>

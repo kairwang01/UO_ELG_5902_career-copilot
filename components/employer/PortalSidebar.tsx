@@ -9,6 +9,10 @@ import {
   CreditCard,
   ChevronRight,
   BookmarkCheck,
+  Settings,
+  LogOut,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import type { UserProfile } from '../../types';
 import LanguageSwitcher from '../LanguageSwitcher';
@@ -28,6 +32,7 @@ interface PortalSidebarProps {
   currentPage: PortalPage;
   onNavigate: (page: PortalPage) => void;
   onGoHome: () => void;
+  onSignOut: () => void;
   profile: UserProfile | null;
   darkMode: boolean;
   onToggleDark: () => void;
@@ -42,8 +47,10 @@ export function PortalSidebar({
   currentPage,
   onNavigate,
   onGoHome,
+  onSignOut,
   profile,
   darkMode,
+  onToggleDark,
   currentLang,
   onLanguageChange,
   t,
@@ -136,7 +143,16 @@ export function PortalSidebar({
             <div className={`font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>{(profile?.credits ?? 0).toLocaleString()} CR</div>
           </div>
         </div>
-        <div className="flex items-center gap-3 px-3 py-2">
+        {/* My Profile — single profile access point (no duplicate top-right menu). */}
+        <button
+          type="button"
+          onClick={() => onNavigate('account-settings')}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            currentPage === 'account-settings'
+              ? (dm ? 'bg-gray-700/50' : 'bg-blue-50')
+              : (dm ? 'hover:bg-gray-700/40' : 'hover:bg-gray-100')
+          }`}
+        >
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${dm ? 'bg-gray-700' : 'bg-blue-100'}`}>
             {profile?.avatar_url ? (
               <img src={profile.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
@@ -144,12 +160,31 @@ export function PortalSidebar({
               <User className={`w-5 h-5 ${dm ? 'text-gray-300' : 'text-blue-600'}`} />
             )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className={`text-sm font-semibold truncate ${dm ? 'text-white' : 'text-gray-900'}`}>
               {profile?.full_name || t('portal_business_fallback_name')}
             </div>
-            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_business_account')}</div>
+            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_nav_account')}</div>
           </div>
+          <Settings className="w-4 h-4 shrink-0 text-gray-400" />
+        </button>
+        <div className="mt-1 grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            onClick={onToggleDark}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${dm ? 'text-gray-300 hover:bg-gray-700/40' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            {dm ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {dm ? t('menu_light_mode') : t('menu_dark_mode')}
+          </button>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${dm ? 'text-red-400 hover:bg-red-900/20' : 'text-red-600 hover:bg-red-50'}`}
+          >
+            <LogOut className="w-4 h-4" />
+            {t('menu_sign_out')}
+          </button>
         </div>
       </div>
     </aside>

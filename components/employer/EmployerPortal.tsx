@@ -236,6 +236,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const sidebarProps = {
     onNavigate: navigate,
     onGoHome,
+    onSignOut,
     profile,
     darkMode,
     onToggleDark: onToggleTheme,

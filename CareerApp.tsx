@@ -1088,19 +1088,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               </svg>
             </button>
             <ApiStatusBanner />
-            <div className="flex items-center gap-3 ml-auto" data-tour="account-menu">
+            {/* Profile access is consolidated into the sidebar "My Profile" block
+                (bottom-left) — no duplicate top-right account menu. */}
+            <div className="flex items-center gap-3 ml-auto">
               <span className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 hidden sm:block">
                 {t(DASHBOARD_VIEW_LABEL_KEYS[dashboardView])}
               </span>
-              <AccountMenu
-                profile={profile}
-                email={session.user.email ?? ''}
-                theme={theme}
-                onToggleTheme={toggleTheme}
-                onAccount={() => setDashboardView('account' as typeof dashboardView)}
-                onSignOut={() => data.auth.signOut()}
-                t={t}
-              />
             </div>
           </header>
           <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10">

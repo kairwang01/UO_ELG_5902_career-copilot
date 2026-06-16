@@ -53,11 +53,8 @@ export function PortalTopBar({ title, darkMode = false, accountMenuProps }: Port
       <h1 className={`min-w-0 flex-1 truncate text-left text-lg font-semibold sm:text-center sm:text-xl ${darkMode ? 'text-white' : 'text-gray-900'}`}>
         {title}
       </h1>
-      {menuConfig && (
-        <div className="flex-shrink-0">
-          <AccountMenu {...menuConfig} />
-        </div>
-      )}
+      {/* Account access is consolidated into the portal sidebar "My Profile"
+          block (bottom-left) — no duplicate top-right account menu. */}
     </div>
   );
 }
