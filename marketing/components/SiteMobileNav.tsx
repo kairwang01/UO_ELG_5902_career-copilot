@@ -14,7 +14,7 @@ export const SiteMobileNav: React.FC = () => {
   const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
-  const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : SITE_ROUTES.workspace;
+  const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : `${SITE_ROUTES.workspace}?auth=signup`;
 
   const linkClass = 'block py-3 text-sm border-b border-[var(--site-border)]';
 
@@ -114,7 +114,7 @@ export const SiteMobileNav: React.FC = () => {
                 className="block rounded-[var(--site-radius)] bg-[var(--site-action)] px-3 py-3 text-center text-sm font-semibold text-white mt-3"
                 onClick={() => setOpen(false)}
               >
-                {isEmployerSurface ? t('business_hero_get_started_button') : t('site_cta_analyze_resume')}
+                {t('business_hero_get_started_button')}
               </Link>
             </>
           )}
