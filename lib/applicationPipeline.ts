@@ -72,8 +72,54 @@ export const APPLICATION_PIPELINE_STAGES = [
 ] as const satisfies readonly ApplicationPipelineStage[];
 
 export type ApplicationPipelineStatus =
-  | (typeof APPLICATION_PIPELINE_STAGES)[number]['status']
+  | ApplicationPipelineStageStatus
   | 'Rejected';
+
+export type ApplicationPipelineStageStatus = (typeof APPLICATION_PIPELINE_STAGES)[number]['status'];
+
+export type ApplicationProgressGroupId = 'applied' | 'interview' | 'offer' | 'signing';
+
+export interface ApplicationProgressGroup {
+  id: ApplicationProgressGroupId;
+  labelKey: string;
+  statuses: readonly ApplicationPipelineStageStatus[];
+  noteKey?: string;
+}
+
+export const APPLICATION_PROGRESS_GROUPS = [
+  {
+    id: 'applied',
+    labelKey: 'applications_progress_group_applied',
+    statuses: ['Applied'],
+  },
+  {
+    id: 'interview',
+    labelKey: 'applications_progress_group_interview',
+    statuses: [
+      'Group Interview',
+      'First Interview',
+      'Second Interview',
+      'Decision Maker Interview',
+      'HR Interview',
+    ],
+  },
+  {
+    id: 'offer',
+    labelKey: 'applications_progress_group_offer',
+    statuses: [
+      'Offer',
+      'Hiring Evaluation',
+      'Intent Letter',
+      'Offer Confirmed',
+    ],
+    noteKey: 'applications_progress_offer_note',
+  },
+  {
+    id: 'signing',
+    labelKey: 'applications_progress_group_signing',
+    statuses: ['Tripartite Agreement', 'Signed'],
+  },
+] as const satisfies readonly ApplicationProgressGroup[];
 
 export type ApplicationFilterGroup = 'All' | ApplicationStatusGroup;
 
@@ -164,6 +210,20 @@ export function getApplicationStatusGroup(status: unknown): ApplicationStatusGro
 export function getApplicationStatusIndex(status: unknown): number {
   const normalized = normalizeApplicationStatus(status);
   return APPLICATION_PIPELINE_STAGES.findIndex((stage) => stage.status === normalized);
+}
+
+export function getApplicationProgressGroupIndex(status: unknown): number {
+  const normalized = normalizeApplicationStatus(status);
+  if (normalized === 'Rejected') return -1;
+  return APPLICATION_PROGRESS_GROUPS.findIndex((group) =>
+    group.statuses.some((stageStatus) => stageStatus === normalized),
+  );
+}
+
+export function getNextApplicationPipelineStatus(status: unknown): ApplicationPipelineStageStatus | null {
+  const current = getApplicationStatusIndex(status);
+  if (current < 0 || current >= APPLICATION_PIPELINE_STAGES.length - 1) return null;
+  return APPLICATION_PIPELINE_STAGES[current + 1].status;
 }
 
 export function getApplicationStatusLabelKey(status: unknown): string {

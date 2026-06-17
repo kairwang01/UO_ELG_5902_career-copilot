@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
-import { ArrowDownUp, Bell, Briefcase, CheckCircle2, Circle, Clock3, MessageSquare, RotateCcw, Search, Star, X } from 'lucide-react';
+import { ArrowDownUp, Bell, Briefcase, CheckCircle2, Clock3, MessageSquare, RotateCcw, Search, Star, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
 import {
   APPLICATION_FILTER_GROUPS,
   APPLICATION_FILTER_LABEL_KEYS,
   APPLICATION_PIPELINE_STAGES,
+  APPLICATION_PROGRESS_GROUPS,
   applicationMatchesFilter,
   getApplicationStatusGroup,
   getApplicationStatusIndex,
@@ -149,92 +150,155 @@ function sortLabel(sort: ApplicationSortKey, t: (k: string) => string): string {
   return t(`applications_sort_${sort}`);
 }
 
-// ─── Stepper ──────────────────────────────────────────────────────────────────
+// ─── Progress Timeline ────────────────────────────────────────────────────────
 
-interface StepperProps {
+interface ProgressTimelineProps {
   status: ApplicationPipelineStatus;
   t: (k: string) => string;
 }
 
-const Stepper: React.FC<StepperProps> = ({ status, t }) => {
+type MainStageState = 'done' | 'current' | 'pending' | 'closed';
+
+const MAIN_STAGE_CLASSES: Record<MainStageState, {
+  circle: string;
+  label: string;
+  connector: string;
+}> = {
+  done: {
+    circle: 'bg-emerald-600 text-white ring-4 ring-emerald-100 dark:bg-emerald-500 dark:ring-emerald-950/70',
+    label: 'text-emerald-700 dark:text-emerald-300',
+    connector: 'bg-emerald-200 dark:bg-emerald-900/70',
+  },
+  current: {
+    circle: 'bg-blue-600 text-white ring-4 ring-blue-100 dark:bg-blue-500 dark:ring-blue-950/70',
+    label: 'text-blue-700 dark:text-blue-300',
+    connector: 'bg-blue-200 dark:bg-blue-900/70',
+  },
+  pending: {
+    circle: 'bg-blue-100 text-blue-300 ring-4 ring-blue-50 dark:bg-blue-950/60 dark:text-blue-700 dark:ring-blue-950/40',
+    label: 'text-slate-500 dark:text-slate-400',
+    connector: 'border-t-2 border-dashed border-blue-100 dark:border-blue-950',
+  },
+  closed: {
+    circle: 'bg-slate-200 text-slate-500 ring-4 ring-slate-100 dark:bg-slate-700 dark:text-slate-400 dark:ring-slate-800',
+    label: 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500 dark:decoration-slate-700',
+    connector: 'border-t-2 border-dashed border-slate-200 dark:border-slate-700',
+  },
+};
+
+const SUB_STAGE_CLASSES: Record<MainStageState, string> = {
+  done: 'bg-emerald-500 text-white dark:bg-emerald-400 dark:text-slate-950',
+  current: 'bg-blue-600 text-white ring-4 ring-blue-100 dark:bg-blue-500 dark:ring-blue-950/70',
+  pending: 'bg-blue-100 text-blue-300 dark:bg-blue-950/70 dark:text-blue-700',
+  closed: 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
+};
+
+const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, t }) => {
   const current = getApplicationStatusIndex(status);
   const isComplete = isApplicationHiredStatus(status);
   const isRejected = isApplicationRejectedStatus(status);
+  const normalized = normalizeApplicationStatus(status);
 
   return (
-    <div className="mt-4 overflow-x-auto pb-2" aria-label={t('applications_timeline_label')}>
-      <div className="flex min-w-max items-start gap-0 pr-2">
-      {APPLICATION_PIPELINE_STAGES.map((step, i) => {
-        const isDone = !isRejected && (i < current || (i === current && isComplete));
-        const isCurrent = !isRejected && i === current && !isComplete;
-        const isPending = i > current;
+    <div className="mt-5 overflow-x-auto pb-2" aria-label={t('applications_timeline_label')}>
+      <div className="min-w-0 rounded-lg bg-slate-50 px-4 py-5 dark:bg-slate-900/70 sm:min-w-[820px]">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-0">
+          {APPLICATION_PROGRESS_GROUPS.map((group, groupIndex) => {
+            const lastIndex = getApplicationStatusIndex(group.statuses[group.statuses.length - 1]);
+            const groupContainsCurrent = group.statuses.some((stageStatus) => stageStatus === normalized);
+            const groupState: MainStageState = isRejected
+              ? 'closed'
+              : current > lastIndex || (isComplete && current >= lastIndex)
+                ? 'done'
+                : groupContainsCurrent
+                  ? 'current'
+                  : 'pending';
+            const hasSubStages = group.statuses.length > 1;
+            const groupClasses = MAIN_STAGE_CLASSES[groupState];
+            const connectorDone = !isRejected && current > lastIndex;
 
-        // Color logic
-        let circleClass = '';
-        if (isComplete && i === current) {
-          circleClass =
-            'bg-green-600 border-green-600 text-white dark:bg-green-500 dark:border-green-500';
-        } else if (isDone) {
-          circleClass =
-            'bg-blue-600 border-blue-600 text-white dark:bg-blue-500 dark:border-blue-500';
-        } else if (isCurrent) {
-          circleClass =
-            'border-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-white dark:bg-slate-800';
-        } else {
-          circleClass =
-            'border-2 border-gray-300 text-gray-400 dark:border-slate-600 dark:text-slate-500 bg-white dark:bg-slate-800';
-        }
+            return (
+              <React.Fragment key={group.id}>
+                <div className="w-full shrink-0 sm:w-44">
+                  <p className={`text-center text-sm font-semibold leading-5 ${groupClasses.label}`}>
+                    {t(group.labelKey)}
+                  </p>
+                  <div className="mt-2 flex justify-center">
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${groupClasses.circle}`}>
+                      {groupState === 'done' ? <CheckCircle2 className="h-4 w-4" /> : groupIndex + 1}
+                    </span>
+                  </div>
 
-        let labelClass = '';
-        if (isComplete && i === current) {
-          labelClass = 'text-green-600 dark:text-green-400 font-semibold';
-        } else if (isRejected) {
-          labelClass = 'text-gray-400 dark:text-slate-500 line-through decoration-slate-300 dark:decoration-slate-600';
-        } else if (isCurrent) {
-          labelClass = 'text-blue-600 dark:text-blue-400 font-semibold';
-        } else if (isPending) {
-          labelClass = 'text-gray-400 dark:text-slate-500';
-        } else {
-          labelClass = 'text-gray-600 dark:text-gray-300';
-        }
+                  {hasSubStages && (
+                    <div className="mx-auto mt-4 w-full max-w-[220px] sm:max-w-[150px]">
+                      <div className="relative space-y-3">
+                        <span
+                          aria-hidden="true"
+                          className={`absolute left-[7px] top-2 h-[calc(100%-1rem)] w-px ${
+                            groupState === 'done' || groupState === 'current'
+                              ? 'bg-blue-100 dark:bg-blue-950'
+                              : 'bg-slate-200 dark:bg-slate-800'
+                          }`}
+                        />
+                        {group.statuses.map((stageStatus) => {
+                          const stage = APPLICATION_PIPELINE_STAGES.find((item) => item.status === stageStatus);
+                          const stageIndex = getApplicationStatusIndex(stageStatus);
+                          const stageState: MainStageState = isRejected
+                            ? 'closed'
+                            : stageIndex < current || (isComplete && stageIndex <= current)
+                              ? 'done'
+                              : stageIndex === current
+                                ? 'current'
+                                : 'pending';
 
-        return (
-          <React.Fragment key={step.status}>
-            <div className="flex w-20 shrink-0 flex-col items-center gap-1">
-              <div
-                className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${circleClass}`}
-              >
-                {isDone && !isPending ? (
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                ) : isCurrent ? (
-                  <span>{i + 1}</span>
-                ) : (
-                  <Circle className="h-3.5 w-3.5 opacity-40" />
+                          return (
+                            <div key={stageStatus} className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-2">
+                              <span className={`mt-1 h-3.5 w-3.5 rounded-full ${SUB_STAGE_CLASSES[stageState]}`}>
+                                {stageState === 'done' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                              </span>
+                              <span
+                                className={`text-xs leading-5 ${
+                                  stageState === 'current'
+                                    ? 'font-semibold text-blue-700 dark:text-blue-300'
+                                    : stageState === 'done'
+                                      ? 'font-medium text-slate-600 dark:text-slate-300'
+                                      : 'text-slate-400 dark:text-slate-500'
+                                }`}
+                              >
+                                {stage ? t(stage.labelKey) : stageStatus}
+                                {stage && 'optional' in stage && stage.optional && (
+                                  <span className="ml-1 text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                    {t('applications_stage_optional')}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {'noteKey' in group && group.noteKey && (
+                        <p className="mt-3 rounded-md border border-blue-100 bg-white px-3 py-2 text-[11px] leading-5 text-slate-500 dark:border-blue-950 dark:bg-slate-950 dark:text-slate-400">
+                          {t(group.noteKey)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {groupIndex < APPLICATION_PROGRESS_GROUPS.length - 1 && (
+                  <div
+                    aria-hidden="true"
+                    className={`mt-[42px] hidden h-0.5 w-12 shrink-0 rounded-full sm:block ${
+                      connectorDone
+                        ? MAIN_STAGE_CLASSES.done.connector
+                        : MAIN_STAGE_CLASSES.pending.connector
+                    }`}
+                  />
                 )}
-              </div>
-              <span className={`w-full text-center text-[10px] leading-tight sm:text-[11px] ${labelClass}`}>
-                {t(step.labelKey)}
-                {'optional' in step && step.optional && (
-                  <span className="mt-0.5 block text-[9px] font-medium text-slate-400 dark:text-slate-500">
-                    {t('applications_stage_optional')}
-                  </span>
-                )}
-              </span>
-            </div>
-
-            {/* Connector line between steps */}
-            {i < APPLICATION_PIPELINE_STAGES.length - 1 && (
-              <div
-                className={`flex-1 h-0.5 mb-4 mx-1 rounded-full transition-colors ${
-                  i < current
-                    ? 'bg-blue-400 dark:bg-blue-600'
-                    : 'bg-gray-200 dark:bg-slate-700'
-                }`}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -255,59 +319,66 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
   const guidance = STATUS_GUIDANCE[statusGroup];
   const GuidanceIcon = guidance.icon;
   const [reviewOpen, setReviewOpen] = useState(false);
+  const currentStatusLabel = t(getApplicationStatusLabelKey(app.status));
 
   return (
     <div
-      className={`relative rounded-2xl border p-4 shadow-sm transition-all animate-fade-in ${
+      className={`relative rounded-2xl border p-5 shadow-sm transition-all animate-fade-in sm:p-6 ${
         isRejected
           ? 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60'
           : 'border-gray-100 bg-white hover:border-blue-100 hover:shadow-md dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-800/50'
       }`}
     >
-      {/* Top row: title + status chip */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate leading-snug">
-            {app.job_title || t('applications_unknown_role')}
-          </p>
-          <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-            {formatDate(app)}
-          </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:flex-1">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {t('applications_meta_applied_on')}
+            </p>
+            <p className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
+              {formatDate(app)}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {t('applications_meta_role')}
+            </p>
+            <p className="mt-1 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+              {app.job_title || t('applications_unknown_role')}
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          {/* Status chip */}
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_CHIP_CLASSES[statusGroup]}`}
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CHIP_CLASSES[statusGroup]}`}
           >
-            {t(getApplicationStatusLabelKey(app.status))}
+            {currentStatusLabel}
           </span>
-
-          {/* Match % badge */}
           {app.compatibility_score != null && (
-            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">
               {t('applications_match')} {app.compatibility_score}%
             </span>
           )}
         </div>
       </div>
 
-      {/* 3-step stepper */}
-      <Stepper status={app.status} t={t} />
-
-      <div className={`mt-3 rounded-xl border px-3 py-2.5 text-xs leading-relaxed ${guidance.className}`}>
-        <div className="flex items-start gap-2">
-          <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${guidance.iconClassName}`}>
-            <GuidanceIcon className="h-3.5 w-3.5" />
-          </span>
+      <div className={`mt-5 rounded-lg border px-4 py-4 text-sm leading-relaxed ${guidance.className}`}>
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="font-semibold">{t(guidance.titleKey)}</p>
-            <p className="mt-0.5 opacity-90">{t(guidance.descKey)}</p>
+            <p className="text-lg font-semibold leading-7">
+              {formatTranslation(t('applications_current_status'), { status: currentStatusLabel })}
+            </p>
+            <p className="mt-2 max-w-3xl opacity-90">{t(guidance.descKey)}</p>
           </div>
+          <span className={`hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:flex ${guidance.iconClassName}`}>
+            <GuidanceIcon className="h-6 w-6" />
+          </span>
         </div>
       </div>
 
-      {/* Hired: review company CTA */}
+      <ProgressTimeline status={app.status} t={t} />
+
       {isHired && app.employer_id && (
         <div className="mt-3 flex items-center justify-end">
           <button
@@ -761,7 +832,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
         </div>
       ) : (
         /* ── Application cards ── */
-        <div className="grid gap-3 sm:grid-cols-1 md:grid-cols-2">
+        <div className="grid gap-4">
           {visible.map((app) => (
             <ApplicationCard key={app.id} app={app} t={t} onFindSimilar={onFindSimilar} />
           ))}

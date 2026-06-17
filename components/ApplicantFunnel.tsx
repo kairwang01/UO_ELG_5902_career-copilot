@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { doc, updateDoc } from 'firebase/firestore';
 import {
     ArrowLeft,
+    ArrowRight,
     Clock3,
     Download,
     Eye,
@@ -28,6 +29,7 @@ import {
     APPLICATION_PIPELINE_STAGES,
     getApplicationStatusIndex,
     getApplicationStatusLabelKey,
+    getNextApplicationPipelineStatus,
     isApplicationRejectedStatus,
     normalizeApplicationStatus,
     type ApplicationPipelineStatus,
@@ -124,6 +126,70 @@ function SelectField<T extends string>({
         </label>
     );
 }
+
+interface StageControlProps {
+    applicant: Applicant;
+    statusOptions: ApplicationPipelineStatus[];
+    statusSavingId: string | null;
+    getStatusLabel: (status: string) => string;
+    onStatusChange: (applicant: Applicant, nextStatusValue: string) => void;
+    t: (key: string) => string;
+}
+
+const StageControl: React.FC<StageControlProps> = ({
+    applicant,
+    statusOptions,
+    statusSavingId,
+    getStatusLabel,
+    onStatusChange,
+    t,
+}) => {
+    const currentStatus = normalizeApplicationStatus(applicant.status);
+    const nextStatus = getNextApplicationPipelineStatus(currentStatus);
+    const isSaving = statusSavingId === applicant.id;
+    const canAdvance = Boolean(nextStatus) && !isSaving && currentStatus !== 'Rejected';
+
+    const handleAdvance = () => {
+        if (!nextStatus || isSaving) return;
+        onStatusChange(applicant, nextStatus);
+    };
+
+    return (
+        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <SelectField<ApplicationPipelineStatus>
+                    id={`applicant-stage-${applicant.id}`}
+                    label={t('applicant_funnel_stage_control_label')}
+                    value={currentStatus}
+                    onChange={(value) => onStatusChange(applicant, value)}
+                >
+                    {statusOptions.map(status => (
+                        <option key={status} value={status}>{getStatusLabel(status)}</option>
+                    ))}
+                </SelectField>
+
+                <button
+                    type="button"
+                    onClick={handleAdvance}
+                    disabled={!canAdvance}
+                    className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                >
+                    <ArrowRight className="h-4 w-4" />
+                    {nextStatus
+                        ? formatTranslation(t('applicant_funnel_advance_to'), { status: getStatusLabel(nextStatus) })
+                        : t('applicant_funnel_stage_final')}
+                </button>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-blue-800/80 dark:text-blue-200/80">
+                {isSaving
+                    ? t('applicant_funnel_status_updating')
+                    : nextStatus
+                        ? t('applicant_funnel_stage_control_helper')
+                        : t('applicant_funnel_stage_final_helper')}
+            </p>
+        </div>
+    );
+};
 
 const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onBack, t }) => {
     const { addToast } = useToast();
@@ -935,23 +1001,14 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                         </button>
                                     </div>
                                 </div>
-                                <div className="mt-4 max-w-sm">
-                                    <SelectField<ApplicationPipelineStatus>
-                                        id={`applicant-stage-${selectedApplicant.id}`}
-                                        label={t('applicant_funnel_stage_control_label')}
-                                        value={normalizeApplicationStatus(selectedApplicant.status)}
-                                        onChange={(value) => handleStatusChange(selectedApplicant, value)}
-                                    >
-                                        {statusOptions.map(status => (
-                                            <option key={status} value={status}>{getStatusLabel(status)}</option>
-                                        ))}
-                                    </SelectField>
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        {statusSavingId === selectedApplicant.id
-                                            ? t('applicant_funnel_status_updating')
-                                            : t('applicant_funnel_stage_control_helper')}
-                                    </p>
-                                </div>
+                                <StageControl
+                                    applicant={selectedApplicant}
+                                    statusOptions={statusOptions}
+                                    statusSavingId={statusSavingId}
+                                    getStatusLabel={getStatusLabel}
+                                    onStatusChange={handleStatusChange}
+                                    t={t}
+                                />
                                 {selectedApplicant.summary && (
                                     <p className="mt-4 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-400">{selectedApplicant.summary}</p>
                                 )}
@@ -1030,22 +1087,15 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                         </div>
                                     </div>
                                 )}
-                                <div className="mt-4 text-left">
-                                    <SelectField<ApplicationPipelineStatus>
-                                        id={`applicant-stage-${selectedApplicant.id}`}
-                                        label={t('applicant_funnel_stage_control_label')}
-                                        value={normalizeApplicationStatus(selectedApplicant.status)}
-                                        onChange={(value) => handleStatusChange(selectedApplicant, value)}
-                                    >
-                                        {statusOptions.map(status => (
-                                            <option key={status} value={status}>{getStatusLabel(status)}</option>
-                                        ))}
-                                    </SelectField>
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        {statusSavingId === selectedApplicant.id
-                                            ? t('applicant_funnel_status_updating')
-                                            : t('applicant_funnel_stage_control_helper')}
-                                    </p>
+                                <div className="text-left">
+                                    <StageControl
+                                        applicant={selectedApplicant}
+                                        statusOptions={statusOptions}
+                                        statusSavingId={statusSavingId}
+                                        getStatusLabel={getStatusLabel}
+                                        onStatusChange={handleStatusChange}
+                                        t={t}
+                                    />
                                 </div>
                             </div>
                         </div>
