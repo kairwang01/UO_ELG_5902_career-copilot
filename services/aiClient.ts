@@ -343,6 +343,19 @@ export const getApplicantResumeFile = (applicationId: string): Promise<Applicant
   });
 
 /**
+ * Returns the resume TEXT of a candidate who applied to a job the caller owns
+ * (same server-side authorization as getApplicantResumeFile). Lets the
+ * job-owning employer read the applicant's resume inline. Empty string when the
+ * applicant has no stored resume_text.
+ */
+export const getApplicantResumeText = (applicationId: string): Promise<{ resumeText: string }> =>
+  callDedicated(async () => {
+    const fn = httpsCallable<{ applicationId: string }, { resumeText: string }>(firebaseFunctions, 'getApplicantResumeText', { timeout: 60_000 });
+    const res = await fn({ applicationId });
+    return res.data;
+  });
+
+/**
  * Dispatches a long-tail tool through the consolidated `aiProxy` callable, which
  * applies tier-gated model routing (Gemini / KairLLM / DeepSeek / custom). The
  * legacy per-tool functions are Gemini-only and ignore the selected model — this

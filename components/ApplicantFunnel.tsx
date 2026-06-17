@@ -6,6 +6,7 @@ import {
     ArrowLeft,
     Clock3,
     Download,
+    Eye,
     FileWarning,
     MessageSquare,
     RotateCcw,
@@ -14,11 +15,14 @@ import {
     Star,
     Target,
     Users,
+    X,
 } from 'lucide-react';
-import { listJobApplicants, getApplicantResumeFile, type JobApplicant } from '../services/aiClient';
+import { listJobApplicants, getApplicantResumeFile, getApplicantResumeText, type JobApplicant } from '../services/aiClient';
 import { saveToShortlist } from '../lib/shortlistData';
 import { useToast } from './Toast';
+import ResumePreview from './ResumePreview';
 import FunnelChart from './FunnelChart';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 import { firestoreDb } from '../lib/firebaseClient';
 import {
     APPLICATION_PIPELINE_STAGES,
@@ -133,7 +137,35 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
     const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
     const [downloadingResumeId, setDownloadingResumeId] = useState<string | null>(null);
+    const [viewingApplicant, setViewingApplicant] = useState<Applicant | null>(null);
+    const [resumeViewText, setResumeViewText] = useState<string | null>(null);
+    const [resumeViewLoading, setResumeViewLoading] = useState(false);
+    const [resumeViewError, setResumeViewError] = useState<string | null>(null);
     const detailRef = useRef<HTMLElement | null>(null);
+
+    // View an applicant's resume TEXT inline (server verifies the caller owns the
+    // job the candidate applied to — same gate as the file download).
+    const handleViewResume = async (applicant: Applicant) => {
+        setViewingApplicant(applicant);
+        setResumeViewText(null);
+        setResumeViewError(null);
+        setResumeViewLoading(true);
+        try {
+            const res = await getApplicantResumeText(applicant.id);
+            setResumeViewText(res.resumeText ?? '');
+        } catch (err) {
+            setResumeViewError(err instanceof Error ? err.message : t('applicant_funnel_resume_view_error'));
+        } finally {
+            setResumeViewLoading(false);
+        }
+    };
+    const closeResumeView = useCallback(() => {
+        setViewingApplicant(null);
+        setResumeViewText(null);
+        setResumeViewError(null);
+    }, []);
+    // Match the app's modal standard: Esc-to-close + body scroll lock while open.
+    useModalBehavior(closeResumeView, Boolean(viewingApplicant));
 
     // Download the original resume FILE of an applicant (server verifies the
     // caller owns the job the candidate applied to). Applicants who only pasted
@@ -895,14 +927,11 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => handleDownloadResume(selectedApplicant)}
-                                            disabled={downloadingResumeId === selectedApplicant.id}
-                                            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                            onClick={() => handleViewResume(selectedApplicant)}
+                                            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                                         >
-                                            <Download className="h-4 w-4" />
-                                            {downloadingResumeId === selectedApplicant.id
-                                                ? t('applicant_funnel_downloading')
-                                                : t('applicant_funnel_download_resume')}
+                                            <Eye className="h-4 w-4" />
+                                            {t('applicant_funnel_view_resume')}
                                         </button>
                                     </div>
                                 </div>
@@ -984,14 +1013,11 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                 <p className="mx-auto mt-2 text-sm leading-6">{t('applicant_funnel_no_analysis_desc')}</p>
                                 <button
                                     type="button"
-                                    onClick={() => handleDownloadResume(selectedApplicant)}
-                                    disabled={downloadingResumeId === selectedApplicant.id}
-                                    className="mx-auto mt-4 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                    onClick={() => handleViewResume(selectedApplicant)}
+                                    className="mx-auto mt-4 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                                 >
-                                    <Download className="h-4 w-4" />
-                                    {downloadingResumeId === selectedApplicant.id
-                                        ? t('applicant_funnel_downloading')
-                                        : t('applicant_funnel_download_resume')}
+                                    <Eye className="h-4 w-4" />
+                                    {t('applicant_funnel_view_resume')}
                                 </button>
                                 {selectedRecommendation && RecommendationIcon && (
                                     <div className={`mt-4 rounded-lg border p-3 text-left ${RECOMMENDATION_TONE_CLASS[selectedRecommendation.tone]}`}>
@@ -1026,6 +1052,73 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                     )}
                 </section>
             </div>
+
+            {viewingApplicant && (
+                <div
+                    className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={closeResumeView}
+                >
+                    <div
+                        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-2xl dark:bg-gray-800"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-3 dark:border-gray-700">
+                            <h3 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-gray-100">
+                                {formatTranslation(t('applicant_funnel_resume_modal_title'), {
+                                    name: viewingApplicant.candidate_name || t('applicant_funnel_unnamed_candidate'),
+                                })}
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={closeResumeView}
+                                aria-label={t('applicant_funnel_resume_close')}
+                                className="shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                            {resumeViewLoading ? (
+                                <div className="flex h-[320px] items-center justify-center">
+                                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-700" />
+                                </div>
+                            ) : resumeViewError ? (
+                                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                                    {resumeViewError}
+                                </div>
+                            ) : resumeViewText && resumeViewText.trim() ? (
+                                <ResumePreview resumeText={resumeViewText} market="" t={t} />
+                            ) : (
+                                <div className="flex h-[320px] items-center justify-center px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    {t('applicant_funnel_resume_empty')}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-5 py-3 dark:border-gray-700">
+                            <button
+                                type="button"
+                                onClick={() => handleDownloadResume(viewingApplicant)}
+                                disabled={downloadingResumeId === viewingApplicant.id}
+                                className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                            >
+                                <Download className="h-4 w-4" />
+                                {downloadingResumeId === viewingApplicant.id
+                                    ? t('applicant_funnel_downloading')
+                                    : t('applicant_funnel_download_resume')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={closeResumeView}
+                                className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                            >
+                                {t('applicant_funnel_resume_close')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

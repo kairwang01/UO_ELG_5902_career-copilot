@@ -39,6 +39,7 @@ export { onUserCreatedFunction        as onUserCreated         } from "./handler
 export { createJobApplicationFunction as createJobApplication  } from "./handlers/jobApplications";
 export { listJobApplicantsFunction    as listJobApplicants     } from "./handlers/listJobApplicants";
 export { getApplicantResumeFileFunction as getApplicantResumeFile } from "./handlers/getApplicantResumeFile";
+export { getApplicantResumeTextFunction as getApplicantResumeText } from "./handlers/getApplicantResumeText";
 export { adminGetDashboardFunction    as adminGetDashboard     } from "./handlers/adminPortal";
 export { adminGetLlmConfigFunction   as adminGetLlmConfig     } from "./handlers/adminPortal";
 export { adminUpdateLlmConfigFunction as adminUpdateLlmConfig } from "./handlers/adminPortal";
