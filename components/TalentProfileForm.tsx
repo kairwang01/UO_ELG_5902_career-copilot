@@ -119,6 +119,8 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const [prefilling, setPrefilling] = useState(false);
   const [prefillMsg, setPrefillMsg] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ basic: true, intention: true });
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Auto-fill from the candidate's resume. Fills ONLY empty fields / empty list
   // sections (never overwrites what the candidate already typed); skills are
@@ -133,7 +135,19 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
     setPrefillMsg(null);
     try {
       const ex = sanitizeExtractedProfile(await extractTalentProfile(resumeText));
-      let filledLists = false;
+      // Decide which sections will actually receive data (from current state) so
+      // we can expand exactly those — the user must see everything before saving.
+      const touched = new Set<string>();
+      (['basic', 'additional'] as const).forEach((id) => {
+        const exObj = ex[id] as Record<string, string> | undefined;
+        if (exObj && Object.keys(exObj).some((k) => { const cur = (profile[id] as Record<string, string>)[k]; return !cur || !String(cur).trim(); })) touched.add(id);
+      });
+      (['education', 'experience', 'projects', 'awards', 'portfolio'] as const).forEach((id) => {
+        const exList = ex[id] as Record<string, string | string[]>[] | undefined;
+        if (exList && exList.length && !(profile[id] ?? []).some(hasMeaningfulEntry)) touched.add(id);
+      });
+      if (ex.skills && Object.keys(ex.skills).some((g) => ((ex.skills as Record<string, string[]>)[g] ?? []).some((s) => !(profile.skills[g] ?? []).includes(s)))) touched.add('skills');
+
       setProfile((p) => {
         const next: TalentProfile = { ...p, basic: { ...p.basic }, additional: { ...p.additional }, skills: { ...p.skills } };
         (['basic', 'additional'] as const).forEach((id) => {
@@ -146,10 +160,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         });
         (['education', 'experience', 'projects', 'awards', 'portfolio'] as const).forEach((id) => {
           const exList = ex[id] as Record<string, string | string[]>[] | undefined;
-          if (exList && exList.length && !(next[id] ?? []).some(hasMeaningfulEntry)) {
-            next[id] = exList;
-            filledLists = true;
-          }
+          if (exList && exList.length && !(next[id] ?? []).some(hasMeaningfulEntry)) next[id] = exList;
         });
         if (ex.skills) {
           Object.keys(ex.skills).forEach((g) => {
@@ -158,7 +169,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         }
         return next;
       });
-      if (filledLists) setOpen((o) => ({ ...o, education: true, experience: true, projects: true, skills: true }));
+      if (touched.size) setOpen((o) => ({ ...o, ...Object.fromEntries([...touched].map((id) => [id, true])) }));
       setPrefillMsg({ kind: 'ok', text: 'Filled from your resume — please review and edit each section before saving.' });
     } catch (err) {
       setPrefillMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Could not read your resume. Please fill the form manually.' });
@@ -169,16 +180,24 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
 
   useEffect(() => {
     let active = true;
-    loadTalentProfile(uid).then((p) => {
-      if (!active) return;
-      // Seed name/email for a brand-new profile.
-      if (!p.basic?.name && seed?.name) p.basic = { ...p.basic, name: seed.name };
-      if (!p.basic?.email && seed?.email) p.basic = { ...p.basic, email: seed.email };
-      setProfile(p);
-      setLoading(false);
-    });
+    setLoading(true);
+    setLoadError(false);
+    loadTalentProfile(uid)
+      .then((p) => {
+        if (!active) return;
+        // Seed name/email for a brand-new profile.
+        if (!p.basic?.name && seed?.name) p.basic = { ...p.basic, name: seed.name };
+        if (!p.basic?.email && seed?.email) p.basic = { ...p.basic, email: seed.email };
+        setProfile(p);
+        setLoading(false);
+      })
+      .catch(() => {
+        // Don't render the form on a failed read — a save would clobber the real
+        // profile with an empty one. Show a retry instead.
+        if (active) { setLoadError(true); setLoading(false); }
+      });
     return () => { active = false; };
-  }, [uid]);
+  }, [uid, reloadKey]);
 
   const ready = useMemo(() => isTalentProfileReady(profile), [profile]);
 
@@ -212,6 +231,14 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
 
   const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-gray-500">
+        <p>Couldn't load your Talent Profile. Check your connection and try again.</p>
+        <button type="button" onClick={() => setReloadKey((k) => k + 1)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">Retry</button>
+      </div>
+    );
+  }
   if (loading) {
     return <div className="flex items-center justify-center py-16 text-gray-500"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading your profile…</div>;
   }
@@ -299,11 +326,11 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       {/* Sticky action bar */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
-          <button type="button" onClick={() => persist(true)} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
+          <button type="button" onClick={() => persist(true)} disabled={saving || prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
           </button>
           {onPrimary && (
-            <button type="button" disabled={saving || !ready} onClick={async () => { const p = await persist(true); onPrimary(p); }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" disabled={saving || prefilling || !ready} onClick={async () => { const p = await persist(true); onPrimary(p); }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
               {primaryLabel ?? 'Save & apply'}
             </button>
           )}

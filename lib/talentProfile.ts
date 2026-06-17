@@ -281,9 +281,19 @@ export function isTalentProfileReady(p: TalentProfile | null | undefined): boole
 // correctly: dates → YYYY-MM-DD, select values snapped to a valid option,
 // chips → clean string[]. This is what makes auto-fill "correct".
 
+function isValidYMD(y: number, m: number, d: number): boolean {
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
 function coerceDate(s: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  if (/^\d{4}-\d{2}$/.test(s)) return `${s}-01`;
+  // Validate the calendar — a malformed value (2024-13, 2024-02-30) would be
+  // silently blanked by <input type=date> yet persisted as garbage. Emit '' instead.
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (ymd) return isValidYMD(+ymd[1], +ymd[2], +ymd[3]) ? s : '';
+  const ym = /^(\d{4})-(\d{2})$/.exec(s);
+  if (ym) return isValidYMD(+ym[1], +ym[2], 1) ? `${s}-01` : '';
   if (/^\d{4}$/.test(s)) return `${s}-01-01`;
   const t = Date.parse(s);
   return Number.isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10);
@@ -339,7 +349,7 @@ export function sanitizeExtractedProfile(raw: unknown): Partial<TalentProfile> {
     } else if (section.kind === 'list' && Array.isArray(data)) {
       const entries = (data as unknown[]).map((it) => coerceEntry(section.fields, it)).filter((e) => Object.keys(e).length);
       if (entries.length) out[section.id] = entries;
-    } else if (section.kind === 'skills' && typeof data === 'object') {
+    } else if (section.kind === 'skills' && data && typeof data === 'object' && !Array.isArray(data)) {
       const skills: Record<string, string[]> = {};
       for (const g of section.groups) {
         const arr = (data as Record<string, unknown>)[g.key];

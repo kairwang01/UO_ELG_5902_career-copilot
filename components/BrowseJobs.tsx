@@ -454,14 +454,22 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       return;
     }
     if (appliedJobs.has(jobId) || applyInFlight.current === jobId) return;
-    // Applying requires a ready Talent Profile.
-    if (!isTalentProfileReady(await loadTalentProfile(session.user.id))) {
-      addToast(t('apply_complete_profile_first'), 'info');
-      return;
-    }
-    applyInFlight.current = jobId;
+    applyInFlight.current = jobId; // set before the profile read so a double-click can't double-apply
     setApplyingId(jobId);
     try {
+      // Applying requires a ready Talent Profile. A read FAILURE must not be read
+      // as "no profile" (which would mislead a ready candidate) — abort + retry.
+      let profileReady = false;
+      try {
+        profileReady = isTalentProfileReady(await loadTalentProfile(session.user.id));
+      } catch {
+        addToast(t('browse_jobs_apply_error'), 'error');
+        return;
+      }
+      if (!profileReady) {
+        addToast(t('apply_complete_profile_first'), 'info');
+        return;
+      }
       const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
       await createJobApplication({ jobId, compatibilityScore: null });
       setAppliedJobs((prev) => new Set(prev).add(jobId));

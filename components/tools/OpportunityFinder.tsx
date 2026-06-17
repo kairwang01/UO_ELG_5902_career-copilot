@@ -71,20 +71,28 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const [introCache, setIntroCache] = useState<Record<string, IntroResult>>({});
   const [introLoading, setIntroLoading] = useState<Record<string, boolean>>({});
 
+  const applyInFlightRef = useRef<string | null>(null);
   const applyToInternalJob = async (jobId: string, compatibilityScore: number | undefined) => {
     if (!session?.user) {
         addToast(t('tool_opportunity_finder_signin_required'), 'error');
         return;
     }
-
-    // Applying requires a ready Talent Profile (the candidate's structured info
-    // that this application carries and employers review).
-    if (!isTalentProfileReady(await loadTalentProfile(session.user.id))) {
-        addToast(t('apply_complete_profile_first'), 'info');
-        return;
-    }
-
+    if (applyInFlightRef.current === jobId) return; // guard against double-clicks
+    applyInFlightRef.current = jobId;
     try {
+        // Applying requires a ready Talent Profile. A read FAILURE must not be read
+        // as "no profile" (which would mislead a ready candidate) — abort + retry.
+        let profileReady = false;
+        try {
+            profileReady = isTalentProfileReady(await loadTalentProfile(session.user.id));
+        } catch {
+            addToast(t('tool_opportunity_finder_apply_error'), 'error');
+            return;
+        }
+        if (!profileReady) {
+            addToast(t('apply_complete_profile_first'), 'info');
+            return;
+        }
         // Write goes through a Cloud Function: employer_id / job_title are read
         // server-side from the authoritative job_postings doc (not forgeable from
         // the client), duplicates are rejected atomically, and Firestore rules
@@ -96,6 +104,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     } catch (err) {
         console.error('Error applying to job:', err);
         addToast(t('tool_opportunity_finder_apply_error'), 'error');
+    } finally {
+        applyInFlightRef.current = null;
     }
   };
 

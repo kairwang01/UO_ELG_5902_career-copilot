@@ -9,13 +9,12 @@ import { firestoreDb } from '../lib/firebaseClient';
 import { emptyTalentProfile, type TalentProfile } from '../lib/talentProfile';
 
 export async function loadTalentProfile(uid: string): Promise<TalentProfile> {
-  try {
-    const snap = await getDoc(doc(firestoreDb, 'talent_profiles', uid));
-    if (snap.exists()) {
-      return { ...emptyTalentProfile(), ...(snap.data() as Partial<TalentProfile>) } as TalentProfile;
-    }
-  } catch (e) {
-    console.error('loadTalentProfile failed:', e);
+  // Throws on a real read failure (network / permission) so callers can tell a
+  // genuine "no profile yet" (empty) apart from "couldn't read". Never silently
+  // returns empty — a save would then persist that empty over the real profile.
+  const snap = await getDoc(doc(firestoreDb, 'talent_profiles', uid));
+  if (snap.exists()) {
+    return { ...emptyTalentProfile(), ...(snap.data() as Partial<TalentProfile>) } as TalentProfile;
   }
   return emptyTalentProfile();
 }
