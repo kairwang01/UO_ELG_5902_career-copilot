@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { UserProfile } from '../../types';
 import LanguageSwitcher from '../LanguageSwitcher';
+import BrandLogo from '../BrandLogo';
 
 export type PortalPage =
   | 'dashboard'
@@ -86,27 +87,13 @@ export function PortalSidebar({
     >
       {/* Logo — clicking goes back to the business homepage */}
       <div className="p-6">
-        <div className="flex gap-3">
-          <button onClick={onGoHome} className="flex-shrink-0 group self-center" aria-label={t('portal_back_home_aria')}>
-            <svg className="w-10 h-10 transition-opacity group-hover:opacity-80" fill="none" viewBox="0 0 32 32">
-              <path
-                d="M12 16H20M12 21.3333H20M22.6667 28H9.33333C8.62609 28 7.94781 27.719 7.44771 27.219C6.94762 26.7189 6.66667 26.0406 6.66667 25.3333V6.66667C6.66667 5.95942 6.94762 5.28115 7.44771 4.78105C7.94781 4.28095 8.62609 4 9.33333 4H16.7813C17.1349 4.00008 17.474 4.1406 17.724 4.39067L24.9427 11.6093C25.1927 11.8593 25.3333 12.1984 25.3333 12.552V25.3333C25.3333 26.0406 25.0524 26.7189 24.5523 27.219C24.0522 27.719 23.3739 28 22.6667 28Z"
-                stroke="#1D4ED8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              />
-            </svg>
-          </button>
-          <div className="flex flex-col justify-center">
-            <button onClick={onGoHome} className="group text-left">
-              <div className={`font-semibold text-sm ${dm ? 'text-white' : 'text-gray-900'} group-hover:text-[#1d4ed8] transition-colors`}>
-                Career CoPilot
-              </div>
-            </button>
-            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_subtitle')}</div>
-          </div>
-        </div>
+        <button
+          onClick={onGoHome}
+          className="group flex min-w-0 text-left transition-opacity hover:opacity-85"
+          aria-label={t('portal_back_home_aria')}
+        >
+          <BrandLogo size="md" surface={dm ? 'dark' : 'light'} subtitle={t('portal_subtitle')} />
+        </button>
       </div>
 
       <div className="flex-1 px-4 space-y-2 overflow-y-auto">

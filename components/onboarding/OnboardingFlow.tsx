@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, FileText, Sparkles, Upload, Zap } from 'lucide-react';
+import { CalendarDays, FileText, Sparkles, Upload } from 'lucide-react';
 import { data } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { parseFile } from '../../services/fileHelpers';
 import { uploadResumeFile, deleteResumeFile, type ResumeFileMeta } from '../../services/resumeStorage';
+import { BrandMark } from '../BrandLogo';
 import { loadJobPreferences, saveJobPreferences } from '../../hooks/useJobPreferences';
 import {
   CAREER_FIELDS,
@@ -239,9 +240,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
       {/* Top bar: brand + progress + skip */}
       <header className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur px-4 pt-4 pb-3 sm:px-8">
         <div className="mx-auto flex w-full max-w-lg items-center gap-3">
-          <div className="rounded-xl bg-blue-600 p-1.5 text-white" aria-hidden="true">
-            <Zap className="h-4 w-4" />
-          </div>
+          <BrandMark className="h-8 w-8 shrink-0" />
           <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
             <div
               className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out"

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { SiteLanguageSwitcher } from './SiteLanguageSwitcher';
+import BrandLogo from '../../components/BrandLogo';
 
 export const SiteFooter: React.FC = () => {
   const { t } = useMarketingI18n();
@@ -19,8 +20,8 @@ export const SiteFooter: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           <div className="col-span-2 md:col-span-1">
-            <Link to={SITE_ROUTES.home} className="font-semibold text-[var(--site-text)]">
-              Career CoPilot
+            <Link to={SITE_ROUTES.home} className="inline-flex">
+              <BrandLogo size="sm" />
             </Link>
             <p className="mt-2 text-sm text-[var(--site-text-muted)]">{t('site_footer_tagline')}</p>
           </div>

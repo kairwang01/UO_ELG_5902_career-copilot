@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
+import BrandLogo from '../BrandLogo';
 
 export interface AdminNavItem {
   id: string;
@@ -38,20 +39,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
       <aside className="hidden md:flex w-60 lg:w-64 shrink-0 flex-col bg-[#0f2744] text-white">
         <div className="px-5 py-6 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-md bg-white/10 flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold truncate">Career CoPilot</p>
-              <p className="text-[10px] text-blue-200/70 font-medium">Admin Console</p>
-            </div>
+            <BrandLogo size="sm" surface="dark" subtitle="Admin Console" />
           </div>
         </div>
 

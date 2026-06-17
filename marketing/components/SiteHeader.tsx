@@ -5,6 +5,7 @@ import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { SiteMobileNav } from './SiteMobileNav';
 import { SiteLanguageSwitcher } from './SiteLanguageSwitcher';
 import { useSiteSession } from '../hooks/useSiteSession';
+import BrandLogo from '../../components/BrandLogo';
 
 export const SiteHeader: React.FC = () => {
   const { pathname } = useLocation();
@@ -26,9 +27,9 @@ export const SiteHeader: React.FC = () => {
             logo keeps you on your current surface. */}
         <Link
           to={isEmployerSurface ? SITE_ROUTES.employers : SITE_ROUTES.home}
-          className="flex items-center text-base sm:text-lg font-semibold text-[var(--site-text)] tracking-tight truncate shrink-0"
+          className="flex min-w-0 shrink-0 items-center gap-2"
         >
-          Career CoPilot
+          <BrandLogo size="md" />
           {isEmployerSurface && (
             <span className="ml-2 rounded-md bg-[var(--site-action)]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--site-action)]">
               {t('site_badge_business')}
