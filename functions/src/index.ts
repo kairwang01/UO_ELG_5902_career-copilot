@@ -35,6 +35,7 @@ export { mockInterviewFunction        as mockInterview         } from "./handler
 export { generateCoverLetterFunction  as generateCoverLetter   } from "./handlers/generateCoverLetter";
 export { generateCareerPathFunction   as generateCareerPath    } from "./handlers/generateCareerPath";
 export { setSubscriptionStatusFunction as setSubscriptionStatus } from "./handlers/setSubscriptionStatus";
+export { grantMonthlyCreditsFunction  as grantMonthlyCredits   } from "./handlers/grantMonthlyCredits";
 export { onUserCreatedFunction        as onUserCreated         } from "./handlers/onUserCreated";
 export { createJobApplicationFunction as createJobApplication  } from "./handlers/jobApplications";
 export { listJobApplicantsFunction    as listJobApplicants     } from "./handlers/listJobApplicants";

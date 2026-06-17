@@ -12,10 +12,14 @@
  *   - "pending_<plan>"      → candidate plan "<plan>"   (e.g. pending_essentials → essentials)
  *   - "<plan>"              → used as-is (already stripped, or "free", or a dev-mode key)
  *
- * CREDITS POLICY (deliberate): this handler sets subscription_status ONLY. It does
- * NOT grant credits — granting here would let the bypassable dev-mode / pending-plan
- * paths act as a free credit faucet and would reset balances on every sign-in.
- * Plan credits are the future Stripe webhook's responsibility.
+ * CREDITS POLICY (updated 2026-06-17): selecting a plan now grants that plan's
+ * monthly AI-credit allotment (see credits/planCredits.ts) and the balance
+ * ACCUMULATES — matching the pricing copy "Unused credits never expire". To stop the
+ * bypassable dev-mode / pending-plan paths from acting as a free credit faucet, the
+ * grant is applied AT MOST ONCE per calendar month, tracked in a server-only
+ * `credit_renewals/{uid}` doc (NOT a field on users/{uid}, which would trip the
+ * client firestore.rules validUser allowlist). The grantMonthlyCredits scheduled
+ * function applies the same allotment on the 1st of each month thereafter.
  *
  * Frontend integration:
  *   const fn = httpsCallable(getFunctions(), "setSubscriptionStatus");
@@ -26,6 +30,11 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requireAuth } from "../middleware/auth";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
+import {
+  CREDIT_RENEWALS_COLLECTION,
+  currentCreditPeriod,
+  monthlyCreditsFor,
+} from "../credits/planCredits";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -103,18 +112,40 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
   const companyName = cleanName(data?.companyName, 160);
 
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
+  const renewalRef = db.collection(CREDIT_RENEWALS_COLLECTION).doc(uid);
+
+  // This month's allotment for the selected plan (0 for free / add-ons / unknown).
+  const period = currentCreditPeriod();
+  const monthlyGrant = monthlyCreditsFor(plan);
 
   // Transaction so this can't race the onUserCreated trigger (which may create the
   // doc with the default role:'candidate'). Whichever writer commits first wins the
   // read; the second aborts+retries, re-reads, and takes the no-clobber update path
   // — so a business account can never settle back to role:'candidate'.
   return db.runTransaction(async (tx) => {
+    // All reads must precede all writes in a Firestore transaction.
     const snap = await tx.get(userRef);
+    const renewalSnap = await tx.get(renewalRef);
     const now = admin.firestore.FieldValue.serverTimestamp();
 
+    // Grant this plan's monthly credits at most once per calendar month. A repeat
+    // selection (or re-selecting after this month was already granted) does NOT
+    // re-grant — that closes the free-credit faucet on the bypassable plan paths.
+    const alreadyGrantedThisPeriod = renewalSnap.exists && renewalSnap.get("period") === period;
+    const grantNow = monthlyGrant > 0 && !alreadyGrantedThisPeriod;
+
+    if (grantNow) {
+      tx.set(
+        renewalRef,
+        { period, plan, granted_amount: monthlyGrant, granted_at: now },
+        { merge: true },
+      );
+    }
+
     if (!snap.exists) {
+      const startingCredits = INITIAL_CREDITS + (grantNow ? monthlyGrant : 0);
       const doc: Record<string, unknown> = {
-        [USER_FIELDS.credits]: INITIAL_CREDITS,
+        [USER_FIELDS.credits]: startingCredits,
         [USER_FIELDS.role]: audience === "business" ? "employer" : "candidate",
         [USER_FIELDS.subscriptionStatus]: plan,
         [USER_FIELDS.createdAt]: now,
@@ -125,16 +156,21 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
       tx.set(userRef, doc);
       return {
         subscription_status: plan,
-        credits: INITIAL_CREDITS,
+        credits: startingCredits,
         role: audience === "business" ? "employer" : "candidate",
       };
     }
+
+    const baseCredits: number = snap.get(USER_FIELDS.credits) ?? INITIAL_CREDITS;
+    const newCredits = baseCredits + (grantNow ? monthlyGrant : 0);
 
     const patch: Record<string, unknown> = {
       [USER_FIELDS.subscriptionStatus]: plan,
       [USER_FIELDS.updatedAt]: now,
     };
-    if (snap.get(USER_FIELDS.credits) == null) patch[USER_FIELDS.credits] = INITIAL_CREDITS;
+    // Always write the (possibly unchanged) balance so a missing field is backfilled
+    // and a fresh grant is persisted in the same atomic write.
+    patch[USER_FIELDS.credits] = newCredits;
     if (snap.get(USER_FIELDS.createdAt) == null) patch[USER_FIELDS.createdAt] = now;
     if (audience === "business") patch[USER_FIELDS.role] = "employer";
     // Backfill name/org from signup only when the doc doesn't already carry one,
@@ -147,10 +183,9 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
     tx.set(userRef, patch, { merge: true });
 
     // Return the authoritative values so the frontend can sync its local state.
-    const credits: number = snap.get(USER_FIELDS.credits) ?? INITIAL_CREDITS;
     return {
       subscription_status: plan,
-      credits,
+      credits: newCredits,
       role: audience === "business" ? "employer" : snap.get(USER_FIELDS.role),
     };
   });
