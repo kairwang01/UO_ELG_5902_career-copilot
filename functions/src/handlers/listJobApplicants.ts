@@ -29,6 +29,11 @@ import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
+import {
+  normalizeTalentProfile,
+  talentProfileToMatchText,
+  type TalentProfileSnapshot,
+} from "../utils/talentProfile";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -48,6 +53,7 @@ interface SafeApplicant {
   strengths: string[];
   potentialGaps: string[];
   suggestedQuestions: string[];
+  talent_profile: TalentProfileSnapshot | null;
 }
 
 interface ApplicationRow {
@@ -81,7 +87,7 @@ function isoFromTimestamp(value: unknown): string | null {
   return null;
 }
 
-function emptyApplicant(a: ApplicationRow): SafeApplicant {
+function emptyApplicant(a: ApplicationRow, talentProfile: TalentProfileSnapshot | null): SafeApplicant {
   return {
     id: a.application_id,
     candidate_name: a.candidate_name,
@@ -92,6 +98,7 @@ function emptyApplicant(a: ApplicationRow): SafeApplicant {
     strengths: [],
     potentialGaps: [],
     suggestedQuestions: [],
+    talent_profile: talentProfile,
   };
 }
 
@@ -141,19 +148,35 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
     })
     .filter((a) => a.candidate_id);
 
-  // 3. Fetch candidate docs (Admin SDK) — resume_text never leaves the server.
+  // 3. Fetch candidate docs + Talent Profiles (Admin SDK). Resume text never
+  //    leaves the server; structured Talent Profiles are returned only for this
+  //    job-owning employer and are also used as match context.
+  //
   //    We also read the live name here: candidate_name on the application is a
   //    snapshot frozen at apply time, and a write race during user provisioning
   //    can leave it empty (→ "Unnamed Candidate" in the UI). Reading full_name
   //    live recovers the name for both existing and future applications.
-  const resumeById = new Map<string, string>();
   const liveNameById = new Map<string, string>();
+  const talentProfileById = new Map<string, TalentProfileSnapshot | null>();
+  const candidateContextById = new Map<string, string>();
   await Promise.all(
     Array.from(new Set(applications.map((a) => a.candidate_id))).map(async (cid) => {
-      const snap = await db.collection("users").doc(cid).get();
+      const [snap, talentSnap] = await Promise.all([
+        db.collection("users").doc(cid).get(),
+        db.collection("talent_profiles").doc(cid).get(),
+      ]);
       const data = snap.exists ? snap.data() : undefined;
       const text = data?.resume_text;
-      resumeById.set(cid, typeof text === "string" ? text : "");
+      const resumeText = typeof text === "string" ? text : "";
+      const talentProfile = normalizeTalentProfile(talentSnap.exists ? talentSnap.data() : undefined);
+      talentProfileById.set(cid, talentProfile);
+      const profileText = talentProfileToMatchText(talentProfile);
+      candidateContextById.set(
+        cid,
+        [resumeText.trim(), profileText ? `Structured Talent Profile:\n${profileText}` : ""]
+          .filter(Boolean)
+          .join("\n\n"),
+      );
       const fullName = typeof data?.full_name === "string" ? data.full_name.trim() : "";
       const email = typeof data?.email === "string" ? data.email.trim() : "";
       liveNameById.set(cid, fullName || email);
@@ -168,7 +191,8 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
   }
 
   // 4. Run analyzeCandidateMatch per applicant ON THE SERVER. Applicants without
-  //    a resume (or beyond the cap) are returned unanalyzed rather than dropped.
+  //    resume/profile context (or beyond the cap) are returned unanalyzed rather
+  //    than dropped.
   await ensurePlatformCaches();
   const spec = TOOL_REGISTRY["analyzeCandidateMatch"];
   if (!spec) {
@@ -181,7 +205,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
 
   const analyzable =
     jobDescription.length > 0
-      ? applications.filter((a) => (resumeById.get(a.candidate_id) ?? "").trim().length > 0)
+      ? applications.filter((a) => (candidateContextById.get(a.candidate_id) ?? "").trim().length > 0)
       : [];
   const pool = analyzable.slice(0, MATCH_CANDIDATE_CAP);
   const poolIds = new Set(pool.map((a) => a.application_id));
@@ -189,13 +213,13 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
   const analyzed = await Promise.all(
     pool.map(async (a): Promise<SafeApplicant> => {
       try {
-        const llmRequest = spec.build({ resumeText: resumeById.get(a.candidate_id)!, jobDescription });
+        const llmRequest = spec.build({ resumeText: candidateContextById.get(a.candidate_id)!, jobDescription });
         const result = await provider.generate(llmRequest);
         const parsed = (result.raw !== undefined ? result.raw : tryParseJson(result.text)) as
           | Record<string, unknown>
           | undefined;
         if (!parsed || typeof parsed.score !== "number") {
-          return emptyApplicant(a);
+          return emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null);
         }
         return {
           id: a.application_id,
@@ -207,15 +231,18 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
           strengths: strArr(parsed.strengths),
           potentialGaps: strArr(parsed.potentialGaps),
           suggestedQuestions: strArr(parsed.suggestedQuestions),
+          talent_profile: talentProfileById.get(a.candidate_id) ?? null,
         };
       } catch (e) {
         console.error(`listJobApplicants: match failed for candidate ${a.candidate_id}:`, e);
-        return emptyApplicant(a);
+        return emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null);
       }
     }),
   );
 
-  const unanalyzed = applications.filter((a) => !poolIds.has(a.application_id)).map(emptyApplicant);
+  const unanalyzed = applications
+    .filter((a) => !poolIds.has(a.application_id))
+    .map((a) => emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null));
 
   const applicants = [...analyzed, ...unanalyzed].sort(
     (x, y) => y.compatibility_score - x.compatibility_score,

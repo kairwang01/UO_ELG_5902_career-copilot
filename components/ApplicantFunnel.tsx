@@ -5,14 +5,19 @@ import { doc, updateDoc } from 'firebase/firestore';
 import {
     ArrowLeft,
     ArrowRight,
+    BookOpen,
+    Briefcase,
     Clock3,
     Download,
     Eye,
     FileWarning,
+    GraduationCap,
+    Link as LinkIcon,
     MessageSquare,
     RotateCcw,
     Search,
     SlidersHorizontal,
+    Sparkles,
     Star,
     Target,
     Users,
@@ -20,6 +25,7 @@ import {
 } from 'lucide-react';
 import { listJobApplicants, getApplicantResumeFile, getApplicantResumeText, type JobApplicant } from '../services/aiClient';
 import { saveToShortlist } from '../lib/shortlistData';
+import { TALENT_PROFILE_SCHEMA, hasMeaningfulEntry, type Section, type TalentProfile } from '../lib/talentProfile';
 import { useToast } from './Toast';
 import ResumePreview from './ResumePreview';
 import FunnelChart from './FunnelChart';
@@ -81,6 +87,217 @@ function hasApplicantAnalysis(applicant: Applicant): boolean {
         (applicant.compatibility_score ?? 0) > 0,
     );
 }
+
+function formatTalentValue(value: unknown): string {
+    if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).join(', ');
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function talentEntries(record: unknown): Array<[string, string]> {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return [];
+    return Object.entries(record as Record<string, unknown>)
+        .map(([key, value]) => [key, formatTalentValue(value)] as [string, string])
+        .filter(([, value]) => value.length > 0);
+}
+
+function talentProfileHasData(profile: TalentProfile | null | undefined): boolean {
+    if (!profile) return false;
+    const data = profile as unknown as Record<string, unknown>;
+    return TALENT_PROFILE_SCHEMA.some((section) => {
+        const sectionData = data[section.id];
+        if (section.kind === 'skills') {
+            return Object.values(profile.skills ?? {}).some((values) => values.length > 0);
+        }
+        if (section.kind === 'list') {
+            return Array.isArray(sectionData) && sectionData.some((item) => hasMeaningfulEntry(item as Record<string, string | string[]>));
+        }
+        return talentEntries(sectionData).length > 0;
+    });
+}
+
+function talentProfileSearchTokens(profile: TalentProfile | null | undefined): string[] {
+    if (!profile) return [];
+    const tokens: string[] = [];
+    const data = profile as unknown as Record<string, unknown>;
+    for (const section of TALENT_PROFILE_SCHEMA) {
+        const sectionData = data[section.id];
+        if (section.kind === 'skills') {
+            Object.values(profile.skills ?? {}).forEach((values) => tokens.push(...values));
+        } else if (section.kind === 'list' && Array.isArray(sectionData)) {
+            sectionData.forEach((entry) => talentEntries(entry).forEach(([, value]) => tokens.push(value)));
+        } else {
+            talentEntries(sectionData).forEach(([, value]) => tokens.push(value));
+        }
+    }
+    return tokens;
+}
+
+function collectTalentSkills(profile: TalentProfile | null | undefined): string[] {
+    if (!profile?.skills) return [];
+    return Object.values(profile.skills).flat().filter(Boolean).slice(0, 10);
+}
+
+function getTalentCurrentRole(profile: TalentProfile | null | undefined): string | undefined {
+    const targetRole = typeof profile?.intention?.targetRole === 'string' ? profile.intention.targetRole.trim() : '';
+    const latestRole = typeof profile?.experience?.[0]?.role === 'string' ? profile.experience[0].role.trim() : '';
+    return targetRole || latestRole || undefined;
+}
+
+const TALENT_SECTION_ICONS: Record<string, React.ElementType> = {
+    basic: Users,
+    intention: Target,
+    education: GraduationCap,
+    experience: Briefcase,
+    projects: Sparkles,
+    skills: BookOpen,
+    awards: Star,
+    portfolio: LinkIcon,
+    references: MessageSquare,
+    additional: FileWarning,
+};
+
+const TalentProfileSummary: React.FC<{ profile: TalentProfile | null | undefined; t: (key: string) => string }> = ({ profile, t }) => {
+    if (!talentProfileHasData(profile)) {
+        return (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+                {t('applicant_funnel_talent_profile_empty')}
+            </div>
+        );
+    }
+
+    const safeProfile = profile as TalentProfile;
+    const data = safeProfile as unknown as Record<string, unknown>;
+    const topSignals = [
+        { label: t('applicant_funnel_talent_profile_target'), value: formatTalentValue(safeProfile.intention?.targetRole) },
+        { label: t('applicant_funnel_talent_profile_location'), value: [safeProfile.basic?.city, safeProfile.basic?.country].map(formatTalentValue).filter(Boolean).join(', ') },
+        {
+            label: t('applicant_funnel_talent_profile_history'),
+            value: String((safeProfile.education?.length ?? 0) + (safeProfile.experience?.length ?? 0)),
+        },
+        { label: t('applicant_funnel_talent_profile_skills'), value: String(collectTalentSkills(safeProfile).length) },
+    ].filter((signal) => signal.value && signal.value !== '0');
+
+    const renderSection = (section: Section) => {
+        const Icon = TALENT_SECTION_ICONS[section.id] ?? FileWarning;
+        if (section.kind === 'skills') {
+            const groups = section.groups
+                .map((group) => ({ ...group, values: safeProfile.skills?.[group.key] ?? [] }))
+                .filter((group) => group.values.length > 0);
+            if (groups.length === 0) return null;
+            return (
+                <div key={section.id} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                    <h5 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <Icon className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                        {section.title}
+                    </h5>
+                    <div className="mt-3 space-y-3">
+                        {groups.map((group) => (
+                            <div key={group.key}>
+                                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{group.label}</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {group.values.map((value) => (
+                                        <span key={`${group.key}-${value}`} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                                            {value}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        if (section.kind === 'list') {
+            const items = Array.isArray(data[section.id]) ? data[section.id] as Record<string, string | string[]>[] : [];
+            const meaningful = items.filter(hasMeaningfulEntry);
+            if (meaningful.length === 0) return null;
+            return (
+                <div key={section.id} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                    <h5 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <Icon className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                        {section.title}
+                    </h5>
+                    <div className="mt-3 space-y-3">
+                        {meaningful.map((item, index) => {
+                            const title = formatTalentValue(item[section.itemTitleKey]) || `${section.itemLabel} ${index + 1}`;
+                            const rows = section.fields
+                                .map((field) => [field.label, formatTalentValue(item[field.key])] as [string, string])
+                                .filter(([, value]) => value.length > 0);
+                            return (
+                                <div key={`${section.id}-${index}`} className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/70">
+                                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</p>
+                                    <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+                                        {rows.map(([label, value]) => (
+                                            <div key={`${label}-${value}`} className="min-w-0">
+                                                <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</dt>
+                                                <dd className="break-words text-sm leading-5 text-gray-700 dark:text-gray-300">{value}</dd>
+                                            </div>
+                                        ))}
+                                    </dl>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        }
+
+        const rows = section.fields
+            .map((field) => [field.label, formatTalentValue((data[section.id] as Record<string, unknown> | undefined)?.[field.key])] as [string, string])
+            .filter(([, value]) => value.length > 0);
+        if (rows.length === 0) return null;
+        return (
+            <div key={section.id} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                <h5 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    <Icon className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                    {section.title}
+                </h5>
+                <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {rows.map(([label, value]) => (
+                        <div key={`${section.id}-${label}`} className="min-w-0">
+                            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</dt>
+                            <dd className="break-words text-sm leading-5 text-gray-700 dark:text-gray-300">{value}</dd>
+                        </div>
+                    ))}
+                </dl>
+            </div>
+        );
+    };
+
+    return (
+        <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 dark:border-blue-900/60 dark:bg-blue-950/10">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h4 className="text-base font-bold text-gray-900 dark:text-gray-100">{t('applicant_funnel_talent_profile_title')}</h4>
+                    <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">{t('applicant_funnel_talent_profile_desc')}</p>
+                </div>
+                <span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    safeProfile.status === 'complete'
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                }`}>
+                    {safeProfile.status === 'complete' ? t('applicant_funnel_talent_profile_complete') : t('applicant_funnel_talent_profile_draft')}
+                </span>
+            </div>
+
+            {topSignals.length > 0 && (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {topSignals.map((signal) => (
+                        <div key={signal.label} className="rounded-lg bg-white px-3 py-2 dark:bg-gray-900/70">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{signal.label}</p>
+                            <p className="mt-1 truncate text-sm font-semibold text-gray-800 dark:text-gray-100">{signal.value}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="mt-4 grid gap-3">
+                {TALENT_PROFILE_SCHEMA.map(renderSection)}
+            </div>
+        </div>
+    );
+};
 
 function isWithinDays(dateValue: string | null, days: number): boolean {
     if (!dateValue) return false;
@@ -290,9 +507,13 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             await saveToShortlist(employerUid, {
                 candidate_name: applicant.candidate_name || t('applicant_funnel_unnamed_candidate'),
                 candidate_snapshot: {
-                    summary: applicant.summary,
-                    skills: (applicant.strengths ?? []).slice(0, 10),
-                    current_role: undefined,
+                    summary: typeof applicant.talent_profile?.additional?.overallStrengths === 'string'
+                        ? applicant.talent_profile.additional.overallStrengths
+                        : applicant.summary,
+                    skills: collectTalentSkills(applicant.talent_profile).length > 0
+                        ? collectTalentSkills(applicant.talent_profile)
+                        : (applicant.strengths ?? []).slice(0, 10),
+                    current_role: getTalentCurrentRole(applicant.talent_profile),
                 },
                 job_id: job.id,
                 job_title: job.title,
@@ -376,6 +597,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                     ...applicant.strengths,
                     ...applicant.potentialGaps,
                     ...applicant.suggestedQuestions,
+                    ...talentProfileSearchTokens(applicant.talent_profile),
                 ].join(' ').toLowerCase();
                 return haystack.includes(kw);
             });
@@ -933,6 +1155,11 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                                     {t('applicant_funnel_needs_review_chip')}
                                                 </span>
                                             )}
+                                            {talentProfileHasData(applicant.talent_profile) && (
+                                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                                    {t('applicant_funnel_talent_profile_chip')}
+                                                </span>
+                                            )}
                                         </div>
                                     </button>
                                 );
@@ -1014,6 +1241,8 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                 )}
                             </div>
 
+                            <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
+
                             {selectedRecommendation && RecommendationIcon && (
                                 <div className={`rounded-xl border p-4 ${RECOMMENDATION_TONE_CLASS[selectedRecommendation.tone]}`}>
                                     <div className="flex items-start gap-3">
@@ -1059,8 +1288,9 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             )}
                         </div>
                     ) : (
-                        <div className="flex h-full min-h-[360px] items-center justify-center text-center text-gray-500 dark:text-gray-400">
-                            <div className="max-w-sm rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-900">
+                        <div key={selectedApplicant.id} className="animate-panel-expand space-y-5">
+                            <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
+                            <div className="mx-auto max-w-sm rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
                                 <FileWarning className="mx-auto h-10 w-10 text-amber-500" />
                                 <p className="mt-3 font-semibold text-gray-700 dark:text-gray-200">
                                     {formatTranslation(t('applicant_funnel_no_analysis_title'), {

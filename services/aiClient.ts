@@ -13,6 +13,7 @@
 
 import { httpsCallable } from 'firebase/functions';
 import { firebaseFunctions } from '../lib/firebaseClient';
+import type { TalentProfile } from '../lib/talentProfile';
 import type {
   AnalysisResult, ResumeImage,
   FormattedResume, CoverLetter, LinkedInOptimization, CareerPathResult,
@@ -303,6 +304,7 @@ export interface JobApplicant {
   strengths: string[];
   potentialGaps: string[];
   suggestedQuestions: string[];
+  talent_profile: TalentProfile | null;
 }
 
 export interface ListJobApplicantsResult {
