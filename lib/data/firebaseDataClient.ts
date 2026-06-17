@@ -70,6 +70,7 @@ const toSession = (user: User | null): AppSession | null => (
 const USER_DOCUMENT_FIELDS = new Set([
   'role',
   'full_name',
+  'birth_date',
   'avatar_url',
   'subscription_status',
   'resume_text',
@@ -129,6 +130,7 @@ const mapProfile = (id: string, data: DocumentData): UserProfile => ({
   id,
   updated_at: toIsoString(data.updated_at) ?? '',
   full_name: data.full_name ?? null,
+  birth_date: data.birth_date ?? null,
   avatar_url: data.avatar_url ?? null,
   subscription_status: data.subscription_status ?? 'free',
   role: data.role ?? 'candidate',

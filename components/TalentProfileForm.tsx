@@ -197,7 +197,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         if (active) { setLoadError(true); setLoading(false); }
       });
     return () => { active = false; };
-  }, [uid, reloadKey]);
+  }, [uid, reloadKey, seed?.name, seed?.email]);
 
   const ready = useMemo(() => isTalentProfileReady(profile), [profile]);
 

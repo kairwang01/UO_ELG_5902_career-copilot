@@ -7,6 +7,7 @@ import { uploadResumeFile, deleteResumeFile, type ResumeFileMeta } from '../../s
 import { loadJobPreferences, saveJobPreferences } from '../../hooks/useJobPreferences';
 import {
   CAREER_FIELDS,
+  loadBirthdayLocal,
   loadPendingOnboardingName,
   markOnboardingDone,
   saveBirthdayLocal,
@@ -19,8 +20,8 @@ import {
  * Collects name (required), birthday (optional), resume (optional) and target
  * career fields (optional), then asks for privacy consent BEFORE anything is
  * persisted — until the final step every answer lives only in component state.
- * Persistence stays inside existing channels: profile.full_name, the
- * user-reviewed resume_text and JobPreferences.
+ * Persistence stays inside existing channels: profile.full_name/birth_date,
+ * the user-reviewed resume_text and JobPreferences.
  */
 
 interface OnboardingFlowProps {
@@ -83,7 +84,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
   const initialName = splitFullName(onboardingNameSource(profile));
   const [firstName, setFirstName] = useState(initialName.firstName);
   const [lastName, setLastName] = useState(initialName.lastName);
-  const [birthday, setBirthday] = useState('');
+  const [birthday, setBirthday] = useState(profile.birth_date || loadBirthdayLocal(uid));
   const [resumeDraft, setResumeDraft] = useState('');
   const [resumeSource, setResumeSource] = useState<string | null>(null); // filename or 'paste'
   const [resumeFileMeta, setResumeFileMeta] = useState<ResumeFileMeta | null>(null);
@@ -171,6 +172,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
       // 1) Name → profile (allowlisted field).
       const { error } = await data.profiles.update(uid, {
         full_name: fullName,
+        birth_date: birthday || null,
         updated_at: new Date().toISOString(),
       });
       if (error) throw new Error(error.message);
@@ -204,8 +206,8 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
         });
       }
 
-      // 3) Optional birthday → local until the profile schema gains a field.
-      if (birthday) saveBirthdayLocal(uid, birthday);
+      // 3) Optional birthday → also mirror locally for old-client compatibility.
+      saveBirthdayLocal(uid, birthday);
 
       setPhase('done');
     } catch {

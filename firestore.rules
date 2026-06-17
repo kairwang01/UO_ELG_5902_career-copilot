@@ -86,6 +86,12 @@ service cloud.firestore {
         data[field] is bool;
     }
 
+    function optionalDateString(data, field) {
+      return !hasField(data, field) ||
+        data[field] == null ||
+        (data[field] is string && data[field].matches("^\\d{4}-\\d{2}-\\d{2}$"));
+    }
+
     function unchanged(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
     }
@@ -120,6 +126,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           "role",
           "full_name",
+          "birth_date",
           "email",
           "preferred_language",
           "avatar_url",
@@ -158,6 +165,7 @@ service cloud.firestore {
         data.created_at is timestamp &&
         optionalTimestamp(data, "updated_at") &&
         optionalString(data, "full_name", 120) &&
+        optionalDateString(data, "birth_date") &&
         optionalString(data, "email", 320) &&
         optionalString(data, "preferred_language", 20) &&
         optionalUrl(data, "avatar_url", 2048) &&
@@ -194,10 +202,12 @@ service cloud.firestore {
     function validLegacyUserProfileUpdate(data) {
       return data.diff(resource.data).affectedKeys().hasOnly([
           "full_name",
+          "birth_date",
           "avatar_url",
           "updated_at"
         ]) &&
         optionalString(data, "full_name", 120) &&
+        optionalDateString(data, "birth_date") &&
         optionalUrl(data, "avatar_url", 2048) &&
         optionalTimestamp(data, "updated_at");
     }

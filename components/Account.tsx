@@ -14,6 +14,7 @@ import ApiKeyManager from './ApiKeyManager';
 import { BusinessCustomApi } from './BusinessCustomApi';
 import { listModels } from '../services/aiClient';
 import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
+import { loadBirthdayLocal, saveBirthdayLocal } from '../lib/onboarding';
 
 // A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
 const TALENT_NFT_CONTRACT_ADDRESS =
@@ -90,6 +91,7 @@ const Account: React.FC<AccountProps> = ({
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
   const [web3Busy, setWeb3Busy] = useState(false);
   const [fullName, setFullName] = useState<string>('');
+  const [birthDate, setBirthDate] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('free');
   const [password, setPassword] = useState('');
@@ -238,6 +240,14 @@ const Account: React.FC<AccountProps> = ({
 
       if (profileData) {
         setFullName(profileData.full_name || '');
+        const resolvedBirthDate = profileData.birth_date || loadBirthdayLocal(user.id);
+        setBirthDate(resolvedBirthDate);
+        if (resolvedBirthDate && !profileData.birth_date) {
+          void data.profiles.update(user.id, {
+            birth_date: resolvedBirthDate,
+            updated_at: new Date().toISOString(),
+          });
+        }
         setAvatarUrl(profileData.avatar_url || '');
         setSubscriptionStatus(profileData.subscription_status);
         setWalletAddress(profileData.wallet_address || null);
@@ -260,7 +270,7 @@ const Account: React.FC<AccountProps> = ({
 
   const updateProfile = async (
     event: React.FormEvent | null,
-    { fullName, avatarUrl }: { fullName: string; avatarUrl: string },
+    { fullName, avatarUrl, birthDate }: { fullName: string; avatarUrl: string; birthDate: string },
   ) => {
     if (event) {
       event.preventDefault();
@@ -272,12 +282,14 @@ const Account: React.FC<AccountProps> = ({
       const updates = {
         id: user.id,
         full_name: fullName,
+        birth_date: birthDate || null,
         avatar_url: avatarUrl,
         updated_at: new Date().toISOString(),
       };
 
       const { error } = await data.profiles.upsert(updates);
       if (error) throw new Error(error.message);
+      saveBirthdayLocal(user.id, birthDate);
       setMessage({
         type: 'success',
         text: t('account_profile_updated_success'),
@@ -635,7 +647,7 @@ const Account: React.FC<AccountProps> = ({
 
       {/* Profile Details Form */}
       <form
-        onSubmit={(e) => updateProfile(e, { fullName, avatarUrl })}
+        onSubmit={(e) => updateProfile(e, { fullName, avatarUrl, birthDate })}
         className="space-y-6"
       >
         <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
@@ -646,7 +658,7 @@ const Account: React.FC<AccountProps> = ({
           size={150}
           onUpload={(url) => {
             setAvatarUrl(url);
-            updateProfile(null, { fullName, avatarUrl: url });
+            updateProfile(null, { fullName, avatarUrl: url, birthDate });
           }}
           altText={t('ws_profile_avatar_alt')}
           uploadLabel={t('account_avatar_upload')}
@@ -685,6 +697,23 @@ const Account: React.FC<AccountProps> = ({
             onChange={(e) => setFullName(e.target.value)}
             className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-900"
           />
+        </div>
+        <div>
+          <label
+            htmlFor="birthDate"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            {t('account_birth_date_label')}
+          </label>
+          <input
+            id="birthDate"
+            type="date"
+            value={birthDate}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setBirthDate(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-900"
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{t('account_birth_date_hint')}</p>
         </div>
         <div>
           <button

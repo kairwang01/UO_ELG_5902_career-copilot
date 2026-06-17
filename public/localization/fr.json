@@ -252,6 +252,8 @@
   "account_profile_details": "Détails du profil",
   "account_email_label": "E-mail",
   "account_fullname_label": "Nom complet",
+  "account_birth_date_label": "Date de naissance",
+  "account_birth_date_hint": "Facultatif. Utilisé uniquement pour personnaliser les conseils selon votre étape de carrière.",
   "account_update_profile_button": "Mettre à jour le profil",
   "account_saving_button": "Enregistrement...",
   "account_change_password": "Changer le mot de passe",

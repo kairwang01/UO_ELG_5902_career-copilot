@@ -48,7 +48,7 @@ import { SiteLayout } from './marketing/components/SiteLayout';
 import { isWeb3Enabled, onWeb3FlagChange } from './config/featureFlags';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import WorkspaceTour from './components/onboarding/WorkspaceTour';
-import { isOnboardingDue, isTourDone, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
+import { isOnboardingDue, isTourDone, loadBirthdayLocal, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -94,6 +94,7 @@ const buildLocalProfile = (
   id: userId,
   updated_at: new Date().toISOString(),
   full_name: null,
+  birth_date: null,
   avatar_url: null,
   subscription_status: 'free',
   role: 'candidate',
@@ -302,10 +303,20 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
       const applyProfile = async (p: UserProfile | null) => {
         if (!p) return;
-        setProfile(p);
-        setResumeText(p.role === 'candidate' ? p.resume_text || '' : '');
+        let resolvedProfile = p;
+        const legacyBirthDate = p.role === 'candidate' && !p.birth_date ? loadBirthdayLocal(user.id) : '';
+        if (legacyBirthDate) {
+          resolvedProfile = { ...p, birth_date: legacyBirthDate };
+          data.profiles
+            .update(user.id, { birth_date: legacyBirthDate, updated_at: new Date().toISOString() })
+            .catch(() => {
+              // Non-fatal: the Account page will still show the local fallback in this browser.
+            });
+        }
+        setProfile(resolvedProfile);
+        setResumeText(resolvedProfile.role === 'candidate' ? resolvedProfile.resume_text || '' : '');
 
-        const userCredits = p.credits || 0;
+        const userCredits = resolvedProfile.credits || 0;
         setCredits(userCredits);
 
         const pendingPlan = sessionStorage.getItem('pending_plan');
@@ -330,7 +341,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             });
           }
 
-          if (p.role !== role) {
+          if (resolvedProfile.role !== role) {
             await data.profiles.update(user.id, { role });
           }
 
@@ -946,7 +957,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           <div id="talent-profile-panel">
             <TalentProfileForm
               uid={session.user.id}
-              seed={{ name: profile?.full_name ?? undefined }}
+              seed={{ name: profile?.full_name ?? undefined, email: session.user.email ?? undefined }}
               resumeText={resumeText}
             />
           </div>

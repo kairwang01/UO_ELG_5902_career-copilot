@@ -67,6 +67,7 @@ export interface UserProfile {
   id: string;
   updated_at: string;
   full_name: string | null;
+  birth_date?: string | null;
   avatar_url: string | null;
   subscription_status: string;
   role: 'employer' | 'candidate' | 'agency';

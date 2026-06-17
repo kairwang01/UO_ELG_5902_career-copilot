@@ -329,6 +329,8 @@
   "account_profile_details": "Profile",
   "account_email_label": "Email",
   "account_fullname_label": "Full Name",
+  "account_birth_date_label": "Date of birth",
+  "account_birth_date_hint": "Optional. Used only to personalize career-stage guidance.",
   "account_update_profile_button": "Save",
   "account_saving_button": "Saving...",
   "account_change_password": "Change Password",

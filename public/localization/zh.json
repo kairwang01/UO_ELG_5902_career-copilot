@@ -329,6 +329,8 @@
   "account_profile_details": "个人信息",
   "account_email_label": "邮箱",
   "account_fullname_label": "姓名",
+  "account_birth_date_label": "出生日期",
+  "account_birth_date_hint": "选填。仅用于按职业阶段调整建议。",
   "account_update_profile_button": "保存",
   "account_saving_button": "保存中...",
   "account_change_password": "修改密码",
