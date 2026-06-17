@@ -990,6 +990,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             <TalentProfileForm
               uid={session.user.id}
               seed={{ name: profile?.full_name ?? undefined }}
+              resumeText={resumeText}
             />
           </div>
         )}

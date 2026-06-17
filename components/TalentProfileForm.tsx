@@ -1,19 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Loader2, Save } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Loader2, Save, Sparkles } from 'lucide-react';
 import {
   TALENT_PROFILE_SCHEMA,
   emptyTalentProfile,
   isTalentProfileReady,
+  sanitizeExtractedProfile,
+  hasMeaningfulEntry,
   type TalentProfile,
   type FieldConfig,
   type Section,
 } from '../lib/talentProfile';
 import { loadTalentProfile, saveTalentProfile } from '../services/talentProfile';
+import { extractTalentProfile } from '../services/aiClient';
 
 interface TalentProfileFormProps {
   uid: string;
   /** Pre-seed name/email when the profile is brand new. */
   seed?: { name?: string; email?: string };
+  /** The candidate's resume text, used to auto-fill the profile. */
+  resumeText?: string;
   /** Rendered as a sticky footer action (e.g. "Save & apply"). */
   primaryLabel?: string;
   onPrimary?: (profile: TalentProfile) => void;
@@ -106,12 +111,61 @@ const FieldGrid: React.FC<{ fields: FieldConfig[]; data: Record<string, unknown>
 );
 
 // ── Main form ───────────────────────────────────────────────────────────────
-const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, primaryLabel, onPrimary, onSaved }) => {
+const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resumeText, primaryLabel, onPrimary, onSaved }) => {
   const [profile, setProfile] = useState<TalentProfile>(emptyTalentProfile());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [prefilling, setPrefilling] = useState(false);
+  const [prefillMsg, setPrefillMsg] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ basic: true, intention: true });
+
+  // Auto-fill from the candidate's resume. Fills ONLY empty fields / empty list
+  // sections (never overwrites what the candidate already typed); skills are
+  // unioned. The AI output is schema-coerced (sanitizeExtractedProfile) so dates
+  // and select values populate correctly.
+  const handlePrefill = async () => {
+    if (!resumeText || resumeText.trim().length < 40) {
+      setPrefillMsg({ kind: 'info', text: 'Add or upload your resume first (the “Resume” tab), then prefill here.' });
+      return;
+    }
+    setPrefilling(true);
+    setPrefillMsg(null);
+    try {
+      const ex = sanitizeExtractedProfile(await extractTalentProfile(resumeText));
+      let filledLists = false;
+      setProfile((p) => {
+        const next: TalentProfile = { ...p, basic: { ...p.basic }, additional: { ...p.additional }, skills: { ...p.skills } };
+        (['basic', 'additional'] as const).forEach((id) => {
+          const exObj = ex[id] as Record<string, string> | undefined;
+          if (!exObj) return;
+          const cur = next[id] as Record<string, string>;
+          Object.keys(exObj).forEach((k) => {
+            if (!cur[k] || !String(cur[k]).trim()) cur[k] = exObj[k];
+          });
+        });
+        (['education', 'experience', 'projects', 'awards', 'portfolio'] as const).forEach((id) => {
+          const exList = ex[id] as Record<string, string | string[]>[] | undefined;
+          if (exList && exList.length && !(next[id] ?? []).some(hasMeaningfulEntry)) {
+            next[id] = exList;
+            filledLists = true;
+          }
+        });
+        if (ex.skills) {
+          Object.keys(ex.skills).forEach((g) => {
+            next.skills[g] = Array.from(new Set([...(next.skills[g] ?? []), ...((ex.skills as Record<string, string[]>)[g] ?? [])]));
+          });
+        }
+        return next;
+      });
+      if (filledLists) setOpen((o) => ({ ...o, education: true, experience: true, projects: true, skills: true }));
+      setPrefillMsg({ kind: 'ok', text: 'Filled from your resume — please review and edit each section before saving.' });
+    } catch (err) {
+      setPrefillMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Could not read your resume. Please fill the form manually.' });
+    } finally {
+      setPrefilling(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -221,6 +275,17 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, primar
       <div className="mb-5">
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Talent Profile</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Fill this once. It pre-fills every job application and lets employers discover you. References are shown to employers as “available on request”.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={handlePrefill} disabled={prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+            {prefilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {prefilling ? 'Reading your resume…' : 'Prefill from my resume'}
+          </button>
+          {prefillMsg && (
+            <span className={`text-xs ${prefillMsg.kind === 'error' ? 'text-red-600 dark:text-red-400' : prefillMsg.kind === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'}`}>
+              {prefillMsg.text}
+            </span>
+          )}
+        </div>
         <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium">
           {ready
             ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"><Check className="h-3.5 w-3.5" /> Ready to apply</span>

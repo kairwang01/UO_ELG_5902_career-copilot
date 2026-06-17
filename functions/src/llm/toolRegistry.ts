@@ -76,7 +76,42 @@ const OPPORTUNITY_SCHEMA = {
   required: ["opportunities", "jobSearchStrategies"],
 };
 
+// Talent Profile extraction — keys MUST match lib/talentProfile.ts field keys so
+// the client can map the result straight into the form (no remapping layer).
+const _S = { type: Type.STRING };
+const _SA = { type: Type.ARRAY, items: { type: Type.STRING } };
+const TALENT_PROFILE_EXTRACT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    basic: { type: Type.OBJECT, properties: { name: _S, preferredName: _S, email: _S, phone: _S, country: _S, city: _S } },
+    education: {
+      type: Type.ARRAY,
+      items: { type: Type.OBJECT, properties: { degree: _S, school: _S, location: _S, faculty: _S, major: _S, startDate: _S, endDate: _S, gpa: _S, gpaScale: _S, ranking: _S, researchDirection: _S, relevantCourses: _SA, thesis: _S } },
+    },
+    experience: {
+      type: Type.ARRAY,
+      items: { type: Type.OBJECT, properties: { company: _S, role: _S, location: _S, category: _S, workMode: _S, startDate: _S, endDate: _S, workContent: _S, collaboration: _S, tools: _SA, outcome: _S, metrics: _SA } },
+    },
+    projects: {
+      type: Type.ARRAY,
+      items: { type: Type.OBJECT, properties: { name: _S, role: _S, type: _S, teamSize: _S, status: _S, startDate: _S, endDate: _S, link: _S, background: _S, responsibilities: _S, process: _S, result: _S, metrics: _SA } },
+    },
+    skills: { type: Type.OBJECT, properties: { projectManagement: _SA, product: _SA, tools: _SA, technical: _SA, ai: _SA, languages: _SA } },
+    awards: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: _S, type: _S, date: _S, organization: _S, description: _S } } },
+    portfolio: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: _S, type: _S, url: _S, description: _S } } },
+    additional: { type: Type.OBJECT, properties: { careerDirection: _S, overallStrengths: _S } },
+  },
+};
+
 export const TOOL_REGISTRY: Record<string, ToolSpec> = {
+  // Free convenience: auto-fill the candidate's OWN Talent Profile from their resume.
+  extractTalentProfile: {
+    creditKey: null,
+    build: (p) => ({
+      prompt: buildPrompt("extractTalentProfile", { resumeText: p.resumeText ?? "" }),
+      responseSchema: TALENT_PROFILE_EXTRACT_SCHEMA,
+    }),
+  },
   applyResumeImprovements: {
     creditKey: null,
     build: (p) => ({

@@ -258,7 +258,7 @@ const hasMeaningfulValue = (value: unknown): boolean => {
   return false;
 };
 
-const hasMeaningfulEntry = (entry: Record<string, string | string[]>): boolean =>
+export const hasMeaningfulEntry = (entry: Record<string, string | string[]>): boolean =>
   Object.values(entry).some(hasMeaningfulValue);
 
 /**
@@ -274,4 +274,82 @@ export function isTalentProfileReady(p: TalentProfile | null | undefined): boole
     (p.education ?? []).some(hasMeaningfulEntry) ||
     (p.experience ?? []).some(hasMeaningfulEntry);
   return hasName && hasTarget && hasHistory;
+}
+
+// ── Resume-extraction sanitizer ─────────────────────────────────────────────
+// Coerces the raw AI output against the schema so the form fields populate
+// correctly: dates → YYYY-MM-DD, select values snapped to a valid option,
+// chips → clean string[]. This is what makes auto-fill "correct".
+
+function coerceDate(s: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}$/.test(s)) return `${s}-01`;
+  if (/^\d{4}$/.test(s)) return `${s}-01-01`;
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10);
+}
+
+function normalizeDegree(s: string): string {
+  const l = s.toLowerCase();
+  if (l.includes('phd') || l.includes('doctor')) return "PhD";
+  if (l.includes('master') || /\bm\.?s\.?\b|msc|m\.?eng|mba/.test(l)) return "Master's";
+  if (l.includes('bachelor') || /\bb\.?s\.?\b|bsc|b\.?eng|b\.?a\.?\b|undergrad/.test(l)) return "Bachelor's";
+  if (l.includes('associate')) return "Associate";
+  if (l.includes('high school') || l.includes('secondary') || l.includes('diploma')) return "High School";
+  return s ? "Other" : "";
+}
+
+function coerceField(field: FieldConfig, v: unknown): string | string[] {
+  if (field.type === 'chips') {
+    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim());
+    return typeof v === 'string' && v.trim() ? [v.trim()] : [];
+  }
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (!s) return '';
+  if (field.type === 'date') return coerceDate(s);
+  if (field.type === 'select') {
+    const exact = (field.options ?? []).find((o) => o.toLowerCase() === s.toLowerCase());
+    if (exact) return exact;
+    if (field.key === 'degree') return normalizeDegree(s);
+    return ''; // unknown select value → leave blank rather than break the <select>
+  }
+  return s;
+}
+
+function coerceEntry(fields: FieldConfig[], raw: unknown): Record<string, string | string[]> {
+  const src = (raw ?? {}) as Record<string, unknown>;
+  const out: Record<string, string | string[]> = {};
+  for (const f of fields) {
+    const c = coerceField(f, src[f.key]);
+    if ((typeof c === 'string' && c) || (Array.isArray(c) && c.length)) out[f.key] = c;
+  }
+  return out;
+}
+
+/** Turn raw AI extraction output into a schema-correct partial profile. */
+export function sanitizeExtractedProfile(raw: unknown): Partial<TalentProfile> {
+  const src = (raw ?? {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const section of TALENT_PROFILE_SCHEMA) {
+    const data = src[section.id];
+    if (data == null) continue;
+    if (section.kind === 'object') {
+      const e = coerceEntry(section.fields, data);
+      if (Object.keys(e).length) out[section.id] = e;
+    } else if (section.kind === 'list' && Array.isArray(data)) {
+      const entries = (data as unknown[]).map((it) => coerceEntry(section.fields, it)).filter((e) => Object.keys(e).length);
+      if (entries.length) out[section.id] = entries;
+    } else if (section.kind === 'skills' && typeof data === 'object') {
+      const skills: Record<string, string[]> = {};
+      for (const g of section.groups) {
+        const arr = (data as Record<string, unknown>)[g.key];
+        if (Array.isArray(arr)) {
+          const clean = arr.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim());
+          if (clean.length) skills[g.key] = clean;
+        }
+      }
+      if (Object.keys(skills).length) out.skills = skills;
+    }
+  }
+  return out as Partial<TalentProfile>;
 }

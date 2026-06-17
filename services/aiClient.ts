@@ -401,6 +401,20 @@ async function callToolWithGrounding<T>(tool: string, payload: Record<string, un
 export const applyResumeImprovements = (resumeText: string, improvements: Improvement[]) =>
   callTool<{ updatedResumeText: string }>('applyResumeImprovements', { resumeText, improvements });
 
+/** Parses a resume into the structured Talent Profile shape (keys match lib/talentProfile.ts). */
+export interface ExtractedTalentProfile {
+  basic?: Record<string, string>;
+  education?: Record<string, string | string[]>[];
+  experience?: Record<string, string | string[]>[];
+  projects?: Record<string, string | string[]>[];
+  skills?: Record<string, string[]>;
+  awards?: Record<string, string | string[]>[];
+  portfolio?: Record<string, string | string[]>[];
+  additional?: Record<string, string>;
+}
+export const extractTalentProfile = (resumeText: string) =>
+  callTool<ExtractedTalentProfile>('extractTalentProfile', { resumeText });
+
 export const convertResumeFormat = (resumeText: string, marketName: string, coverLetterText?: string) =>
   callTool<FormattedResume>('convertResumeFormat', { resumeText, marketName, coverLetterText });
 
