@@ -11,8 +11,8 @@ export const SiteHeader: React.FC = () => {
   const isEmployerSurface = pathname.startsWith(SITE_ROUTES.employers) || pathname.startsWith(SITE_ROUTES.portal);
   const { t } = useMarketingI18n();
   const { session, isAdmin, isBusiness } = useSiteSession();
-  const workspaceHref = isAdmin ? SITE_ROUTES.admin : isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
-  const workspaceLabel = isAdmin ? 'Admin Portal' : t('site_nav_workspace');
+  const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
+  const workspaceLabel = t('site_nav_workspace');
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : `${SITE_ROUTES.workspace}?auth=signup`;
@@ -89,6 +89,14 @@ export const SiteHeader: React.FC = () => {
                   className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
                 >
                   {t('site_nav_join_business')}
+                </Link>
+              )}
+              {isAdmin && (
+                <Link
+                  to={SITE_ROUTES.admin}
+                  className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
+                >
+                  Admin Portal
                 </Link>
               )}
               <Link

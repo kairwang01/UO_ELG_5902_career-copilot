@@ -18,7 +18,7 @@ import { useSiteSession } from '../hooks/useSiteSession';
 
 export const JobseekerHomePage: React.FC = () => {
   const { t } = useMarketingI18n();
-  const { session, ready, isAdmin, isBusiness } = useSiteSession();
+  const { session, ready, isBusiness } = useSiteSession();
   const { search } = useLocation();
 
   // A signed-in user landing on bare "/" is routed to their workspace (or the
@@ -27,7 +27,7 @@ export const JobseekerHomePage: React.FC = () => {
   // so that path must not redirect (otherwise "return to homepage" bounces back).
   const forceHomeView = new URLSearchParams(search).get('home') === '1';
   if (ready && session && !forceHomeView) {
-    return <Navigate to={isAdmin ? SITE_ROUTES.admin : isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace} replace />;
+    return <Navigate to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace} replace />;
   }
   const proofPoints = [
     t('site_tool_resume_report'),

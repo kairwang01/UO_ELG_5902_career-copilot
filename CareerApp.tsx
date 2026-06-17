@@ -11,7 +11,6 @@ import { firestoreDb } from './lib/firebaseClient';
 import { data, type AppSession as Session } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
 import { setUserSubscription } from './services/subscriptionClient';
-import { adminCheckAccess } from './services/adminClient';
 import { useLocalization } from './hooks/useLocalization';
 import { ToastProvider, useToast } from './components/Toast';
 import { useCredits } from './contexts/CreditsContext';
@@ -120,8 +119,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const location = useLocation();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [hasAdminAccess, setHasAdminAccess] = useState(false);
-  const [adminAccessSettled, setAdminAccessSettled] = useState(true);
   const [view, setView] = useState<'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs'>('home');
   const [initialAuthView, setInitialAuthView] = useState<'sign_in' | 'sign_up' | 'forgot_password'>('sign_in');
   const [authMode, setAuthMode] = useState<'candidate' | 'business'>('candidate');
@@ -164,10 +161,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const profileRole = profile?.role as string | undefined;
   const isCandidate = profile?.role === 'candidate';
   const isEmployer = profile?.role === 'employer';
-  // Admin authority lives in platform_config/access (resolved server-side via
-  // adminCheckAccess → hasAdminAccess), NOT on users/{uid}.role, which only ever
-  // holds candidate/employer/agency. Route to /admin solely on the server signal.
-  const shouldRouteToAdmin = hasAdminAccess;
+  // Admin authority is handled by the dedicated /admin route. It must not
+  // override the user's product role here: admin-candidates still need the
+  // candidate workspace, and admin-employers still need the hiring portal.
   const isKnownWorkspaceRole = isCandidate || isEmployer || profileRole === 'agency';
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
   useModalBehavior(closeMobileNav, isMobileNavOpen);
@@ -251,45 +247,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       setView('home');
     }
   }, [session, view]);
-
-  useEffect(() => {
-    let active = true;
-    if (!session?.user) {
-      setHasAdminAccess(false);
-      setAdminAccessSettled(true);
-      return;
-    }
-
-    setAdminAccessSettled(false);
-    adminCheckAccess()
-      .then((result) => {
-        if (active) setHasAdminAccess(!!result.admin);
-      })
-      .catch(() => {
-        if (active) setHasAdminAccess(false);
-      })
-      .finally(() => {
-        if (active) setAdminAccessSettled(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [session?.user?.id]);
-
-  useEffect(() => {
-    if (entry !== 'workspace') return;
-    if (!authHydrated || !session?.user || !isProfileLoaded || !adminAccessSettled) return;
-    if (shouldRouteToAdmin) navigate('/admin', { replace: true });
-  }, [
-    entry,
-    authHydrated,
-    session?.user?.id,
-    isProfileLoaded,
-    adminAccessSettled,
-    shouldRouteToAdmin,
-    navigate,
-  ]);
 
   // Effect to determine and set the UI language based on user preferences or browser settings
   useEffect(() => {
@@ -1313,7 +1270,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     return renderAppEntry();
   };
 
-  const isWorkspaceSessionLoading = Boolean(session && (!isProfileLoaded || !isLangLoaded || !adminAccessSettled));
+  const isWorkspaceSessionLoading = Boolean(session && (!isProfileLoaded || !isLangLoaded));
   const canShowWorkspaceShell = Boolean(session && !showHomePageOverride && view !== 'business' && isProfileLoaded && isLangLoaded);
   const showCandidateShell = canShowWorkspaceShell && isCandidate && !isPortalEntry;
   const showEmployerShell = canShowWorkspaceShell && isEmployer;
