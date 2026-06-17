@@ -40,6 +40,7 @@ import {
 } from './components/dashboard/CandidateWorkspacePages';
 import Sidebar from './components/Sidebar';
 import MyApplications from './components/MyApplications';
+import TalentProfileForm from './components/TalentProfileForm';
 import type { PortalPage } from './components/employer/EmployerPortal';
 import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';
@@ -64,7 +65,7 @@ interface AppContentProps {
 }
 
 type DashboardView =
-  | 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications'
+  | 'dashboard' | 'toolkit' | 'resume' | 'talent_profile' | 'jobs' | 'applications'
   | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
 type CandidatePlanKey = 'free' | 'essentials' | 'accelerator' | 'executive';
 
@@ -73,6 +74,7 @@ const DASHBOARD_VIEW_LABEL_KEYS: Record<DashboardView, string> = {
   dashboard: 'ws_nav_dashboard',
   toolkit: 'ws_nav_toolkit',
   resume: 'ws_nav_resume',
+  talent_profile: 'ws_nav_talent_profile',
   jobs: 'ws_nav_jobs',
   applications: 'ws_nav_applications',
   interview: 'ws_nav_interview',
@@ -981,6 +983,15 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 session={session}
               />
             </div>
+        )}
+
+        {dashboardView === 'talent_profile' && session?.user && (
+          <div id="talent-profile-panel">
+            <TalentProfileForm
+              uid={session.user.id}
+              seed={{ name: profile?.full_name ?? undefined }}
+            />
+          </div>
         )}
 
         {dashboardView === 'applications' && (

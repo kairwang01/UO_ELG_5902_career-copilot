@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Wrench,
   FileText,
+  IdCard,
   Globe,
   CreditCard,
   CalendarCheck,
@@ -25,7 +26,7 @@ import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import LanguageSwitcher from './LanguageSwitcher';
 import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
 
-type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
+type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'talent_profile' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
 
 interface SidebarProps {
   activeView: SidebarView;
@@ -72,6 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const allWorkspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: t('ws_nav_dashboard'), icon: LayoutDashboard },
     { id: 'resume', label: t('ws_nav_resume'), icon: FileText },
+    { id: 'talent_profile', label: t('ws_nav_talent_profile'), icon: IdCard },
     { id: 'jobs', label: t('ws_nav_jobs'), icon: Briefcase },
     { id: 'applications', label: t('ws_nav_applications'), icon: ClipboardList },
     { id: 'interview', label: t('ws_nav_interview'), icon: MessageSquare },

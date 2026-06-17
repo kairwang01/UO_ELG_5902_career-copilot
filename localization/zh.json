@@ -2171,6 +2171,8 @@
   "ws_credits_label": "积分",
   "ws_nav_dashboard": "仪表盘",
   "ws_nav_resume": "简历",
+  "ws_nav_talent_profile": "人才档案",
+  "apply_complete_profile_first": "投递前请先完善你的人才档案——从侧边栏的“人才档案”打开。",
   "ws_nav_jobs": "职位搜索",
   "ws_nav_applications": "投递记录",
   "ws_nav_interview": "面试",

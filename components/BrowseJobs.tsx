@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { loadTalentProfile } from '../services/talentProfile';
+import { isTalentProfileReady } from '../lib/talentProfile';
 import {
   Briefcase,
   CheckCircle2,
@@ -452,6 +454,11 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
       return;
     }
     if (appliedJobs.has(jobId) || applyInFlight.current === jobId) return;
+    // Applying requires a ready Talent Profile.
+    if (!isTalentProfileReady(await loadTalentProfile(session.user.id))) {
+      addToast(t('apply_complete_profile_first'), 'info');
+      return;
+    }
     applyInFlight.current = jobId;
     setApplyingId(jobId);
     try {

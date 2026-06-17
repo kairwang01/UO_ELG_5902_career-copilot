@@ -611,6 +611,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // talent_profiles/{uid} — the candidate's reusable structured profile. PII
+    // (name/email/phone + history). Owner-only client access; employers see it
+    // only via the server-side Discover Talent / applicant flow (Admin SDK).
+    match /talent_profiles/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // mail/{id} — outbound email queue for the "Trigger Email" extension. Holds
     // candidate email addresses; only the Admin SDK (notifications trigger) and
     // the extension touch it. Clients can NEVER enqueue or read mail.

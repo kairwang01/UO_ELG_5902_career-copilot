@@ -2171,6 +2171,8 @@
   "ws_credits_label": "Credits",
   "ws_nav_dashboard": "Dashboard",
   "ws_nav_resume": "Resume",
+  "ws_nav_talent_profile": "Talent Profile",
+  "apply_complete_profile_first": "Complete your Talent Profile before applying — open “Talent Profile” in the sidebar.",
   "ws_nav_jobs": "Job Search",
   "ws_nav_applications": "Applications",
   "ws_nav_interview": "Interview",

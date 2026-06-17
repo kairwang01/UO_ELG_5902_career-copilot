@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Info, Search } from 'lucide-react';
 import { findOpportunities, calculateCompatibility, generateProfessionalEmail } from '../../services/aiClient';
+import { loadTalentProfile } from '../../services/talentProfile';
+import { isTalentProfileReady } from '../../lib/talentProfile';
 import type { OpportunityResult, Opportunity } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
@@ -72,6 +74,13 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const applyToInternalJob = async (jobId: string, compatibilityScore: number | undefined) => {
     if (!session?.user) {
         addToast(t('tool_opportunity_finder_signin_required'), 'error');
+        return;
+    }
+
+    // Applying requires a ready Talent Profile (the candidate's structured info
+    // that this application carries and employers review).
+    if (!isTalentProfileReady(await loadTalentProfile(session.user.id))) {
+        addToast(t('apply_complete_profile_first'), 'info');
         return;
     }
 
