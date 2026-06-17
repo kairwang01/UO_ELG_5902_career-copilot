@@ -162,8 +162,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const profileRole = profile?.role as string | undefined;
   const isCandidate = profile?.role === 'candidate';
   const isEmployer = profile?.role === 'employer';
-  const hasAdminProfileRole = profileRole === 'super' || profileRole === 'admin' || profileRole === 'reviewer';
-  const shouldRouteToAdmin = hasAdminAccess || hasAdminProfileRole;
+  // Admin authority lives in platform_config/access (resolved server-side via
+  // adminCheckAccess → hasAdminAccess), NOT on users/{uid}.role, which only ever
+  // holds candidate/employer/agency. Route to /admin solely on the server signal.
+  const shouldRouteToAdmin = hasAdminAccess;
   const isKnownWorkspaceRole = isCandidate || isEmployer || profileRole === 'agency';
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
   useModalBehavior(closeMobileNav, isMobileNavOpen);

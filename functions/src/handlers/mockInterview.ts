@@ -334,7 +334,14 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       if (price > 0) {
         await deductCredits(uid, price, "mock-interview-report-unlock");
       }
-      await reportRef.update({ unlocked: true, unlocked_at: admin.firestore.FieldValue.serverTimestamp() });
+      try {
+        await reportRef.update({ unlocked: true, unlocked_at: admin.firestore.FieldValue.serverTimestamp() });
+      } catch (err) {
+        // Couldn't persist the unlock — reverse the charge so the user is never
+        // billed for a report that stayed locked.
+        if (price > 0) await refundCredits(uid, price);
+        throw err;
+      }
     }
     return { locked: false, ...stored.report };
   }

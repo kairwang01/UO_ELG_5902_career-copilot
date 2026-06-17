@@ -66,13 +66,28 @@ export const extractTextFromUrlFunction = onCall({ invoker: "public" }, async (r
 
   let html: string;
   try {
-    const resp = await fetch(safe.toString(), {
-      redirect: "follow",
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!resp.ok) throw new Error(`status ${resp.status}`);
+    let target = safe;
+    let resp: Awaited<ReturnType<typeof fetch>> | undefined;
+    // Follow redirects MANUALLY, re-validating each hop with assertSafeUrl — a
+    // submitted-safe URL must not be able to 3xx-redirect us to an internal host
+    // (e.g. the cloud metadata endpoint) that the initial guard never saw.
+    for (let hop = 0; hop < 5; hop++) {
+      resp = await fetch(target.toString(), {
+        redirect: "manual",
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (resp.status >= 300 && resp.status < 400) {
+        const loc = resp.headers.get("location");
+        if (!loc) break;
+        target = assertSafeUrl(new URL(loc, target).toString()); // throws if the hop host is blocked
+        continue;
+      }
+      break;
+    }
+    if (!resp || !resp.ok) throw new Error(`status ${resp?.status ?? "none"}`);
     html = (await resp.text()).slice(0, 200_000); // cap to keep token cost bounded
-  } catch {
+  } catch (err) {
+    if (err instanceof HttpsError) throw err; // surface "host not allowed" from a redirect hop
     throw new HttpsError("unavailable", "Could not retrieve content from the provided URL.");
   }
 

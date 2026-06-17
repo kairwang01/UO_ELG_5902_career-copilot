@@ -86,8 +86,9 @@ export const createCompanyReviewFunction = onCall(
       .get();
 
     const isVerified = hiredSnap.docs.some((d) => {
-      const status = d.data().status;
-      return status === "Hired" || status === "Signed";
+      // "Signed" is the pipeline's only hired status (lib/applicationPipeline.ts,
+      // group 'hired'). There is no "Hired" status — that branch never matched.
+      return d.data().status === "Signed";
     });
 
     if (!isVerified) {
