@@ -26,6 +26,7 @@ export function useSiteSession(): SiteSessionState {
   const [isAdmin, setIsAdmin] = useState(false);
   const [sessionResolved, setSessionResolved] = useState(false);
   const [profileSettled, setProfileSettled] = useState(false);
+  const [adminSettled, setAdminSettled] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -34,7 +35,10 @@ export function useSiteSession(): SiteSessionState {
       setSession(s);
       setSessionResolved(true);
       // No session means no profile fetch will happen — settle immediately.
-      if (!s?.user) setProfileSettled(true);
+      if (!s?.user) {
+        setProfileSettled(true);
+        setAdminSettled(true);
+      }
     });
     const { unsubscribe } = data.auth.onAuthStateChange((_event, s) => {
       if (!active) return;
@@ -42,6 +46,7 @@ export function useSiteSession(): SiteSessionState {
       setSessionResolved(true);
       if (!s?.user) {
         setProfileSettled(true);
+        setAdminSettled(true);
       }
     });
     return () => {
@@ -55,11 +60,13 @@ export function useSiteSession(): SiteSessionState {
     if (!session?.user) {
       setProfile(null);
       setIsAdmin(false);
+      setAdminSettled(true);
       // profileSettled is already set by the session effect for the no-session path.
       return;
     }
     // Reset settled flag while fetching for this user.
     setProfileSettled(false);
+    setAdminSettled(false);
     data.profiles
       .get(session.user.id)
       .then((r) => {
@@ -80,6 +87,9 @@ export function useSiteSession(): SiteSessionState {
       })
       .catch(() => {
         if (active) setIsAdmin(false);
+      })
+      .finally(() => {
+        if (active) setAdminSettled(true);
       });
     return () => {
       active = false;
@@ -92,7 +102,7 @@ export function useSiteSession(): SiteSessionState {
       profile?.subscription_status?.replace('pending_biz_', '') ?? '',
     );
 
-  const ready = sessionResolved && profileSettled;
+  const ready = sessionResolved && profileSettled && adminSettled;
 
   return { session, profile, ready, isAdmin, isBusiness };
 }

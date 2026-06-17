@@ -11,7 +11,8 @@ export const SiteMobileNav: React.FC = () => {
   const isEmployerSurface = pathname.startsWith(SITE_ROUTES.employers) || pathname.startsWith(SITE_ROUTES.portal);
   const { t } = useMarketingI18n();
   const { session, isAdmin, isBusiness } = useSiteSession();
-  const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
+  const workspaceHref = isAdmin ? SITE_ROUTES.admin : isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
+  const workspaceLabel = isAdmin ? 'Admin Portal' : t('site_nav_workspace');
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : `${SITE_ROUTES.workspace}?auth=signup`;
@@ -80,11 +81,6 @@ export const SiteMobileNav: React.FC = () => {
           )}
           {session ? (
             <>
-              {isAdmin && (
-                <Link to={SITE_ROUTES.admin} className={`${linkClass} text-indigo-600 font-medium`} onClick={() => setOpen(false)}>
-                  Admin Portal
-                </Link>
-              )}
               <Link
                 to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.employers}
                 className={linkClass}
@@ -97,7 +93,7 @@ export const SiteMobileNav: React.FC = () => {
                 className="block rounded-[var(--site-radius)] bg-[var(--site-action)] px-3 py-3 text-center text-sm font-semibold text-white mt-3"
                 onClick={() => setOpen(false)}
               >
-                {t('site_nav_workspace')}
+                {workspaceLabel}
               </Link>
             </>
           ) : (

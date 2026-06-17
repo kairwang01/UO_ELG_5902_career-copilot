@@ -11,7 +11,8 @@ export const SiteHeader: React.FC = () => {
   const isEmployerSurface = pathname.startsWith(SITE_ROUTES.employers) || pathname.startsWith(SITE_ROUTES.portal);
   const { t } = useMarketingI18n();
   const { session, isAdmin, isBusiness } = useSiteSession();
-  const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
+  const workspaceHref = isAdmin ? SITE_ROUTES.admin : isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
+  const workspaceLabel = isAdmin ? 'Admin Portal' : t('site_nav_workspace');
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : `${SITE_ROUTES.workspace}?auth=signup`;
@@ -75,14 +76,6 @@ export const SiteHeader: React.FC = () => {
           </div>
           {session ? (
             <>
-              {isAdmin && (
-                <Link
-                  to={SITE_ROUTES.admin}
-                  className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-indigo-600 hover:text-indigo-700 whitespace-nowrap"
-                >
-                  Admin Portal
-                </Link>
-              )}
               {isBusiness ? (
                 <Link
                   to={SITE_ROUTES.portal}
@@ -102,7 +95,7 @@ export const SiteHeader: React.FC = () => {
                 to={workspaceHref}
                 className="hidden sm:inline-flex min-h-[40px] items-center justify-center rounded-[var(--site-radius)] bg-[var(--site-action)] px-4 text-sm font-semibold text-white hover:bg-[var(--site-action-hover)] whitespace-nowrap"
               >
-                {t('site_nav_workspace')}
+                {workspaceLabel}
               </Link>
             </>
           ) : (
