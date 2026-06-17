@@ -619,7 +619,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       (snap) => {
         if (!snap.exists()) return;
         const p = { id: uid, ...snap.data() } as UserProfile;
-        setProfile(p);
+        // Preserve the locally-migrated birth_date when the server doc still
+        // predates the field — the fire-and-forget migration write in
+        // applyProfile may not have committed before this snapshot fires.
+        setProfile((prev) => ({ ...p, birth_date: p.birth_date ?? prev?.birth_date ?? null }));
         if (typeof p.credits === 'number') setCredits(p.credits);
       },
       () => {

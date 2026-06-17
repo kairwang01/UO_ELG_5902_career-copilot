@@ -94,7 +94,7 @@ export const SiteMobileNav: React.FC = () => {
                   className={linkClass}
                   onClick={() => setOpen(false)}
                 >
-                  Admin Portal
+                  {t('site_nav_admin_portal')}
                 </Link>
               )}
               <Link

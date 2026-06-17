@@ -139,7 +139,14 @@ function collectTalentSkills(profile: TalentProfile | null | undefined): string[
 
 function getTalentCurrentRole(profile: TalentProfile | null | undefined): string | undefined {
     const targetRole = typeof profile?.intention?.targetRole === 'string' ? profile.intention.targetRole.trim() : '';
-    const latestRole = typeof profile?.experience?.[0]?.role === 'string' ? profile.experience[0].role.trim() : '';
+    // Experience entries are stored in the order the candidate added them (not
+    // date-sorted), so experience[0] is NOT necessarily the current role. Prefer
+    // an ongoing role (no end date), else the most recent by end/start date.
+    const exp = (profile?.experience ?? []).filter((e) => typeof e?.role === 'string' && e.role.trim());
+    const dateKey = (e: Record<string, string | string[]>) => String(e?.endDate || e?.startDate || '');
+    const ongoing = exp.find((e) => !String(e?.endDate ?? '').trim());
+    const byDate = [...exp].sort((a, b) => dateKey(b).localeCompare(dateKey(a)));
+    const latestRole = String(ongoing?.role || byDate[0]?.role || '').trim();
     return targetRole || latestRole || undefined;
 }
 
@@ -157,13 +164,10 @@ const TALENT_SECTION_ICONS: Record<string, React.ElementType> = {
 };
 
 const TalentProfileSummary: React.FC<{ profile: TalentProfile | null | undefined; t: (key: string) => string }> = ({ profile, t }) => {
-    if (!talentProfileHasData(profile)) {
-        return (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                {t('applicant_funnel_talent_profile_empty')}
-            </div>
-        );
-    }
+    // Render nothing when there is no structured profile — absence of the section
+    // (and of the "Talent Profile" chip) already signals it. Avoids stacking a
+    // dashed empty box above the separate "no analysis" placeholder.
+    if (!talentProfileHasData(profile)) return null;
 
     const safeProfile = profile as TalentProfile;
     const data = safeProfile as unknown as Record<string, unknown>;

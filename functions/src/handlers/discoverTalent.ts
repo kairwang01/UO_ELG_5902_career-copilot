@@ -26,7 +26,7 @@ import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
-import { normalizeTalentProfile, talentProfileToMatchText } from "../utils/talentProfile";
+import { buildCandidateMatchContext, normalizeTalentProfile, talentProfileToMatchText } from "../utils/talentProfile";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -116,21 +116,29 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
     .limit(CANDIDATE_SCAN_LIMIT)
     .get();
 
-  const withContext: CandidateRow[] = (await Promise.all(
-    snap.docs.map(async (d) => {
+  // Batch the per-candidate talent_profile reads into a single getAll instead of
+  // one point-read RPC per scanned candidate. The profile feeds the eligibility
+  // gate below (a profile-only candidate can cross MIN_CONTEXT_CHARS), so it is
+  // read in both modes; getAll preserves ref order → profileSnaps[i] ↔ docs[i].
+  const docs = snap.docs;
+  const profileSnaps = docs.length
+    ? await db.getAll(...docs.map((d) => db.collection("talent_profiles").doc(d.id)))
+    : [];
+  const withContext: CandidateRow[] = docs
+    .map((d, i) => {
       const data = d.data();
       const resumeText = typeof data.resume_text === "string" ? data.resume_text.trim() : "";
-      const talentSnap = await db.collection("talent_profiles").doc(d.id).get();
-      const profileText = talentProfileToMatchText(normalizeTalentProfile(talentSnap.exists ? talentSnap.data() : undefined));
+      const profileSnap = profileSnaps[i];
+      const profileText = talentProfileToMatchText(
+        normalizeTalentProfile(profileSnap && profileSnap.exists ? profileSnap.data() : undefined),
+      );
       return {
         id: d.id,
-        candidate_text: [resumeText, profileText ? `Structured Talent Profile:\n${profileText}` : ""]
-          .filter(Boolean)
-          .join("\n\n"),
+        candidate_text: buildCandidateMatchContext(resumeText, profileText),
         nft_staked: data.nft_staked === true,
       };
-    }),
-  )).filter((c) => c.candidate_text.trim().length >= MIN_CONTEXT_CHARS);
+    })
+    .filter((c) => c.candidate_text.trim().length >= MIN_CONTEXT_CHARS);
 
   // Verified-rail listing: no AI, no resume content leaves the server.
   if (!jobDescription) {

@@ -96,7 +96,7 @@ export const SiteHeader: React.FC = () => {
                   to={SITE_ROUTES.admin}
                   className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
                 >
-                  Admin Portal
+                  {t('site_nav_admin_portal')}
                 </Link>
               )}
               <Link

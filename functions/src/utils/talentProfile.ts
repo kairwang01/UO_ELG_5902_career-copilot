@@ -219,3 +219,17 @@ export function talentProfileToMatchText(profile: TalentProfileSnapshot | null):
   pushRecord(lines, "Summary", profile.additional);
   return lines.join("\n").slice(0, 20_000);
 }
+
+/** Combined ceiling on the per-candidate context handed to the match LLM. The
+ *  resume (write-capped at 200k) and the structured profile (≤20k) were being
+ *  concatenated with no joint cap → up to ~220k chars/candidate × the parallel
+ *  match fan-out. A match judgement does not need 200k chars of resume. */
+export const MAX_MATCH_CONTEXT_CHARS = 80_000;
+
+/** Combine resume text + structured-profile match text into one capped context.
+ *  The structured profile is preserved in full; the resume is truncated to fit. */
+export function buildCandidateMatchContext(resumeText: string, profileText: string): string {
+  const profilePart = profileText ? `Structured Talent Profile:\n${profileText}` : "";
+  const resumeBudget = Math.max(0, MAX_MATCH_CONTEXT_CHARS - profilePart.length - 2);
+  return [resumeText.trim().slice(0, resumeBudget), profilePart].filter(Boolean).join("\n\n");
+}

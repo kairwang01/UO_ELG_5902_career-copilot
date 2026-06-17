@@ -197,7 +197,12 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         if (active) { setLoadError(true); setLoading(false); }
       });
     return () => { active = false; };
-  }, [uid, reloadKey, seed?.name, seed?.email]);
+    // Re-fetch only on identity change or explicit retry. The effect REPLACES the
+    // in-memory profile via setProfile, so reacting to live seed.name/seed.email
+    // changes (full_name can arrive late via the users/{uid} snapshot) would wipe
+    // the candidate's unsaved section edits. The seed is first-load-only by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, reloadKey]);
 
   const ready = useMemo(() => isTalentProfileReady(profile), [profile]);
 

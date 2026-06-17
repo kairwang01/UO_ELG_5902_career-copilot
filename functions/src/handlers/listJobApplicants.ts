@@ -30,6 +30,7 @@ import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
 import {
+  buildCandidateMatchContext,
   normalizeTalentProfile,
   talentProfileToMatchText,
   type TalentProfileSnapshot,
@@ -159,29 +160,30 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
   const liveNameById = new Map<string, string>();
   const talentProfileById = new Map<string, TalentProfileSnapshot | null>();
   const candidateContextById = new Map<string, string>();
-  await Promise.all(
-    Array.from(new Set(applications.map((a) => a.candidate_id))).map(async (cid) => {
-      const [snap, talentSnap] = await Promise.all([
-        db.collection("users").doc(cid).get(),
-        db.collection("talent_profiles").doc(cid).get(),
-      ]);
-      const data = snap.exists ? snap.data() : undefined;
-      const text = data?.resume_text;
-      const resumeText = typeof text === "string" ? text : "";
-      const talentProfile = normalizeTalentProfile(talentSnap.exists ? talentSnap.data() : undefined);
-      talentProfileById.set(cid, talentProfile);
-      const profileText = talentProfileToMatchText(talentProfile);
-      candidateContextById.set(
-        cid,
-        [resumeText.trim(), profileText ? `Structured Talent Profile:\n${profileText}` : ""]
-          .filter(Boolean)
-          .join("\n\n"),
-      );
-      const fullName = typeof data?.full_name === "string" ? data.full_name.trim() : "";
-      const email = typeof data?.email === "string" ? data.email.trim() : "";
-      liveNameById.set(cid, fullName || email);
-    }),
-  );
+  const candidateIds = Array.from(new Set(applications.map((a) => a.candidate_id)));
+  // Batch the by-id reads into two getAll calls (users, talent_profiles) instead
+  // of 2N individual point reads. getAll preserves ref order → snaps[i] ↔ ids[i].
+  // Guard the empty case: getAll throws on a zero-length spread.
+  const [userSnaps, profileSnaps] = candidateIds.length
+    ? await Promise.all([
+        db.getAll(...candidateIds.map((cid) => db.collection("users").doc(cid))),
+        db.getAll(...candidateIds.map((cid) => db.collection("talent_profiles").doc(cid))),
+      ])
+    : [[], []];
+  candidateIds.forEach((cid, i) => {
+    const snap = userSnaps[i];
+    const talentSnap = profileSnaps[i];
+    const data = snap && snap.exists ? snap.data() : undefined;
+    const text = data?.resume_text;
+    const resumeText = typeof text === "string" ? text : "";
+    const talentProfile = normalizeTalentProfile(talentSnap && talentSnap.exists ? talentSnap.data() : undefined);
+    talentProfileById.set(cid, talentProfile);
+    const profileText = talentProfileToMatchText(talentProfile);
+    candidateContextById.set(cid, buildCandidateMatchContext(resumeText, profileText));
+    const fullName = typeof data?.full_name === "string" ? data.full_name.trim() : "";
+    const email = typeof data?.email === "string" ? data.email.trim() : "";
+    liveNameById.set(cid, fullName || email);
+  });
 
   // Backfill empty/whitespace snapshot names from the live profile name (or email).
   for (const a of applications) {
