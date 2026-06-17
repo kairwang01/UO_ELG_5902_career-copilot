@@ -618,6 +618,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // billing/{uid} — server-only paid-entitlement gate for recurring credit
+    // grants. Written ONLY by a real payment (Stripe webhook) / admin, never the
+    // client (which could otherwise self-grant unlimited monthly credits).
+    match /billing/{uid} {
+      allow read, write: if false;
+    }
+
     // platform_config, usage_events, credit_ledger — and everything else — are
     // server-only (Admin SDK). Clients must use admin* Cloud Functions; no
     // direct reads/writes.

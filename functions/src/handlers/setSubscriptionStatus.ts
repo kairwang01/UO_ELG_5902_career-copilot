@@ -128,22 +128,27 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
     const renewalSnap = await tx.get(renewalRef);
     const now = admin.firestore.FieldValue.serverTimestamp();
 
-    // Grant this plan's monthly credits at most once per calendar month. A repeat
-    // selection (or re-selecting after this month was already granted) does NOT
-    // re-grant — that closes the free-credit faucet on the bypassable plan paths.
-    const alreadyGrantedThisPeriod = renewalSnap.exists && renewalSnap.get("period") === period;
-    const grantNow = monthlyGrant > 0 && !alreadyGrantedThisPeriod;
+    // Grant the plan's monthly credits at most once per calendar month, PLAN-AWARE:
+    // pay only the positive difference. A first selection grants the full allotment;
+    // an in-month UPGRADE grants (new − already-granted); a downgrade or repeat grants
+    // 0. granted_amount is stored as the high-water mark, so toggling plans within a
+    // month can never farm credits. (Recurring monthly top-ups are gated off until
+    // real billing is wired — see grantMonthlyCredits.)
+    const renewalThisPeriod = renewalSnap.exists && renewalSnap.get("period") === period;
+    const grantedThisPeriod = renewalThisPeriod ? (Number(renewalSnap.get("granted_amount")) || 0) : 0;
+    const deltaGrant = monthlyGrant > 0 ? Math.max(0, monthlyGrant - grantedThisPeriod) : 0;
+    const newGrantedAmount = Math.max(monthlyGrant, grantedThisPeriod);
 
-    if (grantNow) {
+    if (monthlyGrant > 0) {
       tx.set(
         renewalRef,
-        { period, plan, granted_amount: monthlyGrant, granted_at: now },
+        { period, plan, granted_amount: newGrantedAmount, granted_at: now },
         { merge: true },
       );
     }
 
     if (!snap.exists) {
-      const startingCredits = INITIAL_CREDITS + (grantNow ? monthlyGrant : 0);
+      const startingCredits = INITIAL_CREDITS + deltaGrant;
       const doc: Record<string, unknown> = {
         [USER_FIELDS.credits]: startingCredits,
         [USER_FIELDS.role]: audience === "business" ? "employer" : "candidate",
@@ -162,7 +167,7 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
     }
 
     const baseCredits: number = snap.get(USER_FIELDS.credits) ?? INITIAL_CREDITS;
-    const newCredits = baseCredits + (grantNow ? monthlyGrant : 0);
+    const newCredits = baseCredits + deltaGrant;
 
     const patch: Record<string, unknown> = {
       [USER_FIELDS.subscriptionStatus]: plan,

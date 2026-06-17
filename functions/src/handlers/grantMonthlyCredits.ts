@@ -6,11 +6,18 @@
  * allotment (credits/planCredits.ts). Balances accumulate — unused credits never
  * expire — matching the pricing-page promise.
  *
+ * ENTITLEMENT GATE (decision 2026-06-17): a recurring top-up is granted ONLY to
+ * users with an active billing entitlement (`billing/{uid}.active === true`),
+ * which is written exclusively by a real payment (the future Stripe webhook) or
+ * an admin — NEVER by self-service plan selection. Until billing is wired, no
+ * entitlement exists, so this scheduled grant tops up nobody: the recurring
+ * free-credit faucet is OFF. (Self-service grant-on-select still runs in
+ * setSubscriptionStatus for the demo; that one is plan-aware and un-farmable.)
+ *
  * Idempotency: each user's last grant period lives in a server-only
  * `credit_renewals/{uid}` doc. A user is topped up only when that period differs
  * from the current "YYYY-MM", so a retried or doubly-fired schedule can never
- * double-grant. setSubscriptionStatus stamps the same doc when a plan is selected,
- * so a brand-new subscriber is not granted twice in their first month.
+ * double-grant.
  *
  * Free / add-on plans have a 0 allotment and are skipped.
  */
@@ -31,6 +38,10 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+
+/** Server-only entitlement collection — written ONLY by a real payment (Stripe
+ *  webhook) or an admin, never by the client. Gates recurring credit grants. */
+const BILLING_COLLECTION = "billing";
 
 /** Plan keys that carry a recurring (>0) monthly allotment. */
 const PAID_PLANS = Object.keys(PLAN_MONTHLY_CREDITS).filter(
@@ -59,9 +70,16 @@ export const grantMonthlyCreditsFunction = onSchedule(
         continue;
       }
       const renewalRef = db.collection(CREDIT_RENEWALS_COLLECTION).doc(uid);
+      const billingRef = db.collection(BILLING_COLLECTION).doc(uid);
       try {
         const did = await db.runTransaction(async (tx) => {
           const renewalSnap = await tx.get(renewalRef);
+          const billingSnap = await tx.get(billingRef);
+          // Gate: only a real, server-written billing entitlement earns a recurring
+          // top-up. No entitlement (today's state, pre-Stripe) → grant nobody.
+          if (!(billingSnap.exists && billingSnap.get("active") === true)) {
+            return false;
+          }
           if (renewalSnap.exists && renewalSnap.get("period") === period) {
             return false; // already granted this month
           }
