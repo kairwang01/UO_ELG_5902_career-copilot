@@ -2812,6 +2812,7 @@
   "agency_results_no_attention_desc": "Errors and retry items will appear here when a file cannot be processed.",
   "agency_results_waiting_title": "Queue ready to run",
   "agency_results_waiting_desc": "Run the pending files to create scored candidates and client handoff assets.",
+  "apply_complete_profile_first": "Complete your Talent Profile before applying. It only takes a few minutes and is reused for every application.",
   "talent_command_title": "Talent sourcing control",
   "talent_command_desc": "Pick a posted role, review match quality, then save or engage candidates without losing context.",
   "talent_command_context_manual": "Manual role brief",

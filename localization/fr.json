@@ -2541,6 +2541,7 @@
   "agency_results_no_attention_desc": "Les erreurs et éléments à relancer apparaîtront ici si un fichier ne peut pas être traité.",
   "agency_results_waiting_title": "File prête à lancer",
   "agency_results_waiting_desc": "Lancez les fichiers en attente pour créer scores candidats et livrables client.",
+  "apply_complete_profile_first": "Complétez votre Talent Profile avant de postuler. Il ne faut que quelques minutes et il sera réutilisé pour chaque candidature.",
   "talent_command_title": "Pilotage du sourcing",
   "talent_command_desc": "Choisissez un poste publié, évaluez la qualité des correspondances, puis sauvegardez ou contactez les candidats sans perdre le contexte.",
   "talent_command_context_manual": "Brief de poste manuel",

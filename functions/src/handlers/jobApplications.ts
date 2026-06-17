@@ -31,6 +31,33 @@ interface CreateJobApplicationRequest {
   compatibilityScore?: number | null;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const hasMeaningfulValue = (value: unknown): boolean => {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.some(hasMeaningfulValue);
+  return false;
+};
+
+const hasMeaningfulEntry = (value: unknown): boolean =>
+  isRecord(value) && Object.values(value).some(hasMeaningfulValue);
+
+const isTalentProfileReady = (profile: FirebaseFirestore.DocumentData | undefined): boolean => {
+  if (!profile) return false;
+  const basic = profile.basic;
+  const intention = profile.intention;
+  const hasName = isRecord(basic) && typeof basic.name === "string" && basic.name.trim().length > 0;
+  const hasTarget =
+    isRecord(intention) &&
+    typeof intention.targetRole === "string" &&
+    intention.targetRole.trim().length > 0;
+  const hasHistory =
+    (Array.isArray(profile.education) && profile.education.some(hasMeaningfulEntry)) ||
+    (Array.isArray(profile.experience) && profile.experience.some(hasMeaningfulEntry));
+  return hasName && hasTarget && hasHistory;
+};
+
 export const createJobApplicationFunction = onCall(async (request) => {
   const uid = requireAuth(request);
   const data = request.data as CreateJobApplicationRequest;
@@ -61,14 +88,24 @@ export const createJobApplicationFunction = onCall(async (request) => {
     );
   }
 
-  // 3. Read candidate name from their profile (server-side — trusted).
+  // 3. Enforce the reusable Talent Profile requirement server-side. The UI also
+  // blocks early, but this is the authoritative apply path and must be bypass-safe.
+  const talentProfileSnap = await db.collection("talent_profiles").doc(uid).get();
+  if (!isTalentProfileReady(talentProfileSnap.data())) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Complete your Talent Profile before applying."
+    );
+  }
+
+  // 4. Read candidate name from their profile (server-side — trusted).
   const userSnap = await db.collection("users").doc(uid).get();
   const candidateName: string =
     userSnap.data()?.full_name ??
     request.auth?.token.email ??
     "Candidate";
 
-  // 4. Write the application. Admin SDK bypasses Firestore client rules.
+  // 5. Write the application. Admin SDK bypasses Firestore client rules.
   const appRef = await db.collection("job_applications").add({
     job_id: data.jobId,
     candidate_id: uid,

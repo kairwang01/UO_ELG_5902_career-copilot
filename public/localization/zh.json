@@ -2812,6 +2812,7 @@
   "agency_results_no_attention_desc": "如果文件无法处理，错误和重试项会出现在这里。",
   "agency_results_waiting_title": "队列可以运行",
   "agency_results_waiting_desc": "运行待处理文件，生成候选人评分和客户交付材料。",
+  "apply_complete_profile_first": "请先完善 Talent Profile 再投递。只需几分钟，之后每次申请都可以复用。",
   "talent_command_title": "人才发现控制台",
   "talent_command_desc": "选择已发布岗位，查看匹配质量，再保存或联系候选人，过程上下文保持一致。",
   "talent_command_context_manual": "手动岗位说明",

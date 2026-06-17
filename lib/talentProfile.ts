@@ -252,15 +252,26 @@ export const emptyTalentProfile = (): TalentProfile => ({
   additional: {},
 });
 
+const hasMeaningfulValue = (value: unknown): boolean => {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.some(hasMeaningfulValue);
+  return false;
+};
+
+const hasMeaningfulEntry = (entry: Record<string, string | string[]>): boolean =>
+  Object.values(entry).some(hasMeaningfulValue);
+
 /**
  * Minimum bar to consider the profile "ready to apply": a name, a target role,
- * and at least one education OR experience entry. Kept deliberately light so a
- * candidate isn't blocked from applying by optional sections.
+ * and at least one non-empty education OR experience entry. Kept deliberately
+ * light so a candidate isn't blocked from applying by optional sections.
  */
 export function isTalentProfileReady(p: TalentProfile | null | undefined): boolean {
   if (!p) return false;
   const hasName = !!(p.basic?.name && p.basic.name.trim());
   const hasTarget = !!(p.intention?.targetRole && String(p.intention.targetRole).trim());
-  const hasHistory = (p.education?.length ?? 0) > 0 || (p.experience?.length ?? 0) > 0;
+  const hasHistory =
+    (p.education ?? []).some(hasMeaningfulEntry) ||
+    (p.experience ?? []).some(hasMeaningfulEntry);
   return hasName && hasTarget && hasHistory;
 }
