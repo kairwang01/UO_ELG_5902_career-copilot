@@ -611,6 +611,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // mail/{id} — outbound email queue for the "Trigger Email" extension. Holds
+    // candidate email addresses; only the Admin SDK (notifications trigger) and
+    // the extension touch it. Clients can NEVER enqueue or read mail.
+    match /mail/{id} {
+      allow read, write: if false;
+    }
+
     // platform_config, usage_events, credit_ledger — and everything else — are
     // server-only (Admin SDK). Clients must use admin* Cloud Functions; no
     // direct reads/writes.
