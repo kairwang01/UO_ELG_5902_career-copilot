@@ -13,7 +13,18 @@ interface CareerCoachBotProps {
     profile: UserProfile | null;
     resumeText: string;
     t: (key: string) => string;
+    /** Route the candidate to a workspace section (intent chips → the right tool). */
+    onLaunchTool?: (target: 'jobs' | 'resume' | 'interview' | 'plan') => void;
 }
+
+// Intent shortcuts — the "one entry routes you" pattern (states intent up front,
+// then drops you in the right tool) instead of a tool menu the user must hunt.
+const COACH_INTENTS: { target: 'jobs' | 'resume' | 'interview' | 'plan'; labelKey: string; icon: string }[] = [
+    { target: 'jobs', labelKey: 'coach_intent_jobs', icon: '🎯' },
+    { target: 'resume', labelKey: 'coach_intent_resume', icon: '📄' },
+    { target: 'interview', labelKey: 'coach_intent_interview', icon: '🎤' },
+    { target: 'plan', labelKey: 'coach_intent_plan', icon: '🧭' },
+];
 
 interface Message {
     role: 'user' | 'model';
@@ -105,7 +116,7 @@ const renderFormattedMessage = (text: string) => {
 };
 
 
-const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, session, profile, resumeText, t }) => {
+const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, session, profile, resumeText, t, onLaunchTool }) => {
     useModalBehavior(onClose, isOpen);
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
@@ -182,6 +193,27 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
 
                 {/* Chat Body */}
                 <div className="flex-grow overflow-y-auto p-4 bg-gray-50/50 dark:bg-slate-900/50">
+                    {messages.length === 0 && !isLoading && (
+                        <div className="py-4">
+                            <p className="text-sm text-gray-600 dark:text-gray-300">{t('coach_welcome')}</p>
+                            {onLaunchTool && (
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                    {COACH_INTENTS.map(({ target, labelKey, icon }) => (
+                                        <button
+                                            key={target}
+                                            type="button"
+                                            onClick={() => onLaunchTool(target)}
+                                            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-sm font-medium text-gray-700 transition hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:hover:border-blue-700 dark:hover:bg-blue-950/30"
+                                        >
+                                            <span aria-hidden="true">{icon}</span>
+                                            <span>{t(labelKey)}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">{t('coach_welcome_or_ask')}</p>
+                        </div>
+                    )}
                     {messages.map((msg, index) => (
                         <div key={index} className={`flex items-end gap-3 my-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             {msg.role === 'model' && (
