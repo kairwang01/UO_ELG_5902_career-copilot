@@ -2,17 +2,24 @@
  * companyReviews — Glassdoor-style company review feature.
  *
  * createCompanyReviewFunction:
- *   Server-only writes with employer-verification gate.
- *   A candidate is a "verified employee" of employer X iff they have a
- *   job_applications doc where candidate_id==caller, employer_id==X, status is
- *   a completed hire state.
+ *   Server-only writes with graded employer-verification gate.
+ *   A candidate may write a review for employer X iff they reached the interview
+ *   stage or beyond in the application pipeline for that employer. Eligibility is
+ *   checked against the immutable `application_status_events` audit log (so a
+ *   candidate who interviewed but was later rejected still qualifies), with a
+ *   belt-and-suspenders cross-check against current `job_applications` statuses.
+ *   The highest stage ever reached determines the `verification_tier`:
+ *     - "interviewed" — reached any interview round
+ *     - "offer"       — received an offer / intent letter / hiring evaluation
+ *     - "hired"       — signed (Signed status)
  *
  * Review doc id is `${employerId}_${uid}` — one review per candidate per company,
  * revisions allowed via set(..., {merge:true}).
  *
- * Reads are open to any signed-in user (no PII — author_uid is stored but never
- * returned; reads go through listCompanyReviews in lib/companyReviewsData.ts which
- * strips it on the client side).
+ * Reads (listCompanyReviewsFunction) are open to any signed-in user. The callable
+ * uses the Admin SDK to project out `author_uid` and the identity-encoding doc id,
+ * returning `verification_tier` in place of the raw `verified` boolean so readers
+ * can see how deeply a reviewer engaged with the company without exposing PII.
  *
  * NOTE: the export line in index.ts is added by a separate agent.
  */
@@ -119,6 +126,7 @@ export const createCompanyReviewFunction = onCall(
       .collection("application_status_events")
       .where("candidate_id", "==", uid)
       .where("employer_id", "==", employerId)
+      .limit(200)
       .get();
     eventsSnap.docs.forEach((d) => {
       const toStatus = typeof d.data().to_status === "string" ? d.data().to_status : "";
