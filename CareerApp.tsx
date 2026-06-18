@@ -196,6 +196,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // Localize callable-error copy: resolve the key, but fall back to the baked-in
   // English when a locale is missing the key (t returns the key itself on a miss).
   useEffect(() => {
+    latestTRef.current = t;
     setErrorTranslator((key, fallback) => {
       const resolved = t(key);
       return resolved && resolved !== key ? resolved : fallback;
@@ -208,6 +209,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [authHydrated, setAuthHydrated] = useState(false);
   // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
   const currentUserIdRef = useRef<string | null>(null);
+  // Latest t() for use inside the auth listener (whose deps stay minimal so it
+  // doesn't re-subscribe on every locale change).
+  const latestTRef = useRef(t);
   
   // Initialize theme from localStorage or system preference
   useEffect(() => {
@@ -620,6 +624,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           if (urlParams.get('payment_success') === 'true') {
             addToast('Payment successful — your plan has been upgraded.', 'success');
             window.history.replaceState({}, document.title, window.location.pathname);
+          } else if (session?.user && session.user.emailVerified === false) {
+            // Surface the "verify your email" reminder the signup modal can't show
+            // (the auth listener navigates away before it renders). Fires only on a
+            // genuine sign-in transition, never on reload or token refresh.
+            addToast(latestTRef.current('auth_signup_success_verify'), 'info');
           }
           setView('home');
         }
