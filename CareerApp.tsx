@@ -242,6 +242,17 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     navigate(location.pathname, { replace: true });
   }, [entry, session, authHydrated, location.search, location.pathname, navigate]);
 
+  // Email "view application" deep-link: the status-change email links to
+  // /workspace?app=<id>. A signed-in candidate arriving with it should land on
+  // My Applications (it was previously ignored → dropped them on the dashboard).
+  useEffect(() => {
+    if (entry !== 'workspace' || !session || !isProfileLoaded) return;
+    const appParam = new URLSearchParams(location.search).get('app');
+    if (!appParam) return;
+    setDashboardView('applications');
+    navigate(location.pathname, { replace: true });
+  }, [entry, session, isProfileLoaded, location.search, location.pathname, navigate]);
+
   // Close the auth modal as soon as a session exists (login success or async restore).
   useEffect(() => {
     if (session?.user && view === 'auth') {

@@ -107,7 +107,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
             addToast(t('browse_jobs_application_recorded'), 'info');
             setPendingApply(null);
         } else if (code === 'functions/failed-precondition') {
-            addToast(t('apply_complete_profile_first'), 'info'); // keep modal open to fix
+            // Modal pre-gates profile + resume, so this is usually a closed job.
+            const msg = (err as { message?: string })?.message ?? '';
+            if (/profile|resume/i.test(msg)) {
+                addToast(t('apply_complete_profile_first'), 'info'); // keep modal open to fix
+            } else {
+                addToast(t('apply_job_closed'), 'info');
+                setPendingApply(null); // job closed — nothing to retry
+            }
         } else {
             console.error('Error applying to job:', err);
             addToast(t('tool_opportunity_finder_apply_error'), 'error'); // keep modal open to retry

@@ -533,7 +533,15 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
         addToast(t('browse_jobs_application_recorded'), 'info');
         setReviewJob(null);
       } else if (code === 'functions/failed-precondition') {
-        addToast(t('apply_complete_profile_first'), 'info'); // keep modal open to fix
+        // The modal pre-gates profile + resume, so the reachable precondition
+        // here is the job having closed. Distinguish by the server message.
+        const msg = (err as { message?: string })?.message ?? '';
+        if (/profile|resume/i.test(msg)) {
+          addToast(t('apply_complete_profile_first'), 'info'); // keep modal open to fix
+        } else {
+          addToast(t('apply_job_closed'), 'info');
+          setReviewJob(null); // job closed — nothing to retry
+        }
       } else {
         addToast(t('browse_jobs_apply_error'), 'error'); // keep modal open to retry
       }

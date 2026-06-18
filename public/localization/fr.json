@@ -2393,6 +2393,7 @@
   "browse_jobs_direct_apply_title": "Postuler depuis votre espace",
   "browse_jobs_direct_apply_hint": "Soumettez maintenant, puis suivez le prochain statut dans Candidatures.",
   "browse_jobs_application_recorded": "Candidature enregistrée",
+  "apply_job_closed": "Cette offre vient de fermer et n'accepte plus de candidatures.",
   "apply_review_title": "Vérifiez avant de postuler",
   "apply_review_subtitle": "Confirmez ce que l'employeur recevra.",
   "apply_review_section_profile": "Partagé avec cet employeur",

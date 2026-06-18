@@ -2381,6 +2381,7 @@
   "browse_jobs_direct_apply_title": "ワークスペースから応募",
   "browse_jobs_direct_apply_hint": "今すぐ送信し、次の状態を応募一覧で確認できます。",
   "browse_jobs_application_recorded": "応募を記録しました",
+  "apply_job_closed": "この求人は締め切られ、応募を受け付けていません。",
   "browse_jobs_track_in_applications": "面接や結果の更新は応募一覧で確認できます。",
   "portal_listings_with_applicants": "応募者がいる募集中求人",
   "portal_listings_quiet_posts": "流入強化が必要な募集中求人",

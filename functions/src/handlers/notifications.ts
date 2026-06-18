@@ -61,23 +61,36 @@ export const onApplicationStatusChangeFunction = onDocumentUpdated(
       // 1) In-app notification — deterministic id per (application, normalized
       //    status) so an employer toggling a stage back and forth can't flood the
       //    candidate's feed (one notification per distinct stage reached).
-      await db
+      // Candidate-facing note the employer attached to this transition (the
+      // internal `reason` is never surfaced — it stays in the audit event).
+      const candidateNote = typeof after.last_status_note === "string" ? after.last_status_note : null;
+      const notifRef = db
         .collection("users")
         .doc(candidateId)
         .collection("notifications")
-        .doc(safeId(`${appId}_${status}`))
+        .doc(safeId(`${appId}_${status}`));
+      await notifRef
         .create({
           type: "application_status",
           application_id: appId,
           job_title: after.job_title ?? null,
           status,
-          // Candidate-facing note the employer attached to this transition (the
-          // internal `reason` is never surfaced — it stays in the audit event).
-          candidate_note: typeof after.last_status_note === "string" ? after.last_status_note : null,
+          candidate_note: candidateNote,
           read: false,
           created_at: admin.firestore.FieldValue.serverTimestamp(),
         })
-        .catch(swallowAlreadyExists);
+        .catch(async (err) => {
+          // Stage already reached: refresh the candidate-facing note (the employer
+          // may have edited it on a re-save) and resurface it unread. Admin SDK
+          // bypasses the owner-only update rule.
+          if ((err as { code?: number | string })?.code === 6 || (err as { code?: string })?.code === "already-exists") {
+            await notifRef
+              .set({ candidate_note: candidateNote, read: false, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+              .catch((e) => console.error("notifications: note refresh failed", e));
+            return;
+          }
+          swallowAlreadyExists(err);
+        });
 
       // 2) Email the candidate on a meaningful forward stage change (best-effort).
       //    Delivered by the Firebase "Trigger Email" extension watching `mail`.
