@@ -214,6 +214,7 @@ STRICT RULES:
 - Use ONLY facts that appear in the resume. NEVER invent names, employers, schools, dates, GPAs, links, tools, or metrics. If something is not in the resume, omit the field or leave it empty.
 - DATES: output every date as YYYY-MM-DD. If only month+year are known, use the 1st of that month (e.g. "Sept 2023" -> "2023-09-01"). If only a year is known, use "YYYY-01-01". For ongoing / "Present" / "Current" / unknown end dates, leave the field empty.
 - basic: full name, email, phone, country, and current city if shown.
+- intention.targetRole: infer the single most likely target role from the candidate's most recent / most senior position or any stated objective/summary (e.g. "Product Manager", "Software Engineer"). intention.roleCategory: the closest broad category. These are a best-guess STARTING POINT the candidate will confirm — base them only on resume evidence, never invent an unrelated role.
 - education: one entry per school/degree. Set "degree" to EXACTLY one of: "High School", "Associate", "Bachelor's", "Master's", "PhD", "Other".
 - experience: one entry per internship or job. workContent = a concise summary of what they did; put outcomes in "outcome" and quantified results in "metrics" (array of short strings like "+30% conversion"); "tools" = an array of tools/technologies used in that role.
 - projects: one entry per project (background = the problem/users; result = what shipped; metrics = quantified figures; link = any URL).

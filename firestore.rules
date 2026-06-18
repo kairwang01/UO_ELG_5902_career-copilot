@@ -555,12 +555,13 @@ service cloud.firestore {
     }
 
     // ---- company_reviews/{id} --------------------------------------------
-    // id format: `${employerId}_${candidateUid}`.
-    // Writes are server-only (Admin SDK via createCompanyReview callable).
-    // Any signed-in user may read (no PII — author_uid is never shown in UI).
+    // id format: `${employerId}_${candidateUid}`. The doc carries author_uid AND
+    // an identity-encoding id, so DIRECT client reads are denied — they would
+    // de-anonymize reviewers. Reads go through the listCompanyReviews callable
+    // (Admin SDK), which projects out author_uid and the raw id. Writes are
+    // server-only (createCompanyReview callable).
     match /company_reviews/{id} {
-      allow read: if isSignedIn();
-      allow write: if false;
+      allow read, write: if false;
     }
 
     // talent_profiles/{uid} — the candidate's reusable structured profile. PII

@@ -131,3 +131,49 @@ export const createCompanyReviewFunction = onCall(
     return { ok: true };
   }
 );
+
+/**
+ * listCompanyReviewsFunction — returns a company's reviews with ZERO identifying
+ * data. Direct client reads of company_reviews are denied in firestore.rules
+ * because the raw doc carries author_uid AND an identity-encoding doc id
+ * (`${employerId}_${uid}`) — readable directly via the SDK regardless of the
+ * client helper. This callable (Admin SDK) projects out both, so a reviewer can
+ * never be de-anonymized.
+ */
+interface ListCompanyReviewsRequest {
+  employerId?: unknown;
+}
+
+export const listCompanyReviewsFunction = onCall({ invoker: "public" }, async (request) => {
+  requireAuth(request); // any signed-in user may read aggregate reviews (no PII returned)
+
+  const data = (request.data ?? {}) as ListCompanyReviewsRequest;
+  const employerId = typeof data.employerId === "string" ? data.employerId.trim() : "";
+  if (!employerId) {
+    throw new HttpsError("invalid-argument", "employerId is required.");
+  }
+
+  const snap = await db
+    .collection("company_reviews")
+    .where("employer_id", "==", employerId)
+    .get();
+
+  const reviews = snap.docs
+    .map((d) => {
+      const r = d.data();
+      const createdAt =
+        r.created_at && typeof (r.created_at as { toDate?: unknown }).toDate === "function"
+          ? (r.created_at as admin.firestore.Timestamp).toDate().toISOString()
+          : null;
+      return {
+        rating: typeof r.rating === "number" ? r.rating : 0,
+        text: typeof r.text === "string" ? r.text : "",
+        verified: r.verified === true,
+        created_at: createdAt,
+      };
+    })
+    // newest first (ISO strings sort lexicographically; nulls last)
+    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+
+  return { reviews };
+});

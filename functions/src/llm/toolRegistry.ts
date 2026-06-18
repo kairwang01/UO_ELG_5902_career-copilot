@@ -84,6 +84,9 @@ const TALENT_PROFILE_EXTRACT_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     basic: { type: Type.OBJECT, properties: { name: _S, preferredName: _S, email: _S, phone: _S, country: _S, city: _S } },
+    // intention.targetRole is a REQUIRED apply-gate field — extracting it here
+    // means an auto-filled profile is actually ready to apply (was omitted).
+    intention: { type: Type.OBJECT, properties: { targetRole: _S, roleCategory: _S } },
     education: {
       type: Type.ARRAY,
       items: { type: Type.OBJECT, properties: { degree: _S, school: _S, location: _S, faculty: _S, major: _S, startDate: _S, endDate: _S, gpa: _S, gpaScale: _S, ranking: _S, researchDirection: _S, relevantCourses: _SA, thesis: _S } },

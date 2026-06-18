@@ -7,16 +7,8 @@
  * submitCompanyReview: calls the createCompanyReview Cloud Function.
  */
 
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  type DocumentData,
-  type Timestamp,
-} from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { firestoreDb, firebaseFunctions } from "./firebaseClient";
+import { firebaseFunctions } from "./firebaseClient";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,55 +27,29 @@ export interface AggregateRating {
   count: number;
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function toIsoOrUndefined(value: unknown): string | undefined {
-  if (!value) return undefined;
-  if (typeof value === "object" && "toDate" in value) {
-    return (value as Timestamp).toDate().toISOString();
-  }
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
-  return undefined;
-}
-
-function mapReview(data: DocumentData): CompanyReview {
-  return {
-    rating: typeof data.rating === "number" ? data.rating : 0,
-    text: typeof data.text === "string" ? data.text : "",
-    verified: data.verified === true,
-    created_at: toIsoOrUndefined(data.created_at),
-  };
-  // NOTE: author_uid is intentionally NOT included — never expose it to UI.
-}
-
 // ─── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Fetches all reviews for a given employer, sorted newest-first.
- * author_uid is stripped — not present on the returned type.
+ * Fetches all reviews for a given employer (newest-first), via the
+ * listCompanyReviews Cloud Function. Direct client reads of company_reviews are
+ * DENIED in firestore.rules — the raw doc carries author_uid and an
+ * identity-encoding doc id, so reads must go through the server, which projects
+ * out everything identifying. The returned objects never contain author_uid.
  */
 export async function listCompanyReviews(
   employerId: string
 ): Promise<CompanyReview[]> {
-  const snap = await getDocs(
-    query(
-      collection(firestoreDb, "company_reviews"),
-      where("employer_id", "==", employerId)
-    )
-  );
-
-  const reviews = snap.docs.map((d) => mapReview(d.data()));
-
-  // Client-sort by created_at desc (Firestore rules don't allow orderBy here
-  // without a composite index that may not exist yet).
-  reviews.sort((a, b) => {
-    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return tb - ta;
-  });
-
-  return reviews;
+  const fn = httpsCallable<
+    { employerId: string },
+    { reviews: Array<{ rating: number; text: string; verified: boolean; created_at: string | null }> }
+  >(firebaseFunctions, "listCompanyReviews");
+  const result = await fn({ employerId });
+  return (result.data?.reviews ?? []).map((r) => ({
+    rating: r.rating,
+    text: r.text,
+    verified: r.verified,
+    created_at: r.created_at ?? undefined,
+  }));
 }
 
 /**

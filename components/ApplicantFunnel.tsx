@@ -612,9 +612,11 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             const { applicants: result } = await listJobApplicants(job.id);
 
             setApplicants(result);
-            if (result.length > 0) {
-                setSelectedApplicant(result[0]);
-            }
+            // Don't auto-spotlight the top AI-scored applicant (result is score-sorted) —
+            // let the selection effect pick filteredApplicants[0], i.e. the chronologically
+            // newest under the default 'newest' sort, consistent with the advisory-not-
+            // automated-ranking compliance posture.
+            setSelectedApplicant(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : t('applicant_funnel_load_error'));
         } finally {

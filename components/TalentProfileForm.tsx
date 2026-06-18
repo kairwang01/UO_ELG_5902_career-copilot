@@ -139,7 +139,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       // Decide which sections will actually receive data (from current state) so
       // we can expand exactly those — the user must see everything before saving.
       const touched = new Set<string>();
-      (['basic', 'additional'] as const).forEach((id) => {
+      (['basic', 'intention', 'additional'] as const).forEach((id) => {
         const exObj = ex[id] as Record<string, string> | undefined;
         if (exObj && Object.keys(exObj).some((k) => { const cur = (profile[id] as Record<string, string>)[k]; return !cur || !String(cur).trim(); })) touched.add(id);
       });
@@ -150,8 +150,8 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       if (ex.skills && Object.keys(ex.skills).some((g) => ((ex.skills as Record<string, string[]>)[g] ?? []).some((s) => !(profile.skills[g] ?? []).includes(s)))) touched.add('skills');
 
       setProfile((p) => {
-        const next: TalentProfile = { ...p, basic: { ...p.basic }, additional: { ...p.additional }, skills: { ...p.skills } };
-        (['basic', 'additional'] as const).forEach((id) => {
+        const next: TalentProfile = { ...p, basic: { ...p.basic }, intention: { ...p.intention }, additional: { ...p.additional }, skills: { ...p.skills } };
+        (['basic', 'intention', 'additional'] as const).forEach((id) => {
           const exObj = ex[id] as Record<string, string> | undefined;
           if (!exObj) return;
           const cur = next[id] as Record<string, string>;

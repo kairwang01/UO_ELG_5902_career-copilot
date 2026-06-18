@@ -21,6 +21,7 @@ import {
     RefreshCw,
     RotateCcw,
     Search,
+    Sparkles,
     Users,
     XCircle,
 } from 'lucide-react';
@@ -649,6 +650,14 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                         <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{description}</p>
                     </div>
                 ))}
+            </div>
+
+            {/* AI-hiring disclosure: candidate match scores here are advisory
+                decision-support, not automated screening (EEOC/FTC/Ontario).
+                Mirrors the ApplicantFunnel banner; shared i18n key. */}
+            <div className="mb-6 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-2.5 text-xs leading-5 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-300" />
+                <span>{t('applicant_funnel_ai_disclosure')}</span>
             </div>
 
             <TalentCommandCenter

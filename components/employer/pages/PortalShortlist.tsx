@@ -39,7 +39,13 @@ type TranslationFn = (key: string) => string;
 // ---- helpers ----------------------------------------------------------------
 
 function escapeCSVField(value: string): string {
-  const s = String(value ?? "");
+  let s = String(value ?? "");
+  // Neutralize spreadsheet formula injection: a candidate-controlled value
+  // starting with = + - @ (or a leading tab/CR) is executed as a formula by
+  // Excel/Sheets/LibreOffice. Prefix an apostrophe so the cell is treated as
+  // text. Runs BEFORE quoting so a value with both a formula char and a comma
+  // gets both protections.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (s.includes('"') || s.includes(",") || s.includes("\n")) {
     return `"${s.replace(/"/g, '""')}"`;
   }
