@@ -149,6 +149,19 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
     })
     .filter((a) => a.candidate_id);
 
+  // First application per candidate for this job (one expected).
+  const appByCandidate = new Map<string, ApplicationRow>();
+  for (const a of applications) if (!appByCandidate.has(a.candidate_id)) appByCandidate.set(a.candidate_id, a);
+
+  // Frozen submission snapshots (resume/profile AS APPLIED) from the server-only
+  // application_snapshots collection, keyed by application id. Batched getAll.
+  const snapshotByAppId = new Map<string, admin.firestore.DocumentData>();
+  const appIds = applications.map((a) => a.application_id);
+  if (appIds.length) {
+    const snapDocs = await db.getAll(...appIds.map((id) => db.collection("application_snapshots").doc(id)));
+    snapDocs.forEach((s) => { if (s.exists) snapshotByAppId.set(s.id, s.data()!); });
+  }
+
   // 3. Fetch candidate docs + Talent Profiles (Admin SDK). Resume text never
   //    leaves the server; structured Talent Profiles are returned only for this
   //    job-owning employer and are also used as match context.
@@ -174,9 +187,20 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
     const snap = userSnaps[i];
     const talentSnap = profileSnaps[i];
     const data = snap && snap.exists ? snap.data() : undefined;
-    const text = data?.resume_text;
-    const resumeText = typeof text === "string" ? text : "";
-    const talentProfile = normalizeTalentProfile(talentSnap && talentSnap.exists ? talentSnap.data() : undefined);
+    const app = appByCandidate.get(cid);
+    const snapshot = app ? snapshotByAppId.get(app.application_id) : undefined;
+    // Prefer the frozen submission snapshot (resume/profile AS APPLIED); fall
+    // back to the live docs only for legacy applications without a snapshot.
+    const snapText = typeof snapshot?.resume_text_snapshot === "string" ? snapshot.resume_text_snapshot : "";
+    const liveText = typeof data?.resume_text === "string" ? data.resume_text : "";
+    // A present snapshot wins even when its text is empty (file-only applicant);
+    // only legacy (no-snapshot) applications fall back to live text.
+    const resumeText = snapshot ? snapText : liveText;
+    const profileSource =
+      snapshot && snapshot.talent_profile_snapshot
+        ? (snapshot.talent_profile_snapshot as admin.firestore.DocumentData)
+        : (talentSnap && talentSnap.exists ? talentSnap.data() : undefined);
+    const talentProfile = normalizeTalentProfile(profileSource);
     talentProfileById.set(cid, talentProfile);
     const profileText = talentProfileToMatchText(talentProfile);
     candidateContextById.set(cid, buildCandidateMatchContext(resumeText, profileText));

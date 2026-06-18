@@ -22,7 +22,7 @@ export async function assertEmployerOwnsApplication(
   db: admin.firestore.Firestore,
   uid: string,
   applicationId: string,
-): Promise<{ candidateId: string; jobId: string }> {
+): Promise<{ candidateId: string; jobId: string; appData: admin.firestore.DocumentData }> {
   const appSnap = await db.collection("job_applications").doc(applicationId).get();
   if (!appSnap.exists) {
     throw new HttpsError("not-found", "Application not found.");
@@ -39,5 +39,7 @@ export async function assertEmployerOwnsApplication(
     throw new HttpsError("permission-denied", "You do not own the job for this application.");
   }
 
-  return { candidateId, jobId };
+  // appData is the (lean) job_applications doc. The frozen submission snapshot
+  // lives in application_snapshots/{applicationId} (read separately by callers).
+  return { candidateId, jobId, appData };
 }

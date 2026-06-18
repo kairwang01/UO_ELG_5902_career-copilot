@@ -2078,6 +2078,8 @@
   "applicant_funnel_clear_all_filters": "すべて解除",
   "applicant_funnel_unnamed_candidate": "名前未設定の候補者",
   "applicant_funnel_talent_profile_chip": "Talent Profile",
+  "applicant_funnel_ai_disclosure": "AI match scores and suggestions are advisory — they help you review faster, not screen people out. Every hiring decision is yours.",
+  "apply_review_need_resume": "履歴書を追加してください（ファイルをアップロードまたはテキストを貼り付け）",
   "applicant_funnel_talent_profile_title": "Talent Profile",
   "applicant_funnel_talent_profile_desc": "候補者が提出した構造化プロフィール。履歴書と併せて確認できます。",
   "applicant_funnel_talent_profile_empty": "この応募者の構造化された Talent Profile はまだありません。",

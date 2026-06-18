@@ -37,8 +37,17 @@ export const getApplicantResumeTextFunction = onCall(
     // Authorize: caller must own the job this candidate applied to.
     const { candidateId } = await assertEmployerOwnsApplication(db, uid, applicationId);
 
-    // Read the candidate's resume_text (Admin SDK; owner-only rules bypassed).
-    // Only resume_text is returned — never email or any other profile field.
+    // Prefer the FROZEN submission snapshot (the resume AS APPLIED) so the
+    // employer reviews what was submitted, not the candidate's later edits. Gate
+    // on the snapshot DOC's existence (not text length) — a file-only applicant
+    // has a legitimately-empty resume_text_snapshot that must still win over the
+    // candidate's later-edited live text. Fall back to live only for legacy
+    // applications that have no snapshot doc at all.
+    const snapDoc = await db.collection("application_snapshots").doc(applicationId).get();
+    if (snapDoc.exists) {
+      const snap = snapDoc.data()!;
+      return { resumeText: typeof snap.resume_text_snapshot === "string" ? snap.resume_text_snapshot : "" };
+    }
     const userSnap = await db.collection("users").doc(candidateId).get();
     const userData = userSnap.exists ? userSnap.data()! : undefined;
     const resumeText = typeof userData?.resume_text === "string" ? userData.resume_text : "";

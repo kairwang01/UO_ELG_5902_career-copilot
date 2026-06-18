@@ -2078,6 +2078,8 @@
   "applicant_funnel_clear_all_filters": "Alle Filter löschen",
   "applicant_funnel_unnamed_candidate": "Unbenannter Kandidat",
   "applicant_funnel_talent_profile_chip": "Talent Profile",
+  "applicant_funnel_ai_disclosure": "AI match scores and suggestions are advisory — they help you review faster, not screen people out. Every hiring decision is yours.",
+  "apply_review_need_resume": "Fügen Sie Ihren Lebenslauf hinzu (Datei hochladen oder Text einfügen)",
   "applicant_funnel_talent_profile_title": "Talent Profile",
   "applicant_funnel_talent_profile_desc": "Strukturiertes Profil, das vom Kandidaten eingereicht und zusammen mit dem Lebenslauf geprüft wird.",
   "applicant_funnel_talent_profile_empty": "Für diesen Bewerber ist noch kein strukturiertes Talent Profile verfügbar.",

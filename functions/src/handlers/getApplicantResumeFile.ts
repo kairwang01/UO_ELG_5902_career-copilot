@@ -57,16 +57,32 @@ export const getApplicantResumeFileFunction = onCall(
     //    single-sourced check with getApplicantResumeText).
     const { candidateId } = await assertEmployerOwnsApplication(db, uid, applicationId);
 
-    // 2. Read the candidate's stored resume-file reference (Admin SDK; owner-only
-    //    Firestore rules are bypassed server-side).
-    const userSnap = await db.collection("users").doc(candidateId).get();
-    const userData = userSnap.exists ? userSnap.data()! : undefined;
-    const path = typeof userData?.resume_file_path === "string" ? userData.resume_file_path : "";
-    const storedName = typeof userData?.resume_file_name === "string" ? userData.resume_file_name : "";
+    // 2. Resolve the file path. Prefer the FROZEN submission snapshot copied at
+    //    apply time (application_resumes/{applicationId}/…) so HR gets the file
+    //    AS SUBMITTED even after the candidate replaces/deletes their resume.
+    //    Fall back to the candidate's live file only for legacy applications.
+    const snapDoc = await db.collection("application_snapshots").doc(applicationId).get();
+    const snapData = snapDoc.exists ? snapDoc.data()! : undefined;
+    const snapPath = typeof snapData?.resume_file_snapshot_path === "string" ? snapData.resume_file_snapshot_path : "";
+    const snapName = typeof snapData?.resume_file_snapshot_name === "string" ? snapData.resume_file_snapshot_name : "";
+    let path = "";
+    let storedName = "";
+    if (snapPath.startsWith(`application_resumes/${applicationId}/`)) {
+      path = snapPath;
+      storedName = snapName;
+    } else {
+      // Legacy fallback: read the candidate's live resume-file reference.
+      const userSnap = await db.collection("users").doc(candidateId).get();
+      const userData = userSnap.exists ? userSnap.data()! : undefined;
+      const livePath = typeof userData?.resume_file_path === "string" ? userData.resume_file_path : "";
+      // Defense-in-depth: only serve a file inside THIS candidate's own namespace.
+      if (livePath.startsWith(`resumes/${candidateId}/`)) {
+        path = livePath;
+        storedName = typeof userData?.resume_file_name === "string" ? userData.resume_file_name : "";
+      }
+    }
 
-    // Defense-in-depth: only ever serve a file inside THIS candidate's own
-    // namespace, regardless of what the doc claims (the field is client-written).
-    if (!path || !path.startsWith(`resumes/${candidateId}/`)) {
+    if (!path) {
       return { available: false };
     }
 

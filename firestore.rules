@@ -642,6 +642,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // application_snapshots/{applicationId} — the frozen resume/Talent-Profile
+    // snapshot taken at apply time (the version HR reviews). Holds candidate PII;
+    // written by createJobApplication and read by the employer-resume callables,
+    // all Admin SDK. Clients NEVER read or write it directly.
+    match /application_snapshots/{applicationId} {
+      allow read, write: if false;
+    }
+
     // platform_config, usage_events, credit_ledger — and everything else — are
     // server-only (Admin SDK). Clients must use admin* Cloud Functions; no
     // direct reads/writes.

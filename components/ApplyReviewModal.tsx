@@ -75,6 +75,9 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
   }, [open, uid]);
 
   const ready = useMemo(() => isTalentProfileReady(profile), [profile]);
+  const hasResume = Boolean(resumeFileName) || hasResumeText;
+  // A resume is required to apply — HR review depends on it (server re-enforces).
+  const canSubmit = ready && hasResume;
   const name = profile?.basic?.name?.trim() || '';
   const targetRole = typeof profile?.intention?.targetRole === 'string' ? profile.intention.targetRole.trim() : '';
   const eduCount = countMeaningful(profile?.education);
@@ -89,7 +92,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
   };
 
   const handleConfirm = async () => {
-    if (submitting || !ready) return;
+    if (submitting || !canSubmit) return;
     setSubmitting(true);
     try {
       await onConfirm();
@@ -186,7 +189,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
                 </div>
               </dl>
 
-              {!ready && (
+              {!canSubmit && (
                 <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-900/50 dark:bg-amber-950/20">
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-200">
                     <AlertCircle className="h-4 w-4" />
@@ -196,6 +199,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
                     {!name && <li>• {t('apply_review_need_name')}</li>}
                     {!targetRole && <li>• {t('apply_review_need_target')}</li>}
                     {eduCount === 0 && expCount === 0 && <li>• {t('apply_review_need_history')}</li>}
+                    {!hasResume && <li>• {t('apply_review_need_resume')}</li>}
                   </ul>
                   {!onEditProfile && (
                     <p className="mt-2 text-xs font-medium text-amber-800/90 dark:text-amber-200/90">{t('apply_review_sidebar_hint')}</p>
@@ -213,7 +217,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3.5 dark:border-slate-700">
-          {!loading && !loadError && !ready && onEditProfile && (
+          {!loading && !loadError && !canSubmit && onEditProfile && (
             <button
               type="button"
               onClick={handleEdit}
@@ -233,7 +237,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={submitting || loading || loadError || !ready}
+            disabled={submitting || loading || loadError || !canSubmit}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-600"
           >
             {submitting ? (

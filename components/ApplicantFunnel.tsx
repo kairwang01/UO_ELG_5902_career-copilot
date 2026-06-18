@@ -543,7 +543,10 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [recencyFilter, setRecencyFilter] = useState<RecencyFilter>('all');
     const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>('all');
-    const [sortKey, setSortKey]         = useState<SortKey>('score');
+    // Default to chronological, NOT AI match score: ranking applicants by an AI
+    // score by default reads as automated screening (EEOC/FTC/Ontario AI-hiring
+    // scrutiny). The score stays available as an opt-in, advisory sort.
+    const [sortKey, setSortKey]         = useState<SortKey>('newest');
 
     const fetchApplicants = useCallback(async () => {
         try {
@@ -677,7 +680,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         setStatusFilter('all');
         setRecencyFilter('all');
         setAnalysisFilter('all');
-        setSortKey('score');
+        setSortKey('newest');
     };
 
     const applyQuickFilter = (filter: QuickFilterKey) => {
@@ -693,7 +696,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             setMinScore('85');
             setRecencyFilter('all');
             setAnalysisFilter('all');
-            setSortKey('score');
+            setSortKey('newest');
             return;
         }
 
@@ -943,6 +946,13 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                     </span>
                 </div>
                 <FunnelChart data={funnelData} t={t} />
+            </div>
+
+            {/* AI-hiring disclosure: AI output here is advisory decision-support,
+                not automated screening (EEOC/FTC guidance; Ontario ESA disclosure). */}
+            <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-2.5 text-xs leading-5 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-300" />
+                <span>{t('applicant_funnel_ai_disclosure')}</span>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
