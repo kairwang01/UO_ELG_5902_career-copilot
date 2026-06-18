@@ -600,6 +600,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // employer_responsiveness/{employerId} — coarse, backward-looking aggregate
+    // (avg days-to-first-action, last action) derived server-side from the audit
+    // log. Employer-level, NO candidate PII — any signed-in user may read it to
+    // see the job-card responsiveness badge. Server-only writes (trigger).
+    match /employer_responsiveness/{employerId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // platform_config, usage_events, credit_ledger — and everything else — are
     // server-only (Admin SDK). Clients must use admin* Cloud Functions; no
     // direct reads/writes.

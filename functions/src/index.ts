@@ -67,6 +67,7 @@ export { adminDeleteModelFunction      as adminDeleteModel     } from "./handler
 export { adminSetDefaultModelFunction  as adminSetDefaultModel } from "./handlers/adminModels";
 export { createCompanyReviewFunction   as createCompanyReview  } from "./handlers/companyReviews";
 export { listCompanyReviewsFunction    as listCompanyReviews   } from "./handlers/companyReviews";
+export { onApplicationStatusEventCreatedFunction as onApplicationStatusEventCreated } from "./handlers/responsiveness";
 export { adminGetPromptsFunction            as adminGetPrompts           } from "./handlers/adminPrompts";
 export { adminUpdatePromptFunction          as adminUpdatePrompt         } from "./handlers/adminPrompts";
 export { adminResetPromptFunction           as adminResetPrompt          } from "./handlers/adminPrompts";

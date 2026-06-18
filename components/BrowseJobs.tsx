@@ -16,7 +16,7 @@ import {
   Target,
   X,
 } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from '../lib/firebaseClient';
 import { listAllActiveJobPostings } from '../lib/recruitingData';
@@ -169,6 +169,21 @@ const postedLabel = (iso: string, t: (k: string) => string): string => {
   return new Date(iso).toLocaleDateString();
 };
 
+// ── helper: employer responsiveness badge (anti-ghosting, coarse + honest) ────
+// Returns { text, recent } or null when there isn't enough signal to claim anything.
+const responsivenessBadge = (
+  resp: { avgDays: number | null; lastActionMs: number | null } | null | undefined,
+  t: (k: string) => string,
+): { text: string; recent: boolean } | null => {
+  if (!resp) return null;
+  const recent = resp.lastActionMs !== null && Date.now() - resp.lastActionMs < 14 * 86_400_000;
+  if (resp.avgDays !== null) {
+    return { text: t('browse_jobs_responds_in').replace('{n}', String(Math.max(1, Math.round(resp.avgDays)))), recent };
+  }
+  if (recent) return { text: t('browse_jobs_active_recently'), recent: true };
+  return null;
+};
+
 // ── main component ─────────────────────────────────────────────────────────────
 const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) => {
   const { addToast } = useToast();
@@ -198,6 +213,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
   const [reviewsExpanded, setReviewsExpanded] = useState<Record<string, boolean>>({});
   // Track which employer ids are already being fetched to avoid duplicate requests.
   const fetchingReviews = useRef<Set<string>>(new Set());
+
+  // Employer responsiveness badge (anti-ghosting): coarse, backward-looking
+  // aggregate derived server-side. Keyed by employer_id, loaded eagerly for the
+  // visible jobs so the badge shows on the collapsed card.
+  type RespEntry = { avgDays: number | null; lastActionMs: number | null };
+  const [respCache, setRespCache] = useState<Record<string, RespEntry>>({});
+  const respCacheRef = useRef<Record<string, RespEntry>>({});
+  const fetchingResp = useRef<Set<string>>(new Set());
 
   // ── debounce keyword ──────────────────────────────────────────────────────
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -290,6 +313,33 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
       }
     })();
   }, [expandedId, jobs]);
+
+  // ── eager-load employer responsiveness for the visible jobs ─────────────────
+  useEffect(() => {
+    const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)));
+    eids.forEach((eid) => {
+      if (respCacheRef.current[eid] !== undefined || fetchingResp.current.has(eid)) return;
+      fetchingResp.current.add(eid);
+      (async () => {
+        try {
+          const snap = await getDoc(doc(firestoreDb, 'employer_responsiveness', eid));
+          const d = snap.exists() ? snap.data() : undefined;
+          const count = typeof d?.count === 'number' ? d.count : 0;
+          const sum = typeof d?.sum_days === 'number' ? d.sum_days : 0;
+          const lastMs = d?.last_action_at?.toMillis?.() ?? null;
+          const entry: RespEntry = { avgDays: count >= 3 ? sum / count : null, lastActionMs: lastMs };
+          respCacheRef.current = { ...respCacheRef.current, [eid]: entry };
+          setRespCache((prev) => ({ ...prev, [eid]: entry }));
+        } catch {
+          const entry: RespEntry = { avgDays: null, lastActionMs: null };
+          respCacheRef.current = { ...respCacheRef.current, [eid]: entry };
+          setRespCache((prev) => ({ ...prev, [eid]: entry }));
+        } finally {
+          fetchingResp.current.delete(eid);
+        }
+      })();
+    });
+  }, [jobs]);
 
   // ── distinct locations ────────────────────────────────────────────────────
   const locations = useMemo(() => {
@@ -826,6 +876,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
             const reviewsId = eid ? `job-reviews-${job.id}` : undefined;
             const employerReviews = eid ? (reviewCache[eid] ?? null) : null;
             const showRatingChip = employerReviews && employerReviews.count > 0;
+            const respBadge = responsivenessBadge(eid ? respCache[eid] : null, t);
             const reviewsOpen = eid ? (reviewsExpanded[eid] ?? false) : false;
             const applicationStages = [
               { label: t('browse_jobs_status_viewed'), active: true, icon: Clock3 },
@@ -864,6 +915,20 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                           <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-full px-2 py-0.5 whitespace-nowrap">
                             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
                             {employerReviews!.avg.toFixed(1)}&nbsp;({employerReviews!.count})
+                          </span>
+                        )}
+                        {/* Responsiveness badge — coarse, honest, anti-ghosting */}
+                        {respBadge && (
+                          <span
+                            title={t('browse_jobs_responsiveness_hint')}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${
+                              respBadge.recent
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-900/20 dark:text-emerald-300'
+                                : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                            }`}
+                          >
+                            <Clock3 className="h-3 w-3" />
+                            {respBadge.text}
                           </span>
                         )}
                         {isApplied && (
