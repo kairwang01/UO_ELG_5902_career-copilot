@@ -39,6 +39,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
   const [profile, setProfile] = useState<TalentProfile | null>(null);
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [hasResumeText, setHasResumeText] = useState(false);
+  const [resumeSnippet, setResumeSnippet] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -56,6 +57,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
     setProfile(null);
     setResumeFileName(null);
     setHasResumeText(false);
+    setResumeSnippet('');
     Promise.all([loadTalentProfile(uid), data.profiles.get(uid)])
       .then(([tp, profileRes]) => {
         if (!active) return;
@@ -65,7 +67,9 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
         setProfile(tp);
         const user = profileRes.data;
         setResumeFileName(user?.resume_file_name ?? null);
-        setHasResumeText(Boolean(user?.resume_text && user.resume_text.trim().length > 0));
+        const text = (user?.resume_text ?? '').trim();
+        setHasResumeText(text.length > 0);
+        setResumeSnippet(text.length > 180 ? `${text.slice(0, 180).trim()}…` : text);
         setLoading(false);
       })
       .catch(() => {
@@ -84,6 +88,11 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
   const expCount = countMeaningful(profile?.experience);
   const projCount = countMeaningful(profile?.projects);
   const skillCount = countSkills(profile);
+  // Latest experience = first meaningful entry — shown as a real preview line.
+  const topExp = (profile?.experience ?? []).find(hasMeaningfulEntry);
+  const topExpLabel = topExp
+    ? [topExp.role, topExp.company].map((v) => (typeof v === 'string' ? v.trim() : '')).filter(Boolean).join(' · ')
+    : '';
 
   if (!open || !job) return null;
 
@@ -176,11 +185,15 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
               <dl className="space-y-2.5 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
                 <Row label={t('apply_review_name')} value={name || '—'} />
                 <Row label={t('apply_review_target_role')} value={targetRole || '—'} />
+                {topExpLabel && <Row label={t('apply_review_latest_experience')} value={topExpLabel} icon={<Briefcase className="h-3.5 w-3.5 text-slate-400" />} />}
                 <Row
                   label={t('apply_review_resume')}
                   value={resumeStatus}
                   icon={<FileText className="h-3.5 w-3.5 text-slate-400" />}
                 />
+                {resumeSnippet && (
+                  <p className="rounded-lg bg-slate-50 px-2.5 py-2 text-xs italic leading-5 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">“{resumeSnippet}”</p>
+                )}
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   <Stat icon={<GraduationCap className="h-3.5 w-3.5" />} label={t('apply_review_education')} count={eduCount} />
                   <Stat icon={<Briefcase className="h-3.5 w-3.5" />} label={t('apply_review_experience')} count={expCount} />
