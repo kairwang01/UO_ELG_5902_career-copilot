@@ -92,8 +92,6 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
         <p className="mt-0.5">{t('tool_career_path_intro_line2')}</p>
       </div>
 
-      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_career_path_setup_desc')}</p>
-
       {/* (b) SAMPLE-FILL */}
       <div className="flex items-center gap-2">
         <button

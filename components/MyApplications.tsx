@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
-import { ArrowDownUp, Bell, Briefcase, CheckCircle2, Clock3, MessageSquare, RotateCcw, Search, Star, X } from 'lucide-react';
+import { ArrowDownUp, Bell, Briefcase, CheckCircle2, ChevronDown, ChevronUp, Clock3, MessageSquare, RotateCcw, Search, Star, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
 import {
   APPLICATION_FILTER_GROUPS,
@@ -318,6 +318,66 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, t }) => {
   );
 };
 
+// ─── Compact Progress (default, collapsed) ──────────────────────────────────────
+
+interface CompactProgressProps {
+  status: ApplicationPipelineStatus;
+  t: (k: string) => string;
+}
+
+const CompactProgress: React.FC<CompactProgressProps> = ({ status, t }) => {
+  const total = APPLICATION_PIPELINE_STAGES.length;
+  const isComplete = isApplicationHiredStatus(status);
+  const isRejected = isApplicationRejectedStatus(status);
+  // Status index is 0-based across the pipeline; present as 1-based "Step n".
+  const rawIndex = getApplicationStatusIndex(status);
+  const step = isRejected ? 0 : Math.min(Math.max(rawIndex, 0) + 1, total);
+  const percent = isRejected ? 0 : isComplete ? 100 : Math.round((step / total) * 100);
+
+  const barTrack = isRejected
+    ? 'bg-slate-200 dark:bg-slate-700'
+    : 'bg-slate-100 dark:bg-slate-800';
+  const barFill = isRejected
+    ? 'bg-slate-300 dark:bg-slate-600'
+    : isComplete
+      ? 'bg-emerald-500 dark:bg-emerald-400'
+      : 'bg-blue-500 dark:bg-blue-400';
+  const captionClass = isRejected
+    ? 'text-slate-400 dark:text-slate-500'
+    : isComplete
+      ? 'text-emerald-700 dark:text-emerald-300'
+      : 'text-slate-600 dark:text-slate-300';
+
+  const caption = isRejected
+    ? t('applications_process_ended')
+    : isComplete
+      ? t('applications_pipeline_complete')
+      : formatTranslation(t('applications_pipeline_step'), {
+          step,
+          total,
+          stage: t(getApplicationStatusLabelKey(status)),
+        });
+
+  return (
+    <div className="mt-5">
+      <div
+        className={`h-1.5 w-full overflow-hidden rounded-full ${barTrack}`}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        aria-label={t('applications_timeline_label')}
+      >
+        <div
+          className={`h-full rounded-full transition-all ${barFill}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className={`mt-2 text-xs font-medium ${captionClass}`}>{caption}</p>
+    </div>
+  );
+};
+
 // ─── Application Card ─────────────────────────────────────────────────────────
 
 interface CardProps {
@@ -333,6 +393,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
   const guidance = STATUS_GUIDANCE[statusGroup];
   const GuidanceIcon = guidance.icon;
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
   const currentStatusLabel = t(getApplicationStatusLabelKey(app.status));
 
   return (
@@ -405,7 +466,25 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
         </div>
       )}
 
-      <ProgressTimeline status={app.status} t={t} />
+      {/* Compact progress by default; full timeline behind a per-card disclosure. */}
+      <CompactProgress status={app.status} t={t} />
+
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setPipelineOpen((open) => !open)}
+          aria-expanded={pipelineOpen}
+          aria-label={pipelineOpen ? t('applications_pipeline_hide') : t('applications_pipeline_show')}
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700/60 dark:hover:text-slate-200"
+        >
+          {pipelineOpen ? t('applications_pipeline_hide') : t('applications_pipeline_show')}
+          {pipelineOpen
+            ? <ChevronUp className="h-3.5 w-3.5" />
+            : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+
+      {pipelineOpen && <ProgressTimeline status={app.status} t={t} />}
 
       {isHired && app.employer_id && (
         <div className="mt-3 flex items-center justify-end">

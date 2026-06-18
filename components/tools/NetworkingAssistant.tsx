@@ -60,8 +60,6 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
         <p className="mt-0.5">{t('tool_networking_intro_line2')}</p>
       </div>
 
-      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_networking_assistant_setup_desc')}</p>
-
       {/* (b) SAMPLE-FILL */}
       <button
         type="button"

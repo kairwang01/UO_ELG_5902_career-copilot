@@ -6,6 +6,7 @@ import {
     ArrowRight,
     BookOpen,
     Briefcase,
+    ChevronDown,
     Clock3,
     Download,
     Eye,
@@ -599,6 +600,9 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     // score by default reads as automated screening (EEOC/FTC/Ontario AI-hiring
     // scrutiny). The score stays available as an opt-in, advisory sort.
     const [sortKey, setSortKey]         = useState<SortKey>('newest');
+    // Secondary refinements (status / recency / analysis) live behind a single
+    // "Filters" disclosure to keep the rail card-first; tiles + search + sort stay visible.
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     const fetchApplicants = useCallback(async () => {
         try {
@@ -728,6 +732,16 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         return count;
     }, [keyword, minScore, statusFilter, recencyFilter, analysisFilter]);
 
+    // Count of the refinements tucked behind the "Filters" disclosure, surfaced
+    // as a badge so an active hidden filter is still discoverable when collapsed.
+    const secondaryFilterCount = useMemo(() => {
+        let count = 0;
+        if (statusFilter !== 'all') count++;
+        if (recencyFilter !== 'all') count++;
+        if (analysisFilter !== 'all') count++;
+        return count;
+    }, [statusFilter, recencyFilter, analysisFilter]);
+
     const clearFilters = () => {
         setKeyword('');
         setMinScore('all');
@@ -800,29 +814,6 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         { key: 'recent', label: t('applicant_funnel_stat_recent'), count: recentCount, Icon: Clock3 },
         { key: 'needs_review', label: t('applicant_funnel_stat_needs_review'), count: needsReviewCount, Icon: FileWarning },
     ];
-    const activeFilterLabels = useMemo(() => {
-        const labels: string[] = [];
-        const trimmedKeyword = keyword.trim();
-
-        if (trimmedKeyword) {
-            labels.push(formatTranslation(t('applicant_funnel_filter_keyword_value'), { value: trimmedKeyword }));
-        }
-        if (minScore !== 'all') {
-            labels.push(formatTranslation(t('applicant_funnel_filter_score_value'), { value: scoreOptionLabel(minScore) }));
-        }
-        if (statusFilter !== 'all') {
-            labels.push(formatTranslation(t('applicant_funnel_filter_status_value'), { value: getStatusLabel(statusFilter) }));
-        }
-        if (recencyFilter !== 'all') {
-            labels.push(formatTranslation(t('applicant_funnel_filter_recency_value'), { value: recencyOptionLabel(recencyFilter) }));
-        }
-        if (analysisFilter !== 'all') {
-            labels.push(formatTranslation(t('applicant_funnel_filter_analysis_value'), { value: analysisOptionLabel(analysisFilter) }));
-        }
-
-        return labels;
-    }, [analysisFilter, keyword, minScore, recencyFilter, statusFilter, t]);
-
     const selectedRecommendation = useMemo(() => {
         if (!selectedApplicant) return null;
 
@@ -999,9 +990,18 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                         <h3 className="text-xl font-bold leading-tight text-gray-900 dark:text-gray-100">
                             {formatTranslation(t('applicant_funnel_title'), { title: job.title })}
                         </h3>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500 dark:text-gray-400">
-                            {t('applicant_funnel_subtitle')}
-                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                                <Users className="h-3.5 w-3.5" />
+                                {formatTranslation(t('applicant_funnel_total_count'), { count: applicants.length })}
+                            </span>
+                            {highMatchCount > 0 && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                    <Target className="h-3.5 w-3.5" />
+                                    {formatTranslation(t('applicant_funnel_high_match_count'), { count: highMatchCount })}
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 lg:justify-self-end">
                         <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -1019,23 +1019,6 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-2.5 text-xs leading-5 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
                 <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-300" />
                 <span>{t('applicant_funnel_ai_disclosure')}</span>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                    { label: t('applicant_funnel_stat_total'), value: applicants.length, Icon: Users },
-                    { label: t('applicant_funnel_stat_high_match'), value: highMatchCount, Icon: Target },
-                    { label: t('applicant_funnel_stat_recent'), value: recentCount, Icon: Clock3 },
-                    { label: t('applicant_funnel_stat_needs_review'), value: needsReviewCount, Icon: FileWarning },
-                ].map(({ label, value, Icon }) => (
-                    <div key={label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/40">
-                            <Icon className="h-4 w-4 text-blue-700 dark:text-blue-300" />
-                        </div>
-                        <div className="text-2xl font-semibold text-gray-900 dark:text-white">{value}</div>
-                        <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</div>
-                    </div>
-                ))}
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -1118,45 +1101,10 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             </SelectField>
 
                             <SelectField
-                                id="applicant-status-filter"
-                                label={t('applicant_funnel_status_label')}
-                                value={statusFilter}
-                                onChange={setStatusFilter}
-                            >
-                                <option value="all">{t('applicant_funnel_status_all')}</option>
-                                {statusOptions.map(status => (
-                                    <option key={status} value={status}>{getStatusLabel(status)}</option>
-                                ))}
-                            </SelectField>
-
-                            <SelectField
-                                id="applicant-recency-filter"
-                                label={t('applicant_funnel_recency_label')}
-                                value={recencyFilter}
-                                onChange={(value) => setRecencyFilter(value as RecencyFilter)}
-                            >
-                                {RECENCY_OPTIONS.map(option => (
-                                    <option key={option} value={option}>{recencyOptionLabel(option)}</option>
-                                ))}
-                            </SelectField>
-
-                            <SelectField
-                                id="applicant-analysis-filter"
-                                label={t('applicant_funnel_analysis_label')}
-                                value={analysisFilter}
-                                onChange={(value) => setAnalysisFilter(value as AnalysisFilter)}
-                            >
-                                {ANALYSIS_OPTIONS.map(option => (
-                                    <option key={option} value={option}>{analysisOptionLabel(option)}</option>
-                                ))}
-                            </SelectField>
-
-                            <SelectField
                                 id="applicant-sort"
                                 label={t('applicant_funnel_sort_label')}
                                 value={sortKey}
                                 onChange={(value) => setSortKey(value as SortKey)}
-                                className="sm:col-span-2 lg:col-span-1 xl:col-span-2"
                             >
                                 {SORT_OPTIONS.map(option => (
                                     <option key={option} value={option}>{sortOptionLabel(option)}</option>
@@ -1164,23 +1112,65 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             </SelectField>
                         </div>
 
-                        {activeFilterLabels.length > 0 && (
-                            <div className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 dark:border-blue-900/60 dark:bg-blue-950/20">
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                                    {t('applicant_funnel_active_filters')}
-                                </p>
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                    {activeFilterLabels.map((label) => (
-                                        <span
-                                            key={label}
-                                            className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-blue-800 ring-1 ring-blue-100 dark:bg-gray-900 dark:text-blue-200 dark:ring-blue-900/60"
-                                        >
-                                            {label}
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setFiltersOpen((open) => !open)}
+                                aria-expanded={filtersOpen}
+                                aria-controls="applicant-secondary-filters"
+                                className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                            >
+                                <span className="inline-flex items-center gap-2">
+                                    <SlidersHorizontal className="h-4 w-4 text-gray-400" />
+                                    {t('applicant_funnel_filters_disclosure')}
+                                    {secondaryFilterCount > 0 && (
+                                        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold leading-none text-white dark:bg-blue-500">
+                                            {secondaryFilterCount}
                                         </span>
-                                    ))}
+                                    )}
+                                </span>
+                                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {filtersOpen && (
+                                <div id="applicant-secondary-filters" className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                                    <SelectField
+                                        id="applicant-status-filter"
+                                        label={t('applicant_funnel_status_label')}
+                                        value={statusFilter}
+                                        onChange={setStatusFilter}
+                                    >
+                                        <option value="all">{t('applicant_funnel_status_all')}</option>
+                                        {statusOptions.map(status => (
+                                            <option key={status} value={status}>{getStatusLabel(status)}</option>
+                                        ))}
+                                    </SelectField>
+
+                                    <SelectField
+                                        id="applicant-recency-filter"
+                                        label={t('applicant_funnel_recency_label')}
+                                        value={recencyFilter}
+                                        onChange={(value) => setRecencyFilter(value as RecencyFilter)}
+                                    >
+                                        {RECENCY_OPTIONS.map(option => (
+                                            <option key={option} value={option}>{recencyOptionLabel(option)}</option>
+                                        ))}
+                                    </SelectField>
+
+                                    <SelectField
+                                        id="applicant-analysis-filter"
+                                        label={t('applicant_funnel_analysis_label')}
+                                        value={analysisFilter}
+                                        onChange={(value) => setAnalysisFilter(value as AnalysisFilter)}
+                                        className="sm:col-span-2 lg:col-span-1 xl:col-span-2"
+                                    >
+                                        {ANALYSIS_OPTIONS.map(option => (
+                                            <option key={option} value={option}>{analysisOptionLabel(option)}</option>
+                                        ))}
+                                    </SelectField>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
 
                     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">

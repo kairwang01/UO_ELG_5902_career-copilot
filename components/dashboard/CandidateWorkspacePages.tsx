@@ -5,6 +5,8 @@ import {
   Briefcase,
   CalendarCheck,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   CreditCard,
   FileText,
   ListFilter,
@@ -327,6 +329,101 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   );
 };
 
+const JobMatchCard: React.FC<{
+  job: typeof jobMatches[number];
+  t: (key: string) => string;
+  onOpenTool: (tool: string) => void;
+}> = ({ job, t, onOpenTool }) => {
+  const [showWhy, setShowWhy] = useState(false);
+
+  return (
+    <article className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
+      {/* Decision layer: title + score, priority, company·location, skill-gap chips */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{job.title}</h3>
+            <StatusPill tone={job.score >= 80 ? 'ready' : 'gap'}>
+              {t('ws_job_match_score_badge').replace('{score}', String(job.score))}
+            </StatusPill>
+          </div>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {job.company} · {job.location}
+          </p>
+        </div>
+        <StatusPill tone="neutral">{t(job.priorityKey)}</StatusPill>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('ws_job_match_skill_gaps')}</span>
+        {job.gaps.map((gap) => (
+          <StatusPill key={gap} tone="gap">
+            {gap}
+          </StatusPill>
+        ))}
+      </div>
+
+      {/* Why this match — progressive disclosure: evidence + requirements */}
+      <button
+        type="button"
+        onClick={() => setShowWhy((prev) => !prev)}
+        aria-expanded={showWhy}
+        className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+      >
+        {t('ws_job_match_why')}
+        {showWhy ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+
+      {showWhy && (
+        <div className="mt-3 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">{t('ws_job_match_evidence')}</p>
+            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              {job.evidence.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <table className="w-full text-sm">
+            <tbody>
+              {job.requirements.map((req) => (
+                <tr key={req.label} className="border-t border-slate-200 dark:border-slate-700">
+                  <td className="py-2 pr-2 text-slate-700 dark:text-slate-300">{req.label}</td>
+                  <td className={`py-2 text-right font-medium ${req.met ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                    {req.met ? t('ws_job_match_requirement_met') : t('ws_job_match_requirement_gap')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => onOpenTool('cover-letter')}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+        >
+          <Mail className="h-4 w-4" />
+          {t('workspace_draft_cover_letter')}
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenTool('email-crafter')}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+        >
+          <Send className="h-4 w-4" />
+          {t('workspace_prepare_outreach')}
+        </button>
+      </div>
+    </article>
+  );
+};
+
 export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, onViewChange, session }) => {
   const [sort, setSort] = useState<'priority' | 'score'>('priority');
   const hasResume = resumeText.trim().length > 0;
@@ -390,83 +487,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
 
           <div className="space-y-4">
             {sortedJobs.map((job) => (
-              <article key={job.id} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{job.title}</h3>
-                      <StatusPill tone={job.score >= 80 ? 'ready' : 'gap'}>
-                        {t('ws_job_match_score_badge').replace('{score}', String(job.score))}
-                      </StatusPill>
-                    </div>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                      {job.company} · {job.location}
-                    </p>
-                  </div>
-                  <StatusPill tone="neutral">{t(job.priorityKey)}</StatusPill>
-                </div>
-
-                <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">{t('ws_job_match_evidence')}</p>
-                    <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-                      {job.evidence.map((item) => (
-                        <li key={item} className="flex gap-2">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('ws_job_match_skill_gaps')}</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {job.gaps.map((gap) => (
-                          <StatusPill key={gap} tone="gap">
-                            {gap}
-                          </StatusPill>
-                        ))}
-                      </div>
-                    </div>
-                    <table className="w-full text-sm">
-                      <tbody>
-                        {job.requirements.map((req) => (
-                          <tr key={req.label} className="border-t border-slate-200 dark:border-slate-700">
-                            <td className="py-2 pr-2 text-slate-700 dark:text-slate-300">{req.label}</td>
-                            <td className={`py-2 text-right font-medium ${req.met ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                              {req.met ? t('ws_job_match_requirement_met') : t('ws_job_match_requirement_gap')}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {t('ws_job_match_next_step')}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onOpenTool('cover-letter')}
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
-                    >
-                      <Mail className="h-4 w-4" />
-                      {t('workspace_draft_cover_letter')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenTool('email-crafter')}
-                      className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
-                    >
-                      <Send className="h-4 w-4" />
-                      {t('workspace_prepare_outreach')}
-                    </button>
-                  </div>
-                </div>
-              </article>
+              <JobMatchCard key={job.id} job={job} t={t} onOpenTool={onOpenTool} />
             ))}
           </div>
         </div>

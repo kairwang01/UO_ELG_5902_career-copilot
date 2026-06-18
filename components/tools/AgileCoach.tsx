@@ -76,8 +76,6 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
         <p>{t('tool_agile_coach_intro_desc')}</p>
       </div>
 
-      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_agile_coach_setup_desc')}</p>
-
       {/* (b) SAMPLE FILL */}
       <div className="text-right">
         <button

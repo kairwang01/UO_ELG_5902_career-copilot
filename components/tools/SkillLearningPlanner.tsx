@@ -65,8 +65,6 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
         <p className="mt-0.5">{t('tool_skill_planner_intro_line2')}</p>
       </div>
 
-      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_skill_planner_setup_desc')}</p>
-
       {/* (b) SAMPLE-FILL */}
       <button
         type="button"

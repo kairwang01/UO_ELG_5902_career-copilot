@@ -70,8 +70,6 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_salary_negotiator_setup_desc')}</p>
-
         {/* (b) SAMPLE FILL */}
         <div className="text-right">
           <button
