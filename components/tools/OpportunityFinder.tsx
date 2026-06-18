@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Info, Search } from 'lucide-react';
 import { findOpportunities, calculateCompatibility, generateProfessionalEmail } from '../../services/aiClient';
-import { loadTalentProfile } from '../../services/talentProfile';
-import { isTalentProfileReady } from '../../lib/talentProfile';
+import ApplyReviewModal, { type ApplyReviewJob } from '../ApplyReviewModal';
 import type { OpportunityResult, Opportunity } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
@@ -72,38 +71,47 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const [introLoading, setIntroLoading] = useState<Record<string, boolean>>({});
 
   const applyInFlightRef = useRef<string | null>(null);
-  const applyToInternalJob = async (jobId: string, compatibilityScore: number | undefined) => {
+  // Pre-submit review: the candidate confirms what the employer will receive
+  // before the application is actually created.
+  const [pendingApply, setPendingApply] = useState<{ job: ApplyReviewJob; score: number | undefined } | null>(null);
+
+  const openApplyReview = (jobId: string, title: string, company: string | undefined, compatibilityScore: number | undefined) => {
     if (!session?.user) {
         addToast(t('tool_opportunity_finder_signin_required'), 'error');
         return;
     }
-    if (applyInFlightRef.current === jobId) return; // guard against double-clicks
-    applyInFlightRef.current = jobId;
+    if (appliedJobs.has(jobId)) return;
+    setPendingApply({ job: { id: jobId, title, company }, score: compatibilityScore });
+  };
+
+  const confirmApply = async () => {
+    if (!session?.user || !pendingApply) return;
+    const { job, score } = pendingApply;
+    if (appliedJobs.has(job.id) || applyInFlightRef.current === job.id) return;
+    applyInFlightRef.current = job.id;
     try {
-        // Applying requires a ready Talent Profile. A read FAILURE must not be read
-        // as "no profile" (which would mislead a ready candidate) — abort + retry.
-        let profileReady = false;
-        try {
-            profileReady = isTalentProfileReady(await loadTalentProfile(session.user.id));
-        } catch {
-            addToast(t('tool_opportunity_finder_apply_error'), 'error');
-            return;
-        }
-        if (!profileReady) {
-            addToast(t('apply_complete_profile_first'), 'info');
-            return;
-        }
         // Write goes through a Cloud Function: employer_id / job_title are read
         // server-side from the authoritative job_postings doc (not forgeable from
-        // the client), duplicates are rejected atomically, and Firestore rules
-        // forbid client-side creates on job_applications.
+        // the client), duplicates are rejected atomically, Firestore rules forbid
+        // client-side creates, and the ready-Talent-Profile precondition is
+        // re-enforced server-side.
         const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
-        await createJobApplication({ jobId, compatibilityScore: compatibilityScore ?? null });
-
-        setAppliedJobs(prev => new Set(prev).add(jobId));
+        await createJobApplication({ jobId: job.id, compatibilityScore: score ?? null });
+        setAppliedJobs(prev => new Set(prev).add(job.id));
+        addToast(t('tool_opportunity_finder_apply_success'), 'success');
+        setPendingApply(null);
     } catch (err) {
-        console.error('Error applying to job:', err);
-        addToast(t('tool_opportunity_finder_apply_error'), 'error');
+        const code = (err as { code?: string })?.code ?? '';
+        if (code === 'functions/already-exists') {
+            setAppliedJobs(prev => new Set(prev).add(job.id));
+            addToast(t('browse_jobs_application_recorded'), 'info');
+            setPendingApply(null);
+        } else if (code === 'functions/failed-precondition') {
+            addToast(t('apply_complete_profile_first'), 'info'); // keep modal open to fix
+        } else {
+            console.error('Error applying to job:', err);
+            addToast(t('tool_opportunity_finder_apply_error'), 'error'); // keep modal open to retry
+        }
     } finally {
         applyInFlightRef.current = null;
     }
@@ -502,7 +510,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
 
                         <div className="mt-4 flex flex-wrap gap-2 justify-end">
                              {job.isInternal ? (
-                                <button onClick={() => applyToInternalJob(jobId, job.compatibilityScore)} disabled={hasApplied} className={`text-sm text-white px-3 py-1.5 rounded-md transition-colors ${hasApplied ? 'bg-green-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                <button onClick={() => openApplyReview(jobId, job.jobTitle, job.company, job.compatibilityScore)} disabled={hasApplied} className={`text-sm text-white px-3 py-1.5 rounded-md transition-colors ${hasApplied ? 'bg-green-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
                                     {hasApplied ? t('tool_opportunity_finder_applied_button') : t('tool_opportunity_finder_apply_button')}
                                 </button>
                              ) : (
@@ -554,6 +562,17 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
             ))}
           </ul>
         </div>
+      )}
+
+      {session?.user && (
+        <ApplyReviewModal
+          open={Boolean(pendingApply)}
+          job={pendingApply?.job ?? null}
+          uid={session.user.id}
+          t={t}
+          onConfirm={confirmApply}
+          onClose={() => setPendingApply(null)}
+        />
       )}
     </div>
   );

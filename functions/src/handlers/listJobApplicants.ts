@@ -180,16 +180,21 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
     talentProfileById.set(cid, talentProfile);
     const profileText = talentProfileToMatchText(talentProfile);
     candidateContextById.set(cid, buildCandidateMatchContext(resumeText, profileText));
+    // The Talent Profile name is the candidate's own typed name (apply gate
+    // guarantees it) — prefer it over users.full_name, which can be null for
+    // OAuth sign-ins. (users has no email field, so that fallback is inert.)
+    const tpName = typeof talentProfile?.basic?.name === "string" ? (talentProfile.basic.name as string).trim() : "";
     const fullName = typeof data?.full_name === "string" ? data.full_name.trim() : "";
     const email = typeof data?.email === "string" ? data.email.trim() : "";
-    liveNameById.set(cid, fullName || email);
+    liveNameById.set(cid, tpName || fullName || email);
   });
 
-  // Backfill empty/whitespace snapshot names from the live profile name (or email).
+  // Backfill snapshot names that are empty OR email-shaped (older applications
+  // froze the login email before the name fix) from the live profile name.
   for (const a of applications) {
-    if (!a.candidate_name.trim()) {
-      a.candidate_name = liveNameById.get(a.candidate_id) || a.candidate_name;
-    }
+    const live = liveNameById.get(a.candidate_id);
+    const stale = !a.candidate_name.trim() || a.candidate_name.includes("@");
+    if (stale && live) a.candidate_name = live;
   }
 
   // 4. Run analyzeCandidateMatch per applicant ON THE SERVER. Applicants without

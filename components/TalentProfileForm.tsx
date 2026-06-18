@@ -120,6 +120,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const [prefillMsg, setPrefillMsg] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ basic: true, intention: true });
   const [loadError, setLoadError] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   // Auto-fill from the candidate's resume. Fills ONLY empty fields / empty list
@@ -223,11 +224,17 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const persist = async (markComplete: boolean): Promise<TalentProfile> => {
     const next: TalentProfile = { ...profile, status: markComplete && ready ? 'complete' : profile.status };
     setSaving(true);
+    setSaveError(false);
     try {
       await saveTalentProfile(uid, next);
       setProfile(next);
       setSavedAt(Date.now());
       onSaved?.(next);
+    } catch (e) {
+      // Surface the failure — a silent swallow leaves the form looking saved
+      // while the server still holds the old profile (and the apply gate reads it).
+      setSaveError(true);
+      throw e;
     } finally {
       setSaving(false);
     }
@@ -331,11 +338,16 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       {/* Sticky action bar */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
-          <button type="button" onClick={() => persist(true)} disabled={saving || prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
+          {saveError && (
+            <span className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
+              Couldn't save. Check your connection and try again.
+            </span>
+          )}
+          <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
           </button>
           {onPrimary && (
-            <button type="button" disabled={saving || prefilling || !ready} onClick={async () => { const p = await persist(true); onPrimary(p); }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" disabled={saving || prefilling || !ready} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
               {primaryLabel ?? 'Save & apply'}
             </button>
           )}

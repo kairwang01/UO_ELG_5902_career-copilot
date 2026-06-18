@@ -25,7 +25,7 @@ import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { ALL_PLANS, PLAN_HIERARCHY } from '../../config';
 
-type WorkspaceView = 'dashboard' | 'resume' | 'jobs' | 'interview' | 'plan' | 'toolkit' | 'billing';
+type WorkspaceView = 'dashboard' | 'resume' | 'talent_profile' | 'jobs' | 'interview' | 'plan' | 'toolkit' | 'billing';
 
 interface WorkspacePageProps {
   resumeText: string;
@@ -327,7 +327,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   );
 };
 
-export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, session }) => {
+export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, onViewChange, session }) => {
   const [sort, setSort] = useState<'priority' | 'score'>('priority');
   const hasResume = resumeText.trim().length > 0;
   const sortedJobs = useMemo(
@@ -347,7 +347,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
         onPrimary={() => (hasResume ? onOpenTool('opportunity-finder') : onUploadResume())}
       />
       <CareerGoalsPanel t={t} />
-      <BrowseJobs session={session ?? null} t={t} />
+      <BrowseJobs session={session ?? null} t={t} onEditProfile={() => onViewChange('talent_profile')} />
 
       {!hasResume ? (
         <EmptyWorkbenchState

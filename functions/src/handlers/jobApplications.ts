@@ -98,12 +98,16 @@ export const createJobApplicationFunction = onCall(async (request) => {
     );
   }
 
-  // 4. Read candidate name from their profile (server-side — trusted).
+  // 4. Freeze the candidate's display name (server-side — trusted). The Talent
+  //    Profile name is the highest-confidence source: the apply gate above
+  //    guarantees basic.name is non-empty. Prefer it over users.full_name (which
+  //    is null for OAuth sign-ins whose displayName was empty) so the employer
+  //    never sees the login email where a real name exists.
+  const tpBasic = talentProfileSnap.data()?.basic as Record<string, unknown> | undefined;
+  const tpName = typeof tpBasic?.name === "string" ? tpBasic.name.trim() : "";
   const userSnap = await db.collection("users").doc(uid).get();
-  const candidateName: string =
-    userSnap.data()?.full_name ??
-    request.auth?.token.email ??
-    "Candidate";
+  const fullName = typeof userSnap.data()?.full_name === "string" ? userSnap.data()!.full_name.trim() : "";
+  const candidateName: string = tpName || fullName || request.auth?.token.email || "Candidate";
 
   // 5. Write the application. Admin SDK bypasses Firestore client rules.
   const appRef = await db.collection("job_applications").add({

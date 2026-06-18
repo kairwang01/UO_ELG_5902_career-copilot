@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { loadTalentProfile } from '../services/talentProfile';
-import { isTalentProfileReady } from '../lib/talentProfile';
+import ApplyReviewModal, { type ApplyReviewJob } from './ApplyReviewModal';
 import {
   Briefcase,
   CheckCircle2,
@@ -38,6 +37,8 @@ import {
 interface BrowseJobsProps {
   session: Session | null;
   t: (key: string) => string;
+  /** Jump to the Talent Profile editor (from the pre-submit review step). */
+  onEditProfile?: () => void;
 }
 
 const QUICK_SEARCHES = [
@@ -169,7 +170,7 @@ const postedLabel = (iso: string, t: (k: string) => string): string => {
 };
 
 // ── main component ─────────────────────────────────────────────────────────────
-const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
+const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) => {
   const { addToast } = useToast();
   const { prefs } = useJobPreferences();
 
@@ -448,39 +449,49 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   // Ref guard catches double-clicks that land before React re-renders with the
   // disabled state (state updates are async; the ref flips synchronously).
   const applyInFlight = useRef<string | null>(null);
-  const handleApply = useCallback(async (jobId: string) => {
+  const [reviewJob, setReviewJob] = useState<ApplyReviewJob | null>(null);
+
+  // Step 1 — open the pre-submit review. The candidate confirms exactly what the
+  // employer will receive (name, resume, Talent Profile) before anything is sent.
+  const openApplyReview = useCallback((job: JobPosting) => {
     if (!session?.user) {
       addToast(t('browse_jobs_sign_in_to_apply'), 'error');
       return;
     }
+    if (appliedJobs.has(job.id)) return;
+    setReviewJob({ id: job.id, title: job.title, company: job.company_name ?? undefined });
+  }, [session, appliedJobs, addToast, t]);
+
+  // Step 2 — actually submit, only after the candidate confirms in the modal.
+  // The server re-enforces the ready-Talent-Profile precondition (bypass-safe).
+  const confirmApply = useCallback(async () => {
+    if (!session?.user || !reviewJob) return;
+    const jobId = reviewJob.id;
     if (appliedJobs.has(jobId) || applyInFlight.current === jobId) return;
-    applyInFlight.current = jobId; // set before the profile read so a double-click can't double-apply
+    applyInFlight.current = jobId;
     setApplyingId(jobId);
     try {
-      // Applying requires a ready Talent Profile. A read FAILURE must not be read
-      // as "no profile" (which would mislead a ready candidate) — abort + retry.
-      let profileReady = false;
-      try {
-        profileReady = isTalentProfileReady(await loadTalentProfile(session.user.id));
-      } catch {
-        addToast(t('browse_jobs_apply_error'), 'error');
-        return;
-      }
-      if (!profileReady) {
-        addToast(t('apply_complete_profile_first'), 'info');
-        return;
-      }
       const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
       await createJobApplication({ jobId, compatibilityScore: null });
       setAppliedJobs((prev) => new Set(prev).add(jobId));
       addToast(t('browse_jobs_apply_success'), 'success');
-    } catch {
-      addToast(t('browse_jobs_apply_error'), 'error');
+      setReviewJob(null);
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? '';
+      if (code === 'functions/already-exists') {
+        setAppliedJobs((prev) => new Set(prev).add(jobId));
+        addToast(t('browse_jobs_application_recorded'), 'info');
+        setReviewJob(null);
+      } else if (code === 'functions/failed-precondition') {
+        addToast(t('apply_complete_profile_first'), 'info'); // keep modal open to fix
+      } else {
+        addToast(t('browse_jobs_apply_error'), 'error'); // keep modal open to retry
+      }
     } finally {
       applyInFlight.current = null;
       setApplyingId(null);
     }
-  }, [session, appliedJobs, addToast, t]);
+  }, [session, reviewJob, appliedJobs, addToast, t]);
 
   // ── render ────────────────────────────────────────────────────────────────
   return (
@@ -956,7 +967,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                       <button
                         type="button"
                         disabled={isApplied || isApplying}
-                        onClick={() => handleApply(job.id)}
+                        onClick={() => openApplyReview(job)}
                         aria-busy={isApplying}
                         aria-label={
                           isApplied
@@ -1061,6 +1072,18 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             );
           })}
         </div>
+      )}
+
+      {session?.user && (
+        <ApplyReviewModal
+          open={Boolean(reviewJob)}
+          job={reviewJob}
+          uid={session.user.id}
+          t={t}
+          onConfirm={confirmApply}
+          onClose={() => setReviewJob(null)}
+          onEditProfile={onEditProfile}
+        />
       )}
     </section>
   );
