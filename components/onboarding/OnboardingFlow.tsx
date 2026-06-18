@@ -29,6 +29,8 @@ interface OnboardingFlowProps {
   uid: string;
   profile: UserProfile;
   t: (key: string) => string;
+  /** Drives the brand mark's surface tint so it matches the themed onboarding chrome. */
+  theme: 'light' | 'dark';
   /** skipped=true → nothing was persisted. resumeText flows into the workspace. */
   onComplete: (result: { skipped: boolean; resumeText?: string }) => void;
 }
@@ -78,7 +80,7 @@ const TransitionScreen: React.FC<{ line: string }> = ({ line }) => (
   </div>
 );
 
-const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComplete }) => {
+const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme, onComplete }) => {
   const [phase, setPhase] = useState<Phase>('intro');
 
   // ── collected answers (in memory until consent) ───────────────────────────
@@ -240,7 +242,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
       {/* Top bar: brand + progress + skip */}
       <header className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur px-4 pt-4 pb-3 sm:px-8">
         <div className="mx-auto flex w-full max-w-lg items-center gap-3">
-          <BrandMark className="h-8 w-8 shrink-0" />
+          <BrandMark surface={theme === 'dark' ? 'dark' : 'light'} className="h-8 w-8 shrink-0" />
           <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
             <div
               className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out"

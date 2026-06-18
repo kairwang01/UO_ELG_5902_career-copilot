@@ -1123,6 +1123,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           uid={session.user.id}
           profile={profile}
           t={t}
+          theme={theme}
           onComplete={({ skipped, resumeText: importedResume }) => {
             if (importedResume) {
               // The workspace's debounced auto-save persists this to the profile.
