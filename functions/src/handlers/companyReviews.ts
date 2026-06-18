@@ -27,6 +27,40 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// Pipeline status → group. Mirrors lib/applicationPipeline.ts, inlined because
+// functions/src cannot import the root lib/ (tsconfig includes src/** only).
+const INTERVIEW_STATUSES = new Set([
+  "Group Interview",
+  "First Interview",
+  "Second Interview",
+  "Decision Maker Interview",
+  "HR Interview",
+]);
+const OFFER_STATUSES = new Set([
+  "Offer",
+  "Hiring Evaluation",
+  "Intent Letter",
+  "Offer Confirmed",
+  "Tripartite Agreement",
+]);
+const HIRED_STATUSES = new Set(["Signed"]);
+
+type VerificationTier = "interviewed" | "offer" | "hired";
+
+// Rank so we can take the highest stage ever reached. 0 = below threshold.
+function statusTierRank(status: string): number {
+  if (HIRED_STATUSES.has(status)) return 3;
+  if (OFFER_STATUSES.has(status)) return 2;
+  if (INTERVIEW_STATUSES.has(status)) return 1;
+  return 0;
+}
+
+const RANK_TO_TIER: Record<number, VerificationTier> = {
+  3: "hired",
+  2: "offer",
+  1: "interviewed",
+};
+
 interface CreateCompanyReviewRequest {
   employerId: string;
   rating: number;
@@ -76,27 +110,41 @@ export const createCompanyReviewFunction = onCall(
       );
     }
 
-    // ── Verification: caller must be hired through the platform at this employer ──
+    // ── Verification: highest pipeline stage ever reached at this employer ──
+    // Use the immutable audit log so a candidate who interviewed and was later
+    // rejected still qualifies (their current status would be "Rejected").
+    let bestRank = 0;
 
-    const hiredSnap = await db
+    const eventsSnap = await db
+      .collection("application_status_events")
+      .where("candidate_id", "==", uid)
+      .where("employer_id", "==", employerId)
+      .get();
+    eventsSnap.docs.forEach((d) => {
+      const toStatus = typeof d.data().to_status === "string" ? d.data().to_status : "";
+      bestRank = Math.max(bestRank, statusTierRank(toStatus));
+    });
+
+    // Also consider current application statuses (belt-and-suspenders).
+    const appsSnap = await db
       .collection("job_applications")
       .where("candidate_id", "==", uid)
       .where("employer_id", "==", employerId)
-      .limit(10)
+      .limit(25)
       .get();
-
-    const isVerified = hiredSnap.docs.some((d) => {
-      // "Signed" is the pipeline's only hired status (lib/applicationPipeline.ts,
-      // group 'hired'). There is no "Hired" status — that branch never matched.
-      return d.data().status === "Signed";
+    appsSnap.docs.forEach((d) => {
+      const status = typeof d.data().status === "string" ? d.data().status : "";
+      bestRank = Math.max(bestRank, statusTierRank(status));
     });
 
-    if (!isVerified) {
+    if (bestRank < 1) {
       throw new HttpsError(
         "failed-precondition",
-        "Only verified employees (hired through the platform) can review this company."
+        "Only candidates who interviewed (or progressed further) through the platform can review this company."
       );
     }
+
+    const verificationTier: VerificationTier = RANK_TO_TIER[bestRank];
 
     // ── Snapshot company_name from users/{employerId} ───────────────────────
 
@@ -121,7 +169,8 @@ export const createCompanyReviewFunction = onCall(
         author_uid: uid,
         rating: data.rating,
         text,
-        verified: true,
+        verification_tier: verificationTier,
+        verified: verificationTier === "hired",
         created_at: createdAt,
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       },
@@ -165,10 +214,19 @@ export const listCompanyReviewsFunction = onCall({ invoker: "public" }, async (r
         r.created_at && typeof (r.created_at as { toDate?: unknown }).toDate === "function"
           ? (r.created_at as admin.firestore.Timestamp).toDate().toISOString()
           : null;
+      const tier =
+        r.verification_tier === "hired" ||
+        r.verification_tier === "offer" ||
+        r.verification_tier === "interviewed"
+          ? r.verification_tier
+          : r.verified === true
+          ? "hired"
+          : "interviewed";
       return {
         rating: typeof r.rating === "number" ? r.rating : 0,
         text: typeof r.text === "string" ? r.text : "",
         verified: r.verified === true,
+        verification_tier: tier,
         created_at: createdAt,
       };
     })
