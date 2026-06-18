@@ -2062,6 +2062,7 @@
   "applicant_funnel_status_reason_placeholder": "任意：例 ポートフォリオ確認済み、グループ面接をスキップ",
   "applicant_funnel_candidate_note_label": "候補者メモ",
   "applications_employer_note_label": "採用担当者からのメモ",
+  "applications_reviewed_on": "{date} に採用担当者が確認しました",
   "applicant_funnel_candidate_note_placeholder": "候補者への連絡やフォローアップ用の任意メモ",
   "applicant_funnel_filter_result": "{total} 名中 {shown} 名を表示",
   "applicant_funnel_stat_total": "応募者数",

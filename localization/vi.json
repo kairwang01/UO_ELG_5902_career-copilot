@@ -2062,6 +2062,7 @@
   "applicant_funnel_status_reason_placeholder": "Tùy chọn: ví dụ hồ sơ đạt, hoặc bỏ qua phỏng vấn nhóm",
   "applicant_funnel_candidate_note_label": "Ghi chú cho ứng viên",
   "applications_employer_note_label": "Ghi chú từ nhà tuyển dụng",
+  "applications_reviewed_on": "Nhà tuyển dụng đã xem vào {date}",
   "applicant_funnel_candidate_note_placeholder": "Ghi chú tùy chọn cho thông báo ứng viên hoặc theo dõi sau",
   "applicant_funnel_filter_result": "Hiển thị {shown}/{total} ứng viên",
   "applicant_funnel_stat_total": "Tổng ứng viên",

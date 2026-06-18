@@ -35,7 +35,17 @@ export const getApplicantResumeTextFunction = onCall(
     }
 
     // Authorize: caller must own the job this candidate applied to.
-    const { candidateId } = await assertEmployerOwnsApplication(db, uid, applicationId);
+    const { candidateId, appData } = await assertEmployerOwnsApplication(db, uid, applicationId);
+
+    // Anti-ghosting "Reviewed" receipt: record the FIRST time the owning employer
+    // opened this applicant's resume, so the candidate's My Applications can show
+    // "Reviewed on {date}" instead of leaving them guessing whether anyone looked.
+    // Idempotent (set once) and best-effort — never block the resume read.
+    if (!appData.employer_viewed_at) {
+      db.collection("job_applications").doc(applicationId)
+        .update({ employer_viewed_at: admin.firestore.FieldValue.serverTimestamp() })
+        .catch(() => { /* non-fatal */ });
+    }
 
     // Prefer the FROZEN submission snapshot (the resume AS APPLIED) so the
     // employer reviews what was submitted, not the candidate's later edits. Gate

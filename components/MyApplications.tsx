@@ -37,12 +37,24 @@ interface ApplicationRow {
   compatibility_score?: number | null;
   // Candidate-facing note the employer attached to the latest status change.
   last_status_note?: string | null;
+  // First time the employer opened this applicant's resume (anti-ghosting receipt).
+  employer_viewed_at?: { toMillis?: () => number; toDate?: () => Date } | null;
 }
 
 type FilterStatus = ApplicationFilterGroup;
 type ApplicationSortKey = 'newest' | 'match' | 'title';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTimestamp(ts?: { toDate?: () => Date } | null): string {
+  try {
+    const d = ts?.toDate?.();
+    if (d) return d.toLocaleDateString();
+  } catch {
+    // ignore
+  }
+  return '';
+}
 
 function formatDate(row: ApplicationRow): string {
   try {
@@ -379,6 +391,13 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
         </div>
       </div>
 
+      {app.employer_viewed_at && (
+        <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          {formatTranslation(t('applications_reviewed_on'), { date: formatTimestamp(app.employer_viewed_at) })}
+        </div>
+      )}
+
       {app.last_status_note && (
         <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/20">
           <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-800 dark:text-blue-200">
@@ -556,6 +575,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
             application_date: data.application_date as ApplicationRow['application_date'],
             compatibility_score: typeof data.compatibility_score === 'number' ? data.compatibility_score : null,
             last_status_note: typeof data.last_status_note === 'string' ? data.last_status_note : null,
+            employer_viewed_at: (data.employer_viewed_at ?? null) as ApplicationRow['employer_viewed_at'],
           } satisfies ApplicationRow;
         });
         rows.sort(

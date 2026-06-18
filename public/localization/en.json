@@ -1168,6 +1168,7 @@
   "applications_meta_role": "Role",
   "applications_current_status": "Current status: {status}",
   "applications_employer_note_label": "Note from the employer",
+  "applications_reviewed_on": "Reviewed by the employer on {date}",
   "applications_filter_all": "All",
   "applications_filter_applied": "Applied",
   "applications_filter_interview": "Interview",

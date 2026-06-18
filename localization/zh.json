@@ -1168,6 +1168,7 @@
   "applications_meta_role": "投递岗位",
   "applications_current_status": "当前状态：{status}",
   "applications_employer_note_label": "来自招聘方的留言",
+  "applications_reviewed_on": "招聘方已于 {date} 查看",
   "applications_filter_all": "全部",
   "applications_filter_applied": "投递",
   "applications_filter_interview": "面试",

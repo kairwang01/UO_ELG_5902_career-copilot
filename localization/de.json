@@ -2062,6 +2062,7 @@
   "applicant_funnel_status_reason_placeholder": "Optional: z. B. Portfolio geprüft oder Gruppeninterview übersprungen",
   "applicant_funnel_candidate_note_label": "Kandidatennotiz",
   "applications_employer_note_label": "Nachricht vom Arbeitgeber",
+  "applications_reviewed_on": "Vom Arbeitgeber geprüft am {date}",
   "applicant_funnel_candidate_note_placeholder": "Optionale Notiz für Kandidatenkommunikation oder Follow-up",
   "applicant_funnel_filter_result": "{shown} von {total} Bewerbungen angezeigt",
   "applicant_funnel_stat_total": "Bewerbungen gesamt",
