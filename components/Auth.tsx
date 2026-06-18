@@ -57,26 +57,26 @@ const PlanSelectorCard: React.FC<{ plan: Plan & { key: string }; isSelected: boo
 };
 
 
-const getAuthErrorMessage = (message: string): string => {
+const getAuthErrorMessage = (message: string, t: AuthProps['t']): string => {
   if (message.includes('invalid-credential') || message.includes('wrong-password') || message.includes('user-not-found')) {
-    return 'Incorrect email or password. Please try again.';
+    return t('auth_error_invalid_credentials');
   }
   if (message.includes('email-already-in-use') || message.includes('already registered')) {
-    return 'An account with this email already exists. Please sign in instead.';
+    return t('auth_error_user_exists');
   }
   if (message.includes('weak-password')) {
-    return 'Password is too weak. Please use at least 6 characters.';
+    return t('auth_error_weak_password');
   }
   if (message.includes('invalid-email')) {
-    return 'Please enter a valid email address.';
+    return t('auth_error_invalid_email');
   }
   if (message.includes('too-many-requests')) {
-    return 'Too many failed attempts. Please wait a few minutes and try again.';
+    return t('auth_error_too_many_requests');
   }
   if (message.includes('network-request-failed')) {
-    return 'Network error. Please check your connection and try again.';
+    return t('auth_error_network');
   }
-  return 'Something went wrong. Please try again.';
+  return t('auth_error_generic');
 };
 
 const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }) => {
@@ -113,7 +113,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setMessage(null);
     const { error } = await data.auth.signInWithPassword(email, password);
     if (error) {
-      setError(getAuthErrorMessage(error.message));
+      setError(getAuthErrorMessage(error.message, t));
     } else {
       onClose();
     }
@@ -151,7 +151,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         setError(t('auth_error_user_exists'));
         setAuthView('sign_in');
       } else {
-        setError(getAuthErrorMessage(authError.message));
+        setError(getAuthErrorMessage(authError.message, t));
       }
       setLoading(false);
       return;
@@ -175,7 +175,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         });
 
         if (profileError) {
-          setError(`Account created, but we failed to set up your profile. Error: ${profileError.message}`);
+          setError(t('auth_profile_created_setup_failed').replace('{error}', profileError.message));
         } else {
           // Best-effort: set Firebase Auth displayName (non-fatal if it fails).
           try {
@@ -207,7 +207,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         setError(err instanceof Error ? err.message : t('auth_unexpected_error'));
       }
     } else {
-      setError('User account was not created successfully. Please try again.');
+      setError(t('auth_account_create_failed'));
     }
 
     setLoading(false);
@@ -219,7 +219,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     setError(null);
     setMessage(null);
     const { error } = await data.auth.resetPassword(email);
-    if (error) setError(getAuthErrorMessage(error.message));
+    if (error) setError(getAuthErrorMessage(error.message, t));
     else setMessage(t('auth_message_reset_link_sent'));
     setLoading(false);
   }
@@ -237,7 +237,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     // stuck on "Signing in…" until a full reload.
     const { error } = await data.auth.signInWithGoogle();
     if (error) {
-      setError(getAuthErrorMessage(error.message));
+      setError(getAuthErrorMessage(error.message, t));
     }
     // On success the auth listener closes this modal; resetting is harmless.
     setLoading(false);

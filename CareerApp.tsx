@@ -375,7 +375,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             setCredits(refreshed.credits || userCredits);
           }
         } catch (planErr) {
-          addToast(`Could not apply your selected plan yet: ${(planErr as Error).message}`, 'error');
+          const message = planErr instanceof Error ? planErr.message : String(planErr);
+          addToast(latestTRef.current('selected_plan_apply_failed').replace('{error}', message), 'error');
         }
       };
 
@@ -430,7 +431,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         }
       }
     } catch {
-      setError("Could not load your profile. Please try again later.");
+      setError(latestTRef.current('profile_load_error'));
     } finally {
         setIsProfileLoaded(true);
     }
@@ -554,7 +555,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             setIsRedirecting(false);
         }
     } catch (error) {
-        setError(`Error preparing for checkout: ${(error as Error).message}`);
+        const message = error instanceof Error ? error.message : String(error);
+        setError(latestTRef.current('checkout_prepare_error').replace('{error}', message));
         setIsRedirecting(false);
     }
   }, [session, getProfile]);
@@ -565,7 +567,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       await setUserSubscription(`pending_biz_${planKey}`);
       await getProfile();
     } catch (error) {
-      addToast(`Failed to set plan: ${(error as Error).message}`, 'error');
+      const message = error instanceof Error ? error.message : String(error);
+      addToast(t('business_plan_set_failed').replace('{error}', message), 'error');
     }
   };
 
@@ -622,7 +625,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         if (_event === 'SIGNED_IN') {
           const urlParams = new URLSearchParams(window.location.search);
           if (urlParams.get('payment_success') === 'true') {
-            addToast('Payment successful — your plan has been upgraded.', 'success');
+            addToast(latestTRef.current('payment_success_plan_upgraded'), 'success');
             window.history.replaceState({}, document.title, window.location.pathname);
           } else if (session?.user && session.user.emailVerified === false) {
             // Surface the "verify your email" reminder the signup modal can't show
@@ -655,7 +658,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         if (typeof p.credits === 'number') setCredits(p.credits);
       },
       () => {
-        addToast('Profile updates are temporarily unavailable. Refresh if account details look stale.', 'info');
+        addToast(latestTRef.current('profile_updates_unavailable'), 'info');
       }
     );
     return () => unsub();
@@ -688,7 +691,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     const handleStripeRedirect = () => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('payment_cancelled') === 'true') {
-            addToast('Payment cancelled. You can try again anytime from the pricing page.', 'info');
+            addToast(latestTRef.current('payment_cancelled_try_again'), 'info');
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     };
@@ -740,7 +743,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const performAnalysis = async () => {
     if (!resumeText.trim() && (!resumeImages || resumeImages.length === 0)) {
-      setError('Please provide your resume before analyzing.');
+      setError(t('resume_analysis_required'));
       return;
     }
     setIsLoading(true);
@@ -750,7 +753,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     try {
       const success = await deductCredits(analysisCost, session);
       if (!success) {
-          throw new Error("Credit deduction failed. Please check your balance.");
+          throw new Error(t('credit_deduction_failed'));
       }
       
       const result = await analyzeResume(resumeText, resumeImages, market);
@@ -767,7 +770,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               keywords: result.keywords,
             });
         } catch {
-            addToast('Analysis finished, but the activity history could not be updated.', 'info');
+            addToast(t('analysis_history_update_failed'), 'info');
         }
       }
       
@@ -792,7 +795,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('An unknown error occurred.');
+        setError(t('unexpected_error'));
       }
     } finally {
       setIsLoading(false);

@@ -78,6 +78,20 @@ const UploadSection: React.FC<UploadSectionProps> = ({
       t(key),
     );
 
+  const parseFileErrorMessage = (parseError: unknown) => {
+    if (!(parseError instanceof Error)) return t('upload_file_parse_failed');
+    switch (parseError.message) {
+      case 'Could not extract text or images from PDF.':
+        return t('upload_file_pdf_extract_failed');
+      case 'Could not read the image file.':
+        return t('upload_file_image_read_failed');
+      case 'Unsupported file type. Please upload a .txt, .png, .jpg, .pdf, or .docx file.':
+        return t('upload_file_unsupported_type');
+      default:
+        return t('upload_file_parse_failed');
+    }
+  };
+
   const clearInputs = () => {
     setResumeText('');
     setResumeImages(null);
@@ -151,7 +165,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
         // downloadable copy of exactly what the user submitted.
         onResumeFileSelected?.(file);
     } catch (parseError) {
-        setError(parseError instanceof Error ? parseError.message : t('upload_file_parse_failed'));
+        setError(parseFileErrorMessage(parseError));
         setInfoMessage(null);
     } finally {
         setIsParsing(false);

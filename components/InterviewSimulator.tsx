@@ -451,7 +451,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         setError(null);
         try {
             const generated = await generateInterviewQuestions(resumeText, assembleContext(), market);
-            if (!generated.length) throw new Error("No interview questions were generated. Please try again.");
+            if (!generated.length) throw new Error(t('mi_error_no_questions_generated'));
             answersRef.current = [];
             submittingRef.current = false;
             setQuestions(generated);
@@ -463,7 +463,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             setStage('interviewing');
             speak(generated[0].question, () => setPrepArmed(true));
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to start interview session.");
+            setError(err instanceof Error ? err.message : t('mi_error_start_failed'));
             setStage('setup');
         }
     };
