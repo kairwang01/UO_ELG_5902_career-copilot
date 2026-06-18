@@ -377,16 +377,13 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
         </div>
       </div>
 
-      <div className={`mt-5 rounded-lg border px-4 py-4 text-sm leading-relaxed ${guidance.className}`}>
+      {/* Next-step guidance only — the status itself is already shown by the chip
+          above, so the old "Current status: {status}" heading was a third echo. */}
+      <div className={`mt-5 rounded-lg border px-4 py-3 text-sm leading-relaxed ${guidance.className}`}>
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-lg font-semibold leading-7">
-              {formatTranslation(t('applications_current_status'), { status: currentStatusLabel })}
-            </p>
-            <p className="mt-2 max-w-3xl opacity-90">{t(guidance.descKey)}</p>
-          </div>
-          <span className={`hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:flex ${guidance.iconClassName}`}>
-            <GuidanceIcon className="h-6 w-6" />
+          <p className="min-w-0 max-w-3xl font-medium opacity-90">{t(guidance.descKey)}</p>
+          <span className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl sm:flex ${guidance.iconClassName}`}>
+            <GuidanceIcon className="h-5 w-5" />
           </span>
         </div>
       </div>
