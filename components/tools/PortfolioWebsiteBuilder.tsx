@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Globe, Sparkles } from 'lucide-react';
 import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
@@ -7,6 +7,15 @@ import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useToast } from '../Toast';
 import { ToolError } from './ToolUtils';
 import type { AppSession as Session } from '../../lib/data';
+import {
+  deletePortfolioDraft,
+  loadPortfolioDraft,
+  portfolioDraftResumeFingerprint,
+  savePortfolioDraft,
+  type PortfolioDraftDetails,
+  type PortfolioDraftInput,
+  type PortfolioDraftProject,
+} from '../../services/portfolioDraft';
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -337,6 +346,48 @@ const truncate = (value: string, maxLength: number): string => {
 const isBlankProject = (project: Project): boolean =>
     !compact(project.title) && !compact(project.description) && !compact(project.url);
 
+const DEFAULT_PROJECT: Project = { id: 1, title: '', description: '', url: '', category: 'Web' };
+
+const toDraftProject = (project: Project): PortfolioDraftProject => ({
+    title: project.title,
+    description: project.description,
+    url: project.url,
+    category: project.category,
+});
+
+const fromDraftProject = (project: PortfolioDraftProject, index: number): Project => ({
+    id: Date.now() + index,
+    title: project.title,
+    description: project.description,
+    url: project.url,
+    category: project.category || 'Web',
+});
+
+const buildDraftSnapshot = (
+    resumeFingerprint: string,
+    content: PortfolioContent | null,
+    details: PortfolioDraftDetails,
+    projects: Project[],
+): PortfolioDraftInput => ({
+    resume_fingerprint: resumeFingerprint,
+    content,
+    details: {
+        tagline: details.tagline,
+        bio: details.bio,
+        theme: details.theme,
+    },
+    projects: projects.map(toDraftProject),
+});
+
+const isMeaningfulDraft = (draft: PortfolioDraftInput): boolean => (
+    Boolean(draft.content) ||
+    Boolean(compact(draft.details.tagline)) ||
+    Boolean(compact(draft.details.bio)) ||
+    draft.projects.some(project => compact(project.title) || compact(project.description) || compact(project.url))
+);
+
+const serializeDraftSnapshot = (draft: PortfolioDraftInput): string => JSON.stringify(draft);
+
 const buildTaglineFromContent = (content: PortfolioContent): string => {
     const currentRole = compact(content.experience?.[0]?.title);
     const categories = (content.skills ?? [])
@@ -615,12 +666,12 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const [result, setResult] = useState<PortfolioWebsiteResult | null>(null);
   const [portfolioContent, setPortfolioContent] = useState<PortfolioContent | null>(null);
   const [autoFillLoading, setAutoFillLoading] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'loading' | 'saving' | 'saved' | 'error'>('idle');
   
   const [currentStep, setCurrentStep] = useState<'template' | 'details' | 'result'>('template');
   const [details, setDetails] = useState({ tagline: '', bio: '', theme: 'sapphire' });
-  const [projects, setProjects] = useState<Project[]>([
-    { id: 1, title: '', description: '', url: '', category: 'Web' }
-  ]);
+  const [projects, setProjects] = useState<Project[]>([DEFAULT_PROJECT]);
   
   const [headshotStep, setHeadshotStep] = useState<'initial' | 'camera' | 'photo_uploaded' | 'generating' | 'generated' | 'final_selected'>('initial');
   // Headshot failures get their own state so the message shows next to the
@@ -634,10 +685,92 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const autoFillRunRef = useRef(0);
+  const saveDraftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedDraftRef = useRef('');
+  const resumeFingerprint = useMemo(() => portfolioDraftResumeFingerprint(resumeText), [resumeText]);
 
   useEffect(() => {
     setPortfolioContent(null);
-  }, [resumeText]);
+    setDetails(prev => ({ tagline: '', bio: '', theme: prev.theme }));
+    setProjects([DEFAULT_PROJECT]);
+    setResult(null);
+    setCurrentStep('template');
+    setDraftHydrated(false);
+    lastSavedDraftRef.current = '';
+  }, [resumeFingerprint]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const uid = session?.user?.id;
+
+    if (!uid || !resumeText.trim()) {
+      setDraftHydrated(true);
+      setDraftStatus('idle');
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setDraftStatus('loading');
+    loadPortfolioDraft(uid)
+      .then((draft) => {
+        if (cancelled) return;
+
+        if (draft && draft.resume_fingerprint === resumeFingerprint) {
+          setPortfolioContent(draft.content);
+          setDetails(draft.details);
+          setProjects(draft.projects.length > 0 ? draft.projects.map(fromDraftProject) : [DEFAULT_PROJECT]);
+          setCurrentStep('details');
+          lastSavedDraftRef.current = serializeDraftSnapshot({
+            resume_fingerprint: draft.resume_fingerprint,
+            content: draft.content,
+            details: draft.details,
+            projects: draft.projects,
+          });
+          setDraftStatus('saved');
+        } else {
+          setDraftStatus('idle');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDraftStatus('error');
+      })
+      .finally(() => {
+        if (!cancelled) setDraftHydrated(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeFingerprint, resumeText, session?.user?.id]);
+
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!draftHydrated || !uid || !resumeText.trim()) return undefined;
+
+    const draft = buildDraftSnapshot(resumeFingerprint, portfolioContent, details, projects);
+    if (!isMeaningfulDraft(draft)) return undefined;
+
+    const serializedDraft = serializeDraftSnapshot(draft);
+    if (serializedDraft === lastSavedDraftRef.current) return undefined;
+
+    if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
+    setDraftStatus('saving');
+    saveDraftTimerRef.current = setTimeout(() => {
+      savePortfolioDraft(uid, draft)
+        .then(() => {
+          lastSavedDraftRef.current = serializedDraft;
+          setDraftStatus('saved');
+        })
+        .catch(() => {
+          setDraftStatus('error');
+        });
+    }, 900);
+
+    return () => {
+      if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
+    };
+  }, [details, draftHydrated, portfolioContent, projects, resumeFingerprint, resumeText, session?.user?.id]);
 
   useEffect(() => {
     return () => {
@@ -655,7 +788,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   }, [headshotStep, cameraStream]);
 
   useEffect(() => {
-    if (initialInput) {
+    if (initialInput && draftHydrated) {
         try {
             const project: SkillBridgeProject = JSON.parse(initialInput);
             if(project.projectTitle && project.objective) {
@@ -671,7 +804,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             console.error("Could not parse initial project for portfolio builder", e);
         }
     }
-  }, [initialInput]);
+  }, [draftHydrated, initialInput]);
 
   const { addToast } = useToast();
 
@@ -869,6 +1002,26 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const handleProjectChange = (id: number, field: string, value: string) => setProjects(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
   const addProject = () => setProjects(prev => [...prev, { id: Date.now(), title: '', description: '', url: '', category: 'Web' }]);
   const removeProject = (id: number) => setProjects(prev => prev.filter(p => p.id !== id));
+
+  const clearSavedDraft = async () => {
+    const uid = session?.user?.id;
+    if (!uid) return;
+    if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
+    try {
+      await deletePortfolioDraft(uid);
+      lastSavedDraftRef.current = '';
+      setPortfolioContent(null);
+      setDetails(prev => ({ tagline: '', bio: '', theme: prev.theme }));
+      setProjects([DEFAULT_PROJECT]);
+      setResult(null);
+      setCurrentStep('template');
+      setDraftStatus('idle');
+      addToast(t('tool_portfolio_draft_cleared'), 'success');
+    } catch (err) {
+      setDraftStatus('error');
+      setError(err instanceof Error ? err.message : t('tool_portfolio_draft_save_failed'));
+    }
+  };
   
   const handleProjectImageUpload = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1024,8 +1177,31 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                 {t('tool_portfolio_back_to_styles')}
             </button>
-            <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-full text-xs font-bold border border-blue-100 dark:border-blue-800/50">
-                Template: {PORTFOLIO_TEMPLATES.find(t => t.key === details.theme)?.name}
+            <div className="flex flex-wrap justify-end gap-2">
+                {draftStatus !== 'idle' && (
+                    <div className={`px-3 py-1.5 rounded-full text-xs font-bold border ${
+                        draftStatus === 'error'
+                            ? 'bg-red-50 text-red-700 border-red-100 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/50'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50'
+                    }`}>
+                        {draftStatus === 'loading' && t('tool_portfolio_draft_status_loading')}
+                        {draftStatus === 'saving' && t('tool_portfolio_draft_status_saving')}
+                        {draftStatus === 'saved' && t('tool_portfolio_draft_status_saved')}
+                        {draftStatus === 'error' && t('tool_portfolio_draft_save_failed')}
+                    </div>
+                )}
+                {session?.user?.id && (
+                    <button
+                        type="button"
+                        onClick={clearSavedDraft}
+                        className="px-3 py-1.5 rounded-full text-xs font-bold border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                        {t('tool_portfolio_clear_draft_button')}
+                    </button>
+                )}
+                <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-full text-xs font-bold border border-blue-100 dark:border-blue-800/50">
+                    Template: {PORTFOLIO_TEMPLATES.find(t => t.key === details.theme)?.name}
+                </div>
             </div>
         </div>
 

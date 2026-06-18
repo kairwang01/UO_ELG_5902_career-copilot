@@ -402,6 +402,25 @@ service cloud.firestore {
         optionalString(data, "salary_range", 120);
     }
 
+    function validPortfolioDraft(data) {
+      return data.keys().hasOnly([
+          "version",
+          "resume_fingerprint",
+          "details",
+          "projects",
+          "content",
+          "updated_at"
+        ]) &&
+        data.keys().hasAll(["version", "resume_fingerprint", "details", "projects", "updated_at"]) &&
+        data.version == 1 &&
+        optionalString(data, "resume_fingerprint", 80) &&
+        data.details is map &&
+        data.projects is list &&
+        data.projects.size() <= 12 &&
+        (!hasField(data, "content") || data.content == null || data.content is map) &&
+        optionalString(data, "updated_at", 40);
+    }
+
     // (validApplicationStatus / validJobApplication removed — job_applications
     // creates and updates are now server-only via Cloud Functions, so the
     // client-write validators are dead. Status values are validated in
@@ -569,6 +588,14 @@ service cloud.firestore {
     // only via the server-side Discover Talent / applicant flow (Admin SDK).
     match /talent_profiles/{userId} {
       allow read, write: if isOwner(userId);
+    }
+
+    // portfolio_drafts/{uid} — the candidate's user-reviewed Showcase Builder
+    // text draft. Owner-only; images are intentionally not stored here.
+    match /portfolio_drafts/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && validPortfolioDraft(request.resource.data);
+      allow delete: if isOwner(userId);
     }
 
     // mail/{id} — outbound email queue for the "Trigger Email" extension. Holds
