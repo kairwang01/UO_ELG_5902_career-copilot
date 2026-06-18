@@ -686,10 +686,12 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     }
     const alive = begin();
     setError(null);
+    const resumeSnapshot = resumeText;
     try {
-      const extractedContent = portfolioContent ?? await generatePortfolioWebsite(resumeText);
+      const extractedContent = portfolioContent ?? await generatePortfolioWebsite(resumeSnapshot);
 
-      if (!alive()) return;
+      // Drop a result whose resume changed mid-flight (stale-resume guard).
+      if (!alive() || resumeSnapshot !== resumeText) return;
       setPortfolioContent(extractedContent);
 
       const finalHtml = buildHtml({
@@ -715,11 +717,15 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       return;
     }
     const runId = ++autoFillRunRef.current;
+    // Snapshot the resume this run is for: if the resume changes mid-flight, the
+    // cache-clearing effect fires but the run-id guard alone wouldn't catch it,
+    // so a stale result could repopulate the cache. Drop the run if it diverged.
+    const resumeSnapshot = resumeText;
     setAutoFillLoading(true);
     setError(null);
     try {
-      const extractedContent = await generatePortfolioWebsite(resumeText);
-      if (autoFillRunRef.current !== runId) return;
+      const extractedContent = await generatePortfolioWebsite(resumeSnapshot);
+      if (autoFillRunRef.current !== runId || resumeSnapshot !== resumeText) return;
 
       setPortfolioContent(extractedContent);
       setDetails(prev => ({
