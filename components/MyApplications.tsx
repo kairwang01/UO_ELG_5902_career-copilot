@@ -10,6 +10,7 @@ import {
   APPLICATION_PIPELINE_STAGES,
   APPLICATION_PROGRESS_GROUPS,
   applicationMatchesFilter,
+  getApplicationProgressGroupIndex,
   getApplicationStatusGroup,
   getApplicationStatusIndex,
   getApplicationStatusLabelKey,
@@ -325,14 +326,44 @@ interface CompactProgressProps {
   t: (k: string) => string;
 }
 
+// Bar anchors to the 4 STABLE phases, not the 12 fine-grained stages: employers
+// run only some of the interview rounds, and the intent-letter / tripartite stages
+// are campus-only, so a fixed "of 12" denominator would misrepresent progress.
+// A capped intra-phase nudge keeps the bar moving on every real status change
+// without ever reaching (and so implying) the next phase's milestone.
+const PHASE_BASE_PERCENT = [10, 35, 60, 85]; // applied · interview · offer · agreement
+const PHASE_CEIL_PERCENT = 100;
+
 const CompactProgress: React.FC<CompactProgressProps> = ({ status, t }) => {
-  const total = APPLICATION_PIPELINE_STAGES.length;
   const isComplete = isApplicationHiredStatus(status);
   const isRejected = isApplicationRejectedStatus(status);
-  // Status index is 0-based across the pipeline; present as 1-based "Step n".
-  const rawIndex = getApplicationStatusIndex(status);
-  const step = isRejected ? 0 : Math.min(Math.max(rawIndex, 0) + 1, total);
-  const percent = isRejected ? 0 : isComplete ? 100 : Math.round((step / total) * 100);
+  const groupIndex = getApplicationProgressGroupIndex(status);
+
+  let percent: number;
+  if (isRejected) {
+    percent = 0;
+  } else if (isComplete) {
+    percent = 100;
+  } else if (groupIndex < 0) {
+    percent = PHASE_BASE_PERCENT[0];
+  } else {
+    const base = PHASE_BASE_PERCENT[groupIndex] ?? PHASE_BASE_PERCENT[0];
+    const nextBase = groupIndex < PHASE_BASE_PERCENT.length - 1
+      ? PHASE_BASE_PERCENT[groupIndex + 1]
+      : PHASE_CEIL_PERCENT;
+    // Position within the phase drives the nudge — so Tripartite (early in the
+    // 'signing' phase) sits below Signed without relying on the group index alone.
+    const group = APPLICATION_PROGRESS_GROUPS[groupIndex];
+    const stageInGroup = (group.statuses as readonly string[]).indexOf(normalizeApplicationStatus(status));
+    const frac = group.statuses.length > 1 && stageInGroup > 0
+      ? Math.min(stageInGroup / group.statuses.length, 0.8)
+      : 0;
+    percent = Math.round(base + frac * (nextBase - base));
+  }
+
+  const phaseLabel = t(
+    (groupIndex >= 0 ? APPLICATION_PROGRESS_GROUPS[groupIndex] : APPLICATION_PROGRESS_GROUPS[0]).labelKey,
+  );
 
   const barTrack = isRejected
     ? 'bg-slate-200 dark:bg-slate-700'
@@ -348,15 +379,13 @@ const CompactProgress: React.FC<CompactProgressProps> = ({ status, t }) => {
       ? 'text-emerald-700 dark:text-emerald-300'
       : 'text-slate-600 dark:text-slate-300';
 
+  // The status chip above the bar already names the precise stage, so the caption
+  // carries the macro phase (one of 4) instead — no misleading "of 12" denominator.
   const caption = isRejected
     ? t('applications_process_ended')
     : isComplete
       ? t('applications_pipeline_complete')
-      : formatTranslation(t('applications_pipeline_step'), {
-          step,
-          total,
-          stage: t(getApplicationStatusLabelKey(status)),
-        });
+      : formatTranslation(t('applications_pipeline_phase'), { phase: phaseLabel });
 
   return (
     <div className="mt-5">
