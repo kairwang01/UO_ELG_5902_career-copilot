@@ -10,8 +10,11 @@ import {
   PLAN_HIERARCHY,
 } from '../config';
 import { ethers } from 'ethers';
-import ApiKeyManager from './ApiKeyManager';
-import { BusinessCustomApi } from './BusinessCustomApi';
+// TEMP HIDDEN: user-facing API keys + BYOA custom endpoint are hidden from the
+// settings page. Model/endpoint config is superadmin-only via the Admin Console.
+// To restore, re-enable these imports and the two JSX blocks below.
+// import ApiKeyManager from './ApiKeyManager';
+// import { BusinessCustomApi } from './BusinessCustomApi';
 import { listModels } from '../services/aiClient';
 import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
 import { loadBirthdayLocal, saveBirthdayLocal } from '../lib/onboarding';
@@ -728,7 +731,8 @@ const Account: React.FC<AccountProps> = ({
         </div>
       </form>
 
-      {/* API Access Section */}
+      {/* TEMP HIDDEN: API Access (user API keys) — config is superadmin-only
+          via the Admin Console. Restore by uncommenting this block + the import.
       <div className="space-y-6 mt-10">
         <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
           {t('account_api_access_title')}
@@ -738,10 +742,15 @@ const Account: React.FC<AccountProps> = ({
           onViewDocs={() => onSetView('api_docs')}
         />
       </div>
+      */}
+
+      {/* TEMP HIDDEN: BYOA custom endpoint — not part of our model right now.
+          Restore by uncommenting this line + the import.
+      <BusinessCustomApi className="mt-10 max-w-md" t={t} />
+      */}
 
       {/* Model routing is admin-controlled server-side.
-            Non-business users see a muted info line; business users keep their BYOA form. */}
-      <BusinessCustomApi className="mt-10 max-w-md" t={t} />
+            Non-business users see a muted info line. */}
       <ModelRoutingManagedNote t={t} />
 
       {/* Web3 Identity Section — experimental, feature-flagged */}
