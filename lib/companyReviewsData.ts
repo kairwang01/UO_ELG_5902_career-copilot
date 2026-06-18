@@ -8,7 +8,8 @@
  */
 
 import { httpsCallable } from "firebase/functions";
-import { firebaseFunctions } from "./firebaseClient";
+import { doc, getDoc } from "firebase/firestore";
+import { firebaseFunctions, firestoreDb } from "./firebaseClient";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,8 @@ export interface CompanyReview {
   rating: number;
   text: string;
   verified: boolean;
+  /** Trust tier derived server-side from the candidate's pipeline relationship. */
+  verificationTier: 'hired' | 'offer' | 'interviewed';
   /** ISO string; may be undefined if the server timestamp hasn't committed yet */
   created_at: string | undefined;
 }
@@ -41,13 +44,14 @@ export async function listCompanyReviews(
 ): Promise<CompanyReview[]> {
   const fn = httpsCallable<
     { employerId: string },
-    { reviews: Array<{ rating: number; text: string; verified: boolean; created_at: string | null }> }
+    { reviews: Array<{ rating: number; text: string; verified: boolean; verification_tier: 'hired' | 'offer' | 'interviewed'; created_at: string | null }> }
   >(firebaseFunctions, "listCompanyReviews");
   const result = await fn({ employerId });
   return (result.data?.reviews ?? []).map((r) => ({
     rating: r.rating,
     text: r.text,
     verified: r.verified,
+    verificationTier: r.verification_tier ?? (r.verified ? 'hired' : 'interviewed'),
     created_at: r.created_at ?? undefined,
   }));
 }
@@ -77,4 +81,24 @@ export async function submitCompanyReview(
   >(firebaseFunctions, "createCompanyReview");
   const result = await fn({ employerId, rating, text });
   return result.data;
+}
+
+/**
+ * Reads the employer_rating/{employerId} aggregate { avg, count } maintained by the
+ * onCompanyReviewWritten trigger. Returns zeros when the doc is absent (no reviews).
+ * Client read is allowed by firestore.rules.
+ */
+export async function getEmployerRating(
+  employerId: string
+): Promise<{ avg: number; count: number }> {
+  try {
+    const snap = await getDoc(doc(firestoreDb, "employer_rating", employerId));
+    const d = snap.exists() ? snap.data() : undefined;
+    return {
+      avg: typeof d?.avg === "number" ? d.avg : 0,
+      count: typeof d?.count === "number" ? d.count : 0,
+    };
+  } catch {
+    return { avg: 0, count: 0 };
+  }
 }

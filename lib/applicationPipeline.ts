@@ -249,6 +249,16 @@ export function isApplicationInterviewStatus(status: unknown): boolean {
   return getApplicationStatusGroup(status) === 'interview';
 }
 
+/**
+ * True when the candidate's relationship with the employer is deep enough to review
+ * the company: reached the interview, offer, or hired group. Mirrors the server-side
+ * write gate in functions/src/handlers/companyReviews.ts.
+ */
+export function isApplicationReviewEligible(status: unknown): boolean {
+  const group = getApplicationStatusGroup(status);
+  return group === 'interview' || group === 'offer' || group === 'hired';
+}
+
 export function applicationMatchesFilter(status: unknown, filter: ApplicationFilterGroup): boolean {
   if (filter === 'All') return true;
   return getApplicationStatusGroup(status) === filter;
