@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Globe } from 'lucide-react';
+import { Globe, Sparkles } from 'lucide-react';
 import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -326,6 +326,95 @@ interface Project {
   image?: HeadshotImage;
 }
 
+const compact = (value: string | null | undefined): string => value?.trim().replace(/\s+/g, ' ') ?? '';
+
+const truncate = (value: string, maxLength: number): string => {
+    const text = compact(value);
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength - 1).trim()}...`;
+};
+
+const isBlankProject = (project: Project): boolean =>
+    !compact(project.title) && !compact(project.description) && !compact(project.url);
+
+const buildTaglineFromContent = (content: PortfolioContent): string => {
+    const currentRole = compact(content.experience?.[0]?.title);
+    const categories = (content.skills ?? [])
+        .map(skill => compact(skill.category))
+        .filter(Boolean)
+        .slice(0, 2);
+    const base = currentRole || categories[0] || 'Professional Portfolio';
+    const extras = categories.filter(category => category.toLowerCase() !== base.toLowerCase());
+    return truncate([base, ...extras].join(' | '), 140);
+};
+
+const buildBioFromContent = (content: PortfolioContent): string => {
+    const name = compact(content.fullName) || 'This professional';
+    const recent = content.experience?.[0];
+    const role = compact(recent?.title);
+    const company = compact(recent?.company);
+    const location = compact(content.contactLocation);
+    const skillCategories = (content.skills ?? [])
+        .map(skill => compact(skill.category))
+        .filter(Boolean)
+        .slice(0, 3);
+    const strongestSkill = compact(content.skills?.[0]?.description);
+    const strongestExperience = compact(recent?.description);
+
+    const sentences = [
+        role
+            ? `${name} is a ${role}${company ? ` with experience at ${company}` : ''}${location ? `, based in ${location}` : ''}.`
+            : `${name} brings a professional background${location ? ` based in ${location}` : ''}.`,
+        skillCategories.length > 0 ? `Their work spans ${skillCategories.join(', ')}.` : '',
+        strongestSkill || strongestExperience,
+    ].filter(Boolean);
+
+    return truncate(sentences.join(' '), 700);
+};
+
+const buildProjectsFromContent = (content: PortfolioContent): Project[] => {
+    const explicitProjects = (content.projects ?? [])
+        .filter(project => compact(project.title) || compact(project.description))
+        .slice(0, 4)
+        .map((project, index) => ({
+            id: Date.now() + index,
+            title: truncate(compact(project.title), 120),
+            description: truncate(compact(project.description), 420),
+            url: compact(project.url),
+            category: truncate(compact(project.category) || 'Project', 60),
+        }));
+
+    if (explicitProjects.length > 0) return explicitProjects;
+
+    const fromExperience = (content.experience ?? [])
+        .filter(exp => compact(exp.title) || compact(exp.description))
+        .slice(0, 3)
+        .map((exp, index) => ({
+            id: Date.now() + index,
+            title: truncate([compact(exp.title), compact(exp.company)].filter(Boolean).join(' at '), 120),
+            description: truncate(compact(exp.description), 420),
+            url: '',
+            category: 'Experience',
+        }));
+
+    if (fromExperience.length > 0) return fromExperience;
+
+    const fromSkills = (content.skills ?? [])
+        .filter(skill => compact(skill.category) || compact(skill.description))
+        .slice(0, 3)
+        .map((skill, index) => ({
+            id: Date.now() + index,
+            title: truncate(compact(skill.category), 120),
+            description: truncate(compact(skill.description), 420),
+            url: '',
+            category: 'Skill Area',
+        }));
+
+    return fromSkills.length > 0
+        ? fromSkills
+        : [{ id: Date.now(), title: '', description: '', url: '', category: 'Web' }];
+};
+
 const resizeImage = (file: File, maxSize: number): Promise<{ mimeType: string; data: string; }> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -524,6 +613,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioWebsiteResult | null>(null);
+  const [portfolioContent, setPortfolioContent] = useState<PortfolioContent | null>(null);
+  const [autoFillLoading, setAutoFillLoading] = useState(false);
   
   const [currentStep, setCurrentStep] = useState<'template' | 'details' | 'result'>('template');
   const [details, setDetails] = useState({ tagline: '', bio: '', theme: 'sapphire' });
@@ -542,6 +633,11 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const autoFillRunRef = useRef(0);
+
+  useEffect(() => {
+    setPortfolioContent(null);
+  }, [resumeText]);
 
   useEffect(() => {
     return () => {
@@ -584,12 +680,17 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setError(t('tool_portfolio_error_required'));
       return;
     }
+    if (!portfolioContent && !resumeText.trim()) {
+      setError(t('tool_portfolio_auto_fill_no_resume'));
+      return;
+    }
     const alive = begin();
     setError(null);
     try {
-      const extractedContent = await generatePortfolioWebsite(resumeText);
+      const extractedContent = portfolioContent ?? await generatePortfolioWebsite(resumeText);
 
       if (!alive()) return;
+      setPortfolioContent(extractedContent);
 
       const finalHtml = buildHtml({
         content: extractedContent,
@@ -605,6 +706,38 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
       if (alive()) end();
+    }
+  };
+
+  const handleAutoFillFromResume = async () => {
+    if (!resumeText.trim()) {
+      setError(t('tool_portfolio_auto_fill_no_resume'));
+      return;
+    }
+    const runId = ++autoFillRunRef.current;
+    setAutoFillLoading(true);
+    setError(null);
+    try {
+      const extractedContent = await generatePortfolioWebsite(resumeText);
+      if (autoFillRunRef.current !== runId) return;
+
+      setPortfolioContent(extractedContent);
+      setDetails(prev => ({
+        ...prev,
+        tagline: buildTaglineFromContent(extractedContent),
+        bio: buildBioFromContent(extractedContent),
+      }));
+      setProjects(prev => {
+        const canReplace = prev.length === 0 || prev.every(isBlankProject);
+        return canReplace ? buildProjectsFromContent(extractedContent) : prev;
+      });
+      addToast(t('tool_portfolio_auto_fill_success'), 'success');
+    } catch (err) {
+      if (autoFillRunRef.current === runId) {
+        setError(err instanceof Error ? err.message : t('tool_portfolio_auto_fill_error'));
+      }
+    } finally {
+      if (autoFillRunRef.current === runId) setAutoFillLoading(false);
     }
   };
 
@@ -892,7 +1025,25 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
 
         <form onSubmit={handleSubmit} className="space-y-8">
             <div>
-                <h4 className="font-bold text-xl text-gray-900 dark:text-gray-100 mb-4">{t('tool_portfolio_step1_title')}</h4>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h4 className="font-bold text-xl text-gray-900 dark:text-gray-100">{t('tool_portfolio_step1_title')}</h4>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{t('tool_portfolio_auto_fill_note')}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleAutoFillFromResume}
+                        disabled={autoFillLoading || loading || !resumeText.trim()}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                    >
+                        {autoFillLoading ? (
+                            <span className="h-4 w-4 rounded-full border-2 border-blue-200 border-t-blue-700 animate-spin dark:border-blue-900 dark:border-t-blue-300" />
+                        ) : (
+                            <Sparkles className="h-4 w-4" />
+                        )}
+                        <span>{autoFillLoading ? t('tool_portfolio_auto_fill_loading') : t('tool_portfolio_auto_fill_button')}</span>
+                    </button>
+                </div>
                 <div className="space-y-4 p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
                     <div>
                         <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_tagline_label')}</label>
@@ -960,7 +1111,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             
             {error && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-xl text-sm border border-red-200 dark:border-red-800/50">{error}</div>}
             
-            <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transform active:scale-[0.98] transition-all">
+            <button type="submit" disabled={loading || autoFillLoading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transform active:scale-[0.98] transition-all">
                 <>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
                     <span>{t('tool_portfolio_generate_button')}</span>

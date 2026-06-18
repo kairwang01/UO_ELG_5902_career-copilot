@@ -243,6 +243,13 @@ export interface PortfolioExperience {
   description: string;
 }
 
+export interface PortfolioProjectContent {
+  title: string;
+  description: string;
+  url: string;
+  category: string;
+}
+
 export interface PortfolioContent {
   fullName: string;
   firstName: string;
@@ -257,6 +264,7 @@ export interface PortfolioContent {
   };
   skills: PortfolioSkill[];
   experience: PortfolioExperience[];
+  projects: PortfolioProjectContent[];
 }
 
 export interface PortfolioWebsiteResult {

@@ -507,7 +507,7 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
     build: (p) => ({
       prompt: buildPrompt("generatePortfolioWebsite", {
         resumeText: p.resumeText,
-      }),
+      }) + "\n\nADDITIONAL REQUIRED FIELD\n- projects: Extract only real projects, portfolio items, publications, case studies, demos, GitHub repositories, or work samples that appear in the resume. For each item return title, description, url, and category. Use the real URL only if it appears in the resume; otherwise return an empty string. If the resume has no explicit projects/work samples, return an empty array. Never invent a project, URL, repo, demo, or metric.",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -535,8 +535,15 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
               properties: { date: { type: Type.STRING }, title: { type: Type.STRING }, company: { type: Type.STRING }, description: { type: Type.STRING } },
             },
           },
+          projects: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, url: { type: Type.STRING }, category: { type: Type.STRING } },
+            },
+          },
         },
-        required: ["fullName", "firstName", "lastName", "contactEmail", "contactPhone", "contactLocation", "socials", "skills", "experience"],
+        required: ["fullName", "firstName", "lastName", "contactEmail", "contactPhone", "contactLocation", "socials", "skills", "experience", "projects"],
       },
     }),
   },
