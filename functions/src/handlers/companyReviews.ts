@@ -25,6 +25,7 @@
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import { requireAuth } from "../middleware/auth";
 
@@ -243,3 +244,47 @@ export const listCompanyReviewsFunction = onCall({ invoker: "public" }, async (r
 
   return { reviews };
 });
+
+/**
+ * onCompanyReviewWritten — maintains employer_rating/{employerId} = { avg, count }
+ * so job cards can show a rating chip without an expensive per-card callable.
+ * Mirrors the employer_responsiveness aggregate pattern. Best-effort: never throws
+ * into a Cloud Function retry loop.
+ */
+export const onCompanyReviewWrittenFunction = onDocumentWritten(
+  "company_reviews/{id}",
+  async (event) => {
+    try {
+      const after = event.data?.after?.data();
+      const before = event.data?.before?.data();
+      const employerId =
+        (typeof after?.employer_id === "string" && after.employer_id) ||
+        (typeof before?.employer_id === "string" && before.employer_id) ||
+        "";
+      if (!employerId) return;
+
+      const snap = await db
+        .collection("company_reviews")
+        .where("employer_id", "==", employerId)
+        .get();
+
+      const ratings = snap.docs
+        .map((d) => d.data().rating)
+        .filter((r): r is number => typeof r === "number");
+      const count = ratings.length;
+      const avg =
+        count === 0
+          ? 0
+          : Math.round((ratings.reduce((a, b) => a + b, 0) / count) * 10) / 10;
+
+      await db.collection("employer_rating").doc(employerId).set({
+        avg,
+        count,
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      // best-effort; swallow so the function never retries forever
+      console.error("onCompanyReviewWritten failed", err);
+    }
+  }
+);

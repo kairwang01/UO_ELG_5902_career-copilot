@@ -642,6 +642,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // employer_rating/{employerId} — coarse company-rating aggregate { avg, count }
+    // derived server-side from company_reviews (no PII). Any signed-in user may read
+    // it for the job-card rating chip. Server-only writes (trigger).
+    match /employer_rating/{employerId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // platform_config, usage_events, credit_ledger — and everything else — are
     // server-only (Admin SDK). Clients must use admin* Cloud Functions; no
     // direct reads/writes.
