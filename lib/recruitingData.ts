@@ -17,6 +17,11 @@ export interface JobPosting {
   employer_id: string;
   title: string;
   company_name: string | null;
+  // Company context, snapshot from the employer profile at creation so candidate
+  // job cards can show scale/industry without reading the owner-only employer doc.
+  company_size: string | null;
+  industry: string | null;
+  founded_year: string | null;
   location: string | null;
   description: string | null;
   salary_range: string | null;
@@ -43,6 +48,9 @@ export interface JobPostingPatch {
   description: string;
   salary_range: string;
   company_name?: string | null;
+  company_size?: string | null;
+  industry?: string | null;
+  founded_year?: string | null;
 }
 
 const toIsoString = (value: unknown): string => {
@@ -64,6 +72,9 @@ const mapJobPosting = (id: string, data: DocumentData): JobPosting => ({
   employer_id: String(data.employer_id ?? ''),
   title: String(data.title ?? ''),
   company_name: data.company_name ?? null,
+  company_size: data.company_size ?? null,
+  industry: data.industry ?? null,
+  founded_year: data.founded_year ?? null,
   location: data.location ?? null,
   description: data.description ?? null,
   salary_range: data.salary_range ?? null,
@@ -141,12 +152,16 @@ export const saveJobPosting = async (
     return;
   }
 
-  // Snapshot company_name at creation time so job cards always show the company
-  // name even if the employer later renames their profile.
+  // Snapshot company_name + context at creation time so job cards always show the
+  // company even if the employer later edits their profile (and so candidates,
+  // who can't read the owner-only employer doc, still see scale/industry/founded).
   await addDoc(collection(firestoreDb, 'job_postings'), {
     ...jobData,
     employer_id: employerId,
     company_name: patch.company_name ?? null,
+    company_size: patch.company_size ?? null,
+    industry: patch.industry ?? null,
+    founded_year: patch.founded_year ?? null,
     is_active: true,
     created_at: serverTimestamp(),
   });

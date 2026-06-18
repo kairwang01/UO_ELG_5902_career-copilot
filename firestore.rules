@@ -379,6 +379,9 @@ service cloud.firestore {
           "employer_id",
           "title",
           "company_name",
+          "company_size",
+          "industry",
+          "founded_year",
           "description",
           "location",
           "salary_range",
@@ -397,6 +400,9 @@ service cloud.firestore {
         data.created_at is timestamp &&
         data.updated_at is timestamp &&
         optionalString(data, "company_name", 160) &&
+        optionalString(data, "company_size", 20) &&
+        optionalString(data, "industry", 80) &&
+        optionalString(data, "founded_year", 8) &&
         optionalString(data, "description", 20000) &&
         optionalString(data, "location", 180) &&
         optionalString(data, "salary_range", 120);

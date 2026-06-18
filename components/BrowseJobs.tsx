@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ApplyReviewModal, { type ApplyReviewJob } from './ApplyReviewModal';
 import {
   Briefcase,
+  Building2,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -963,6 +964,20 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                           {t('browse_jobs_status_active')}
                         </span>
                       </div>
+                      {/* Company context — snapshot from the employer profile, shown
+                          only for the fields the employer actually filled in. */}
+                      {(job.industry || job.company_size || job.founded_year) && (
+                        <div className="mt-1.5 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <Building2 className="h-3 w-3 shrink-0" />
+                          <span className="min-w-0 truncate">
+                            {[
+                              job.industry,
+                              job.company_size && t('browse_jobs_company_size').replace('{size}', job.company_size),
+                              job.founded_year && t('browse_jobs_founded').replace('{year}', job.founded_year),
+                            ].filter(Boolean).join(' · ')}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     {/* Salary sits top-right next to the chevron — the first thing a
                         candidate scans for on a job card. */}

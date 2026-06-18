@@ -1,4 +1,6 @@
 {
+  "browse_jobs_company_size": "{size} employees",
+  "browse_jobs_founded": "Founded {year}",
   "tool_english_pro_default_speaking_topic": "Tell me about your most recent project.",
   "tool_english_pro_speaking_get_topic_hint": "Press the button below to get an IELTS-style speaking topic.",
   "tool_english_pro_back_to_reading": "← Back to Reading Options",

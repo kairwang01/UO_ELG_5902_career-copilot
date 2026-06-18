@@ -1,4 +1,6 @@
 {
+  "browse_jobs_company_size": "{size} 人",
+  "browse_jobs_founded": "成立于 {year}",
   "tool_english_pro_default_speaking_topic": "请谈谈你最近参与的一个项目。",
   "tool_english_pro_speaking_get_topic_hint": "点击下方按钮获取一道雅思口语题目。",
   "tool_english_pro_back_to_reading": "← 返回阅读选项",

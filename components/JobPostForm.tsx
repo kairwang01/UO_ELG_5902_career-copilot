@@ -214,9 +214,12 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 location: location.trim(),
                 description: jobDescription.trim(),
                 salary_range: salaryRange.trim(),
-                // Snapshot company name at create time; profile.company_name is
+                // Snapshot company name + context at create time; profile fields are
                 // trusted (read from server-provisioned user doc, not user input).
                 company_name: profile.company_name ?? null,
+                company_size: profile.company_size ?? null,
+                industry: profile.industry ?? null,
+                founded_year: profile.founded_year ?? null,
             };
 
             await saveJobPosting(session.user.id, jobData, isEditing ? existingJob.id : undefined);
