@@ -27,6 +27,7 @@ import { useToast } from './Toast';
 import {
   listCompanyReviews,
   aggregateRating,
+  getEmployerRating,
   type CompanyReview,
 } from '../lib/companyReviewsData';
 import {
@@ -34,6 +35,20 @@ import {
   useJobPreferences,
   type JobPreferences,
 } from '../hooks/useJobPreferences';
+
+function reviewTierBadge(
+  tier: 'hired' | 'offer' | 'interviewed',
+  t: (k: string) => string
+): { label: string; className: string } {
+  switch (tier) {
+    case 'hired':
+      return { label: t('review_tier_hired'), className: 'text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800/50' };
+    case 'offer':
+      return { label: t('review_tier_offer'), className: 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50' };
+    default:
+      return { label: t('review_tier_interviewed'), className: 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-600' };
+  }
+}
 
 interface BrowseJobsProps {
   session: Session | null;
@@ -223,6 +238,12 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
   const respCacheRef = useRef<Record<string, RespEntry>>({});
   const fetchingResp = useRef<Set<string>>(new Set());
 
+  // Eager rating aggregate per employer, for the always-visible card chip.
+  type RatingEntry = { avg: number; count: number };
+  const [ratingCache, setRatingCache] = useState<Record<string, RatingEntry>>({});
+  const ratingCacheRef = useRef<Record<string, RatingEntry>>({});
+  const fetchingRatings = useRef<Set<string>>(new Set());
+
   // ── debounce keyword ──────────────────────────────────────────────────────
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleKeywordChange = (value: string) => {
@@ -337,6 +358,28 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
           setRespCache((prev) => ({ ...prev, [eid]: entry }));
         } finally {
           fetchingResp.current.delete(eid);
+        }
+      })();
+    });
+  }, [jobs]);
+
+  // ── eager-load company rating aggregate for the visible jobs ────────────────
+  useEffect(() => {
+    const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)));
+    eids.forEach((eid) => {
+      if (ratingCacheRef.current[eid] !== undefined || fetchingRatings.current.has(eid)) return;
+      fetchingRatings.current.add(eid);
+      (async () => {
+        try {
+          const entry = await getEmployerRating(eid);
+          ratingCacheRef.current = { ...ratingCacheRef.current, [eid]: entry };
+          setRatingCache((prev) => ({ ...prev, [eid]: entry }));
+        } catch {
+          const entry = { avg: 0, count: 0 };
+          ratingCacheRef.current = { ...ratingCacheRef.current, [eid]: entry };
+          setRatingCache((prev) => ({ ...prev, [eid]: entry }));
+        } finally {
+          fetchingRatings.current.delete(eid);
         }
       })();
     });
@@ -884,7 +927,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
             const eid = job.employer_id;
             const reviewsId = eid ? `job-reviews-${job.id}` : undefined;
             const employerReviews = eid ? (reviewCache[eid] ?? null) : null;
-            const showRatingChip = employerReviews && employerReviews.count > 0;
+            const employerRating = eid ? (ratingCache[eid] ?? null) : null;
             const respBadge = responsivenessBadge(eid ? respCache[eid] : null, t);
             const reviewsOpen = eid ? (reviewsExpanded[eid] ?? false) : false;
             const applicationStages = [
@@ -919,12 +962,19 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                             {job.company_name}
                           </span>
                         )}
-                        {/* Rating chip — shown when employer has reviews */}
-                        {showRatingChip && (
-                          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-full px-2 py-0.5 whitespace-nowrap">
-                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            {employerReviews!.avg.toFixed(1)}&nbsp;({employerReviews!.count})
-                          </span>
+                        {/* Rating chip — always shown once the aggregate loads */}
+                        {employerRating && (
+                          employerRating.count > 0 ? (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-full px-2 py-0.5 whitespace-nowrap">
+                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                              {employerRating.avg.toFixed(1)}&nbsp;({employerRating.count})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                              <Star className="h-3 w-3" />
+                              {t('browse_jobs_no_reviews')}
+                            </span>
+                          )
                         )}
                         {/* Responsiveness badge — coarse, honest, anti-ghosting */}
                         {respBadge && (
@@ -1134,11 +1184,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                                       }`}
                                     />
                                   ))}
-                                  {rv.verified && (
-                                    <span className="ml-2 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-full px-2 py-0.5">
-                                      {t('review_verified_badge')}
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    const badge = reviewTierBadge(rv.verificationTier, t);
+                                    return (
+                                      <span className={`ml-2 text-[10px] font-semibold border rounded-full px-2 py-0.5 ${badge.className}`}>
+                                        {badge.label}
+                                      </span>
+                                    );
+                                  })()}
                                   {rv.created_at && (
                                     <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500">
                                       {new Date(rv.created_at).toLocaleDateString()}
