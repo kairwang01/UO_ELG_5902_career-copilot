@@ -3,10 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { sendEmailVerification, updateProfile } from 'firebase/auth';
 import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
-import { ALL_PLANS, BUSINESS_PLANS } from '@/config';
+import { BUSINESS_PLANS } from '@/config';
 import type { Plan } from '@/types';
 import { X } from 'lucide-react';
+import { BrandMark } from './BrandLogo';
 import { useModalBehavior } from '../hooks/useModalBehavior';
+
+// Unified input styling (was inconsistent — sign-in inputs lacked dark mode).
+const INPUT_CLASS =
+  'w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30';
 import { markOnboardingPending } from '../lib/onboarding';
 import { setUserSubscription } from '../services/subscriptionClient';
 import { useToast } from './Toast';
@@ -239,83 +244,91 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
   }
 
   const renderContent = () => {
-    const candidatePlans = [ALL_PLANS.free, ALL_PLANS.essentials, ALL_PLANS.accelerator, ALL_PLANS.executive];
     const businessPlans = [BUSINESS_PLANS.single_post, BUSINESS_PLANS.job_pack];
-    const plansToShow = mode === 'business' ? businessPlans : candidatePlans;
+
+    // Social-first, low-friction entry (BOSS instant-start + NA one-click norm).
+    // Candidate only (business signup uses the email + plan path).
+    const googleBlock = mode !== 'business' ? (
+      <>
+        <button type="button" onClick={handleGoogleLogin} disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 py-2.5 font-medium text-gray-700 dark:text-gray-200 transition hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-60">
+          <svg className="h-5 w-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"></path><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691z"></path><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.222 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"></path><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.447-2.275 4.482-4.283 5.942l6.19 5.238C42.028 36.318 44 31.019 44 24c0-1.341-.138-2.65-.389-3.917z"></path></svg>
+          {t('auth_continue_google')}
+        </button>
+        <div className="relative flex items-center py-1">
+          <div className="flex-grow border-t border-gray-200 dark:border-slate-700"></div>
+          <span className="mx-3 text-xs text-gray-400">{t('auth_or_separator')}</span>
+          <div className="flex-grow border-t border-gray-200 dark:border-slate-700"></div>
+        </div>
+      </>
+    ) : null;
 
     switch (authView) {
       case 'sign_up':
         return (
           <>
-            <h2 className="text-2xl font-bold text-center text-gray-800">{mode === 'business' ? t('auth_create_employer_account') : t('auth_create_candidate_account')}</h2>
-            
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-gray-700 text-center">{mode === 'business' ? t('auth_choose_posting_plan') : t('auth_choose_your_plan')}</p>
-              <div className={`grid gap-3 ${mode === 'business' ? 'grid-cols-2' : 'grid-cols-2'}`}>
-                  {plansToShow.map(plan => (
-                      <PlanSelectorCard key={plan.key} plan={plan} isSelected={selectedPlan === plan.key} onSelect={() => setSelectedPlan(plan.key)} t={t} />
-                  ))}
-              </div>
-            </div>
+            <h2 className="text-2xl font-bold text-center text-gray-800 dark:text-gray-100">{mode === 'business' ? t('auth_create_employer_account') : t('auth_create_candidate_account')}</h2>
 
-            <form onSubmit={handleSignUp} className="space-y-4">
-              <input className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" type="text" placeholder={t('auth_placeholder_full_name')} value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} maxLength={80} />
-              <input className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" type="email" placeholder={mode === 'business' ? t('auth_placeholder_email_business') : t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
-              <input className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" type="password" placeholder={t('auth_placeholder_password')} value={password} onChange={(e) => setPassword(e.target.value)} required />
-              <input className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" type="password" placeholder={t('auth_placeholder_confirm_password')} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
-              <button className="w-full bg-blue-700 text-white py-2.5 rounded-md hover:bg-blue-800 disabled:bg-blue-400 font-semibold" type="submit" disabled={loading}>
+            {/* Business signup is a purchase choice → keep the plan picker.
+                Candidate signup is free — no picker; upgrade happens in-app. */}
+            {mode === 'business' && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 text-center">{t('auth_choose_posting_plan')}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {businessPlans.map(plan => (
+                    <PlanSelectorCard key={plan.key} plan={plan} isSelected={selectedPlan === plan.key} onSelect={() => setSelectedPlan(plan.key)} t={t} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {googleBlock}
+
+            <form onSubmit={handleSignUp} className="space-y-3">
+              <input className={INPUT_CLASS} type="text" placeholder={t('auth_placeholder_full_name')} value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} maxLength={80} />
+              <input className={INPUT_CLASS} type="email" placeholder={mode === 'business' ? t('auth_placeholder_email_business') : t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <input className={INPUT_CLASS} type="password" placeholder={t('auth_placeholder_password')} value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <input className={INPUT_CLASS} type="password" placeholder={t('auth_placeholder_confirm_password')} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+              <button className="w-full rounded-lg bg-blue-700 py-2.5 font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-400" type="submit" disabled={loading}>
                 {loading ? t('auth_creating_account') : (mode === 'business' ? t('auth_signup_for_jobs') : t('auth_signup'))}
               </button>
             </form>
-            <p className="text-center text-sm">
-              {mode === 'business' ? t('auth_employer_exists') : t('auth_candidate_exists')} <button onClick={() => setAuthView('sign_in')} className="text-blue-600 hover:underline">{t('auth_signin_link')}</button>
+            <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              {mode === 'business' ? t('auth_employer_exists') : t('auth_candidate_exists')} <button onClick={() => setAuthView('sign_in')} className="text-blue-600 dark:text-blue-400 hover:underline">{t('auth_signin_link')}</button>
             </p>
           </>
         );
       case 'forgot_password':
         return (
           <>
-            <h2 className="text-2xl font-bold text-center text-gray-800">{t('auth_reset_password_title')}</h2>
-            <form onSubmit={handlePasswordReset} className="space-y-4">
-              <input className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" type="email" placeholder={t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
-              <button className="w-full bg-blue-700 text-white py-2.5 rounded-md hover:bg-blue-800 disabled:bg-blue-400 font-semibold" type="submit" disabled={loading}>
+            <h2 className="text-2xl font-bold text-center text-gray-800 dark:text-gray-100">{t('auth_reset_password_title')}</h2>
+            <form onSubmit={handlePasswordReset} className="space-y-3">
+              <input className={INPUT_CLASS} type="email" placeholder={t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <button className="w-full rounded-lg bg-blue-700 py-2.5 font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-400" type="submit" disabled={loading}>
                 {loading ? t('auth_sending_link') : t('auth_send_reset_link')}
               </button>
             </form>
-            <p className="text-center text-sm">
-              {t('auth_remembered_password')} <button onClick={() => setAuthView('sign_in')} className="text-blue-600 hover:underline">{t('auth_signin_link')}</button>
+            <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              {t('auth_remembered_password')} <button onClick={() => setAuthView('sign_in')} className="text-blue-600 dark:text-blue-400 hover:underline">{t('auth_signin_link')}</button>
             </p>
           </>
         );
       default: // sign_in
         return (
           <>
-            <h2 className="text-2xl font-bold text-center text-gray-800">{mode === 'business' ? t('auth_employer_signin_title') : t('auth_welcome_back')}</h2>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <input className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" type="email" placeholder={t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
-              <input className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" type="password" placeholder={t('auth_placeholder_password_signin')} value={password} onChange={(e) => setPassword(e.target.value)} required />
-              <button className="w-full bg-blue-700 text-white py-2.5 rounded-md hover:bg-blue-800 disabled:bg-blue-400 font-semibold" type="submit" disabled={loading}>
+            <h2 className="text-2xl font-bold text-center text-gray-800 dark:text-gray-100">{mode === 'business' ? t('auth_employer_signin_title') : t('auth_welcome_back')}</h2>
+            {googleBlock}
+            <form onSubmit={handleLogin} className="space-y-3">
+              <input className={INPUT_CLASS} type="email" placeholder={t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <input className={INPUT_CLASS} type="password" placeholder={t('auth_placeholder_password_signin')} value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <button className="w-full rounded-lg bg-blue-700 py-2.5 font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-400" type="submit" disabled={loading}>
                 {loading ? t('auth_signing_in') : t('auth_sign_in')}
               </button>
             </form>
-             <div className="text-right text-sm">
-                <button onClick={() => setAuthView('forgot_password')} className="text-blue-600 hover:underline">{t('auth_forgot_password_link')}</button>
+            <div className="text-right text-sm">
+              <button onClick={() => setAuthView('forgot_password')} className="text-blue-600 dark:text-blue-400 hover:underline">{t('auth_forgot_password_link')}</button>
             </div>
-            {mode !== 'business' && (
-              <>
-                <div className="relative flex py-2 items-center">
-                    <div className="flex-grow border-t border-gray-300"></div>
-                    <span className="flex-shrink mx-4 text-gray-400 text-sm">{t('auth_or_separator')}</span>
-                    <div className="flex-grow border-t border-gray-300"></div>
-                </div>
-                <button onClick={handleGoogleLogin} disabled={loading} className="w-full flex items-center justify-center gap-2 bg-white text-gray-700 border border-gray-300 py-2 rounded-md hover:bg-gray-50 disabled:bg-gray-200">
-                    <svg className="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"></path><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691z"></path><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.222 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"></path><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.447-2.275 4.482-4.283 5.942l6.19 5.238C42.028 36.318 44 31.019 44 24c0-1.341-.138-2.65-.389-3.917z"></path></svg>
-                    {t('auth_signin_google')}
-                </button>
-              </>
-            )}
-            <p className="text-center text-sm">
-              {mode === 'business' ? t('auth_no_employer_account') : t('auth_no_candidate_account')} <button onClick={() => setAuthView('sign_up')} className="text-blue-600 hover:underline">{t('auth_signup_link')}</button>
+            <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              {mode === 'business' ? t('auth_no_employer_account') : t('auth_no_candidate_account')} <button onClick={() => setAuthView('sign_up')} className="text-blue-600 dark:text-blue-400 hover:underline">{t('auth_signup_link')}</button>
             </p>
           </>
         );
@@ -327,17 +340,18 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
       <div
         role="dialog"
         aria-modal="true"
-        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-md p-8 space-y-4 relative animate-fade-scale"
+        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-8 space-y-4 relative animate-fade-scale"
       >
-        <button 
+        <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
           aria-label="Close"
         >
           <X size={24} />
         </button>
-        {message && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-md text-center">{message}</div>}
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md text-center">{error}</div>}
+        <div className="flex justify-center"><BrandMark className="h-10 w-10" /></div>
+        {message && <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-center text-sm text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300">{message}</div>}
+        {error && <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-center text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">{error}</div>}
         {renderContent()}
       </div>
     </div>

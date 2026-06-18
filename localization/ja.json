@@ -183,6 +183,7 @@
   "auth_forgot_password_link": "パスワードをお忘れですか？",
   "auth_or_separator": "または",
   "auth_signin_google": "Googleでサインイン",
+  "auth_continue_google": "Google で続行",
   "auth_no_employer_account": "企業アカウントをお持ちではありませんか？",
   "auth_no_candidate_account": "アカウントをお持ちではありませんか？",
   "auth_signup_link": "サインアップ",

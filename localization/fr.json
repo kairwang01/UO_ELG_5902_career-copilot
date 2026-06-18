@@ -183,6 +183,7 @@
   "auth_forgot_password_link": "Mot de passe oublié ?",
   "auth_or_separator": "OU",
   "auth_signin_google": "Se connecter avec Google",
+  "auth_continue_google": "Continuer avec Google",
   "auth_no_employer_account": "Pas de compte entreprise ?",
   "auth_no_candidate_account": "Pas de compte ?",
   "auth_signup_link": "S'inscrire",

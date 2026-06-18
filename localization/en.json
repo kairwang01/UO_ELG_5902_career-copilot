@@ -217,6 +217,7 @@
   "auth_forgot_password_link": "Forgot Password?",
   "auth_or_separator": "or",
   "auth_signin_google": "Continue with Google",
+  "auth_continue_google": "Continue with Google",
   "auth_no_employer_account": "New to Career CoPilot for Business?",
   "auth_no_candidate_account": "New to Career CoPilot?",
   "auth_signup_link": "Sign Up",

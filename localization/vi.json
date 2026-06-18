@@ -183,6 +183,7 @@
   "auth_forgot_password_link": "Quên mật khẩu?",
   "auth_or_separator": "HOẶC",
   "auth_signin_google": "Đăng nhập bằng Google",
+  "auth_continue_google": "Tiếp tục với Google",
   "auth_no_employer_account": "Bạn chưa có tài khoản doanh nghiệp?",
   "auth_no_candidate_account": "Bạn chưa có tài khoản?",
   "auth_signup_link": "Đăng ký",
