@@ -1030,7 +1030,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         const resizedImage = await resizeImage(file, 600);
         setProjects(prev => prev.map(p => p.id === id ? { ...p, image: resizedImage } : p));
     } catch (err) {
-        setError("Failed to process project image. Please try another one.");
+        setError(t('tool_portfolio_image_process_failed'));
         console.error(err);
     }
   };

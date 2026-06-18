@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
-import { analyzeResume, setApiStatusUpdater, setAiModel } from './services/aiClient';
+import { analyzeResume, setApiStatusUpdater, setAiModel, setErrorTranslator } from './services/aiClient';
 import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from './lib/firebaseClient';
@@ -192,6 +192,15 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         }
     });
   }, [setApiStatus, setLastError]);
+
+  // Localize callable-error copy: resolve the key, but fall back to the baked-in
+  // English when a locale is missing the key (t returns the key itself on a miss).
+  useEffect(() => {
+    setErrorTranslator((key, fallback) => {
+      const resolved = t(key);
+      return resolved && resolved !== key ? resolved : fallback;
+    });
+  }, [t]);
 
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);

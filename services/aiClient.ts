@@ -35,6 +35,15 @@ export const setApiStatusUpdater = (updater: (status: ApiStatus, error?: string)
   updateApiStatus = updater;
 };
 
+// Locale-aware error copy. CareerApp registers the app's translator on mount so
+// callable failures surface in the user's language; until then (or for a missing
+// key) the English fallback passed alongside each key is used — never a raw key.
+type ErrorTranslator = (key: string, fallback: string) => string;
+let translateError: ErrorTranslator = (_key, fallback) => fallback;
+export const setErrorTranslator = (fn: ErrorTranslator) => {
+  translateError = fn;
+};
+
 /** Turns Firebase callable errors into user-readable text (avoids bare "INTERNAL"). */
 export function formatCallableError(err: unknown): string {
   const e = err as { code?: string; message?: string; details?: unknown };
@@ -53,26 +62,26 @@ export function formatCallableError(err: unknown): string {
   // User-facing copy only — no internal/infra jargon (model keys, Cloud Run,
   // Admin), which end users (candidates/recruiters) should never see.
   if (isQuota) {
-    return 'Our AI service is busy right now. Please wait about 30 seconds and try again.';
+    return translateError('ai_error_busy', 'Our AI service is busy right now. Please wait about 30 seconds and try again.');
   }
   if (code === 'functions/unauthenticated') {
-    return 'Please sign in to use AI features.';
+    return translateError('ai_error_signin', 'Please sign in to use AI features.');
   }
   if (code === 'functions/permission-denied' || lower.includes('not authenticated')) {
-    return 'You do not have access to this feature. Please sign in again, or contact support if this keeps happening.';
+    return translateError('ai_error_no_access', 'You do not have access to this feature. Please sign in again, or contact support if this keeps happening.');
   }
   if (code === 'functions/not-found') {
-    return 'We could not load your profile. Please sign out and sign back in.';
+    return translateError('ai_error_profile_load', 'We could not load your profile. Please sign out and sign back in.');
   }
   if (code === 'functions/internal' && (lower === 'internal' || message === 'INTERNAL')) {
-    return 'The AI request failed. Please try again in a moment.';
+    return translateError('ai_error_failed', 'The AI request failed. Please try again in a moment.');
   }
   // Insufficient credits — strip the raw server string (which embeds the internal
   // tool slug, e.g. "resume-analysis") and show clean, jargon-free copy.
   if (code === 'functions/failed-precondition' && lower.includes('credit')) {
-    return "You don't have enough credits for this feature. Please purchase more credits to continue.";
+    return translateError('ai_error_no_credits', "You don't have enough credits for this feature. Please purchase more credits to continue.");
   }
-  return message || 'Something went wrong with the AI service. Please try again.';
+  return message || translateError('ai_error_generic', 'Something went wrong with the AI service. Please try again.');
 }
 
 function reportStatusFromError(err: any): void {
@@ -92,7 +101,7 @@ function reportStatusFromError(err: any): void {
   } else if (code === 'functions/internal') {
     updateApiStatus('degraded', friendly);
   } else if (code === 'functions/unavailable' || lower.includes('network') || lower.includes('failed to fetch')) {
-    updateApiStatus('offline', 'Network connection issue. Please check your internet connection.');
+    updateApiStatus('offline', translateError('ai_error_network', 'Network connection issue. Please check your internet connection.'));
   }
 }
 
@@ -413,7 +422,7 @@ async function callToolWithGrounding<T>(tool: string, payload: Record<string, un
     updateApiStatus('online');
     const parsed = res.data?.data;
     if (parsed === undefined || parsed === null) {
-      throw new Error('The AI returned an empty or unparseable response. Please try again.');
+      throw new Error(translateError('ai_error_empty_response', 'The AI returned an empty or unparseable response. Please try again.'));
     }
     return { ...(parsed as object), groundingChunks: res.data?.groundingChunks } as T;
   } catch (err) {
