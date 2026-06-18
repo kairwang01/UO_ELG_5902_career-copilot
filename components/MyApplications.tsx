@@ -35,6 +35,8 @@ interface ApplicationRow {
   status: ApplicationPipelineStatus;
   application_date?: { toMillis?: () => number; toDate?: () => Date };
   compatibility_score?: number | null;
+  // Candidate-facing note the employer attached to the latest status change.
+  last_status_note?: string | null;
 }
 
 type FilterStatus = ApplicationFilterGroup;
@@ -377,6 +379,16 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
         </div>
       </div>
 
+      {app.last_status_note && (
+        <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/20">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-800 dark:text-blue-200">
+            <MessageSquare className="h-3.5 w-3.5" />
+            {t('applications_employer_note_label')}
+          </p>
+          <p className="mt-1.5 whitespace-pre-line text-sm leading-6 text-blue-900/90 dark:text-blue-100/90">{app.last_status_note}</p>
+        </div>
+      )}
+
       <ProgressTimeline status={app.status} t={t} />
 
       {isHired && app.employer_id && (
@@ -543,6 +555,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
             status: normalizeApplicationStatus(data.status),
             application_date: data.application_date as ApplicationRow['application_date'],
             compatibility_score: typeof data.compatibility_score === 'number' ? data.compatibility_score : null,
+            last_status_note: typeof data.last_status_note === 'string' ? data.last_status_note : null,
           } satisfies ApplicationRow;
         });
         rows.sort(
@@ -680,6 +693,11 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
                         <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
                           {t('notifications_status_changed').replace('{status}', t(getApplicationStatusLabelKey(n.status)))}
                         </p>
+                        {n.candidate_note && (
+                          <p className="mt-1 rounded-md bg-blue-100/60 px-2 py-1 text-[11px] leading-5 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
+                            “{n.candidate_note}”
+                          </p>
+                        )}
                       </div>
                       {!n.read && (
                         <button

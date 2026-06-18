@@ -149,8 +149,12 @@ export const updateApplicationStatusFunction = onCall({ invoker: "public" }, asy
       };
     }
 
+    // candidate_note is candidate-facing — mirror it onto the (candidate-readable)
+    // application doc so My Applications can show it. The `reason` field is
+    // employer-internal and is written ONLY to the deny-all audit event below.
     tx.update(appRef, {
       status: nextStatus,
+      last_status_note: candidateNote || null,
     });
     tx.create(eventRef, {
       application_id: applicationId,

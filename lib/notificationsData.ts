@@ -28,6 +28,7 @@ export interface AppNotification {
   application_id: string | null;
   job_title: string | null;
   status: string | null;
+  candidate_note: string | null;
   read: boolean;
   created_at: { toMillis?: () => number; toDate?: () => Date } | null;
 }
@@ -40,6 +41,7 @@ const mapNotification = (id: string, data: DocumentData): AppNotification => ({
   application_id: data.application_id ?? null,
   job_title: data.job_title ?? null,
   status: data.status ?? null,
+  candidate_note: typeof data.candidate_note === "string" ? data.candidate_note : null,
   read: data.read === true,
   created_at: data.created_at ?? null,
 });

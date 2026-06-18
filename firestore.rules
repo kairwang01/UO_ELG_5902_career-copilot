@@ -402,66 +402,10 @@ service cloud.firestore {
         optionalString(data, "salary_range", 120);
     }
 
-    function validApplicationStatus(status) {
-      return status in [
-        "Applied",
-        "Interviewing",
-        "Group Interview",
-        "First Interview",
-        "Second Interview",
-        "Decision Maker Interview",
-        "HR Interview",
-        "Offer",
-        "Hiring Evaluation",
-        "Intent Letter",
-        "Offer Confirmed",
-        "Tripartite Agreement",
-        "Signed",
-        "Rejected",
-        "Hired"
-      ];
-    }
-
-    function validJobApplication(data) {
-      return data.keys().hasOnly([
-          "job_id",
-          "candidate_id",
-          "employer_id",
-          "job_title",
-          "candidate_name",
-          "status",
-          "compatibility_score",
-          "notes",
-          "application_date"
-        ]) &&
-        data.keys().hasAll([
-          "job_id",
-          "candidate_id",
-          "employer_id",
-          "job_title",
-          "candidate_name",
-          "status",
-          "application_date"
-        ]) &&
-        data.job_id is string &&
-        data.job_id.size() > 0 &&
-        data.job_id.size() <= 128 &&
-        data.candidate_id is string &&
-        data.candidate_id.size() > 0 &&
-        data.candidate_id.size() <= 128 &&
-        data.employer_id is string &&
-        data.employer_id.size() > 0 &&
-        data.employer_id.size() <= 128 &&
-        data.job_title is string &&
-        data.job_title.size() > 0 &&
-        data.job_title.size() <= 180 &&
-        data.candidate_name is string &&
-        data.candidate_name.size() <= 120 &&
-        validApplicationStatus(data.status) &&
-        data.application_date is timestamp &&
-        optionalNumber(data, "compatibility_score", 0, 100) &&
-        optionalString(data, "notes", 5000);
-    }
+    // (validApplicationStatus / validJobApplication removed — job_applications
+    // creates and updates are now server-only via Cloud Functions, so the
+    // client-write validators are dead. Status values are validated in
+    // updateApplicationStatus.ts.)
 
     // ---- users/{userId} ---------------------------------------------------
     match /users/{userId} {
@@ -538,7 +482,7 @@ service cloud.firestore {
         // Only the `read` field may be changed by the owner (mark-read).
         // All identity fields must remain unchanged.
         allow update: if isOwner(userId)
-          && unchanged(["type", "application_id", "job_title", "status", "created_at"]);
+          && unchanged(["type", "application_id", "job_title", "status", "candidate_note", "created_at"]);
 
         // Server-only creates/deletes — trigger writes via Admin SDK.
         allow create, delete: if false;

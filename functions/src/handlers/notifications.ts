@@ -71,6 +71,9 @@ export const onApplicationStatusChangeFunction = onDocumentUpdated(
           application_id: appId,
           job_title: after.job_title ?? null,
           status,
+          // Candidate-facing note the employer attached to this transition (the
+          // internal `reason` is never surfaced — it stays in the audit event).
+          candidate_note: typeof after.last_status_note === "string" ? after.last_status_note : null,
           read: false,
           created_at: admin.firestore.FieldValue.serverTimestamp(),
         })

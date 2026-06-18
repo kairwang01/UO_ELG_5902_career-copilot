@@ -2074,6 +2074,7 @@
   "applicant_funnel_status_reason_label": "Raison interne",
   "applicant_funnel_status_reason_placeholder": "Optionnel : ex. portfolio validé ou entretien collectif sauté",
   "applicant_funnel_candidate_note_label": "Note candidat",
+  "applications_employer_note_label": "Note de l'employeur",
   "applicant_funnel_candidate_note_placeholder": "Note optionnelle pour le message candidat ou le suivi",
   "applicant_funnel_filter_result": "{shown} candidature(s) sur {total} affichée(s)",
   "applicant_funnel_stat_total": "Total des candidatures",
