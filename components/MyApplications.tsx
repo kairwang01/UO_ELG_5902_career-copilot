@@ -17,6 +17,7 @@ import {
   isApplicationClosedStatus,
   isApplicationHiredStatus,
   isApplicationRejectedStatus,
+  isApplicationReviewEligible,
   normalizeApplicationStatus,
   type ApplicationFilterGroup,
   type ApplicationPipelineStatus,
@@ -419,6 +420,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
   const statusGroup = getApplicationStatusGroup(app.status);
   const isRejected = isApplicationRejectedStatus(app.status);
   const isHired = isApplicationHiredStatus(app.status);
+  const canReview = isApplicationReviewEligible(app.status);
   const guidance = STATUS_GUIDANCE[statusGroup];
   const GuidanceIcon = guidance.icon;
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -515,7 +517,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
 
       {pipelineOpen && <ProgressTimeline status={app.status} t={t} />}
 
-      {isHired && app.employer_id && (
+      {canReview && app.employer_id && (
         <div className="mt-3 flex items-center justify-end">
           <button
             type="button"
