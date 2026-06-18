@@ -1,7 +1,6 @@
 
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
 import {
     ArrowLeft,
     ArrowRight,
@@ -23,14 +22,19 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import { listJobApplicants, getApplicantResumeFile, getApplicantResumeText, type JobApplicant } from '../services/aiClient';
+import {
+    listJobApplicants,
+    getApplicantResumeFile,
+    getApplicantResumeText,
+    updateApplicationStatus,
+    type JobApplicant,
+} from '../services/aiClient';
 import { saveToShortlist } from '../lib/shortlistData';
 import { TALENT_PROFILE_SCHEMA, hasMeaningfulEntry, type Section, type TalentProfile } from '../lib/talentProfile';
 import { useToast } from './Toast';
 import ResumePreview from './ResumePreview';
 import FunnelChart from './FunnelChart';
 import { useModalBehavior } from '../hooks/useModalBehavior';
-import { firestoreDb } from '../lib/firebaseClient';
 import {
     APPLICATION_PIPELINE_STAGES,
     getApplicationStatusIndex,
@@ -323,6 +327,7 @@ interface SelectFieldProps<T extends string> {
     onChange: (value: T) => void;
     children: React.ReactNode;
     className?: string;
+    disabled?: boolean;
 }
 
 function SelectField<T extends string>({
@@ -332,6 +337,7 @@ function SelectField<T extends string>({
     onChange,
     children,
     className = '',
+    disabled = false,
 }: SelectFieldProps<T>) {
     return (
         <label className={`space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300 ${className}`}>
@@ -340,6 +346,7 @@ function SelectField<T extends string>({
                 id={id}
                 value={value}
                 onChange={(event) => onChange(event.target.value as T)}
+                disabled={disabled}
                 className={SELECT_CLASS}
             >
                 {children}
@@ -353,7 +360,11 @@ interface StageControlProps {
     statusOptions: ApplicationPipelineStatus[];
     statusSavingId: string | null;
     getStatusLabel: (status: string) => string;
-    onStatusChange: (applicant: Applicant, nextStatusValue: string) => void;
+    onStatusChange: (
+        applicant: Applicant,
+        nextStatusValue: string,
+        meta?: { reason?: string; candidateNote?: string },
+    ) => Promise<boolean>;
     t: (key: string) => string;
 }
 
@@ -365,14 +376,28 @@ const StageControl: React.FC<StageControlProps> = ({
     onStatusChange,
     t,
 }) => {
+    const [reason, setReason] = useState('');
+    const [candidateNote, setCandidateNote] = useState('');
     const currentStatus = normalizeApplicationStatus(applicant.status);
     const nextStatus = getNextApplicationPipelineStatus(currentStatus);
     const isSaving = statusSavingId === applicant.id;
     const canAdvance = Boolean(nextStatus) && !isSaving && currentStatus !== 'Rejected';
 
+    const submitStatusChange = async (targetStatus: string) => {
+        if (targetStatus === currentStatus || isSaving) return;
+        const ok = await onStatusChange(applicant, targetStatus, {
+            reason,
+            candidateNote,
+        });
+        if (ok) {
+            setReason('');
+            setCandidateNote('');
+        }
+    };
+
     const handleAdvance = () => {
         if (!nextStatus || isSaving) return;
-        onStatusChange(applicant, nextStatus);
+        void submitStatusChange(nextStatus);
     };
 
     return (
@@ -382,7 +407,8 @@ const StageControl: React.FC<StageControlProps> = ({
                     id={`applicant-stage-${applicant.id}`}
                     label={t('applicant_funnel_stage_control_label')}
                     value={currentStatus}
-                    onChange={(value) => onStatusChange(applicant, value)}
+                    onChange={(value) => void submitStatusChange(value)}
+                    disabled={isSaving}
                 >
                     {statusOptions.map(status => (
                         <option key={status} value={status}>{getStatusLabel(status)}</option>
@@ -400,6 +426,32 @@ const StageControl: React.FC<StageControlProps> = ({
                         ? formatTranslation(t('applicant_funnel_advance_to'), { status: getStatusLabel(nextStatus) })
                         : t('applicant_funnel_stage_final')}
                 </button>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="space-y-1 text-xs font-medium text-blue-900 dark:text-blue-100">
+                    <span>{t('applicant_funnel_status_reason_label')}</span>
+                    <input
+                        type="text"
+                        value={reason}
+                        onChange={(event) => setReason(event.target.value)}
+                        disabled={isSaving}
+                        maxLength={500}
+                        placeholder={t('applicant_funnel_status_reason_placeholder')}
+                        className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-gray-800 transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-blue-900/60 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:disabled:bg-slate-900"
+                    />
+                </label>
+                <label className="space-y-1 text-xs font-medium text-blue-900 dark:text-blue-100">
+                    <span>{t('applicant_funnel_candidate_note_label')}</span>
+                    <textarea
+                        value={candidateNote}
+                        onChange={(event) => setCandidateNote(event.target.value)}
+                        disabled={isSaving}
+                        maxLength={1000}
+                        rows={2}
+                        placeholder={t('applicant_funnel_candidate_note_placeholder')}
+                        className="w-full resize-y rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-gray-800 transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-blue-900/60 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:disabled:bg-slate-900"
+                    />
+                </label>
             </div>
             <p className="mt-2 text-xs leading-5 text-blue-800/80 dark:text-blue-200/80">
                 {isSaving
@@ -817,8 +869,13 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         }
     }, []);
 
-    const handleStatusChange = useCallback(async (applicant: Applicant, nextStatusValue: string) => {
+    const handleStatusChange = useCallback(async (
+        applicant: Applicant,
+        nextStatusValue: string,
+        meta?: { reason?: string; candidateNote?: string },
+    ): Promise<boolean> => {
         const nextStatus = normalizeApplicationStatus(nextStatusValue);
+        if (normalizeApplicationStatus(applicant.status) === nextStatus) return true;
         const previousApplicants = applicants;
         const previousSelected = selectedApplicant;
 
@@ -832,11 +889,18 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         );
 
         try {
-            await updateDoc(doc(firestoreDb, 'job_applications', applicant.id), { status: nextStatus });
+            await updateApplicationStatus(
+                applicant.id,
+                nextStatus,
+                meta?.reason ?? '',
+                meta?.candidateNote ?? '',
+            );
+            return true;
         } catch {
             setApplicants(previousApplicants);
             setSelectedApplicant(previousSelected);
             setStatusUpdateError(t('applicant_funnel_status_update_error'));
+            return false;
         } finally {
             setStatusSavingId(null);
         }

@@ -38,6 +38,7 @@ export { setSubscriptionStatusFunction as setSubscriptionStatus } from "./handle
 export { grantMonthlyCreditsFunction  as grantMonthlyCredits   } from "./handlers/grantMonthlyCredits";
 export { onUserCreatedFunction        as onUserCreated         } from "./handlers/onUserCreated";
 export { createJobApplicationFunction as createJobApplication  } from "./handlers/jobApplications";
+export { updateApplicationStatusFunction as updateApplicationStatus } from "./handlers/updateApplicationStatus";
 export { listJobApplicantsFunction    as listJobApplicants     } from "./handlers/listJobApplicants";
 export { getApplicantResumeFileFunction as getApplicantResumeFile } from "./handlers/getApplicantResumeFile";
 export { getApplicantResumeTextFunction as getApplicantResumeText } from "./handlers/getApplicantResumeText";

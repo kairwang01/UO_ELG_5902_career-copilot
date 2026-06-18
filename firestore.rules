@@ -584,10 +584,10 @@ service cloud.firestore {
     }
 
     // ---- job_applications/{applicationId} ---------------------------------
-    // Both the candidate and the owning employer may read. Status changes are
-    // employer-controlled: only the employer may update, and identity/title
-    // fields are pinned. Either party may delete (candidate withdraw / employer
-    // cleanup).
+    // Both the candidate and the owning employer may read. Creates and status
+    // updates are server-only so every application mutation is validated and
+    // auditable through Cloud Functions. Either party may delete (candidate
+    // withdraw / employer cleanup).
     //
     // CREATE is client-forbidden: all writes go through the createJobApplication
     // Cloud Function (Admin SDK), which reads employer_id/job_title from the
@@ -598,14 +598,12 @@ service cloud.firestore {
         (resource.data.candidate_id == request.auth.uid ||
          resource.data.employer_id == request.auth.uid);
 
-      // Server-only — the createJobApplication Cloud Function (Admin SDK)
-      // bypasses these rules. Direct client creates are rejected.
+      // Server-only — createJobApplication and updateApplicationStatus use the
+      // Admin SDK and bypass these rules. Direct client creates/updates are
+      // rejected so status changes cannot skip the audit log.
       allow create: if false;
 
-      allow update: if isSignedIn() &&
-        resource.data.employer_id == request.auth.uid &&
-        validJobApplication(request.resource.data) &&
-        unchanged(["job_id", "candidate_id", "employer_id", "job_title", "candidate_name", "application_date"]);
+      allow update: if false;
 
       allow delete: if isSignedIn() &&
         (resource.data.candidate_id == request.auth.uid ||
@@ -647,6 +645,13 @@ service cloud.firestore {
     // written by createJobApplication and read by the employer-resume callables,
     // all Admin SDK. Clients NEVER read or write it directly.
     match /application_snapshots/{applicationId} {
+      allow read, write: if false;
+    }
+
+    // application_status_events/{eventId} — immutable audit log for application
+    // status changes. Contains employer-only rationale and optional candidate
+    // notes; clients use callables/UI projections, never direct reads or writes.
+    match /application_status_events/{eventId} {
       allow read, write: if false;
     }
 

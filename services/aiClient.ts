@@ -311,6 +311,14 @@ export interface ListJobApplicantsResult {
   applicants: JobApplicant[];
 }
 
+export interface UpdateApplicationStatusResult {
+  applicationId: string;
+  previousStatus: string;
+  status: string;
+  eventId: string | null;
+  changed: boolean;
+}
+
 /**
  * Returns the applicants for a job the caller owns, each with a server-computed
  * match analysis. Resume text stays on the server (clients are rules-blocked
@@ -320,6 +328,21 @@ export const listJobApplicants = (jobId: string): Promise<ListJobApplicantsResul
   callDedicated(async () => {
     const fn = httpsCallable<{ jobId: string }, ListJobApplicantsResult>(firebaseFunctions, 'listJobApplicants', { timeout: 190_000 });
     const res = await fn({ jobId });
+    return res.data;
+  });
+
+export const updateApplicationStatus = (
+  applicationId: string,
+  status: string,
+  reason = '',
+  candidateNote = '',
+): Promise<UpdateApplicationStatusResult> =>
+  callDedicated(async () => {
+    const fn = httpsCallable<
+      { applicationId: string; status: string; reason?: string; candidateNote?: string },
+      UpdateApplicationStatusResult
+    >(firebaseFunctions, 'updateApplicationStatus', { timeout: 60_000 });
+    const res = await fn({ applicationId, status, reason, candidateNote });
     return res.data;
   });
 
