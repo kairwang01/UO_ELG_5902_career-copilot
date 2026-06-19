@@ -123,6 +123,12 @@ export const createCompanyReviewFunction = onCall(
     // rejected still qualifies (their current status would be "Rejected").
     let bestRank = 0;
 
+    // .limit(200) is a defensive read cap, not a correctness guarantee: we only
+    // need the max rank across all events, which is order-independent, so no
+    // orderBy is needed. In practice a candidate will have far fewer than 200
+    // status transitions at one employer; the belt-and-suspenders job_applications
+    // query below covers the edge case where an application was written directly
+    // at an interview status with no preceding events.
     const eventsSnap = await db
       .collection("application_status_events")
       .where("candidate_id", "==", uid)
