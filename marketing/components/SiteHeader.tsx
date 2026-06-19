@@ -12,7 +12,7 @@ export const SiteHeader: React.FC = () => {
   const isEmployerSurface = pathname.startsWith(SITE_ROUTES.employers) || pathname.startsWith(SITE_ROUTES.portal);
   const { t } = useMarketingI18n();
   const { session, isAdmin, isBusiness } = useSiteSession();
-  const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
+  const workspaceHref = SITE_ROUTES.workspace;
   const workspaceLabel = t('site_nav_workspace');
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;

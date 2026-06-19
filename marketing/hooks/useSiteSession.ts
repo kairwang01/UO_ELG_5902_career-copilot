@@ -3,6 +3,7 @@ import { data } from '../../lib/data';
 import type { AppSession } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { adminCheckAccess } from '../../services/adminClient';
+import { hasBusinessPortalAccess } from '../../lib/access/businessAccess';
 
 export interface SiteSessionState {
   /** Firebase auth session, or null when signed out. */
@@ -96,11 +97,7 @@ export function useSiteSession(): SiteSessionState {
     };
   }, [session?.user?.id]);
 
-  const isBusiness =
-    profile?.role === 'employer' ||
-    ['starter', 'growth', 'pro', 'single_post', 'job_pack'].includes(
-      profile?.subscription_status?.replace('pending_biz_', '') ?? '',
-    );
+  const isBusiness = hasBusinessPortalAccess(profile?.role, profile?.subscription_status);
 
   const ready = sessionResolved && profileSettled && adminSettled;
 

@@ -49,6 +49,7 @@ import { isWeb3Enabled, onWeb3FlagChange } from './config/featureFlags';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import WorkspaceTour from './components/onboarding/WorkspaceTour';
 import { isOnboardingDue, isTourDone, loadBirthdayLocal, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
+import { hasBusinessPortalAccess, normalizeBusinessSubscriptionStatus } from './lib/access/businessAccess';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -195,8 +196,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const { setApiStatus, setLastError } = useApiStatus();
   const isPortalEntry = entry === 'portal';
   const profileRole = profile?.role as string | undefined;
+  const normalizedSubscriptionStatus = normalizeBusinessSubscriptionStatus(profile?.subscription_status);
   const isCandidate = profile?.role === 'candidate';
-  const isEmployer = profile?.role === 'employer';
+  const isEmployer = hasBusinessPortalAccess(profile?.role, profile?.subscription_status);
   // Admin authority is handled by the dedicated /admin route. It must not
   // override the user's product role here: admin-candidates still need the
   // candidate workspace, and admin-employers still need the hiring portal.
@@ -733,7 +735,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   }, [session, isProfileLoaded, isCandidate]);
 
   useEffect(() => {
-    const roleKey = `${session?.user?.id ?? 'signed-out'}:${profile?.role ?? 'no-role'}`;
+    const roleKey = `${session?.user?.id ?? 'signed-out'}:${profile?.role ?? 'no-role'}:${normalizedSubscriptionStatus}`;
     if (roleStateKeyRef.current === roleKey) return;
     roleStateKeyRef.current = roleKey;
 
@@ -746,7 +748,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (profile?.role === 'candidate') {
       setPortalInitialPage('dashboard');
     }
-  }, [session?.user?.id, profile?.role, location.pathname]);
+  }, [session?.user?.id, profile?.role, normalizedSubscriptionStatus, location.pathname]);
 
 
   useEffect(() => {
@@ -1407,7 +1409,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const isWorkspaceSessionLoading = Boolean(session && (!isProfileLoaded || !isLangLoaded));
   const canShowWorkspaceShell = Boolean(session && !showHomePageOverride && view !== 'business' && isProfileLoaded && isLangLoaded);
   const showCandidateShell = canShowWorkspaceShell && isCandidate && !isPortalEntry;
-  const showEmployerShell = canShowWorkspaceShell && isEmployer;
+  const showEmployerShell = canShowWorkspaceShell && isEmployer && isPortalEntry;
   const showUnsupportedRole = canShowWorkspaceShell && !isKnownWorkspaceRole;
 
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
