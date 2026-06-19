@@ -162,7 +162,11 @@ service cloud.firestore {
         data.credits is number &&
         data.credits >= 0 &&
         data.credits <= 1000000 &&
-        data.created_at is timestamp &&
+        // created_at is server-set (onUserCreated/setSubscriptionStatus serverTimestamp)
+        // and immutable from the client (pinned by unchanged() on update). Some legacy
+        // docs persisted it as an ISO string; accept both so those owners aren't locked
+        // out of editing non-legacy profile fields (e.g. the org-profile form).
+        (data.created_at is timestamp || data.created_at is string) &&
         optionalTimestamp(data, "updated_at") &&
         optionalString(data, "full_name", 120) &&
         optionalDateString(data, "birth_date") &&
