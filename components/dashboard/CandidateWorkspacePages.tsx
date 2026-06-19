@@ -234,6 +234,184 @@ const ScoreBlock: React.FC<{ label: string; value: number; tone?: 'ready' | 'gap
   );
 };
 
+const getResumeScoreTone = (score: number): 'ready' | 'gap' | 'risk' =>
+  score >= 75 ? 'ready' : score >= 55 ? 'gap' : 'risk';
+
+const ResumeScoreStrip: React.FC<{
+  score: number;
+  fixesCount: number;
+  latestDate: string;
+  marketName: string;
+  t: (key: string) => string;
+}> = ({ score, fixesCount, latestDate, marketName, t }) => {
+  const tone = getResumeScoreTone(score);
+  const toneStyles = {
+    ready: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/30 dark:text-emerald-300',
+    gap: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-300',
+    risk: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/50 dark:bg-red-900/30 dark:text-red-300',
+  };
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className={`rounded-lg border p-4 ${toneStyles[tone]}`}>
+          <p className="text-xs font-semibold uppercase tracking-wide opacity-80">{t('ws_resume_score_label')}</p>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <span className="text-3xl font-semibold tracking-tight">{score}</span>
+            <span className="text-xs font-semibold">/100</span>
+          </div>
+          <div className="mt-3 h-1.5 rounded-full bg-white/70 dark:bg-slate-950/40">
+            <div className="h-1.5 rounded-full bg-current" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+          </div>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('ws_resume_improvements_title')}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-100">{fixesCount}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('ws_resume_latest_report')}</p>
+          <p className="mt-2 text-base font-semibold text-slate-950 dark:text-slate-100">{latestDate || t('ws_resume_latest_report_unknown')}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            {formatWorkspaceCopy(t('ws_resume_preview_desc'), { market: marketName }).replace(marketName, '').replace(/[：:]\s*$/, '').trim()}
+          </p>
+          <p className="mt-2 text-base font-semibold text-slate-950 dark:text-slate-100">{marketName}</p>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const ResumeFixQueue: React.FC<{
+  improvements: Improvement[];
+  summary: string;
+  t: (key: string) => string;
+  onOpenFormatter: () => void;
+}> = ({ improvements, summary, t, onOpenFormatter }) => {
+  const topFixes = improvements.slice(0, 3);
+  const remainingFixes = improvements.slice(3);
+
+  return (
+    <Panel
+      title={formatWorkspaceCopy(t('ws_resume_priority_fixes'), { count: improvements.length })}
+      description={summary}
+      action={
+        <button
+          type="button"
+          onClick={onOpenFormatter}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+        >
+          {t('ws_resume_open_formatter')}
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      }
+    >
+      {topFixes.length > 0 ? (
+        <div className="space-y-3">
+          {topFixes.map((issue, index) => (
+            <article
+              key={`${issue.area}-${index}`}
+              className="rounded-lg border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-200 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-blue-800 dark:hover:bg-blue-900/20"
+            >
+              <div className="flex gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-sm font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-300">
+                  {String(index + 1).padStart(2, '0')}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <p className="font-semibold text-slate-950 dark:text-slate-100">{issue.area || t('ws_resume_improvement_fallback')}</p>
+                    <StatusPill tone={index < 2 ? 'risk' : 'gap'}>
+                      {index < 2 ? t('workspace_priority_high') : t('workspace_priority_medium')}
+                    </StatusPill>
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.suggestion}</p>
+                </div>
+              </div>
+            </article>
+          ))}
+          {remainingFixes.length > 0 && (
+            <details className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <summary className="cursor-pointer text-sm font-semibold text-blue-700 dark:text-blue-400">
+                {t('ws_resume_improvements_title')} · {remainingFixes.length}
+              </summary>
+              <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                {remainingFixes.map((issue, index) => (
+                  <div key={`${issue.area}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{issue.area || t('ws_resume_improvement_fallback')}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.suggestion}</p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
+          {t('ws_resume_no_improvements')}
+        </div>
+      )}
+    </Panel>
+  );
+};
+
+const ResumeSignalsPanel: React.FC<{
+  strengths: string[];
+  keywords: string[];
+  t: (key: string) => string;
+}> = ({ strengths, keywords, t }) => (
+  <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+    <Panel title={t('ws_resume_strengths_title')} description={t('ws_resume_quality_desc')}>
+      <div className="space-y-2">
+        {strengths.length > 0 ? strengths.slice(0, 4).map((strength) => (
+          <div key={strength} className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <p className="text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-200">{strength}</p>
+          </div>
+        )) : (
+          <p className="text-sm text-slate-600 dark:text-slate-400">{t('ws_resume_no_strengths')}</p>
+        )}
+      </div>
+    </Panel>
+
+    <Panel title={t('ws_resume_keywords_title')}>
+      <div className="flex flex-wrap gap-2">
+        {keywords.length > 0 ? keywords.slice(0, 14).map((keyword) => (
+          <StatusPill key={keyword} tone="ready">
+            {keyword}
+          </StatusPill>
+        )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t('ws_resume_no_keywords')}</span>}
+      </div>
+    </Panel>
+  </div>
+);
+
+const StickyResumePreviewPanel: React.FC<{
+  resumeText: string;
+  market: string;
+  t: (key: string) => string;
+  onOpenFormatter: () => void;
+}> = ({ resumeText, market, t, onOpenFormatter }) => (
+  <aside className="xl:sticky xl:top-6">
+    <Panel
+      title={t('ws_resume_preview_title')}
+      description={formatWorkspaceCopy(t('ws_resume_preview_desc'), { market })}
+      action={
+        <button
+          type="button"
+          onClick={onOpenFormatter}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+        >
+          {t('ws_resume_open_formatter')}
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      }
+    >
+      <ResumePreview resumeText={resumeText} market={market} t={t} />
+    </Panel>
+  </aside>
+);
+
 export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   resumeText,
   market,
@@ -275,7 +453,7 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
           </div>
         </Panel>
       ) : !analysis ? (
-        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid items-start gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <Panel
             title={t('ws_resume_no_report_title')}
             description={analysisError ? t('ws_resume_analysis_unavailable') : t('ws_resume_no_report_desc')}
@@ -294,102 +472,38 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
               {t('ws_resume_no_report_hint')}
             </div>
           </Panel>
-          <Panel title={t('ws_resume_preview_title')} description={formatWorkspaceCopy(t('ws_resume_preview_desc'), { market })}>
-            <ResumePreview resumeText={resumeText} market={market} t={t} />
-          </Panel>
+          <StickyResumePreviewPanel
+            resumeText={resumeText}
+            market={market}
+            t={t}
+            onOpenFormatter={() => onOpenTool('resume-formatter')}
+          />
         </div>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="space-y-6">
-            <Panel
-              title={t('ws_resume_summary_title')}
-              description={t('ws_resume_summary_desc')}
-              action={<StatusPill tone={improvements.length > 0 ? 'gap' : 'ready'}>{formatWorkspaceCopy(t('ws_resume_priority_fixes'), { count: improvements.length })}</StatusPill>}
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ScoreBlock
-                  label={t('ws_resume_score_label')}
-                  value={Math.max(0, Math.min(100, Math.round(analysis.score || 0)))}
-                  tone={analysis.score >= 75 ? 'ready' : analysis.score >= 55 ? 'gap' : 'risk'}
-                />
-                <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('ws_resume_latest_report')}</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-950 dark:text-slate-100">
-                    {latestDate || t('ws_resume_latest_report_unknown')}
-                  </p>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                    {analysis.market_name || market}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-200">
-                {analysis.summary || formatWorkspaceCopy(t('ws_resume_next_action'), { action: t('ws_resume_run_analysis') })}
-              </div>
-            </Panel>
-
-            <Panel title={t('ws_resume_improvements_title')}>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('ws_resume_quality_title')}</p>
-                  <div className="space-y-2">
-                    {improvements.length > 0 ? improvements.map((issue, index) => (
-                      <div key={`${issue.area}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-medium text-slate-950 dark:text-slate-100">{issue.area || t('ws_resume_improvement_fallback')}</p>
-                          <StatusPill tone="gap">{t('workspace_status_gap')}</StatusPill>
-                        </div>
-                        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.suggestion}</p>
-                      </div>
-                    )) : (
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
-                        {t('ws_resume_no_improvements')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">{t('ws_resume_keywords_title')}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {keywords.length > 0 ? keywords.map((keyword) => (
-                      <StatusPill key={keyword} tone="ready">
-                        {keyword}
-                      </StatusPill>
-                    )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t('ws_resume_no_keywords')}</span>}
-                  </div>
-                </div>
-              </div>
-            </Panel>
-
-            <Panel
-              title={t('ws_resume_strengths_title')}
-              description={t('ws_resume_quality_desc')}
-            >
-              <div className="space-y-3">
-                {strengths.length > 0 ? strengths.slice(0, 4).map((strength) => (
-                  <div key={strength} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
-                    <p className="flex gap-2 text-sm font-medium leading-relaxed text-slate-950 dark:text-slate-100">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      <span>{strength}</span>
-                    </p>
-                  </div>
-                )) : (
-                  <p className="text-sm text-slate-600 dark:text-slate-400">{t('ws_resume_no_strengths')}</p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => onOpenTool('resume-formatter')}
-                className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-              >
-                {t('ws_resume_open_formatter')}
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </Panel>
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.78fr)]">
+          <div className="space-y-5">
+            <ResumeScoreStrip
+              score={Math.max(0, Math.min(100, Math.round(analysis.score || 0)))}
+              fixesCount={improvements.length}
+              latestDate={latestDate}
+              marketName={analysis.market_name || market}
+              t={t}
+            />
+            <ResumeFixQueue
+              improvements={improvements}
+              summary={analysis.summary || formatWorkspaceCopy(t('ws_resume_next_action'), { action: t('ws_resume_run_analysis') })}
+              t={t}
+              onOpenFormatter={() => onOpenTool('resume-formatter')}
+            />
+            <ResumeSignalsPanel strengths={strengths} keywords={keywords} t={t} />
           </div>
 
-          <Panel title={t('ws_resume_preview_title')} description={formatWorkspaceCopy(t('ws_resume_preview_desc'), { market })}>
-            <ResumePreview resumeText={resumeText} market={market} t={t} />
-          </Panel>
+          <StickyResumePreviewPanel
+            resumeText={resumeText}
+            market={analysis.market_name || market}
+            t={t}
+            onOpenFormatter={() => onOpenTool('resume-formatter')}
+          />
         </div>
       )}
     </div>
