@@ -319,16 +319,19 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (pathView) {
       if (pathView !== dashboardView) {
         setDashboardView(pathView);
-        setActiveTool(null);
+        if (pathView !== 'toolkit') setActiveTool(null);
         setAnalysisResult(null);
         if (pathView !== 'resume') setIsUpdatingResume(false);
+      }
+      if (pathView === 'toolkit') {
+        setActiveTool(new URLSearchParams(location.search).get('tool'));
       }
       return;
     }
     if (location.pathname.startsWith('/workspace/')) {
       navigate('/workspace', { replace: true });
     }
-  }, [entry, location.pathname, dashboardView, navigate]);
+  }, [entry, location.pathname, location.search, dashboardView, navigate]);
 
   // Close the auth modal as soon as a session exists (login success or async restore).
   useEffect(() => {
@@ -969,7 +972,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const openWorkspaceTool = (tool: string) => {
     setActiveTool(tool);
-    setWorkspaceView('toolkit');
+    setDashboardView('toolkit');
+    setAnalysisResult(null);
+    setIsUpdatingResume(false);
+    if (entry === 'workspace') {
+      navigate(`${dashboardPathForView('toolkit')}?tool=${encodeURIComponent(tool)}`);
+    }
   };
 
   const openResumeUpload = () => {
