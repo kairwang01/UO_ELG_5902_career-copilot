@@ -1702,6 +1702,7 @@
   "coach_intent_plan": "Karriere planen",
   "coach_welcome_or_ask": "… oder fragen Sie mich einfach unten.",
   "coach_send_label": "Nachricht senden",
+  "coach_login_required": "Please sign in to use the AI career coach.",
   "coach_error": "Diese Nachricht konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
   "mi_mic_start": "Spracheingabe starten",
   "mi_mic_stop": "Spracheingabe stoppen",

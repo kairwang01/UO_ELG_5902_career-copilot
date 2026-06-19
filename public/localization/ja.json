@@ -1702,6 +1702,7 @@
   "coach_intent_plan": "キャリアを計画",
   "coach_welcome_or_ask": "…または下に何でも聞いてください。",
   "coach_send_label": "メッセージを送信",
+  "coach_login_required": "Please sign in to use the AI career coach.",
   "coach_error": "メッセージを送信できませんでした。もう一度お試しください。",
   "mi_mic_start": "音声入力を開始",
   "mi_mic_stop": "音声入力を停止",

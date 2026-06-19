@@ -1715,6 +1715,7 @@
   "coach_intent_plan": "Planifier ma carrière",
   "coach_welcome_or_ask": "… ou posez-moi une question ci-dessous.",
   "coach_send_label": "Envoyer le message",
+  "coach_login_required": "Please sign in to use the AI career coach.",
   "coach_error": "Impossible d'envoyer ce message. Réessayez.",
   "mi_mic_start": "Démarrer la saisie vocale",
   "mi_mic_stop": "Arrêter la saisie vocale",

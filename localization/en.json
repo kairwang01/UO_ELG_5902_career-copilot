@@ -2310,6 +2310,7 @@
   "coach_feedback_chip": "Something off?",
   "coach_feedback_prompt": "Something feels off in my job search. Help me diagnose the issue and suggest the next step.",
   "coach_send_label": "Send message",
+  "coach_login_required": "Please sign in to use the AI career coach.",
   "coach_error": "I couldn't send that message. Please try again.",
   "mi_mic_start": "Start voice input",
   "mi_mic_stop": "Stop voice input",

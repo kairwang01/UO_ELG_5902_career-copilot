@@ -2310,6 +2310,7 @@
   "coach_feedback_chip": "吐个槽",
   "coach_feedback_prompt": "我现在求职有点卡住了，帮我判断问题在哪里，并给我下一步建议。",
   "coach_send_label": "发送消息",
+  "coach_login_required": "请登录后使用 AI 职业教练。",
   "coach_error": "消息发送失败，请稍后重试。",
   "mi_mic_start": "开始语音输入",
   "mi_mic_stop": "停止语音输入",

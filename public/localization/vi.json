@@ -1702,6 +1702,7 @@
   "coach_intent_plan": "Lập kế hoạch sự nghiệp",
   "coach_welcome_or_ask": "… hoặc hỏi tôi bất cứ điều gì bên dưới.",
   "coach_send_label": "Gửi tin nhắn",
+  "coach_login_required": "Please sign in to use the AI career coach.",
   "coach_error": "Không gửi được tin nhắn. Vui lòng thử lại.",
   "mi_mic_start": "Bắt đầu nhập bằng giọng nói",
   "mi_mic_stop": "Dừng nhập bằng giọng nói",

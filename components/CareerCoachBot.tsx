@@ -154,6 +154,12 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
         if (!cleanText || isLoading) return;
 
         const userMessage: Message = { role: 'user', content: cleanText };
+        if (!session) {
+            setMessages([...messages, userMessage, { role: 'model', content: t('coach_login_required') }]);
+            setUserInput('');
+            return;
+        }
+
         const history = [...messages, userMessage];
         setMessages(history);
         setUserInput('');
