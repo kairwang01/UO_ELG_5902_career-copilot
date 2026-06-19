@@ -690,6 +690,16 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // application_scorecards/{scorecardId} — employer-only structured interview
+    // evaluations. Candidates cannot read these because they contain internal
+    // hiring judgement, evidence notes, and risks. Writes are server-only through
+    // upsertScorecard, which verifies the employer owns the interview/job.
+    match /application_scorecards/{scorecardId} {
+      allow read: if isSignedIn() &&
+        resource.data.employer_id == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
     // employer_responsiveness/{employerId} — coarse, backward-looking aggregate
     // (avg days-to-first-action, last action) derived server-side from the audit
     // log. Employer-level, NO candidate PII — any signed-in user may read it to

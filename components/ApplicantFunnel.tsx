@@ -9,6 +9,7 @@ import {
     CheckCircle2,
     ChevronDown,
     Clock3,
+    ClipboardCheck,
     Download,
     Eye,
     FileWarning,
@@ -35,6 +36,14 @@ import {
 } from '../services/aiClient';
 import { saveToShortlist } from '../lib/shortlistData';
 import { listInterviewsForApplication, scheduleInterview, updateInterview, type ApplicationInterview, type InterviewFormat } from '../lib/interviewData';
+import {
+    SCORECARD_RATING_KEYS,
+    listScorecardsForApplication,
+    upsertScorecard,
+    type ApplicationScorecard,
+    type ScorecardRatingKey,
+    type ScorecardRecommendation,
+} from '../lib/scorecardData';
 import { TALENT_PROFILE_SCHEMA, hasMeaningfulEntry, type Section, type TalentProfile } from '../lib/talentProfile';
 import { useToast } from './Toast';
 import ResumePreview from './ResumePreview';
@@ -390,6 +399,14 @@ const JobFitChecklist: React.FC<{ job: JobPosting; profile: TalentProfile | null
 };
 
 const INTERVIEW_FORMAT_OPTIONS: InterviewFormat[] = ['phone', 'video', 'onsite'];
+const SCORECARD_RECOMMENDATIONS: ScorecardRecommendation[] = ['strong_hire', 'hire', 'hold', 'no_hire'];
+const SCORE_VALUES = [1, 2, 3, 4, 5];
+const defaultScorecardRatings = (): Record<ScorecardRatingKey, number> => (
+    SCORECARD_RATING_KEYS.reduce((acc, key) => {
+        acc[key] = 3;
+        return acc;
+    }, {} as Record<ScorecardRatingKey, number>)
+);
 
 /**
  * Employer-side interview management for the selected applicant. Self-contained:
@@ -397,8 +414,9 @@ const INTERVIEW_FORMAT_OPTIONS: InterviewFormat[] = ['phone', 'video', 'onsite']
  * never has to thread interview state through. Schedule / reschedule / cancel /
  * mark-completed all round-trip through lib/interviewData and reload the list.
  */
-const InterviewsSection: React.FC<{ applicationId: string; defaultStage: string; t: (key: string) => string }> = ({ applicationId, defaultStage, t }) => {
+const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; defaultStage: string; t: (key: string) => string }> = ({ applicationId, employerUid, defaultStage, t }) => {
     const [interviews, setInterviews] = useState<ApplicationInterview[]>([]);
+    const [scorecards, setScorecards] = useState<ApplicationScorecard[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -419,18 +437,35 @@ const InterviewsSection: React.FC<{ applicationId: string; defaultStage: string;
     // Per-card busy flag so cancel / complete buttons disable only their own card.
     const [actionId, setActionId] = useState<string | null>(null);
 
+    // Structured scorecard form; one open card at a time.
+    const [scorecardOpenFor, setScorecardOpenFor] = useState<string | null>(null);
+    const [scorecardId, setScorecardId] = useState<string | undefined>(undefined);
+    const [scoreRecommendation, setScoreRecommendation] = useState<ScorecardRecommendation>('hold');
+    const [overallScore, setOverallScore] = useState(3);
+    const [ratings, setRatings] = useState<Record<ScorecardRatingKey, number>>(defaultScorecardRatings);
+    const [evidence, setEvidence] = useState('');
+    const [concerns, setConcerns] = useState('');
+    const [nextSteps, setNextSteps] = useState('');
+    const [privateNotes, setPrivateNotes] = useState('');
+    const [scorecardSaving, setScorecardSaving] = useState(false);
+    const [scorecardError, setScorecardError] = useState<string | null>(null);
+
     const loadInterviews = useCallback(async () => {
         setLoading(true);
         setLoadError(null);
         try {
-            const result = await listInterviewsForApplication(applicationId);
-            setInterviews(result);
+            const [interviewResult, scorecardResult] = await Promise.all([
+                listInterviewsForApplication(applicationId),
+                listScorecardsForApplication(applicationId, employerUid),
+            ]);
+            setInterviews(interviewResult);
+            setScorecards(scorecardResult);
         } catch (err) {
             setLoadError(err instanceof Error ? err.message : t('interview_error'));
         } finally {
             setLoading(false);
         }
-    }, [applicationId, t]);
+    }, [applicationId, employerUid, t]);
 
     useEffect(() => {
         void loadInterviews();
@@ -522,6 +557,64 @@ const InterviewsSection: React.FC<{ applicationId: string; defaultStage: string;
         }
     };
 
+    const scorecardByInterview = useMemo(() => {
+        const map = new Map<string, ApplicationScorecard>();
+        scorecards.forEach((card) => map.set(card.interview_id, card));
+        return map;
+    }, [scorecards]);
+
+    const closeScorecardForm = () => {
+        setScorecardOpenFor(null);
+        setScorecardId(undefined);
+        setScoreRecommendation('hold');
+        setOverallScore(3);
+        setRatings(defaultScorecardRatings());
+        setEvidence('');
+        setConcerns('');
+        setNextSteps('');
+        setPrivateNotes('');
+        setScorecardError(null);
+    };
+
+    const openScorecardForm = (interview: ApplicationInterview, existing?: ApplicationScorecard) => {
+        setScorecardOpenFor(interview.id);
+        setScorecardId(existing?.id);
+        setScoreRecommendation(existing?.recommendation ?? 'hold');
+        setOverallScore(existing?.overall_score || 3);
+        setRatings(existing?.ratings ?? defaultScorecardRatings());
+        setEvidence(existing?.evidence ?? '');
+        setConcerns(existing?.concerns ?? '');
+        setNextSteps(existing?.next_steps ?? '');
+        setPrivateNotes(existing?.private_notes ?? '');
+        setScorecardError(null);
+    };
+
+    const handleScorecardSave = async (interview: ApplicationInterview) => {
+        if (scorecardSaving) return;
+        setScorecardSaving(true);
+        setScorecardError(null);
+        try {
+            await upsertScorecard({
+                scorecardId,
+                interviewId: interview.id,
+                stage: interview.stage || defaultStage,
+                recommendation: scoreRecommendation,
+                overallScore,
+                ratings,
+                evidence,
+                concerns,
+                nextSteps,
+                privateNotes,
+            });
+            closeScorecardForm();
+            await loadInterviews();
+        } catch (err) {
+            setScorecardError(err instanceof Error ? err.message : t('scorecard_error'));
+        } finally {
+            setScorecardSaving(false);
+        }
+    };
+
     const formatScheduledAt = (value: string): string => {
         if (!value) return '';
         const date = new Date(value);
@@ -541,6 +634,15 @@ const InterviewsSection: React.FC<{ applicationId: string; defaultStage: string;
             case 'cancelled': return 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300';
             case 'rescheduled': return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
             default: return 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300';
+        }
+    };
+
+    const recommendationClass = (recommendation: ScorecardRecommendation): string => {
+        switch (recommendation) {
+            case 'strong_hire': return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
+            case 'hire': return 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300';
+            case 'no_hire': return 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300';
+            default: return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
         }
     };
 
@@ -692,6 +794,7 @@ const InterviewsSection: React.FC<{ applicationId: string; defaultStage: string;
                             const isBusy = actionId === interview.id;
                             const scheduledLabel = [formatScheduledAt(interview.scheduled_at), interview.timezone].filter(Boolean).join(' · ');
                             const linkIsUrl = /^https?:\/\//i.test(interview.location_or_link ?? '');
+                            const scorecard = scorecardByInterview.get(interview.id);
                             return (
                                 <li key={interview.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/70">
                                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -740,6 +843,30 @@ const InterviewsSection: React.FC<{ applicationId: string; defaultStage: string;
                                     {interview.notes && (
                                         <p className="mt-2 whitespace-pre-line text-xs leading-5 text-gray-600 dark:text-gray-300">{interview.notes}</p>
                                     )}
+                                    {scorecard && (
+                                        <div className="mt-3 rounded-lg border border-indigo-100 bg-white p-3 dark:border-indigo-900/50 dark:bg-gray-800">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-800 dark:text-gray-100">
+                                                    <ClipboardCheck className="h-3.5 w-3.5 text-indigo-500" />
+                                                    {t('scorecard_saved_title')}
+                                                </p>
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${recommendationClass(scorecard.recommendation)}`}>
+                                                        {t('scorecard_recommendation_' + scorecard.recommendation)}
+                                                    </span>
+                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                                                        {formatTranslation(t('scorecard_overall_chip'), { score: scorecard.overall_score })}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-600 dark:text-gray-300">{scorecard.evidence}</p>
+                                            {scorecard.next_steps && (
+                                                <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                                                    <span className="font-semibold">{t('scorecard_next_steps_short')} </span>{scorecard.next_steps}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="mt-3 flex flex-wrap items-center gap-2">
                                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                                             interview.candidate_confirmed
@@ -756,6 +883,15 @@ const InterviewsSection: React.FC<{ applicationId: string; defaultStage: string;
                                     </div>
                                     {!isCancelled && (
                                         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-gray-700/60">
+                                            <button
+                                                type="button"
+                                                onClick={() => openScorecardForm(interview, scorecard)}
+                                                disabled={isBusy}
+                                                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-900/60 dark:bg-gray-800 dark:text-indigo-300 dark:hover:bg-indigo-950/20"
+                                            >
+                                                <ClipboardCheck className="h-3.5 w-3.5" />
+                                                {scorecard ? t('scorecard_edit_btn') : t('scorecard_create_btn')}
+                                            </button>
                                             <button
                                                 type="button"
                                                 onClick={() => openRescheduleForm(interview)}
@@ -783,6 +919,119 @@ const InterviewsSection: React.FC<{ applicationId: string; defaultStage: string;
                                                 <X className="h-3.5 w-3.5" />
                                                 {t('interview_action_cancel')}
                                             </button>
+                                        </div>
+                                    )}
+                                    {scorecardOpenFor === interview.id && (
+                                        <div className="mt-3 rounded-lg border border-indigo-100 bg-white p-3 dark:border-indigo-900/50 dark:bg-gray-800">
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                    <span>{t('scorecard_field_recommendation')}</span>
+                                                    <select
+                                                        value={scoreRecommendation}
+                                                        onChange={(event) => setScoreRecommendation(event.target.value as ScorecardRecommendation)}
+                                                        disabled={scorecardSaving}
+                                                        className={SELECT_CLASS}
+                                                    >
+                                                        {SCORECARD_RECOMMENDATIONS.map((value) => (
+                                                            <option key={value} value={value}>{t('scorecard_recommendation_' + value)}</option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                                <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                    <span>{t('scorecard_field_overall')}</span>
+                                                    <select
+                                                        value={String(overallScore)}
+                                                        onChange={(event) => setOverallScore(Number(event.target.value))}
+                                                        disabled={scorecardSaving}
+                                                        className={SELECT_CLASS}
+                                                    >
+                                                        {SCORE_VALUES.map((value) => (
+                                                            <option key={value} value={value}>{formatTranslation(t('scorecard_score_option'), { score: value })}</option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                                {SCORECARD_RATING_KEYS.map((key) => (
+                                                    <label key={key} className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                        <span>{t('scorecard_rating_' + key)}</span>
+                                                        <select
+                                                            value={String(ratings[key])}
+                                                            onChange={(event) => setRatings((current) => ({ ...current, [key]: Number(event.target.value) }))}
+                                                            disabled={scorecardSaving}
+                                                            className={SELECT_CLASS}
+                                                        >
+                                                            {SCORE_VALUES.map((value) => (
+                                                                <option key={value} value={value}>{formatTranslation(t('scorecard_score_option'), { score: value })}</option>
+                                                            ))}
+                                                        </select>
+                                                    </label>
+                                                ))}
+                                                <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300 sm:col-span-2">
+                                                    <span>{t('scorecard_field_evidence')}</span>
+                                                    <textarea
+                                                        value={evidence}
+                                                        onChange={(event) => setEvidence(event.target.value)}
+                                                        disabled={scorecardSaving}
+                                                        rows={3}
+                                                        className={`${SELECT_CLASS} resize-y`}
+                                                    />
+                                                </label>
+                                                <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300 sm:col-span-2">
+                                                    <span>{t('scorecard_field_concerns')}</span>
+                                                    <textarea
+                                                        value={concerns}
+                                                        onChange={(event) => setConcerns(event.target.value)}
+                                                        disabled={scorecardSaving}
+                                                        rows={2}
+                                                        className={`${SELECT_CLASS} resize-y`}
+                                                    />
+                                                </label>
+                                                <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300 sm:col-span-2">
+                                                    <span>{t('scorecard_field_next_steps')}</span>
+                                                    <textarea
+                                                        value={nextSteps}
+                                                        onChange={(event) => setNextSteps(event.target.value)}
+                                                        disabled={scorecardSaving}
+                                                        rows={2}
+                                                        className={`${SELECT_CLASS} resize-y`}
+                                                    />
+                                                </label>
+                                                <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300 sm:col-span-2">
+                                                    <span>{t('scorecard_field_private_notes')}</span>
+                                                    <textarea
+                                                        value={privateNotes}
+                                                        onChange={(event) => setPrivateNotes(event.target.value)}
+                                                        disabled={scorecardSaving}
+                                                        rows={2}
+                                                        className={`${SELECT_CLASS} resize-y`}
+                                                    />
+                                                </label>
+                                            </div>
+                                            {scorecardError && (
+                                                <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">
+                                                    {scorecardError}
+                                                </p>
+                                            )}
+                                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleScorecardSave(interview)}
+                                                    disabled={scorecardSaving}
+                                                    className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                                >
+                                                    <ClipboardCheck className="h-4 w-4" />
+                                                    {scorecardSaving ? t('scorecard_saving') : t('scorecard_save_btn')}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={closeScorecardForm}
+                                                    disabled={scorecardSaving}
+                                                    className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                    {t('scorecard_cancel_btn')}
+                                                </button>
+                                            </div>
+                                            <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">{t('scorecard_private_hint')}</p>
                                         </div>
                                     )}
                                 </li>
@@ -1942,6 +2191,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
 
                             <InterviewsSection
                                 applicationId={selectedApplicant.id}
+                                employerUid={employerUid}
                                 defaultStage={getStatusLabel(selectedApplicant.status)}
                                 t={t}
                             />
@@ -1997,6 +2247,12 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
 
                             <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
+                            <InterviewsSection
+                                applicationId={selectedApplicant.id}
+                                employerUid={employerUid}
+                                defaultStage={getStatusLabel(selectedApplicant.status)}
+                                t={t}
+                            />
                             <StatusHistory history={selectedApplicant.status_history} getStatusLabel={getStatusLabel} t={t} />
                             <div className="mx-auto max-w-sm rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
                                 <FileWarning className="mx-auto h-10 w-10 text-amber-500" />

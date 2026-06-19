@@ -83,3 +83,4 @@ export { setJobPostingActiveFunction        as setJobPostingActive       } from 
 export { scheduleInterviewFunction          as scheduleInterview         } from "./handlers/interviews";
 export { updateInterviewFunction            as updateInterview           } from "./handlers/interviews";
 export { confirmInterviewFunction           as confirmInterview          } from "./handlers/interviews";
+export { upsertScorecardFunction            as upsertScorecard           } from "./handlers/scorecards";

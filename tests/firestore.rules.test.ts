@@ -181,3 +181,30 @@ describe('application_interviews access', () => {
     await assertFails(updateDoc(doc(db, 'application_interviews', 'iv1'), { interview_status: 'cancelled' }));
   });
 });
+
+describe('application_scorecards access', () => {
+  async function seedScorecard() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'application_scorecards', 'sc1'),
+        { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1', interview_id: 'iv1', recommendation: 'hire' });
+    });
+  }
+  it('the owning employer can read a scorecard', async () => {
+    await seedScorecard();
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('emp1').firestore(), 'application_scorecards', 'sc1')));
+  });
+  it('the candidate CANNOT read the employer scorecard', async () => {
+    await seedScorecard();
+    await assertFails(getDoc(doc(testEnv.authenticatedContext('cand1').firestore(), 'application_scorecards', 'sc1')));
+  });
+  it('an unrelated employer CANNOT read it', async () => {
+    await seedScorecard();
+    await assertFails(getDoc(doc(testEnv.authenticatedContext('emp2').firestore(), 'application_scorecards', 'sc1')));
+  });
+  it('clients CANNOT write scorecards directly (server-only)', async () => {
+    await seedScorecard();
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertFails(setDoc(doc(db, 'application_scorecards', 'sc2'), { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1' }));
+    await assertFails(updateDoc(doc(db, 'application_scorecards', 'sc1'), { recommendation: 'strong_hire' }));
+  });
+});
