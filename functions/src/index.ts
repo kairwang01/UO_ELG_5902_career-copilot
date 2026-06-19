@@ -77,3 +77,6 @@ export { adminPublishPromptFunction         as adminPublishPrompt        } from 
 export { adminRollbackPromptFunction        as adminRollbackPrompt       } from "./handlers/adminPrompts";
 export { adminListPromptVersionsFunction    as adminListPromptVersions   } from "./handlers/adminPrompts";
 export { adminTestModelFunction             as adminTestModel            } from "./handlers/adminTestModel";
+export { createJobPostingFunction           as createJobPosting          } from "./handlers/jobPostings";
+export { updateJobPostingFunction           as updateJobPosting          } from "./handlers/jobPostings";
+export { setJobPostingActiveFunction        as setJobPostingActive       } from "./handlers/jobPostings";

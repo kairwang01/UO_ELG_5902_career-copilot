@@ -1,16 +1,13 @@
 import {
-  addDoc,
   collection,
-  doc,
   getDocs,
   query,
-  serverTimestamp,
-  updateDoc,
   where,
   type DocumentData,
   type Timestamp,
 } from 'firebase/firestore';
-import { firestoreDb } from './firebaseClient';
+import { httpsCallable } from 'firebase/functions';
+import { firestoreDb, firebaseFunctions } from './firebaseClient';
 
 export interface JobPosting {
   id: string;
@@ -134,45 +131,35 @@ export const listActiveEmployerJobs = async (employerId: string): Promise<JobPos
   (await listEmployerJobs(employerId)).filter((job) => job.is_active)
 );
 
+// Job-posting writes are server-only (firestore.rules deny direct client writes).
+// These callables enforce employer role, per-plan active-job limits, server-read
+// company identity, and an audit trail. The patch's company_* fields are ignored
+// server-side — the callable reads them from the employer's authoritative profile.
 export const saveJobPosting = async (
-  employerId: string,
+  _employerId: string,
   patch: JobPostingPatch,
   existingJobId?: string,
 ): Promise<void> => {
-  const jobData = {
+  const posting = {
     title: patch.title,
     location: patch.location,
     description: patch.description,
     salary_range: patch.salary_range,
-    updated_at: serverTimestamp(),
   };
-
   if (existingJobId) {
-    await updateDoc(doc(firestoreDb, 'job_postings', existingJobId), jobData);
+    const fn = httpsCallable<{ jobId: string; posting: typeof posting }, { jobId: string }>(firebaseFunctions, 'updateJobPosting');
+    await fn({ jobId: existingJobId, posting });
     return;
   }
-
-  // Snapshot company_name + context at creation time so job cards always show the
-  // company even if the employer later edits their profile (and so candidates,
-  // who can't read the owner-only employer doc, still see scale/industry/founded).
-  await addDoc(collection(firestoreDb, 'job_postings'), {
-    ...jobData,
-    employer_id: employerId,
-    company_name: patch.company_name ?? null,
-    company_size: patch.company_size ?? null,
-    industry: patch.industry ?? null,
-    founded_year: patch.founded_year ?? null,
-    is_active: true,
-    created_at: serverTimestamp(),
-  });
+  const fn = httpsCallable<{ posting: typeof posting }, { jobId: string }>(firebaseFunctions, 'createJobPosting');
+  await fn({ posting });
 };
 
-/** Close (deactivate) or reopen a job posting. Owner-only per Firestore rules. */
-export const setJobPostingActive = async (jobId: string, isActive: boolean): Promise<void> => {
-  await updateDoc(doc(firestoreDb, 'job_postings', jobId), {
-    is_active: isActive,
-    updated_at: serverTimestamp(),
-  });
+/** Close (deactivate) or reopen a job posting via the server callable (owner +
+ *  entitlement enforced; reopening re-checks the active-job limit). */
+export const setJobPostingActive = async (jobId: string, isActive: boolean, reason?: string): Promise<void> => {
+  const fn = httpsCallable<{ jobId: string; isActive: boolean; reason?: string }, { jobId: string; isActive: boolean }>(firebaseFunctions, 'setJobPostingActive');
+  await fn({ jobId, isActive, reason });
 };
 
 export const listAllActiveJobPostings = async (): Promise<JobPosting[]> => {

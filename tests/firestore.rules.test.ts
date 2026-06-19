@@ -103,21 +103,40 @@ describe('user-doc trust boundary', () => {
   });
 });
 
-describe('job-posting entitlement', () => {
-  it('candidate CANNOT create a job posting', async () => {
+describe('job-posting writes are server-only (createJobPosting callable)', () => {
+  // Direct client writes to job_postings are now denied for EVERYONE — all
+  // create/update goes through the entitlement-checked Admin-SDK callables.
+  it('candidate CANNOT client-create a job posting', async () => {
     await seed('cand1', CANDIDATE);
     const db = testEnv.authenticatedContext('cand1').firestore();
     await assertFails(setDoc(doc(db, 'job_postings', 'j1'), validJob('cand1')));
   });
-  it('employer CAN create a job posting', async () => {
+  it('employer CANNOT client-create a job posting (must use the callable)', async () => {
     await seed('emp1', EMPLOYER);
     const db = testEnv.authenticatedContext('emp1').firestore();
-    await assertSucceeds(setDoc(doc(db, 'job_postings', 'j1'), validJob('emp1')));
+    await assertFails(setDoc(doc(db, 'job_postings', 'j1'), validJob('emp1')));
   });
-  it('employer CANNOT post under another employer_id', async () => {
+  it('employer CANNOT client-update a job posting', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'job_postings', 'j1'), validJob('emp1'));
+    });
     await seed('emp1', EMPLOYER);
     const db = testEnv.authenticatedContext('emp1').firestore();
-    await assertFails(setDoc(doc(db, 'job_postings', 'j2'), validJob('someoneElse')));
+    await assertFails(updateDoc(doc(db, 'job_postings', 'j1'), { title: 'Edited' }));
+  });
+  it('employer CAN still read + delete its own posting', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'job_postings', 'j1'), validJob('emp1'));
+    });
+    await seed('emp1', EMPLOYER);
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertSucceeds(getDoc(doc(db, 'job_postings', 'j1')));
+  });
+  it('clients CANNOT read/write job_posting_events audit log', async () => {
+    await seed('emp1', EMPLOYER);
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertFails(getDoc(doc(db, 'job_posting_events', 'e1')));
+    await assertFails(setDoc(doc(db, 'job_posting_events', 'e1'), { job_id: 'j1', action: 'created' }));
   });
 });
 

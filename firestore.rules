@@ -571,32 +571,28 @@ service cloud.firestore {
     // ---- job_postings/{jobId} ---------------------------------------------
     // Any signed-in user may browse active postings; the owning employer may
     // also see their own inactive ones and is the only writer.
+    // job_postings — SERVER-ONLY writes. Create / update / close+reopen go through
+    // the createJobPosting / updateJobPosting / setJobPostingActive callables
+    // (Admin SDK), which enforce: employer/agency role, per-plan ACTIVE-job limits
+    // (rules can't count, which is why this must be a callable), server-read
+    // company identity (a client can't forge the company), and an audit trail in
+    // job_posting_events. Clients may read active postings (+ their own) and
+    // delete their own. A direct client create/update is rejected.
     match /job_postings/{jobId} {
-      // Only an employer/agency account may post or edit a job — a candidate
-      // (or any other signed-in user) cannot, even if they set employer_id to
-      // their own uid. The caller's role is read from their authoritative user
-      // doc (role is server-only / pinned). NOTE: per-plan active-job LIMITS are
-      // NOT enforceable in rules (they require counting) — that gate belongs in a
-      // createJobPosting callable and is tracked as the next P0 sub-step.
-      function isPoster() {
-        return isSignedIn() &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["employer", "agency"];
-      }
-
       allow read: if isSignedIn() &&
         (resource.data.is_active == true || resource.data.employer_id == request.auth.uid);
 
-      allow create: if isPoster() &&
-        validJobPosting(request.resource.data) &&
-        request.resource.data.employer_id == request.auth.uid;
-
-      allow update: if isPoster() &&
-        resource.data.employer_id == request.auth.uid &&
-        validJobPosting(request.resource.data) &&
-        unchanged(["employer_id", "created_at"]);
+      allow create, update: if false;
 
       allow delete: if isSignedIn() &&
         resource.data.employer_id == request.auth.uid;
+    }
+
+    // job_posting_events/{eventId} — append-only audit log of posting lifecycle
+    // actions (created/updated/closed/reopened + optional reason). Written by the
+    // job-posting callables via the Admin SDK; clients never read or write it.
+    match /job_posting_events/{eventId} {
+      allow read, write: if false;
     }
 
     // ---- job_applications/{applicationId} ---------------------------------
