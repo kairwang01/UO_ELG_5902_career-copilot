@@ -6,6 +6,7 @@ import {
     ArrowRight,
     BookOpen,
     Briefcase,
+    CheckCircle2,
     ChevronDown,
     Clock3,
     Download,
@@ -46,6 +47,8 @@ import {
     type ApplicationPipelineStatus,
 } from '../lib/applicationPipeline';
 import type { JobPosting } from '../lib/recruitingData';
+import { collectCandidateSkills, matchSkills } from '../lib/skillMatch';
+import { experienceLevelLabelKey } from '../constants/jobPostingFields';
 
 interface ApplicantFunnelProps {
   job: JobPosting;
@@ -320,6 +323,65 @@ function toApplicationTime(dateValue: string | null): number {
     const timestamp = new Date(dateValue).getTime();
     return Number.isNaN(timestamp) ? 0 : timestamp;
 }
+
+/**
+ * Job-fit checklist — deterministic (no-AI) must-have evidence the recruiter can
+ * defend: each of the job's required skills marked met/missing against the
+ * candidate's Talent-Profile skills (the SAME signal the candidate saw at apply
+ * time), plus the role's experience level + required qualifications for context.
+ */
+const JobFitChecklist: React.FC<{ job: JobPosting; profile: TalentProfile | null | undefined; t: (key: string) => string }> = ({ job, profile, t }) => {
+    const required = job.required_skills ?? [];
+    const hasContext = required.length > 0 || !!job.required_qualifications || !!job.experience_level;
+    if (!hasContext) return null;
+    const fit = matchSkills(collectCandidateSkills(profile), required);
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex items-center justify-between gap-2">
+                <h4 className="font-semibold text-gray-900 dark:text-gray-100">{t('applicant_funnel_checklist_title')}</h4>
+                {fit.requiredCount > 0 && (
+                    <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                        {t('applicant_funnel_checklist_count').replace('{matched}', String(fit.matchedCount)).replace('{total}', String(fit.requiredCount))}
+                    </span>
+                )}
+            </div>
+            <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{t('applicant_funnel_checklist_desc')}</p>
+            {fit.requiredCount > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                    {fit.matched.map((s) => (
+                        <li key={`m-${s}`} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                            <span className="min-w-0">{s}</span>
+                        </li>
+                    ))}
+                    {fit.missing.map((s) => (
+                        <li key={`x-${s}`} className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                            <X className="h-4 w-4 shrink-0 text-amber-500" />
+                            <span className="min-w-0">{s}</span>
+                            <span className="shrink-0 text-xs text-amber-600 dark:text-amber-400">{t('applicant_funnel_checklist_missing')}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            {(job.experience_level || job.required_qualifications) && (
+                <div className="mt-3 space-y-2 border-t border-gray-100 pt-3 dark:border-gray-700/60">
+                    {job.experience_level && (
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('job_field_experience_level')}</span>
+                            <span className="font-medium text-gray-700 dark:text-gray-200">{t(experienceLevelLabelKey(job.experience_level))}</span>
+                        </div>
+                    )}
+                    {job.required_qualifications && (
+                        <div>
+                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('job_field_required_qualifications')}</p>
+                            <p className="mt-0.5 whitespace-pre-line text-sm leading-6 text-gray-700 dark:text-gray-300">{job.required_qualifications}</p>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 interface SelectFieldProps<T extends string> {
     id: string;
@@ -1313,6 +1375,8 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
 
                             <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
 
+                            <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
+
                             {selectedRecommendation && RecommendationIcon && (
                                 <div className={`rounded-xl border p-4 ${RECOMMENDATION_TONE_CLASS[selectedRecommendation.tone]}`}>
                                     <div className="flex items-start gap-3">
@@ -1360,6 +1424,8 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                     ) : (
                         <div key={selectedApplicant.id} className="animate-panel-expand space-y-5">
                             <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
+
+                            <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
                             <div className="mx-auto max-w-sm rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
                                 <FileWarning className="mx-auto h-10 w-10 text-amber-500" />
                                 <p className="mt-3 font-semibold text-gray-700 dark:text-gray-200">

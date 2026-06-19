@@ -558,7 +558,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
       return;
     }
     if (appliedJobs.has(job.id)) return;
-    setReviewJob({ id: job.id, title: job.title, company: job.company_name ?? undefined });
+    setReviewJob({
+      id: job.id,
+      title: job.title,
+      company: job.company_name ?? undefined,
+      requiredSkills: job.required_skills,
+      experienceLevel: job.experience_level,
+      workMode: job.work_mode,
+    });
   }, [session, appliedJobs, addToast, t]);
 
   // Step 2 — actually submit, only after the candidate confirms in the modal.

@@ -1,14 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Briefcase, FileText, GraduationCap, CheckCircle2, AlertCircle, Loader2, X, ShieldCheck } from 'lucide-react';
+import { Briefcase, FileText, GraduationCap, CheckCircle2, AlertCircle, Loader2, X, ShieldCheck, Target } from 'lucide-react';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { loadTalentProfile } from '../services/talentProfile';
 import { isTalentProfileReady, hasMeaningfulEntry, type TalentProfile } from '../lib/talentProfile';
+import { collectCandidateSkills, matchSkills } from '../lib/skillMatch';
 import { data } from '../lib/data';
 
 export interface ApplyReviewJob {
   id: string;
   title: string;
   company?: string;
+  /** Structured requirements (when known) so the candidate sees their fit pre-submit. */
+  requiredSkills?: string[];
+  experienceLevel?: string | null;
+  workMode?: string | null;
 }
 
 interface ApplyReviewModalProps {
@@ -93,6 +98,13 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
   const topExpLabel = topExp
     ? [topExp.role, topExp.company].map((v) => (typeof v === 'string' ? v.trim() : '')).filter(Boolean).join(' · ')
     : '';
+
+  // Deterministic (no-AI) skill fit vs the job's required skills — same signal the
+  // employer sees in the applicant packet, so the candidate isn't surprised later.
+  const skillFit = useMemo(
+    () => matchSkills(collectCandidateSkills(profile), job?.requiredSkills),
+    [profile, job?.requiredSkills],
+  );
 
   if (!open || !job) return null;
 
@@ -201,6 +213,31 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
                   <Stat label={t('apply_review_skills')} count={skillCount} />
                 </div>
               </dl>
+
+              {/* Structured fit vs this role's required skills (when the job has them) */}
+              {skillFit.requiredCount > 0 && (
+                <div className="mt-3 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    <Target className="h-3.5 w-3.5" />
+                    {t('apply_review_match_title').replace('{matched}', String(skillFit.matchedCount)).replace('{total}', String(skillFit.requiredCount))}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {skillFit.matched.map((s) => (
+                      <span key={`m-${s}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        <CheckCircle2 className="h-3 w-3" />{s}
+                      </span>
+                    ))}
+                    {skillFit.missing.map((s) => (
+                      <span key={`x-${s}`} className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                  {skillFit.missing.length > 0 && (
+                    <p className="mt-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400">{t('apply_review_match_gap_hint')}</p>
+                  )}
+                </div>
+              )}
 
               {!canSubmit && (
                 <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-900/50 dark:bg-amber-950/20">

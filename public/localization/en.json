@@ -1,4 +1,10 @@
 {
+  "apply_review_match_title": "You match {matched} of {total} required skills",
+  "apply_review_match_gap_hint": "You can still apply — the employer sees the same gaps, so highlight related experience.",
+  "applicant_funnel_checklist_title": "Must-have checklist",
+  "applicant_funnel_checklist_desc": "This role's required skills matched against the candidate's profile — a deterministic check, not an AI decision.",
+  "applicant_funnel_checklist_count": "{matched} / {total} met",
+  "applicant_funnel_checklist_missing": "missing",
   "job_section_basic": "Basics",
   "job_section_role": "Role details",
   "job_section_requirements": "Requirements",

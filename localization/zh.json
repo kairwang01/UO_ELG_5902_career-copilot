@@ -1,4 +1,10 @@
 {
+  "apply_review_match_title": "你符合 {total} 项必备技能中的 {matched} 项",
+  "apply_review_match_gap_hint": "你仍然可以申请——雇主也会看到同样的缺口，建议突出相关经历。",
+  "applicant_funnel_checklist_title": "硬性要求核对",
+  "applicant_funnel_checklist_desc": "将该岗位的必备技能与候选人资料逐项核对——确定性结果，非 AI 决策。",
+  "applicant_funnel_checklist_count": "已满足 {matched} / {total}",
+  "applicant_funnel_checklist_missing": "缺失",
   "job_section_basic": "基本信息",
   "job_section_role": "岗位详情",
   "job_section_requirements": "任职要求",
