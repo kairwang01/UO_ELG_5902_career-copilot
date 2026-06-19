@@ -210,22 +210,22 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                     </button>
                 </div>
 
-                <div className="relative shrink-0 px-5">
-                    <div className="pointer-events-none absolute right-9 top-0 hidden h-24 w-32 -rotate-6 rounded-[26px] border border-blue-100 bg-white/80 p-3 shadow-lg shadow-blue-200/40 dark:border-slate-700 dark:bg-slate-800/80 sm:block">
-                        <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white">
-                                <Briefcase className="h-4 w-4" aria-hidden="true" />
+                {showWelcomePanel && (
+                    <div className="relative shrink-0 px-5">
+                        <div className="pointer-events-none absolute right-9 top-0 hidden h-24 w-32 -rotate-6 rounded-[26px] border border-blue-100 bg-white/80 p-3 shadow-lg shadow-blue-200/40 dark:border-slate-700 dark:bg-slate-800/80 sm:block">
+                            <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white">
+                                    <Briefcase className="h-4 w-4" aria-hidden="true" />
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="h-2 w-14 rounded-full bg-slate-900/80 dark:bg-slate-100/80" />
+                                    <div className="h-2 w-10 rounded-full bg-blue-200 dark:bg-blue-900" />
+                                </div>
                             </div>
-                            <div className="space-y-1">
-                                <div className="h-2 w-14 rounded-full bg-slate-900/80 dark:bg-slate-100/80" />
-                                <div className="h-2 w-10 rounded-full bg-blue-200 dark:bg-blue-900" />
-                            </div>
+                            <div className="mt-3 h-2 w-full rounded-full bg-cyan-100 dark:bg-slate-700" />
+                            <div className="mt-2 h-2 w-20 rounded-full bg-cyan-100 dark:bg-slate-700" />
                         </div>
-                        <div className="mt-3 h-2 w-full rounded-full bg-cyan-100 dark:bg-slate-700" />
-                        <div className="mt-2 h-2 w-20 rounded-full bg-cyan-100 dark:bg-slate-700" />
-                    </div>
 
-                    {showWelcomePanel && (
                         <div className="mt-10 rounded-[28px] border border-white/90 bg-white/55 p-5 shadow-sm ring-1 ring-white/60 backdrop-blur dark:border-slate-700 dark:bg-slate-900/70 dark:ring-slate-800">
                             <h4 className="max-w-[300px] whitespace-pre-line text-[28px] font-bold leading-tight tracking-normal text-slate-950 dark:text-slate-50">
                                 {t('coach_panel_hero')}
@@ -265,8 +265,8 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                                 ))}
                             </div>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 <div className={`min-h-0 flex-1 overflow-y-auto px-5 ${showWelcomePanel ? 'py-4' : 'py-5'}`}>
                     {!showWelcomePanel && (
@@ -278,7 +278,7 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                                             <Sparkles className="h-4 w-4" aria-hidden="true" />
                                         </div>
                                     )}
-                                    <div className={`max-w-[82%] rounded-[22px] px-4 py-3 text-sm leading-6 shadow-sm ${
+                                    <div className={`max-w-[82%] break-words rounded-[22px] px-4 py-3 text-sm leading-6 shadow-sm ${
                                         msg.role === 'user'
                                             ? 'rounded-br-md bg-blue-600 text-white'
                                             : 'rounded-bl-md border border-white/80 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
