@@ -154,3 +154,30 @@ describe('saved tool_results tier gate', () => {
       { tool_key: 'salary-negotiation', result: { plan: 'x' } }));
   });
 });
+
+describe('application_interviews access', () => {
+  async function seedInterview() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'application_interviews', 'iv1'),
+        { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1', interview_status: 'scheduled' });
+    });
+  }
+  it('the candidate on the interview can read it', async () => {
+    await seedInterview();
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('cand1').firestore(), 'application_interviews', 'iv1')));
+  });
+  it('the owning employer can read it', async () => {
+    await seedInterview();
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('emp1').firestore(), 'application_interviews', 'iv1')));
+  });
+  it('an unrelated user CANNOT read it', async () => {
+    await seedInterview();
+    await assertFails(getDoc(doc(testEnv.authenticatedContext('other').firestore(), 'application_interviews', 'iv1')));
+  });
+  it('clients CANNOT write interviews directly (server-only)', async () => {
+    await seedInterview();
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertFails(setDoc(doc(db, 'application_interviews', 'iv2'), { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1' }));
+    await assertFails(updateDoc(doc(db, 'application_interviews', 'iv1'), { interview_status: 'cancelled' }));
+  });
+});

@@ -676,6 +676,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // application_interviews/{interviewId} — scheduled interviews for an
+    // application. BOTH parties may READ their own (the candidate sees the time/
+    // format/link to confirm; the owning employer manages them). All WRITES are
+    // server-only: the scheduleInterview / updateInterview / confirmInterview
+    // callables (Admin SDK) enforce that only the job-owning employer schedules/
+    // edits and only the candidate confirms. No employer-secret fields live here
+    // (scorecards are a separate, employer-only surface).
+    match /application_interviews/{interviewId} {
+      allow read: if isSignedIn() &&
+        (resource.data.candidate_id == request.auth.uid ||
+         resource.data.employer_id == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // employer_responsiveness/{employerId} — coarse, backward-looking aggregate
     // (avg days-to-first-action, last action) derived server-side from the audit
     // log. Employer-level, NO candidate PII — any signed-in user may read it to

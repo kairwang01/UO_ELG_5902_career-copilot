@@ -80,3 +80,6 @@ export { adminTestModelFunction             as adminTestModel            } from 
 export { createJobPostingFunction           as createJobPosting          } from "./handlers/jobPostings";
 export { updateJobPostingFunction           as updateJobPosting          } from "./handlers/jobPostings";
 export { setJobPostingActiveFunction        as setJobPostingActive       } from "./handlers/jobPostings";
+export { scheduleInterviewFunction          as scheduleInterview         } from "./handlers/interviews";
+export { updateInterviewFunction            as updateInterview           } from "./handlers/interviews";
+export { confirmInterviewFunction           as confirmInterview          } from "./handlers/interviews";
