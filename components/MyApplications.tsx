@@ -8,16 +8,11 @@ import { listInterviewsForCandidate, confirmInterview, type ApplicationInterview
 import {
   APPLICATION_FILTER_GROUPS,
   APPLICATION_FILTER_LABEL_KEYS,
-  APPLICATION_PIPELINE_STAGES,
-  APPLICATION_PROGRESS_GROUPS,
   applicationMatchesFilter,
-  getApplicationTimelineStageState,
-  getApplicationProgressGroupIndex,
+  buildApplicationPipelinePlan,
   getApplicationStatusGroup,
-  getApplicationStatusIndex,
   getApplicationStatusLabelKey,
   isApplicationClosedStatus,
-  isApplicationHiredStatus,
   isApplicationRejectedStatus,
   isApplicationReviewEligible,
   normalizeApplicationStatus,
@@ -255,37 +250,19 @@ const SUB_STAGE_CLASSES: Record<MainStageState, string> = {
 };
 
 const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, skippedStatuses = [], t }) => {
-  const current = getApplicationStatusIndex(status);
-  const isComplete = isApplicationHiredStatus(status);
-  const isRejected = isApplicationRejectedStatus(status);
-  const normalized = normalizeApplicationStatus(status);
-  const skippedSet = useMemo(() => new Set(skippedStatuses), [skippedStatuses]);
+  const plan = useMemo(
+    () => buildApplicationPipelinePlan(status, skippedStatuses),
+    [status, skippedStatuses],
+  );
 
   return (
     <div className="mt-5 overflow-x-auto pb-2" aria-label={t('applications_timeline_label')}>
       <div className="min-w-0 rounded-lg bg-slate-50 px-4 py-5 dark:bg-slate-900/70 sm:min-w-[820px]">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-0">
-          {APPLICATION_PROGRESS_GROUPS.map((group, groupIndex) => {
-            const firstIndex = getApplicationStatusIndex(group.statuses[0]);
-            const lastIndex = getApplicationStatusIndex(group.statuses[group.statuses.length - 1]);
-            const groupContainsCurrent = group.statuses.some((stageStatus) => stageStatus === normalized);
-            const groupWasFullySkipped =
-              current > lastIndex &&
-              lastIndex >= 0 &&
-              firstIndex >= 0 &&
-              group.statuses.every((stageStatus) => skippedSet.has(stageStatus));
-            const groupState: MainStageState = isRejected
-              ? 'closed'
-              : groupWasFullySkipped
-                ? 'skipped'
-              : current > lastIndex || (isComplete && current >= lastIndex)
-                ? 'done'
-                : groupContainsCurrent
-                  ? 'current'
-                  : 'pending';
+          {plan.groups.map((groupPlan) => {
+            const { group, index: groupIndex, state: groupState, stages: groupStages, connectorDone } = groupPlan;
             const hasSubStages = group.statuses.length > 1;
             const groupClasses = MAIN_STAGE_CLASSES[groupState];
-            const connectorDone = !isRejected && groupState === 'done' && current > lastIndex;
 
             return (
               <React.Fragment key={group.id}>
@@ -314,9 +291,8 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, skippedStat
                               : 'bg-slate-200 dark:bg-slate-800'
                           }`}
                         />
-                        {group.statuses.map((stageStatus) => {
-                          const stage = APPLICATION_PIPELINE_STAGES.find((item) => item.status === stageStatus);
-                          const stageState = getApplicationTimelineStageState(status, stageStatus, skippedStatuses);
+                        {groupStages.map(({ stage, state: stageState }) => {
+                          const stageStatus = stage.status;
 
                           return (
                             <div key={stageStatus} className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-2">
@@ -335,8 +311,8 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, skippedStat
                                       : 'text-slate-400 dark:text-slate-500'
                                 }`}
                               >
-                                {stage ? t(stage.labelKey) : stageStatus}
-                                {stage && 'optional' in stage && stage.optional && (
+                                {t(stage.labelKey)}
+                                {'optional' in stage && stage.optional && (
                                   <span className="ml-1 text-[10px] font-medium text-slate-400 dark:text-slate-500">
                                     {t('applications_stage_optional')}
                                   </span>
@@ -360,7 +336,7 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, skippedStat
                   )}
                 </div>
 
-                {groupIndex < APPLICATION_PROGRESS_GROUPS.length - 1 && (
+                {groupIndex < plan.groups.length - 1 && (
                   <div
                     aria-hidden="true"
                     className={`mt-[42px] hidden h-0.5 w-12 shrink-0 rounded-full sm:block ${
@@ -383,47 +359,17 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, skippedStat
 
 interface CompactProgressProps {
   status: ApplicationPipelineStatus;
+  skippedStatuses?: ApplicationPipelineStageStatus[];
   t: (k: string) => string;
 }
 
-// Bar anchors to the 4 STABLE phases, not the 12 fine-grained stages: employers
-// run only some of the interview rounds, and the intent-letter / tripartite stages
-// are campus-only, so a fixed "of 12" denominator would misrepresent progress.
-// A capped intra-phase nudge keeps the bar moving on every real status change
-// without ever reaching (and so implying) the next phase's milestone.
-const PHASE_BASE_PERCENT = [10, 35, 60, 85]; // applied · interview · offer · agreement
-const PHASE_CEIL_PERCENT = 100;
-
-const CompactProgress: React.FC<CompactProgressProps> = ({ status, t }) => {
-  const isComplete = isApplicationHiredStatus(status);
-  const isRejected = isApplicationRejectedStatus(status);
-  const groupIndex = getApplicationProgressGroupIndex(status);
-
-  let percent: number;
-  if (isRejected) {
-    percent = 0;
-  } else if (isComplete) {
-    percent = 100;
-  } else if (groupIndex < 0) {
-    percent = PHASE_BASE_PERCENT[0];
-  } else {
-    const base = PHASE_BASE_PERCENT[groupIndex] ?? PHASE_BASE_PERCENT[0];
-    const nextBase = groupIndex < PHASE_BASE_PERCENT.length - 1
-      ? PHASE_BASE_PERCENT[groupIndex + 1]
-      : PHASE_CEIL_PERCENT;
-    // Position within the phase drives the nudge — so Tripartite (early in the
-    // 'signing' phase) sits below Signed without relying on the group index alone.
-    const group = APPLICATION_PROGRESS_GROUPS[groupIndex];
-    const stageInGroup = (group.statuses as readonly string[]).indexOf(normalizeApplicationStatus(status));
-    const frac = group.statuses.length > 1 && stageInGroup > 0
-      ? Math.min(stageInGroup / group.statuses.length, 0.8)
-      : 0;
-    percent = Math.round(base + frac * (nextBase - base));
-  }
-
-  const phaseLabel = t(
-    (groupIndex >= 0 ? APPLICATION_PROGRESS_GROUPS[groupIndex] : APPLICATION_PROGRESS_GROUPS[0]).labelKey,
+const CompactProgress: React.FC<CompactProgressProps> = ({ status, skippedStatuses = [], t }) => {
+  const plan = useMemo(
+    () => buildApplicationPipelinePlan(status, skippedStatuses),
+    [status, skippedStatuses],
   );
+  const { isRejected, isComplete, progressPercent: percent, currentGroup } = plan;
+  const phaseLabel = t(currentGroup.labelKey);
 
   const barTrack = isRejected
     ? 'bg-slate-200 dark:bg-slate-700'
@@ -614,7 +560,6 @@ interface CardProps {
 const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interviews, onInterviewChange }) => {
   const statusGroup = getApplicationStatusGroup(app.status);
   const isRejected = isApplicationRejectedStatus(app.status);
-  const isHired = isApplicationHiredStatus(app.status);
   const canReview = isApplicationReviewEligible(app.status);
   const guidance = STATUS_GUIDANCE[statusGroup];
   const GuidanceIcon = guidance.icon;
@@ -713,7 +658,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interview
       )}
 
       {/* Compact progress by default; full timeline behind a per-card disclosure. */}
-      <CompactProgress status={app.status} t={t} />
+      <CompactProgress status={app.status} skippedStatuses={app.skipped_statuses} t={t} />
 
       <div className="mt-3 flex justify-end">
         <button

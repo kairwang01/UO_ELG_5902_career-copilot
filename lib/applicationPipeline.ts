@@ -122,6 +122,14 @@ export const APPLICATION_PROGRESS_GROUPS = [
   },
 ] as const satisfies readonly ApplicationProgressGroup[];
 
+// Bar anchors to the 4 stable macro phases, not the 12 fine-grained stages.
+// Real hiring loops often skip interview rounds and campus-only paperwork, so a
+// fixed "of 12" denominator would misrepresent progress. The intra-phase nudge
+// keeps the bar moving on each real status change without implying the next
+// macro milestone has already been reached.
+const APPLICATION_PHASE_BASE_PERCENT = [10, 35, 60, 85] as const;
+const APPLICATION_PHASE_CEIL_PERCENT = 100;
+
 export type ApplicationFilterGroup = 'All' | ApplicationStatusGroup;
 
 export const APPLICATION_FILTER_GROUPS: ApplicationFilterGroup[] = [
@@ -321,4 +329,127 @@ export function isApplicationReviewEligible(status: unknown): boolean {
 export function applicationMatchesFilter(status: unknown, filter: ApplicationFilterGroup): boolean {
   if (filter === 'All') return true;
   return getApplicationStatusGroup(status) === filter;
+}
+
+export interface ApplicationPipelineStagePlan {
+  stage: ApplicationPipelineStage;
+  index: number;
+  state: ApplicationTimelineStageState;
+  skipped: boolean;
+  current: boolean;
+}
+
+export interface ApplicationProgressGroupPlan {
+  group: ApplicationProgressGroup;
+  index: number;
+  firstIndex: number;
+  lastIndex: number;
+  state: ApplicationTimelineStageState;
+  stages: ApplicationPipelineStagePlan[];
+  containsCurrent: boolean;
+  fullySkipped: boolean;
+  connectorDone: boolean;
+}
+
+export interface ApplicationPipelinePlan {
+  status: ApplicationPipelineStatus;
+  skippedStatuses: ApplicationPipelineStageStatus[];
+  currentIndex: number;
+  groupIndex: number;
+  currentGroup: ApplicationProgressGroup;
+  progressPercent: number;
+  isRejected: boolean;
+  isComplete: boolean;
+  stages: ApplicationPipelineStagePlan[];
+  groups: ApplicationProgressGroupPlan[];
+}
+
+function computeApplicationProgressPercent(status: ApplicationPipelineStatus, groupIndex: number): number {
+  if (status === 'Rejected') return 0;
+  if (isApplicationHiredStatus(status)) return 100;
+  if (groupIndex < 0) return APPLICATION_PHASE_BASE_PERCENT[0];
+
+  const base = APPLICATION_PHASE_BASE_PERCENT[groupIndex] ?? APPLICATION_PHASE_BASE_PERCENT[0];
+  const nextBase = groupIndex < APPLICATION_PHASE_BASE_PERCENT.length - 1
+    ? APPLICATION_PHASE_BASE_PERCENT[groupIndex + 1]
+    : APPLICATION_PHASE_CEIL_PERCENT;
+  const group = APPLICATION_PROGRESS_GROUPS[groupIndex];
+  const stageInGroup = (group.statuses as readonly string[]).indexOf(status);
+  const frac = group.statuses.length > 1 && stageInGroup > 0
+    ? Math.min(stageInGroup / group.statuses.length, 0.8)
+    : 0;
+
+  return Math.round(base + frac * (nextBase - base));
+}
+
+export function buildApplicationPipelinePlan(
+  status: unknown,
+  skippedValue: unknown = [],
+): ApplicationPipelinePlan {
+  const normalizedStatus = normalizeApplicationStatus(status);
+  const skippedStatuses = normalizeSkippedApplicationStatuses(skippedValue);
+  const skippedSet = new Set<ApplicationPipelineStageStatus>(skippedStatuses);
+  const currentIndex = getApplicationStatusIndex(normalizedStatus);
+  const groupIndex = getApplicationProgressGroupIndex(normalizedStatus);
+  const isRejected = normalizedStatus === 'Rejected';
+  const isComplete = isApplicationHiredStatus(normalizedStatus);
+
+  const stages = APPLICATION_PIPELINE_STAGES.map((stage, index): ApplicationPipelineStagePlan => {
+    const state = getApplicationTimelineStageState(normalizedStatus, stage.status, skippedStatuses);
+    return {
+      stage,
+      index,
+      state,
+      skipped: skippedSet.has(stage.status),
+      current: state === 'current',
+    };
+  });
+
+  const groups = APPLICATION_PROGRESS_GROUPS.map((group, index): ApplicationProgressGroupPlan => {
+    const firstIndex = getApplicationStatusIndex(group.statuses[0]);
+    const lastIndex = getApplicationStatusIndex(group.statuses[group.statuses.length - 1]);
+    const groupStatusSet = new Set<ApplicationPipelineStageStatus>(group.statuses);
+    const groupStages = stages.filter((stage) => groupStatusSet.has(stage.stage.status as ApplicationPipelineStageStatus));
+    const containsCurrent = groupStages.some((stage) => stage.current);
+    const fullySkipped =
+      currentIndex > lastIndex &&
+      lastIndex >= 0 &&
+      firstIndex >= 0 &&
+      groupStages.length > 0 &&
+      groupStages.every((stage) => stage.skipped);
+    const state: ApplicationTimelineStageState = isRejected
+      ? 'closed'
+      : fullySkipped
+        ? 'skipped'
+        : currentIndex > lastIndex || (isComplete && currentIndex >= lastIndex)
+          ? 'done'
+          : containsCurrent
+            ? 'current'
+            : 'pending';
+
+    return {
+      group,
+      index,
+      firstIndex,
+      lastIndex,
+      state,
+      stages: groupStages,
+      containsCurrent,
+      fullySkipped,
+      connectorDone: !isRejected && state === 'done' && currentIndex > lastIndex,
+    };
+  });
+
+  return {
+    status: normalizedStatus,
+    skippedStatuses,
+    currentIndex,
+    groupIndex,
+    currentGroup: groupIndex >= 0 ? APPLICATION_PROGRESS_GROUPS[groupIndex] : APPLICATION_PROGRESS_GROUPS[0],
+    progressPercent: computeApplicationProgressPercent(normalizedStatus, groupIndex),
+    isRejected,
+    isComplete,
+    stages,
+    groups,
+  };
 }
