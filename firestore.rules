@@ -96,6 +96,17 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
     }
 
+    // A candidate may not add/change employer identity (company_*) fields — only
+    // employer/agency accounts own a company profile. (Used on the user update
+    // rule; relies on `role` being pinned so it can't be flipped in the same write.)
+    function candidateCompanyFieldsUnchanged() {
+      return request.resource.data.role != "candidate" ||
+        unchanged([
+          "company_name", "company_description", "company_logo_url",
+          "company_website", "company_size", "industry", "founded_year"
+        ]);
+    }
+
     // dev supports candidate | employer | agency (firebase-migration dropped agency).
     function validRole(role) {
       return role in ["candidate", "employer", "agency"];
@@ -454,14 +465,20 @@ service cloud.firestore {
         && request.resource.data.credits <= 100
         && createSubscriptionAllowed(request.resource.data);
 
-      // Update: owner may change profile fields, but credits, subscription_status
-      // and created_at are server-only / immutable from the client.
+      // Update: owner may change profile fields, but credits, subscription_status,
+      // role and created_at are server-only / immutable from the client. Pinning
+      // `role` is the launch-critical trust fix: without it any candidate could
+      // update their own doc with role:"employer" and self-escalate into
+      // employer-only features (posting jobs, talent discovery). Role is set only
+      // by onUserCreated / setSubscriptionStatus (Admin SDK). Candidates also may
+      // not write employer identity (company_*) fields — anti-impersonation.
       allow update: if isOwner(userId)
-        && unchanged(["credits", "subscription_status", "created_at", "custom_provider"])
+        && unchanged(["credits", "subscription_status", "created_at", "custom_provider", "role"])
         && (
           validUser(request.resource.data) ||
           validLegacyUserProfileUpdate(request.resource.data)
-        );
+        )
+        && candidateCompanyFieldsUnchanged();
 
       allow delete: if false;
 
@@ -555,14 +572,25 @@ service cloud.firestore {
     // Any signed-in user may browse active postings; the owning employer may
     // also see their own inactive ones and is the only writer.
     match /job_postings/{jobId} {
+      // Only an employer/agency account may post or edit a job — a candidate
+      // (or any other signed-in user) cannot, even if they set employer_id to
+      // their own uid. The caller's role is read from their authoritative user
+      // doc (role is server-only / pinned). NOTE: per-plan active-job LIMITS are
+      // NOT enforceable in rules (they require counting) — that gate belongs in a
+      // createJobPosting callable and is tracked as the next P0 sub-step.
+      function isPoster() {
+        return isSignedIn() &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["employer", "agency"];
+      }
+
       allow read: if isSignedIn() &&
         (resource.data.is_active == true || resource.data.employer_id == request.auth.uid);
 
-      allow create: if isSignedIn() &&
+      allow create: if isPoster() &&
         validJobPosting(request.resource.data) &&
         request.resource.data.employer_id == request.auth.uid;
 
-      allow update: if isSignedIn() &&
+      allow update: if isPoster() &&
         resource.data.employer_id == request.auth.uid &&
         validJobPosting(request.resource.data) &&
         unchanged(["employer_id", "created_at"]);
