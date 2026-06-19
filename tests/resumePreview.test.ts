@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanResumeDisplay, parseResumeSections } from '../components/ResumePreview';
+import { cleanResumeDisplay, parseResumeSections } from '../lib/resumePreview';
 
 describe('ResumePreview parsing', () => {
   it('recovers CJK section breaks from a one-line extracted resume', () => {
