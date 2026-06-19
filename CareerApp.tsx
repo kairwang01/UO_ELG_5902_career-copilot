@@ -84,6 +84,41 @@ const DASHBOARD_VIEW_LABEL_KEYS: Record<DashboardView, string> = {
   credentials: 'ws_nav_credentials',
 };
 
+const DASHBOARD_VIEW_PATHS: Record<DashboardView, string> = {
+  dashboard: '',
+  toolkit: 'tools',
+  resume: 'resume',
+  talent_profile: 'talent-profile',
+  jobs: 'jobs',
+  applications: 'applications',
+  interview: 'interview',
+  plan: 'career-plan',
+  portfolio: 'portfolio',
+  billing: 'billing',
+  account: 'account',
+  credentials: 'credentials',
+};
+
+const DASHBOARD_PATH_TO_VIEW = Object.entries(DASHBOARD_VIEW_PATHS).reduce<Record<string, DashboardView>>(
+  (acc, [view, path]) => {
+    acc[path] = view as DashboardView;
+    return acc;
+  },
+  {},
+);
+
+const dashboardViewFromPath = (pathname: string): DashboardView | null => {
+  if (!pathname.startsWith('/workspace')) return null;
+  const rest = pathname.replace(/^\/workspace\/?/, '');
+  const segment = rest.split('/')[0] ?? '';
+  return DASHBOARD_PATH_TO_VIEW[segment] ?? null;
+};
+
+const dashboardPathForView = (view: DashboardView): string => {
+  const segment = DASHBOARD_VIEW_PATHS[view];
+  return segment ? `/workspace/${segment}` : '/workspace';
+};
+
 const FIRESTORE_RESUME_TEXT_LIMIT = 200_000;
 const resumeTextForProfile = (text: string): string => text.trim().slice(0, FIRESTORE_RESUME_TEXT_LIMIT);
 
@@ -169,6 +204,15 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
   useModalBehavior(closeMobileNav, isMobileNavOpen);
 
+  const setWorkspaceView = useCallback((nextView: DashboardView, options: { replace?: boolean } = {}) => {
+    setDashboardView(nextView);
+    if (entry !== 'workspace') return;
+    const nextPath = dashboardPathForView(nextView);
+    if (location.pathname !== nextPath) {
+      navigate(nextPath, { replace: options.replace ?? false });
+    }
+  }, [entry, location.pathname, navigate]);
+
   // Keep the Web3 flag in sync and bounce off the credentials view if the
   // module is switched off while the user is on it.
   useEffect(() => onWeb3FlagChange(setWeb3Enabled), []);
@@ -181,8 +225,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     }
   }, [session, isProfileLoaded, isCandidate]);
   useEffect(() => {
-    if (!web3Enabled && dashboardView === 'credentials') setDashboardView('dashboard');
-  }, [web3Enabled, dashboardView]);
+    if (!web3Enabled && dashboardView === 'credentials') setWorkspaceView('dashboard', { replace: true });
+  }, [web3Enabled, dashboardView, setWorkspaceView]);
 
   useEffect(() => {
     setApiStatusUpdater((status, errorMsg) => {
@@ -262,9 +306,27 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (entry !== 'workspace' || !session || !isProfileLoaded) return;
     const appParam = new URLSearchParams(location.search).get('app');
     if (!appParam) return;
-    setDashboardView('applications');
-    navigate(location.pathname, { replace: true });
-  }, [entry, session, isProfileLoaded, location.search, location.pathname, navigate]);
+    setWorkspaceView('applications', { replace: true });
+  }, [entry, session, isProfileLoaded, location.search, setWorkspaceView]);
+
+  // URL-backed candidate workspace: refresh/back/forward must preserve the
+  // active section instead of falling back to the dashboard-only state.
+  useEffect(() => {
+    if (entry !== 'workspace') return;
+    const pathView = dashboardViewFromPath(location.pathname);
+    if (pathView) {
+      if (pathView !== dashboardView) {
+        setDashboardView(pathView);
+        setActiveTool(null);
+        setAnalysisResult(null);
+        if (pathView !== 'resume') setIsUpdatingResume(false);
+      }
+      return;
+    }
+    if (location.pathname.startsWith('/workspace/')) {
+      navigate('/workspace', { replace: true });
+    }
+  }, [entry, location.pathname, dashboardView, navigate]);
 
   // Close the auth modal as soon as a session exists (login success or async restore).
   useEffect(() => {
@@ -675,7 +737,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (roleStateKeyRef.current === roleKey) return;
     roleStateKeyRef.current = roleKey;
 
-    setDashboardView('dashboard');
+    setDashboardView(dashboardViewFromPath(location.pathname) ?? 'dashboard');
     setActiveTool(null);
     setAnalysisResult(null);
     setResumeImages(null);
@@ -684,7 +746,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (profile?.role === 'candidate') {
       setPortalInitialPage('dashboard');
     }
-  }, [session?.user?.id, profile?.role]);
+  }, [session?.user?.id, profile?.role, location.pathname]);
 
 
   useEffect(() => {
@@ -733,7 +795,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       return;
     }
     if (view !== 'home') { setShowHomePageOverride(false); }
-    else { setDashboardView('dashboard'); setShowHomePageOverride(false); }
+    else { setWorkspaceView('dashboard', { replace: true }); setShowHomePageOverride(false); }
     if (view === 'auth') { setInitialAuthView(authView); setAuthMode(mode); }
     setView(view);
   };
@@ -816,7 +878,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     setError(null);
     setResumeImages(null);
     setShowHomePageOverride(false);
-    setDashboardView('dashboard');
+    setWorkspaceView('dashboard', { replace: true });
   };
 
   const handleApplyImprovements = (newText: string) => {
@@ -905,12 +967,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const openWorkspaceTool = (tool: string) => {
     setActiveTool(tool);
-    setDashboardView('toolkit');
+    setWorkspaceView('toolkit');
   };
 
   const openResumeUpload = () => {
     setActiveTool(null);
-    setDashboardView('resume');
+    setWorkspaceView('resume');
     setIsUpdatingResume(true);
   };
 
@@ -926,7 +988,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 hasResume={!!resumeText.trim()}
                 onNavigate={(nextView) => {
-                  setDashboardView(nextView);
+                  setWorkspaceView(nextView);
                   if (nextView === 'resume' && !resumeText.trim()) setIsUpdatingResume(true);
                 }}
               />
@@ -939,7 +1001,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                     <EmptyState
                         title={t('ws_toolkit_empty_title')}
                         description={t('ws_toolkit_empty_desc')}
-                        action={{ label: t('ws_upload_resume'), onClick: () => { setActiveTool(null); setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                        action={{ label: t('ws_upload_resume'), onClick: () => { setActiveTool(null); setWorkspaceView('resume'); setIsUpdatingResume(true); } }}
                     />
                 ) : (
                     <AnalysisDisplay
@@ -969,7 +1031,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
-                onViewChange={setDashboardView}
+                onViewChange={setWorkspaceView}
+                session={session}
               />
             </div>
         )}
@@ -982,7 +1045,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
-                onViewChange={setDashboardView}
+                onViewChange={setWorkspaceView}
                 session={session}
               />
             </div>
@@ -1005,7 +1068,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               t={t}
               onFindSimilar={() => {
                 setActiveTool('opportunity-finder');
-                setDashboardView('toolkit');
+                setWorkspaceView('toolkit');
               }}
             />
           </div>
@@ -1019,7 +1082,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
-                onViewChange={setDashboardView}
+                onViewChange={setWorkspaceView}
+                session={session}
               />
             </div>
         )}
@@ -1032,7 +1096,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
-                onViewChange={setDashboardView}
+                onViewChange={setWorkspaceView}
+                session={session}
               />
             </div>
         )}
@@ -1043,7 +1108,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                     <EmptyState
                         title={t('ws_portfolio_empty_title')}
                         description={t('ws_portfolio_empty_desc')}
-                        action={{ label: t('ws_upload_resume'), onClick: () => { setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                        action={{ label: t('ws_upload_resume'), onClick: () => { setWorkspaceView('resume'); setIsUpdatingResume(true); } }}
                     />
                  ) : (
                     <AnalysisDisplay
@@ -1173,7 +1238,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     const sidebarProps = {
       activeView: dashboardView,
       onViewChange: (v: DashboardView) => {
-        setDashboardView(v);
+        setWorkspaceView(v);
         setIsUpdatingResume(false);
         setIsMobileNavOpen(false);
         // Sidebar navigation must take over the main panel immediately. A lingering
@@ -1188,6 +1253,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       activeTool,
       onToolSelect: (tool: string | null) => {
         setActiveTool(tool);
+        if (tool) setWorkspaceView('toolkit');
         setIsMobileNavOpen(false);
       },
       onLogout: () => data.auth.signOut(),
@@ -1243,7 +1309,28 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                     <p className="text-gray-600 dark:text-gray-400">{resumeText ? t('dashboard_update_prompt') : t('dashboard_new_user_prompt')}</p>
                   </div>
                   <div id="upload-section" ref={uploadSectionRef} className="scroll-mt-20">
-                    <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} variant={uploadVariant} />
+                    <UploadSection
+                      t={t}
+                      resumeText={resumeText}
+                      setResumeText={setResumeText}
+                      resumeImages={resumeImages}
+                      setResumeImages={setResumeImages}
+                      onInitiateAnalysis={handleInitiateAnalysis}
+                      isLoading={isLoading}
+                      error={error}
+                      setError={setError}
+                      market={market}
+                      setMarket={setMarket}
+                      variant={uploadVariant}
+                      onResumeFileSelected={handleResumeFileSelected}
+                      storedResumeFile={profile?.resume_file_url ? {
+                        name: profile.resume_file_name ?? null,
+                        url: profile.resume_file_url,
+                        uploadedAt: profile.resume_file_uploaded_at ?? null,
+                      } : null}
+                      onRemoveResumeFile={handleRemoveResumeFile}
+                      isSavingResumeFile={isSavingResumeFile}
+                    />
                   </div>
                   {resumeText && (<div className="text-center mt-6"><button onClick={() => setIsUpdatingResume(false)} className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-semibold bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 px-6 py-2 rounded-lg transition-colors">{t('dashboard_cancel_update')}</button></div>)}
                 </div>
@@ -1300,7 +1387,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         />
       );
     }
-    if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} onContinueToToolkit={() => { setAnalysisResult(null); setActiveTool(null); setDashboardView('toolkit'); }} />; }
+    if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} onContinueToToolkit={() => { setAnalysisResult(null); setActiveTool(null); setWorkspaceView('toolkit'); }} />; }
     if (session && !showHomePageOverride) {
         if (!isProfileLoaded || !isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600 dark:text-gray-400">{t('dashboard_loading')}</p></div>; }
         if (profile?.role === 'agency') {
@@ -1358,7 +1445,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             <svg className="h-6 w-6 sm:h-8 sm:w-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
         )}
-        {isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} onLaunchTool={(target) => { setDashboardView(target); setIsChatOpen(false); }} />}
+        {isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} onLaunchTool={(target) => { setWorkspaceView(target); setIsChatOpen(false); }} />}
       </div>
   );
 };

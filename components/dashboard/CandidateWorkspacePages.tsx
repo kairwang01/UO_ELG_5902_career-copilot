@@ -1,30 +1,25 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import {
-  AlertTriangle,
   ArrowRight,
   Briefcase,
   CalendarCheck,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   CreditCard,
   FileText,
-  ListFilter,
   Loader2,
-  Mail,
   MessageSquare,
-  Send,
   Target,
   Zap,
 } from 'lucide-react';
 import ResumePreview from '../ResumePreview';
 import CareerGoalsPanel from '../CareerGoalsPanel';
 import BrowseJobs from '../BrowseJobs';
-import { sampleReport } from '../../marketing/mock/sampleReport';
-import { interviewFeedback } from '../../marketing/mock/interviewFeedback';
-import { careerPathPlan } from '../../marketing/mock/careerPath';
+import { firestoreDb } from '../../lib/firebaseClient';
+import { useRecentApplications } from '../../hooks/useRecentApplications';
+import { getApplicationStatusLabelKey } from '../../lib/applicationPipeline';
 import type { AppSession as Session } from '../../lib/data';
-import type { UserProfile } from '../../types';
+import type { AnalysisResult, Improvement, UserProfile } from '../../types';
 import { ALL_PLANS, PLAN_HIERARCHY } from '../../config';
 
 type WorkspaceView = 'dashboard' | 'resume' | 'talent_profile' | 'jobs' | 'interview' | 'plan' | 'toolkit' | 'billing';
@@ -39,75 +34,101 @@ interface WorkspacePageProps {
   session?: Session | null;
 }
 
-const jobMatches = [
-  {
-    id: 'j1',
-    title: 'Technical Product Owner',
-    company: 'Northstar CRM',
-    location: 'Toronto, ON · Hybrid',
-    score: 84,
-    priorityKey: 'ws_job_match_priority_week',
-    evidence: [
-      'Billing workflow redesign maps to product operations scope.',
-      'Cross-functional backlog ownership appears in recent experience.',
-      'Support-ticket reduction gives a measurable impact story.',
-    ],
-    gaps: ['Pricing discovery', 'Roadmap governance'],
-    requirements: [
-      { label: 'Stakeholder prioritization', met: true },
-      { label: 'Technical delivery background', met: true },
-      { label: 'Customer discovery', met: false },
-    ],
-  },
-  {
-    id: 'j2',
-    title: 'Associate Product Manager, Platform',
-    company: 'Canopy Labs',
-    location: 'Remote Canada',
-    score: 78,
-    priorityKey: 'ws_job_match_priority_after_edits',
-    evidence: [
-      'Developer background supports API/platform credibility.',
-      'A/B testing and SQL keywords align with screening filters.',
-    ],
-    gaps: ['PM title signal', 'User research synthesis'],
-    requirements: [
-      { label: 'SQL and analytics', met: true },
-      { label: 'Feature discovery', met: false },
-      { label: 'Agile delivery', met: true },
-    ],
-  },
-  {
-    id: 'j3',
-    title: 'Product Operations Analyst',
-    company: 'BrightHire',
-    location: 'Ottawa, ON',
-    score: 72,
-    priorityKey: 'ws_job_match_priority_bridge',
-    evidence: [
-      'Process improvement examples transfer well.',
-      'Operational metrics can be reframed into product evidence.',
-    ],
-    gaps: ['Stakeholder roadmap language', 'Interview examples'],
-    requirements: [
-      { label: 'Process improvement', met: true },
-      { label: 'Dashboard reporting', met: true },
-      { label: 'Product lifecycle', met: false },
-    ],
-  },
-];
-
-const practiceQuestionKeys = [
-  'ws_interview_question_prioritize',
-  'ws_interview_question_incomplete_info',
-  'ws_interview_question_data_decision',
-];
-
 const candidatePlanKeys = ['free', 'essentials', 'accelerator', 'executive'] as const;
 type CandidatePlanKey = typeof candidatePlanKeys[number];
 
+type LatestResumeAnalysis = AnalysisResult & {
+  market_name?: string;
+  created_at?: { toDate?: () => Date } | string | null;
+};
+
 const formatWorkspaceCopy = (template: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce((copy, [key, value]) => copy.replaceAll(`{${key}}`, String(value)), template);
+
+const formatAnalysisDate = (value: LatestResumeAnalysis['created_at']): string => {
+  if (!value) return '';
+  try {
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString();
+    }
+    const date = value.toDate?.();
+    return date ? date.toLocaleDateString() : '';
+  } catch {
+    return '';
+  }
+};
+
+const normalizeImprovements = (value: unknown): Improvement[] =>
+  Array.isArray(value)
+    ? value
+        .map((item) => {
+          if (!item || typeof item !== 'object') return null;
+          const record = item as Record<string, unknown>;
+          const area = typeof record.area === 'string' ? record.area.trim() : '';
+          const suggestion = typeof record.suggestion === 'string' ? record.suggestion.trim() : '';
+          return area || suggestion ? { area, suggestion } : null;
+        })
+        .filter((item): item is Improvement => Boolean(item))
+    : [];
+
+const normalizeStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((item) => String(item ?? '').trim()).filter(Boolean) : [];
+
+const useLatestResumeAnalysis = (session?: Session | null) => {
+  const uid = session?.user?.id ?? null;
+  const [analysis, setAnalysis] = useState<LatestResumeAnalysis | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!uid) {
+      setAnalysis(null);
+      setLoading(false);
+      setError(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    getDocs(query(
+      collection(firestoreDb, 'users', uid, 'resume_analyses'),
+      orderBy('created_at', 'desc'),
+      limit(1),
+    ))
+      .then((snap) => {
+        if (cancelled) return;
+        const row = snap.docs[0]?.data() as Record<string, unknown> | undefined;
+        if (!row) {
+          setAnalysis(null);
+          return;
+        }
+        setAnalysis({
+          score: Number(row.score ?? 0),
+          summary: typeof row.summary === 'string' ? row.summary : '',
+          strengths: normalizeStringArray(row.strengths),
+          improvements: normalizeImprovements(row.improvements),
+          keywords: normalizeStringArray(row.keywords),
+          market_name: typeof row.market_name === 'string' ? row.market_name : undefined,
+          created_at: (row.created_at ?? null) as LatestResumeAnalysis['created_at'],
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAnalysis(null);
+          setError(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  return { analysis, loading, error };
+};
 
 const StatusPill: React.FC<{ tone: 'ready' | 'gap' | 'risk' | 'neutral'; children: React.ReactNode }> = ({
   tone,
@@ -219,8 +240,14 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   t,
   onUploadResume,
   onOpenTool,
+  session,
 }) => {
   const hasResume = resumeText.trim().length > 0;
+  const { analysis, loading: analysisLoading, error: analysisError } = useLatestResumeAnalysis(session);
+  const latestDate = formatAnalysisDate(analysis?.created_at);
+  const improvements = analysis?.improvements ?? [];
+  const strengths = analysis?.strengths ?? [];
+  const keywords = analysis?.keywords ?? [];
 
   return (
     <div className="space-y-6">
@@ -240,74 +267,114 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
           buttonLabel={t('ws_upload_resume')}
           onClick={onUploadResume}
         />
+      ) : analysisLoading ? (
+        <Panel title={t('ws_resume_summary_title')} description={t('ws_resume_analysis_loading')}>
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t('ws_resume_analysis_loading')}
+          </div>
+        </Panel>
+      ) : !analysis ? (
+        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <Panel
+            title={t('ws_resume_no_report_title')}
+            description={analysisError ? t('ws_resume_analysis_unavailable') : t('ws_resume_no_report_desc')}
+            action={
+              <button
+                type="button"
+                onClick={onUploadResume}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+              >
+                {t('ws_resume_run_analysis')}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            }
+          >
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-200">
+              {t('ws_resume_no_report_hint')}
+            </div>
+          </Panel>
+          <Panel title={t('ws_resume_preview_title')} description={formatWorkspaceCopy(t('ws_resume_preview_desc'), { market })}>
+            <ResumePreview resumeText={resumeText} market={market} t={t} />
+          </Panel>
+        </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
             <Panel
               title={t('ws_resume_summary_title')}
               description={t('ws_resume_summary_desc')}
-              action={<StatusPill tone="gap">{formatWorkspaceCopy(t('ws_resume_priority_fixes'), { count: 4 })}</StatusPill>}
+              action={<StatusPill tone={improvements.length > 0 ? 'gap' : 'ready'}>{formatWorkspaceCopy(t('ws_resume_priority_fixes'), { count: improvements.length })}</StatusPill>}
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <ScoreBlock label={t('ws_resume_ats_readiness')} value={sampleReport.atsReadiness} />
-                <ScoreBlock label={t('ws_resume_target_fit')} value={sampleReport.roleFit} tone="gap" />
+                <ScoreBlock
+                  label={t('ws_resume_score_label')}
+                  value={Math.max(0, Math.min(100, Math.round(analysis.score || 0)))}
+                  tone={analysis.score >= 75 ? 'ready' : analysis.score >= 55 ? 'gap' : 'risk'}
+                />
+                <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('ws_resume_latest_report')}</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-950 dark:text-slate-100">
+                    {latestDate || t('ws_resume_latest_report_unknown')}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    {analysis.market_name || market}
+                  </p>
+                </div>
               </div>
               <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-200">
-                {formatWorkspaceCopy(t('ws_resume_next_action'), { action: sampleReport.nextAction })}
+                {analysis.summary || formatWorkspaceCopy(t('ws_resume_next_action'), { action: t('ws_resume_run_analysis') })}
               </div>
             </Panel>
 
-            <Panel title={t('ws_resume_risks_title')}>
+            <Panel title={t('ws_resume_improvements_title')}>
               <div className="grid gap-4 lg:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">{t('ws_resume_ats_risks')}</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('ws_resume_quality_title')}</p>
                   <div className="space-y-2">
-                    {sampleReport.issues
-                      .filter((issue) => issue.severity !== 'ready')
-                      .map((issue) => (
-                        <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm font-medium text-slate-950 dark:text-slate-100">{issue.issue}</p>
-                            <StatusPill tone={issue.severity === 'risk' ? 'risk' : 'gap'}>{t(`workspace_status_${issue.severity}`)}</StatusPill>
-                          </div>
-                          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.fix}</p>
+                    {improvements.length > 0 ? improvements.map((issue, index) => (
+                      <div key={`${issue.area}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-medium text-slate-950 dark:text-slate-100">{issue.area || t('ws_resume_improvement_fallback')}</p>
+                          <StatusPill tone="gap">{t('workspace_status_gap')}</StatusPill>
                         </div>
-                      ))}
+                        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.suggestion}</p>
+                      </div>
+                    )) : (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
+                        {t('ws_resume_no_improvements')}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('ws_resume_missing_keywords')}</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">{t('ws_resume_keywords_title')}</p>
                   <div className="flex flex-wrap gap-2">
-                    {sampleReport.missingKeywords.map((keyword) => (
-                      <StatusPill key={keyword} tone="gap">
-                        {keyword}
-                      </StatusPill>
-                    ))}
-                  </div>
-                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">{t('ws_resume_matched_signals')}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {sampleReport.matchedKeywords.slice(0, 5).map((keyword) => (
+                    {keywords.length > 0 ? keywords.map((keyword) => (
                       <StatusPill key={keyword} tone="ready">
                         {keyword}
                       </StatusPill>
-                    ))}
+                    )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t('ws_resume_no_keywords')}</span>}
                   </div>
                 </div>
               </div>
             </Panel>
 
             <Panel
-              title={t('ws_resume_quality_title')}
+              title={t('ws_resume_strengths_title')}
               description={t('ws_resume_quality_desc')}
             >
               <div className="space-y-3">
-                {sampleReport.issues.slice(0, 3).map((issue) => (
-                  <div key={issue.id} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
-                    <p className="font-medium text-slate-950 dark:text-slate-100">{issue.issue}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.whyItMatters}</p>
-                    <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-200">{formatWorkspaceCopy(t('ws_resume_fix_prefix'), { fix: issue.fix })}</p>
+                {strengths.length > 0 ? strengths.slice(0, 4).map((strength) => (
+                  <div key={strength} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
+                    <p className="flex gap-2 text-sm font-medium leading-relaxed text-slate-950 dark:text-slate-100">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span>{strength}</span>
+                    </p>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{t('ws_resume_no_strengths')}</p>
+                )}
               </div>
               <button
                 type="button"
@@ -329,108 +396,8 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   );
 };
 
-const JobMatchCard: React.FC<{
-  job: typeof jobMatches[number];
-  t: (key: string) => string;
-  onOpenTool: (tool: string) => void;
-}> = ({ job, t, onOpenTool }) => {
-  const [showWhy, setShowWhy] = useState(false);
-
-  return (
-    <article className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-5 shadow-sm">
-      {/* Decision layer: title + score, priority, company·location, skill-gap chips */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{job.title}</h3>
-            <StatusPill tone={job.score >= 80 ? 'ready' : 'gap'}>
-              {t('ws_job_match_score_badge').replace('{score}', String(job.score))}
-            </StatusPill>
-          </div>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {job.company} · {job.location}
-          </p>
-        </div>
-        <StatusPill tone="neutral">{t(job.priorityKey)}</StatusPill>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('ws_job_match_skill_gaps')}</span>
-        {job.gaps.map((gap) => (
-          <StatusPill key={gap} tone="gap">
-            {gap}
-          </StatusPill>
-        ))}
-      </div>
-
-      {/* Why this match — progressive disclosure: evidence + requirements */}
-      <button
-        type="button"
-        onClick={() => setShowWhy((prev) => !prev)}
-        aria-expanded={showWhy}
-        className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-      >
-        {t('ws_job_match_why')}
-        {showWhy ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
-
-      {showWhy && (
-        <div className="mt-3 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">{t('ws_job_match_evidence')}</p>
-            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-              {job.evidence.map((item) => (
-                <li key={item} className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <table className="w-full text-sm">
-            <tbody>
-              {job.requirements.map((req) => (
-                <tr key={req.label} className="border-t border-slate-200 dark:border-slate-700">
-                  <td className="py-2 pr-2 text-slate-700 dark:text-slate-300">{req.label}</td>
-                  <td className={`py-2 text-right font-medium ${req.met ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                    {req.met ? t('ws_job_match_requirement_met') : t('ws_job_match_requirement_gap')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-        <button
-          type="button"
-          onClick={() => onOpenTool('cover-letter')}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
-        >
-          <Mail className="h-4 w-4" />
-          {t('workspace_draft_cover_letter')}
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenTool('email-crafter')}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
-        >
-          <Send className="h-4 w-4" />
-          {t('workspace_prepare_outreach')}
-        </button>
-      </div>
-    </article>
-  );
-};
-
 export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, onViewChange, session }) => {
-  const [sort, setSort] = useState<'priority' | 'score'>('priority');
   const hasResume = resumeText.trim().length > 0;
-  const sortedJobs = useMemo(
-    () => [...jobMatches].sort((a, b) => (sort === 'score' ? b.score - a.score : a.id.localeCompare(b.id))),
-    [sort],
-  );
 
   return (
     <div className="space-y-6">
@@ -454,54 +421,38 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
           onClick={onUploadResume}
         />
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[240px_1fr]">
-          <Panel title={t('ws_job_match_controls_title')} description={t('ws_job_match_controls_desc')}>
-            <div className="space-y-2">
-              <button
-                type="button"
-                aria-pressed={sort === 'priority'}
-                onClick={() => setSort('priority')}
-                className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
-                  sort === 'priority' ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <ListFilter className="h-4 w-4" />
-                {t('ws_job_match_sort_priority')}
-              </button>
-              <button
-                type="button"
-                aria-pressed={sort === 'score'}
-                onClick={() => setSort('score')}
-                className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
-                  sort === 'score' ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <Target className="h-4 w-4" />
-                {t('ws_job_match_sort_score')}
-              </button>
-            </div>
-            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              {t('ws_job_match_priority_note')}
-            </div>
-          </Panel>
-
-          <div className="space-y-4">
-            {sortedJobs.map((job) => (
-              <JobMatchCard key={job.id} job={job} t={t} onOpenTool={onOpenTool} />
-            ))}
+        <Panel title={t('ws_job_match_live_title')} description={t('ws_job_match_live_desc')}>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenTool('opportunity-finder')}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+            >
+              <Target className="h-4 w-4" />
+              {t('ws_job_match_find_more')}
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenTool('cover-letter')}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+            >
+              <FileText className="h-4 w-4" />
+              {t('workspace_draft_cover_letter')}
+            </button>
           </div>
-        </div>
+        </Panel>
       )}
     </div>
   );
 };
 
-export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool }) => {
-  const [questionKey, setQuestionKey] = useState(practiceQuestionKeys[0]);
-  const [answer, setAnswer] = useState(
-    t('ws_interview_default_answer'),
-  );
+export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, session }) => {
   const hasResume = resumeText.trim().length > 0;
+  const { applications, loading } = useRecentApplications(session ?? null);
+  const interviewReady = applications.filter((app) => {
+    const labelKey = getApplicationStatusLabelKey(app.status);
+    return labelKey.includes('interview') || labelKey.includes('offer');
+  });
 
   return (
     <div className="space-y-6">
@@ -523,60 +474,58 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <Panel title={t('ws_interview_question_set_title')} description={t('ws_interview_question_set_desc')}>
-            <div className="space-y-2">
-              {practiceQuestionKeys.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setQuestionKey(item)}
-                  className={`w-full rounded-lg border p-3 text-left text-sm font-medium transition ${
-                    questionKey === item ? 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200' : 'border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                  }`}
-                >
-                  {t(item)}
-                </button>
-              ))}
-            </div>
+          <Panel title={t('ws_interview_context_title')} description={t('ws_interview_context_desc')}>
+            {loading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('dashboard_app_stage_loading')}
+              </div>
+            ) : applications.length > 0 ? (
+              <div className="space-y-3">
+                {applications.slice(0, 4).map((app) => (
+                  <div key={app.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{app.job_title || t('applications_unknown_role')}</p>
+                      <StatusPill tone={interviewReady.some((item) => item.id === app.id) ? 'ready' : 'neutral'}>
+                        {t(getApplicationStatusLabelKey(app.status))}
+                      </StatusPill>
+                    </div>
+                    {app.application_date && (
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {formatWorkspaceCopy(t('ws_interview_applied_on'), { date: new Date(app.application_date).toLocaleDateString() })}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-400">
+                {t('ws_interview_no_applications')}
+              </div>
+            )}
           </Panel>
 
-          <Panel title={t('ws_interview_answer_title')} description={t('ws_interview_answer_desc')}>
-            <label htmlFor="practice-answer" className="text-sm font-medium text-slate-800 dark:text-slate-200">
-              {t('ws_interview_your_answer')}
-            </label>
-            <textarea
-              id="practice-answer"
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              className="mt-2 min-h-[150px] w-full rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-3 text-sm leading-relaxed text-slate-900 dark:text-slate-100 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
-            />
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Panel title={t('ws_interview_tool_title')} description={t('ws_interview_tool_desc')}>
+            <div className="grid gap-3 sm:grid-cols-3">
               {[
-                [t('site_interview_star_s'), interviewFeedback.starFeedback.situation],
-                [t('site_interview_star_t'), interviewFeedback.starFeedback.task],
-                [t('site_interview_star_a'), interviewFeedback.starFeedback.action],
-                [t('site_interview_star_r'), interviewFeedback.starFeedback.result],
-              ].map(([label, detail]) => (
-                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
-                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">{label}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{detail}</p>
+                ['site_interview_star_s', 'ws_interview_prepare_story'],
+                ['site_interview_star_t', 'ws_interview_prepare_role'],
+                ['site_interview_star_r', 'ws_interview_prepare_metric'],
+              ].map(([labelKey, detailKey]) => (
+                <div key={labelKey} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">{t(labelKey)}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{t(detailKey)}</p>
                 </div>
               ))}
             </div>
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
-              <span className="font-semibold">{t('ws_interview_improve_next')} </span>
-              {interviewFeedback.starFeedback.missing}
-            </div>
-            <div className="mt-4 rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('site_interview_clarity')}</span>
-                <span className="text-lg font-semibold text-slate-950 dark:text-slate-100">{interviewFeedback.clarityScore}</span>
-              </div>
-              <div className="mt-3 h-2 rounded-full bg-slate-100 dark:bg-slate-800">
-                <div className="h-2 rounded-full bg-amber-500" style={{ width: `${interviewFeedback.clarityScore}%` }} />
-              </div>
-              <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{formatWorkspaceCopy(t('ws_interview_next_drill'), { drill: interviewFeedback.nextDrill })}</p>
-            </div>
+            <button
+              type="button"
+              onClick={() => onOpenTool('mock-interview')}
+              className="mt-5 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+            >
+              <MessageSquare className="h-4 w-4" />
+              {t('ws_interview_start_practice')}
+            </button>
           </Panel>
         </div>
       )}
@@ -584,8 +533,11 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
   );
 };
 
-export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool }) => {
+export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, session }) => {
   const hasResume = resumeText.trim().length > 0;
+  const { analysis, loading: analysisLoading } = useLatestResumeAnalysis(session);
+  const { applications, loading: applicationsLoading } = useRecentApplications(session ?? null);
+  const improvements = analysis?.improvements ?? [];
 
   return (
     <div className="space-y-6">
@@ -607,96 +559,87 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, t, on
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <Panel title={t('ws_plan_target_path')} description={formatWorkspaceCopy(t('ws_plan_role_path'), {
-            current: careerPathPlan.currentRole,
-            target: careerPathPlan.targetRole,
-          })}>
-            <div className="space-y-0">
-              {careerPathPlan.timeline.map((step, index) => (
-                <div key={step.id} className="flex gap-3">
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`mt-1 h-3 w-3 rounded-full ${
-                        step.status === 'done'
-                          ? 'bg-emerald-600'
-                          : step.status === 'in_progress'
-                            ? 'bg-blue-700 ring-4 ring-blue-100 dark:ring-blue-900/50'
-                            : 'bg-slate-300 dark:bg-slate-600'
-                      }`}
-                    />
-                    {index < careerPathPlan.timeline.length - 1 && <div className="my-1 min-h-10 w-px flex-1 bg-slate-200 dark:bg-slate-700" />}
-                  </div>
-                  <div className="pb-5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-slate-950 dark:text-slate-100">{step.label}</p>
-                      <StatusPill tone={step.status === 'done' ? 'ready' : step.status === 'in_progress' ? 'neutral' : 'gap'}>
-                        {t(`workspace_status_${step.status}`)}
-                      </StatusPill>
-                    </div>
-                    {step.detail && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{step.detail}</p>}
-                  </div>
-                </div>
-              ))}
+          <Panel title={t('ws_plan_current_signals')} description={t('ws_plan_current_signals_desc')}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <ScoreBlock
+                label={t('ws_resume_score_label')}
+                value={analysis ? Math.max(0, Math.min(100, Math.round(analysis.score || 0))) : 0}
+                tone={!analysis ? 'gap' : analysis.score >= 75 ? 'ready' : 'gap'}
+              />
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('applications_title')}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-100">
+                  {applicationsLoading ? '...' : applications.length}
+                </p>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{t('ws_plan_applications_helper')}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('ws_resume_priority_fixes').replace('{count}', String(improvements.length))}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-100">
+                  {analysisLoading ? '...' : improvements.length}
+                </p>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{t('ws_plan_fixes_helper')}</p>
+              </div>
             </div>
-            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-200">
-              {formatWorkspaceCopy(t('ws_plan_bridge_role'), { role: careerPathPlan.bridgeRole })}
-            </div>
+            {!analysis && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
+                {t('ws_plan_needs_analysis')}
+              </div>
+            )}
           </Panel>
 
           <div className="space-y-6">
             <Panel title={t('ws_plan_skill_gaps')} description={t('ws_plan_skill_gaps_desc')}>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {careerPathPlan.skillGaps.map((gap) => (
-                  <div key={gap.skill} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{gap.skill}</p>
-                      <StatusPill tone={gap.priority === 'high' ? 'gap' : 'neutral'}>{t(`workspace_priority_${gap.priority}`)}</StatusPill>
+              {improvements.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {improvements.slice(0, 4).map((gap, index) => (
+                    <div key={`${gap.area}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{gap.area || t('ws_resume_improvement_fallback')}</p>
+                        <StatusPill tone={index < 2 ? 'gap' : 'neutral'}>{index < 2 ? t('workspace_priority_high') : t('workspace_priority_medium')}</StatusPill>
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{gap.suggestion}</p>
                     </div>
-                    <div className="mt-3 h-2 rounded-full bg-white dark:bg-slate-700">
-                      <div className="h-2 rounded-full bg-blue-700" style={{ width: `${gap.progress}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600 dark:text-slate-400">{t('ws_plan_no_gaps_yet')}</p>
+              )}
             </Panel>
 
             <Panel title={t('ws_plan_four_week_title')} description={t('ws_plan_four_week_desc')}>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {careerPathPlan.fourWeekPlan.map((week) => (
-                  <div key={week.week} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium text-slate-950 dark:text-slate-100">
-                        {formatWorkspaceCopy(t('ws_plan_week_label'), { week: week.week, focus: week.focus })}
-                      </p>
-                      <StatusPill tone={week.status === 'done' ? 'ready' : week.status === 'in_progress' ? 'neutral' : 'gap'}>
-                        {t(`workspace_status_${week.status}`)}
-                      </StatusPill>
-                    </div>
-                    <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                      {week.tasks.map((task) => (
-                        <li key={task} className="flex gap-2">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-600" />
-                          <span>{task}</span>
-                        </li>
-                      ))}
-                    </ul>
+              <div className="space-y-3">
+                {[
+                  ['ws_plan_action_analyze', analysis ? 'ready' : 'gap'],
+                  ['ws_plan_action_profile', 'neutral'],
+                  ['ws_plan_action_portfolio', 'neutral'],
+                  ['ws_plan_action_apply', applications.length > 0 ? 'ready' : 'gap'],
+                ].map(([key, tone]) => (
+                  <div key={key} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                    <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">{t(key)}</p>
+                    <StatusPill tone={tone as 'ready' | 'gap' | 'neutral'}>{tone === 'ready' ? t('workspace_status_done') : t('workspace_status_pending')}</StatusPill>
                   </div>
                 ))}
               </div>
             </Panel>
 
             <Panel title={t('ws_plan_rhythm_title')}>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  [t('ws_plan_rhythm_project'), t('ws_plan_rhythm_project_desc')],
-                  [t('ws_plan_rhythm_learning'), t('ws_plan_rhythm_learning_desc')],
-                  [t('ws_plan_rhythm_applications'), t('ws_plan_rhythm_applications_desc')],
-                ].map(([title, detail]) => (
-                  <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-4">
-                    <p className="font-medium text-slate-950 dark:text-slate-100">{title}</p>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{detail}</p>
-                  </div>
-                ))}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenTool('career-path')}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+                >
+                  <CalendarCheck className="h-4 w-4" />
+                  {t('ws_plan_generate_updated')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenTool('skill-learning-plan')}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+                >
+                  {t('tool_skill_learning_plan_title')}
+                </button>
               </div>
             </Panel>
           </div>
