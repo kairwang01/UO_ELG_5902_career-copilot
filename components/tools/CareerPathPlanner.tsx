@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Compass } from 'lucide-react';
 import { generateCareerPath, generateSkillBridgeProject } from '../../services/aiClient';
 import type { CareerPathResult, SkillBridgeProject } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 import type { AppSession as Session } from '../../lib/data';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 
@@ -31,6 +32,8 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CareerPathResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<CareerPathResult>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [desiredRole, setDesiredRole] = useState('');
 
   const [generatingProjectForSkill, setGeneratingProjectForSkill] = useState<string | null>(null);
@@ -40,6 +43,9 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
   // SmartSuggest: derive role chips from resume (pure, no AI)
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
+
+  // Hydrate from a previously-saved result (paid users) for free on reopen.
+  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerateProject = async (skill: string) => {
     setLastProjectSkill(skill);
@@ -72,6 +78,8 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
       const apiResult = await generateCareerPath(resumeText, input, market, session);
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -202,6 +210,13 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
     return (
       <div className="space-y-8 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+        />
         <div className="flex justify-between items-center">
           <h4 className="text-xl font-bold">{t('tool_career_path_results_title')}</h4>
           {/* (d) RESULT ACTIONS: Download + start-over */}

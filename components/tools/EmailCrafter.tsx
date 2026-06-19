@@ -1,12 +1,13 @@
 
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mail } from 'lucide-react';
 import { generateProfessionalEmail } from '../../services/aiClient';
 import type { ProfessionalEmailResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
 import type { AppSession as Session } from '../../lib/data';
 
@@ -59,6 +60,8 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProfessionalEmailResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<ProfessionalEmailResult>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [editableResult, setEditableResult] = useState('');
 
   // State for new features
@@ -74,6 +77,15 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
 
   // Recent applications hook for the job-context selector
   const { applications } = useRecentApplications(session);
+
+  // Hydrate from a cloud-saved result on reopen (paid users)
+  useEffect(() => {
+    if (saved && !result) {
+      setResult(saved.result);
+      setEditableResult(saved.result.body);
+      setFromSaved(true);
+    }
+  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTool = async () => {
     const alive = begin();
@@ -100,6 +112,8 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
       if (!alive()) return;
       setResult(apiResult);
       setEditableResult(apiResult.body);
+      setFromSaved(false);
+      persist(apiResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -297,6 +311,13 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
     const { subject } = result;
     return (
       <div className="space-y-4 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+        />
         <div className="flex justify-between items-center">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_email_crafter_results_title')}</h4>
           <DownloadButtons textContent={`Subject: ${subject}\n\n${editableResult}`} baseFilename="email_draft" />

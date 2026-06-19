@@ -1,4 +1,12 @@
 {
+  "tool_try_next": "Try next",
+  "tool_saved_label": "Saved result",
+  "tool_saved_on": "Saved {date}",
+  "tool_saved_just_now": "Saved to your account",
+  "tool_saved_upgrade_hint": "Upgrade to save & revisit results",
+  "site_plan_js_essentials_f5": "Save & revisit your AI results",
+  "site_plan_js_accelerator_f5": "Save & revisit your AI results",
+  "site_plan_js_executive_f5": "Save & revisit your AI results",
   "browse_jobs_company_size": "{size} employees",
   "browse_jobs_founded": "Founded {year}",
   "tool_english_pro_default_speaking_topic": "Tell me about your most recent project.",

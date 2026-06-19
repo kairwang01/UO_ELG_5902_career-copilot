@@ -18,7 +18,8 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { app as firebaseApp, firebaseFunctions } from '../../lib/firebaseClient';
-import { CopyButton, renderFormattedText, ToolError } from './ToolUtils';
+import { CopyButton, renderFormattedText, SavedResultBar, ToolError } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 import { loadJobPreferences, preferencesToPromptBlock, prefsSummaryLine } from '../../hooks/useJobPreferences';
 
 interface OpportunityFinderProps {
@@ -54,6 +55,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // refire the expensive AI search.
   const sessionUserId = session?.user?.id ?? null;
   const [result, setResult] = useState<OpportunityResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<OpportunityResult>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [platformLoading, setPlatformLoading] = useState(false);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [opportunityFilters, setOpportunityFilters] = useState<{ company: string, location: string }>({ company: 'all', location: 'all' });
@@ -74,6 +77,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // Pre-submit review: the candidate confirms what the employer will receive
   // before the application is actually created.
   const [pendingApply, setPendingApply] = useState<{ job: ApplyReviewJob; score: number | undefined } | null>(null);
+
+  // Hydrate the last saved result (paid tiers) so it shows for free on reopen.
+  useEffect(() => {
+    if (saved && !result) {
+      setResult(saved.result);
+      setFromSaved(true);
+    }
+  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openApplyReview = (jobId: string, title: string, company: string | undefined, compatibilityScore: number | undefined) => {
     if (!session?.user) {
@@ -213,7 +224,10 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         if (!alive()) return;
         // Internal platform jobs first (one-click apply + tracked status), then the
         // AI's external web suggestions.
-        setResult({ ...apiResult, opportunities: [...internal.opps, ...apiResult.opportunities] });
+        const merged: OpportunityResult = { ...apiResult, opportunities: [...internal.opps, ...apiResult.opportunities] };
+        setResult(merged);
+        setFromSaved(false);
+        persist(merged); // paid tiers: revisit free next time (no-op for free tiers)
         setInternalJobData(internal.meta);
         // FIX 2: clear any non-fatal side-error (e.g. fetchAppliedJobs) now that we
         // have a good result so the cards render.
@@ -237,7 +251,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     // FIX 1: use sessionUserId (primitive) instead of session (object) so that
     // token-refresh events that recreate the session object do not refire this
     // callback (and therefore the expensive AI search + double credit spend).
-  }, [resumeText, market, sessionUserId, fetchAppliedJobs, fetchInternalJobs, begin, end]);
+  }, [resumeText, market, sessionUserId, fetchAppliedJobs, fetchInternalJobs, persist, begin, end]);
 
   // Free platform-posting load only. The external AI search is credit-charging, so
   // it must be started by an explicit click instead of auto-running on page entry.
@@ -381,6 +395,13 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
 
   return (
     <div className="space-y-4 animate-fade-in">
+      <SavedResultBar
+        t={t}
+        canSave={canSave}
+        isSaved={fromSaved}
+        savedAt={saved?.savedAt ?? null}
+        onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+      />
       <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_opportunity_finder_results_title')}</h4>
 
       {activePrefs && (

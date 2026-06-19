@@ -1,4 +1,12 @@
 {
+  "tool_try_next": "Relancer",
+  "tool_saved_label": "Résultat enregistré",
+  "tool_saved_on": "Enregistré le {date}",
+  "tool_saved_just_now": "Enregistré dans votre compte",
+  "tool_saved_upgrade_hint": "Passez à un forfait payant pour enregistrer vos résultats",
+  "site_plan_js_essentials_f5": "Enregistrez et retrouvez vos résultats IA",
+  "site_plan_js_accelerator_f5": "Enregistrez et retrouvez vos résultats IA",
+  "site_plan_js_executive_f5": "Enregistrez et retrouvez vos résultats IA",
   "nav_features": "Nos outils",
   "nav_how_it_works": "Comment ça marche",
   "nav_pricing": "Tarifs",

@@ -4,8 +4,9 @@ import { PenLine } from 'lucide-react';
 import { generateCoverLetter } from '../../services/aiClient';
 import type { CoverLetter } from '../../types';
 import StagedLoader from '../StagedLoader';
-import { DownloadButtons } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
 import { useApiStatus } from '../../contexts/ApiStatusContext';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
 import type { AppSession as Session } from '../../lib/data';
@@ -58,6 +59,8 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CoverLetter | null>(null);
+  const { canSave, saved, persist } = useToolResults<CoverLetter>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [jobDescription, setJobDescription] = useState(initialInput);
   const [editableResult, setEditableResult] = useState('');
 
@@ -65,6 +68,9 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
   // Recent applications for the job-context selector
   const { applications } = useRecentApplications(session);
+
+  // Hydrate a previously-saved result (free for paid users on reopen).
+  useEffect(() => { if (saved && !result) { setResult(saved.result); setEditableResult(saved.result.letter); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Guard so the paid auto-generate fires at most once per (job, resume) input
   // set — resumeText loading in (a new object/length) must never re-charge a
@@ -102,6 +108,8 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
       const apiResult = await generateCoverLetter(resumeText, input, market);
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult);
       setEditableResult(apiResult.letter);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -245,6 +253,13 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
     return (
       <div className="space-y-4 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+        />
         <div className="flex justify-between items-center">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_cover_letter_results_title')}</h4>
           <DownloadButtons textContent={editableResult} baseFilename="cover_letter" />

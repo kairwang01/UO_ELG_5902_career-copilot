@@ -1,4 +1,12 @@
 {
+  "tool_try_next": "Tạo lại",
+  "tool_saved_label": "Kết quả đã lưu",
+  "tool_saved_on": "Đã lưu {date}",
+  "tool_saved_just_now": "Đã lưu vào tài khoản",
+  "tool_saved_upgrade_hint": "Nâng cấp để lưu kết quả",
+  "site_plan_js_essentials_f5": "Lưu và xem lại kết quả AI",
+  "site_plan_js_accelerator_f5": "Lưu và xem lại kết quả AI",
+  "site_plan_js_executive_f5": "Lưu và xem lại kết quả AI",
   "nav_features": "Tính năng",
   "nav_how_it_works": "Cách hoạt động",
   "nav_pricing": "Giá",

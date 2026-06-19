@@ -2,6 +2,7 @@
 import React from 'react';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
+import { ToolResultsProvider } from '../contexts/ToolResultsContext';
 import AgileCoach from './tools/AgileCoach';
 import CareerPathPlanner from './tools/CareerPathPlanner';
 import CoverLetterGenerator from './tools/CoverLetterGenerator';
@@ -49,6 +50,8 @@ const toolMap: { [key: string]: React.FC<any> } = {
 
 const ToolRunner: React.FC<ToolRunnerProps> = ({ tool, ...props }) => {
   const ActiveTool = toolMap[tool];
+  const uid = props.session?.user?.id ?? null;
+  const subscriptionStatus = props.profile?.subscription_status ?? null;
 
   if (!ActiveTool) {
       return (
@@ -68,7 +71,9 @@ const ToolRunner: React.FC<ToolRunnerProps> = ({ tool, ...props }) => {
 
   return (
     <div className="h-full animate-fade-in">
-        <ActiveTool {...props} tool={tool} />
+        <ToolResultsProvider toolKey={tool} uid={uid} subscriptionStatus={subscriptionStatus}>
+          <ActiveTool {...props} tool={tool} />
+        </ToolResultsProvider>
     </div>
   );
 };

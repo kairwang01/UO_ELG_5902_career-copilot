@@ -534,6 +534,21 @@ service cloud.firestore {
 
         allow delete: if isOwner(userId);
       }
+
+      // tool_results/{toolKey} — the candidate's latest saved AI-tool output,
+      // so a PAID user can revisit it for free next time instead of re-spending
+      // credits ("Try next" re-runs the tool). Owner-read; writes are gated to
+      // candidate paid plans — free users don't get saves. subscription_status
+      // is server-only/immutable from the client (pinned on the user update
+      // rule above), so this tier check can't be forged from the browser.
+      match /tool_results/{toolKey} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && get(/databases/$(database)/documents/users/$(userId)).data.subscription_status in ["essentials", "accelerator", "executive"]
+          && request.resource.data.tool_key is string
+          && request.resource.data.tool_key.size() <= 80;
+        allow delete: if isOwner(userId);
+      }
     }
 
     // ---- job_postings/{jobId} ---------------------------------------------

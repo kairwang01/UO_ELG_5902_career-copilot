@@ -1,4 +1,12 @@
 {
+  "tool_try_next": "再生成一次",
+  "tool_saved_label": "已保存的结果",
+  "tool_saved_on": "已于 {date} 保存",
+  "tool_saved_just_now": "已保存到你的账户",
+  "tool_saved_upgrade_hint": "升级后可保存并随时查看结果",
+  "site_plan_js_essentials_f5": "保存并随时回看 AI 结果",
+  "site_plan_js_accelerator_f5": "保存并随时回看 AI 结果",
+  "site_plan_js_executive_f5": "保存并随时回看 AI 结果",
   "browse_jobs_company_size": "{size} 人",
   "browse_jobs_founded": "成立于 {year}",
   "tool_english_pro_default_speaking_topic": "请谈谈你最近参与的一个项目。",

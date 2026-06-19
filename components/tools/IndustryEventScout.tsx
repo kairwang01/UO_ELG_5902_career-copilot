@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { findIndustryEvents } from '../../services/aiClient';
 import type { EventScoutResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
 
 // (b) sample constants
 const SAMPLE_FIELD = 'Artificial Intelligence';
@@ -27,9 +28,13 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EventScoutResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<EventScoutResult>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [field, setField] = useState('');
   const [location, setLocation] = useState('');
   const [activeFilter, setActiveFilter] = useState<EventFilter>('all');
+
+  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTool = async () => {
     if (!field.trim() || !location.trim()) {
@@ -42,6 +47,8 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
       const apiResult = await findIndustryEvents(field, location);
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -111,6 +118,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
 
     return (
       <div className="space-y-4 animate-fade-in">
+        <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
         {/* (d) RESULT ACTIONS — download + new search */}
         <div className="flex flex-wrap justify-between items-center gap-3">
           <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_event_scout_results_title').replace('{count}', String(filteredEvents.length))}</h4>
