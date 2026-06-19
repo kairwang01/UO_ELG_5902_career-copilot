@@ -1067,7 +1067,7 @@
   "org_founded_year": "Năm thành lập",
   "admin.role.super": "Super",
   "admin.role.admin": "Admin",
-  "admin.role.reviewer": "Reviewer",
+  "admin.role.reviewer": "Người duyệt",
   "admin.admins.title": "Quản lý admin",
   "admin.admins.subtitle": "Mời admin và reviewer. Chỉ dành cho Super. Mọi hành động được ghi nhật ký.",
   "admin.admins.invite_label": "Mời qua email",
