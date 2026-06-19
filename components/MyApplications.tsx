@@ -11,6 +11,7 @@ import {
   APPLICATION_PIPELINE_STAGES,
   APPLICATION_PROGRESS_GROUPS,
   applicationMatchesFilter,
+  getApplicationTimelineStageState,
   getApplicationProgressGroupIndex,
   getApplicationStatusGroup,
   getApplicationStatusIndex,
@@ -20,8 +21,11 @@ import {
   isApplicationRejectedStatus,
   isApplicationReviewEligible,
   normalizeApplicationStatus,
+  normalizeSkippedApplicationStatuses,
   type ApplicationFilterGroup,
+  type ApplicationPipelineStageStatus,
   type ApplicationPipelineStatus,
+  type ApplicationTimelineStageState,
   type ApplicationStatusGroup,
 } from '../lib/applicationPipeline';
 import {
@@ -40,6 +44,8 @@ interface ApplicationRow {
   compatibility_score?: number | null;
   // Candidate-facing note the employer attached to the latest status change.
   last_status_note?: string | null;
+  // Stages the employer explicitly skipped instead of completing.
+  skipped_statuses: ApplicationPipelineStageStatus[];
   // First time the employer opened this applicant's resume (anti-ghosting receipt).
   employer_viewed_at?: { toMillis?: () => number; toDate?: () => Date } | null;
 }
@@ -202,10 +208,11 @@ function sortLabel(sort: ApplicationSortKey, t: (k: string) => string): string {
 
 interface ProgressTimelineProps {
   status: ApplicationPipelineStatus;
+  skippedStatuses?: ApplicationPipelineStageStatus[];
   t: (k: string) => string;
 }
 
-type MainStageState = 'done' | 'current' | 'pending' | 'closed';
+type MainStageState = ApplicationTimelineStageState;
 
 const MAIN_STAGE_CLASSES: Record<MainStageState, {
   circle: string;
@@ -227,6 +234,11 @@ const MAIN_STAGE_CLASSES: Record<MainStageState, {
     label: 'text-slate-500 dark:text-slate-400',
     connector: 'border-t-2 border-dashed border-blue-100 dark:border-blue-950',
   },
+  skipped: {
+    circle: 'border border-dashed border-slate-300 bg-white text-slate-400 ring-4 ring-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:ring-slate-800',
+    label: 'text-slate-400 dark:text-slate-500',
+    connector: 'border-t-2 border-dashed border-slate-200 dark:border-slate-700',
+  },
   closed: {
     circle: 'bg-slate-200 text-slate-500 ring-4 ring-slate-100 dark:bg-slate-700 dark:text-slate-400 dark:ring-slate-800',
     label: 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500 dark:decoration-slate-700',
@@ -238,24 +250,34 @@ const SUB_STAGE_CLASSES: Record<MainStageState, string> = {
   done: 'bg-emerald-500 text-white dark:bg-emerald-400 dark:text-slate-950',
   current: 'bg-blue-600 text-white ring-4 ring-blue-100 dark:bg-blue-500 dark:ring-blue-950/70',
   pending: 'bg-blue-100 text-blue-300 dark:bg-blue-950/70 dark:text-blue-700',
+  skipped: 'border border-dashed border-slate-300 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500',
   closed: 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
 };
 
-const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, t }) => {
+const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, skippedStatuses = [], t }) => {
   const current = getApplicationStatusIndex(status);
   const isComplete = isApplicationHiredStatus(status);
   const isRejected = isApplicationRejectedStatus(status);
   const normalized = normalizeApplicationStatus(status);
+  const skippedSet = useMemo(() => new Set(skippedStatuses), [skippedStatuses]);
 
   return (
     <div className="mt-5 overflow-x-auto pb-2" aria-label={t('applications_timeline_label')}>
       <div className="min-w-0 rounded-lg bg-slate-50 px-4 py-5 dark:bg-slate-900/70 sm:min-w-[820px]">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-0">
           {APPLICATION_PROGRESS_GROUPS.map((group, groupIndex) => {
+            const firstIndex = getApplicationStatusIndex(group.statuses[0]);
             const lastIndex = getApplicationStatusIndex(group.statuses[group.statuses.length - 1]);
             const groupContainsCurrent = group.statuses.some((stageStatus) => stageStatus === normalized);
+            const groupWasFullySkipped =
+              current > lastIndex &&
+              lastIndex >= 0 &&
+              firstIndex >= 0 &&
+              group.statuses.every((stageStatus) => skippedSet.has(stageStatus));
             const groupState: MainStageState = isRejected
               ? 'closed'
+              : groupWasFullySkipped
+                ? 'skipped'
               : current > lastIndex || (isComplete && current >= lastIndex)
                 ? 'done'
                 : groupContainsCurrent
@@ -263,7 +285,7 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, t }) => {
                   : 'pending';
             const hasSubStages = group.statuses.length > 1;
             const groupClasses = MAIN_STAGE_CLASSES[groupState];
-            const connectorDone = !isRejected && current > lastIndex;
+            const connectorDone = !isRejected && groupState === 'done' && current > lastIndex;
 
             return (
               <React.Fragment key={group.id}>
@@ -273,7 +295,11 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, t }) => {
                   </p>
                   <div className="mt-2 flex justify-center">
                     <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${groupClasses.circle}`}>
-                      {groupState === 'done' ? <CheckCircle2 className="h-4 w-4" /> : groupIndex + 1}
+                      {groupState === 'done'
+                        ? <CheckCircle2 className="h-4 w-4" />
+                        : groupState === 'skipped'
+                          ? <span className="h-0.5 w-3 rounded-full bg-current" />
+                          : groupIndex + 1}
                     </span>
                   </div>
 
@@ -290,19 +316,13 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, t }) => {
                         />
                         {group.statuses.map((stageStatus) => {
                           const stage = APPLICATION_PIPELINE_STAGES.find((item) => item.status === stageStatus);
-                          const stageIndex = getApplicationStatusIndex(stageStatus);
-                          const stageState: MainStageState = isRejected
-                            ? 'closed'
-                            : stageIndex < current || (isComplete && stageIndex <= current)
-                              ? 'done'
-                              : stageIndex === current
-                                ? 'current'
-                                : 'pending';
+                          const stageState = getApplicationTimelineStageState(status, stageStatus, skippedStatuses);
 
                           return (
                             <div key={stageStatus} className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-2">
-                              <span className={`mt-1 h-3.5 w-3.5 rounded-full ${SUB_STAGE_CLASSES[stageState]}`}>
+                              <span className={`mt-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full ${SUB_STAGE_CLASSES[stageState]}`}>
                                 {stageState === 'done' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                {stageState === 'skipped' && <span className="h-0.5 w-2 rounded-full bg-current" />}
                               </span>
                               <span
                                 className={`text-xs leading-5 ${
@@ -310,6 +330,8 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, t }) => {
                                     ? 'font-semibold text-blue-700 dark:text-blue-300'
                                     : stageState === 'done'
                                       ? 'font-medium text-slate-600 dark:text-slate-300'
+                                      : stageState === 'skipped'
+                                        ? 'font-medium text-slate-400 dark:text-slate-500'
                                       : 'text-slate-400 dark:text-slate-500'
                                 }`}
                               >
@@ -317,6 +339,11 @@ const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, t }) => {
                                 {stage && 'optional' in stage && stage.optional && (
                                   <span className="ml-1 text-[10px] font-medium text-slate-400 dark:text-slate-500">
                                     {t('applications_stage_optional')}
+                                  </span>
+                                )}
+                                {stageState === 'skipped' && (
+                                  <span className="ml-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                                    {t('applicant_funnel_history_action_skip')}
                                   </span>
                                 )}
                               </span>
@@ -703,7 +730,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interview
         </button>
       </div>
 
-      {pipelineOpen && <ProgressTimeline status={app.status} t={t} />}
+      {pipelineOpen && <ProgressTimeline status={app.status} skippedStatuses={app.skipped_statuses} t={t} />}
 
       {canReview && app.employer_id && (
         <div className="mt-3 flex items-center justify-end">
@@ -896,6 +923,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
             application_date: data.application_date as ApplicationRow['application_date'],
             compatibility_score: typeof data.compatibility_score === 'number' ? data.compatibility_score : null,
             last_status_note: typeof data.last_status_note === 'string' ? data.last_status_note : null,
+            skipped_statuses: normalizeSkippedApplicationStatuses(data.skipped_statuses),
             employer_viewed_at: (data.employer_viewed_at ?? null) as ApplicationRow['employer_viewed_at'],
           } satisfies ApplicationRow;
         });

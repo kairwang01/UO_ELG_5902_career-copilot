@@ -90,10 +90,46 @@ describe('updateApplicationStatus callable', () => {
     expect(result.action).toBe('skip');
     expect(result.skippedStatuses).toEqual(['Group Interview', 'First Interview']);
 
+    const app = (await db.collection('job_applications').doc('app1').get()).data()!;
+    expect(app.status).toBe('Second Interview');
+    expect(app.skipped_statuses).toEqual(['Group Interview', 'First Interview']);
+
     const event = (await db.collection('application_status_events').where('application_id', '==', 'app1').get()).docs[0].data();
     expect(event.action).toBe('skip');
     expect(event.skipped_statuses).toEqual(['Group Interview', 'First Interview']);
     expect(event.reason).toMatch(/Phone screen/);
+  });
+
+  it('preserves skipped stages after later ordinary advances', async () => {
+    await seedApplication();
+
+    await updateApplicationStatusImpl('emp1', {
+      applicationId: 'app1',
+      action: 'skip',
+      status: 'Second Interview',
+      reason: 'Recruiter screen already covered the earlier interview signal.',
+    });
+    const result = await updateApplicationStatusImpl('emp1', {
+      applicationId: 'app1',
+      action: 'advance',
+      candidateNote: 'You are moving to the decision-maker interview.',
+    });
+
+    expect(result.status).toBe('Decision Maker Interview');
+    expect(result.action).toBe('advance');
+    expect(result.skippedStatuses).toEqual([]);
+
+    const app = (await db.collection('job_applications').doc('app1').get()).data()!;
+    expect(app.status).toBe('Decision Maker Interview');
+    expect(app.skipped_statuses).toEqual(['Group Interview', 'First Interview']);
+    expect(app.last_status_note).toBe('You are moving to the decision-maker interview.');
+
+    const events = await db
+      .collection('application_status_events')
+      .where('application_id', '==', 'app1')
+      .get();
+    expect(events.size).toBe(2);
+    expect(events.docs.map((doc) => doc.data().action).sort()).toEqual(['advance', 'skip']);
   });
 
   it('requires a reason when rejecting and keeps the internal reason out of the application doc', async () => {
@@ -123,6 +159,9 @@ describe('updateApplicationStatus callable', () => {
 
   it('requires a reason when reopening a rejected application', async () => {
     await seedApplication('Rejected');
+    await db.collection('job_applications').doc('app1').update({
+      skipped_statuses: ['Group Interview', 'First Interview'],
+    });
 
     await expect(updateApplicationStatusImpl('emp1', {
       applicationId: 'app1',
@@ -139,6 +178,7 @@ describe('updateApplicationStatus callable', () => {
     expect(result.action).toBe('reopen');
     const app = (await db.collection('job_applications').doc('app1').get()).data()!;
     expect(app.status).toBe('Applied');
+    expect(app.skipped_statuses).toEqual([]);
   });
 
   it('does not allow a signed application to be rejected through the normal reject action', async () => {

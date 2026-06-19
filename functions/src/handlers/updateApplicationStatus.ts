@@ -33,8 +33,12 @@ const KNOWN_STATUSES = [
 ] as const;
 
 type ApplicationStatus = (typeof KNOWN_STATUSES)[number];
+type PipelineApplicationStatus = Exclude<ApplicationStatus, "Rejected">;
 
 const KNOWN_STATUS_SET = new Set<string>(KNOWN_STATUSES);
+const PIPELINE_STATUSES = KNOWN_STATUSES.filter(
+  (status): status is PipelineApplicationStatus => status !== "Rejected",
+);
 const STATUS_ALIASES: Record<string, ApplicationStatus> = {
   applied: "Applied",
   apply: "Applied",
@@ -129,6 +133,34 @@ function skippedBetween(fromStatus: ApplicationStatus, toStatus: ApplicationStat
   const to = statusIndex(toStatus);
   if (from < 0 || to < 0 || to <= from + 1) return [];
   return KNOWN_STATUSES.slice(from + 1, to);
+}
+
+function normalizeSkippedStatuses(value: unknown): PipelineApplicationStatus[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<PipelineApplicationStatus>();
+  value.forEach((item) => {
+    const status = normalizeStatus(item);
+    if (status && status !== "Rejected" && statusIndex(status) >= 0) {
+      seen.add(status);
+    }
+  });
+  return PIPELINE_STATUSES.filter((status) => seen.has(status));
+}
+
+function mergeSkippedStatuses(
+  existingValue: unknown,
+  latestSkippedStatuses: readonly string[],
+  action: TransitionAction,
+): PipelineApplicationStatus[] {
+  if (action === "reopen") return [];
+  const seen = new Set<PipelineApplicationStatus>(normalizeSkippedStatuses(existingValue));
+  latestSkippedStatuses.forEach((item) => {
+    const status = normalizeStatus(item);
+    if (status && status !== "Rejected" && statusIndex(status) >= 0) {
+      seen.add(status);
+    }
+  });
+  return PIPELINE_STATUSES.filter((status) => seen.has(status));
 }
 
 function cleanAction(value: unknown): TransitionAction | null {
@@ -248,6 +280,7 @@ export async function updateApplicationStatusImpl(uid: string, rawData: unknown)
     const previousStatus = normalizeStatus(app.status) ?? "Applied";
     const transition = resolveTransition(previousStatus, data, reason);
     const { action, nextStatus, skippedStatuses } = transition;
+    const cumulativeSkippedStatuses = mergeSkippedStatuses(app.skipped_statuses, skippedStatuses, action);
     if (previousStatus === nextStatus) {
       return {
         applicationId,
@@ -267,7 +300,7 @@ export async function updateApplicationStatusImpl(uid: string, rawData: unknown)
       status: nextStatus,
       last_status_note: candidateNote || null,
       last_status_action: action,
-      skipped_statuses: skippedStatuses,
+      skipped_statuses: cumulativeSkippedStatuses,
       last_status_at: admin.firestore.FieldValue.serverTimestamp(),
     });
     tx.create(eventRef, {

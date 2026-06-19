@@ -76,6 +76,7 @@ export type ApplicationPipelineStatus =
   | 'Rejected';
 
 export type ApplicationPipelineStageStatus = (typeof APPLICATION_PIPELINE_STAGES)[number]['status'];
+export type ApplicationTimelineStageState = 'done' | 'current' | 'pending' | 'closed' | 'skipped';
 
 export type ApplicationProgressGroupId = 'applied' | 'interview' | 'offer' | 'signing';
 
@@ -201,6 +202,30 @@ export function normalizeApplicationStatus(status: unknown): ApplicationPipeline
   return STATUS_ALIASES[normalized] ?? 'Applied';
 }
 
+function normalizeKnownApplicationStageStatus(status: unknown): ApplicationPipelineStageStatus | null {
+  const value = typeof status === 'string' ? status.trim() : '';
+  if (!value) return null;
+
+  const direct = APPLICATION_PIPELINE_STAGES.find((stage) => stage.status === value);
+  if (direct) return direct.status;
+
+  const alias = STATUS_ALIASES[value.toLowerCase()];
+  if (!alias || alias === 'Rejected') return null;
+  return STAGE_BY_STATUS.has(alias) ? alias : null;
+}
+
+export function normalizeSkippedApplicationStatuses(value: unknown): ApplicationPipelineStageStatus[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<ApplicationPipelineStageStatus>();
+  value.forEach((item) => {
+    const normalized = normalizeKnownApplicationStageStatus(item);
+    if (normalized) seen.add(normalized);
+  });
+  return APPLICATION_PIPELINE_STAGES
+    .map((stage) => stage.status)
+    .filter((status): status is ApplicationPipelineStageStatus => seen.has(status));
+}
+
 export function getApplicationStatusGroup(status: unknown): ApplicationStatusGroup {
   const normalized = normalizeApplicationStatus(status);
   if (normalized === 'Rejected') return 'rejected';
@@ -210,6 +235,26 @@ export function getApplicationStatusGroup(status: unknown): ApplicationStatusGro
 export function getApplicationStatusIndex(status: unknown): number {
   const normalized = normalizeApplicationStatus(status);
   return APPLICATION_PIPELINE_STAGES.findIndex((stage) => stage.status === normalized);
+}
+
+export function getApplicationTimelineStageState(
+  applicationStatus: unknown,
+  stageStatus: unknown,
+  skippedStatuses: readonly ApplicationPipelineStageStatus[] = [],
+): ApplicationTimelineStageState {
+  const normalized = normalizeApplicationStatus(applicationStatus);
+  if (normalized === 'Rejected') return 'closed';
+
+  const current = getApplicationStatusIndex(normalized);
+  const stageIndex = getApplicationStatusIndex(stageStatus);
+  if (current < 0 || stageIndex < 0) return 'pending';
+
+  const stage = normalizeApplicationStatus(stageStatus);
+  if (stage !== 'Rejected' && skippedStatuses.includes(stage as ApplicationPipelineStageStatus)) return 'skipped';
+  if (isApplicationHiredStatus(normalized) && stageIndex <= current) return 'done';
+  if (stage === normalized) return 'current';
+  if (stageIndex < current) return 'done';
+  return 'pending';
 }
 
 export function getApplicationProgressGroupIndex(status: unknown): number {
