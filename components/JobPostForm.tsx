@@ -16,6 +16,14 @@ import type { InclusivitySuggestion, UserProfile } from '../types';
 import { saveJobPosting, type JobPosting } from '../lib/recruitingData';
 import { renderFormattedText } from './tools/ToolUtils';
 import { useModalBehavior } from '../hooks/useModalBehavior';
+import {
+    WORK_MODES,
+    EMPLOYMENT_TYPES,
+    EXPERIENCE_LEVELS,
+    workModeLabelKey,
+    employmentTypeLabelKey,
+    experienceLevelLabelKey,
+} from '../constants/jobPostingFields';
 
 interface JobPostFormProps {
     session: Session;
@@ -76,6 +84,29 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
     const [keyResponsibilities, setKeyResponsibilities] = useState('');
     const [jobDescription, setJobDescription] = useState('');
 
+    // Structured fields — role details
+    const [workMode, setWorkMode] = useState('');
+    const [employmentType, setEmploymentType] = useState('');
+    const [experienceLevel, setExperienceLevel] = useState('');
+    const [department, setDepartment] = useState('');
+    const [responsibilities, setResponsibilities] = useState('');
+    // Structured fields — requirements
+    const [requiredQualifications, setRequiredQualifications] = useState('');
+    const [niceToHaveQualifications, setNiceToHaveQualifications] = useState('');
+    const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
+    const [preferredSkills, setPreferredSkills] = useState<string[]>([]);
+    const [requiredSkillDraft, setRequiredSkillDraft] = useState('');
+    const [preferredSkillDraft, setPreferredSkillDraft] = useState('');
+    // Structured fields — compensation & logistics
+    const [visaSponsorship, setVisaSponsorship] = useState(false);
+    const [relocation, setRelocation] = useState(false);
+    const [languageRequirement, setLanguageRequirement] = useState('');
+    // Structured fields — hiring process
+    const [applicationDeadline, setApplicationDeadline] = useState('');
+    const [headcount, setHeadcount] = useState('');
+    const [interviewProcess, setInterviewProcess] = useState('');
+    const [campusNewGrad, setCampusNewGrad] = useState(false);
+
     // UI/Loading state
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -93,10 +124,29 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
     const hasLocation = location.trim().length > 0;
     const hasDescription = jobDescription.trim().length > 0;
     const hasSalary = salaryRange.trim().length > 0;
+    const hasWorkMode = workMode.trim().length > 0;
+    const hasEmploymentType = employmentType.trim().length > 0;
+    const hasExperienceLevel = experienceLevel.trim().length > 0;
+    const hasDepartment = department.trim().length > 0;
+    const hasResponsibilities = responsibilities.trim().length > 0;
+    const hasRequiredQualifications = requiredQualifications.trim().length > 0;
+    const hasRequiredSkills = requiredSkills.length > 0;
+    const hasApplicationDeadline = applicationDeadline.trim().length > 0;
+    const parsedHeadcount = Number(headcount);
+    const hasHeadcount = headcount.trim().length > 0 && Number.isFinite(parsedHeadcount) && parsedHeadcount >= 1;
     const readinessItems = [
         { label: t('job_form_check_title'), complete: hasTitle },
         { label: t('job_form_check_location'), complete: hasLocation },
+        { label: t('job_field_work_mode'), complete: hasWorkMode },
+        { label: t('job_field_employment_type'), complete: hasEmploymentType },
+        { label: t('job_field_experience_level'), complete: hasExperienceLevel },
+        { label: t('job_field_department'), complete: hasDepartment },
         { label: t('job_form_check_description'), complete: hasDescription },
+        { label: t('job_field_responsibilities'), complete: hasResponsibilities },
+        { label: t('job_field_required_qualifications'), complete: hasRequiredQualifications },
+        { label: t('job_field_required_skills'), complete: hasRequiredSkills },
+        { label: t('job_field_application_deadline'), complete: hasApplicationDeadline },
+        { label: t('job_field_headcount'), complete: hasHeadcount },
         { label: t('job_form_check_salary'), complete: hasSalary, optional: true },
     ];
     const completedReadinessItems = readinessItems.filter((item) => item.complete).length;
@@ -111,6 +161,23 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setLocation(existingJob.location || '');
             setSalaryRange(existingJob.salary_range || '');
             setJobDescription(existingJob.description || '');
+            // Structured fields — hydrate from the saved posting.
+            setWorkMode(existingJob.work_mode || '');
+            setEmploymentType(existingJob.employment_type || '');
+            setExperienceLevel(existingJob.experience_level || '');
+            setDepartment(existingJob.department || '');
+            setResponsibilities(existingJob.responsibilities || '');
+            setRequiredQualifications(existingJob.required_qualifications || '');
+            setNiceToHaveQualifications(existingJob.nice_to_have_qualifications || '');
+            setRequiredSkills(existingJob.required_skills || []);
+            setPreferredSkills(existingJob.preferred_skills || []);
+            setVisaSponsorship(!!existingJob.visa_sponsorship);
+            setRelocation(!!existingJob.relocation);
+            setLanguageRequirement(existingJob.language_requirement || '');
+            setApplicationDeadline(existingJob.application_deadline || '');
+            setHeadcount(existingJob.headcount ? String(existingJob.headcount) : '');
+            setInterviewProcess(existingJob.interview_process || '');
+            setCampusNewGrad(!!existingJob.campus_new_grad);
             // Key responsibilities are not saved, so they will be blank on edit.
         }
     }, [existingJob]);
@@ -120,7 +187,43 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             onClose();
         }
     };
-    
+
+    // Chip-input helpers for the skill arrays: add the trimmed draft on Enter (no
+    // duplicates), remove an individual chip, and clear the draft afterwards.
+    const addSkill = (
+        draft: string,
+        skills: string[],
+        setSkills: React.Dispatch<React.SetStateAction<string[]>>,
+        setDraft: React.Dispatch<React.SetStateAction<string>>,
+    ) => {
+        const value = draft.trim();
+        if (!value) return;
+        if (!skills.some((s) => s.toLowerCase() === value.toLowerCase())) {
+            setSkills([...skills, value]);
+        }
+        setDraft('');
+    };
+
+    const removeSkill = (
+        skill: string,
+        setSkills: React.Dispatch<React.SetStateAction<string[]>>,
+    ) => {
+        setSkills((prev) => prev.filter((s) => s !== skill));
+    };
+
+    const handleSkillKeyDown = (
+        e: React.KeyboardEvent<HTMLInputElement>,
+        draft: string,
+        skills: string[],
+        setSkills: React.Dispatch<React.SetStateAction<string[]>>,
+        setDraft: React.Dispatch<React.SetStateAction<string>>,
+    ) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            addSkill(draft, skills, setSkills, setDraft);
+        }
+    };
+
     const handleGenerateDescription = async () => {
         if (!jobTitle || !keyResponsibilities) {
             setError(t('job_form_error_generate_required'));
@@ -214,6 +317,23 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 location: location.trim(),
                 description: jobDescription.trim(),
                 salary_range: salaryRange.trim(),
+                // Structured fields — the server re-validates these (it is authoritative).
+                work_mode: workMode,
+                employment_type: employmentType,
+                experience_level: experienceLevel,
+                department: department.trim(),
+                responsibilities: responsibilities.trim(),
+                required_qualifications: requiredQualifications.trim(),
+                nice_to_have_qualifications: niceToHaveQualifications.trim(),
+                required_skills: requiredSkills,
+                preferred_skills: preferredSkills,
+                application_deadline: applicationDeadline,
+                headcount: headcount ? Number(headcount) : null,
+                visa_sponsorship: visaSponsorship,
+                relocation: relocation,
+                language_requirement: languageRequirement.trim(),
+                interview_process: interviewProcess.trim(),
+                campus_new_grad: campusNewGrad,
                 // Snapshot company name + context at create time; profile fields are
                 // trusted (read from server-provisioned user doc, not user input).
                 company_name: profile.company_name ?? null,
@@ -236,11 +356,54 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
 
     const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
     const inputClass = 'mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:ring-blue-900/40';
+    const sectionHeadingClass = 'text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400';
+    const checkboxRowClass = 'flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300';
+    const checkboxClass = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800';
     const secondaryButtonClass = 'inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700';
     const primaryButtonClass = 'inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400';
     const submitButtonLabel = loading
         ? (isEditing ? t('job_form_saving') : t('job_form_posting'))
         : (isEditing ? t('job_form_save_changes') : t('job_form_post_job'));
+
+    // Reusable chip/tag input for a skill array — type a skill + Enter to add a
+    // removable chip. Used for both required and preferred skills.
+    const renderSkillInput = (
+        id: string,
+        skills: string[],
+        setSkills: React.Dispatch<React.SetStateAction<string[]>>,
+        draft: string,
+        setDraft: React.Dispatch<React.SetStateAction<string>>,
+    ) => (
+        <div className="mt-1 rounded-lg border border-gray-300 bg-white px-2 py-2 shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-blue-900/40">
+            {skills.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                    {skills.map((skill) => (
+                        <span key={skill} className="inline-flex items-center gap-1 rounded-full bg-blue-50 py-1 pl-2.5 pr-1 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                            {skill}
+                            <button
+                                type="button"
+                                onClick={() => removeSkill(skill, setSkills)}
+                                className="rounded-full p-0.5 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                                aria-label={`${t('job_field_remove')}: ${skill}`}
+                            >
+                                <X className="h-3 w-3" aria-hidden="true" />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+            <input
+                type="text"
+                id={id}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => handleSkillKeyDown(e, draft, skills, setSkills, setDraft)}
+                onBlur={() => addSkill(draft, skills, setSkills, setDraft)}
+                placeholder={t('job_field_skills_placeholder')}
+                className="block w-full bg-transparent px-1 py-1 text-sm text-gray-900 focus:outline-none dark:text-gray-100 dark:placeholder:text-gray-500"
+            />
+        </div>
+    );
 
     const readinessCard = (
         <aside className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -286,16 +449,19 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label htmlFor="job-title" className={labelClass}>{t('job_form_title_label')}</label>
-                    <input type="text" id="job-title" value={jobTitle} onChange={e => setJobTitle(e.target.value)} required className={inputClass} />
+            <section className="space-y-3">
+                <h3 className={sectionHeadingClass}>{t('job_section_basic')}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="job-title" className={labelClass}>{t('job_form_title_label')}</label>
+                        <input type="text" id="job-title" value={jobTitle} onChange={e => setJobTitle(e.target.value)} required className={inputClass} />
+                    </div>
+                    <div>
+                        <label htmlFor="location" className={labelClass}>{t('job_form_location_label')}</label>
+                        <input type="text" id="location" value={location} onChange={e => setLocation(e.target.value)} placeholder={t('job_form_location_placeholder')} required className={inputClass} />
+                    </div>
                 </div>
-                <div>
-                    <label htmlFor="location" className={labelClass}>{t('job_form_location_label')}</label>
-                    <input type="text" id="location" value={location} onChange={e => setLocation(e.target.value)} placeholder={t('job_form_location_placeholder')} required className={inputClass} />
-                </div>
-            </div>
+            </section>
 
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3 dark:bg-blue-950/30 dark:border-blue-900/60">
                 <div>
@@ -346,25 +512,135 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 </div>
             </div>
 
-            <div>
-                <label htmlFor="salary" className={labelClass}>{t('job_form_salary_label')}</label>
-                <div className="mt-1 flex flex-col gap-2 sm:flex-row">
-                    <input type="text" id="salary" value={salaryRange} onChange={e => setSalaryRange(e.target.value)} placeholder={t('job_form_salary_placeholder')} className={inputClass} />
-                    <button type="button" onClick={handleAnalyzeSalary} disabled={isAiBusy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 sm:flex-shrink-0">
-                        {aiLoading === 'salary'
-                            ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                            : <LineChart className="h-4 w-4" aria-hidden="true" />}
-                        {aiLoading === 'salary' ? t('job_form_analyzing_short') : t('job_form_analyze_rate')}
-                    </button>
-                </div>
-                {salarySuggestion && (
-                    <div className="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200 dark:text-blue-100 dark:bg-blue-950/30 dark:border-blue-900/60">
-                        <p className="font-semibold">{t('job_form_salary_suggestion')}</p>
-                        <p><strong>{t('job_form_yearly_label')}:</strong> {salarySuggestion.yearly}</p>
-                        <p><strong>{t('job_form_monthly_label')}:</strong> {salarySuggestion.monthly}</p>
+            <section className="space-y-4 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <h3 className={sectionHeadingClass}>{t('job_section_role')}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label htmlFor="work-mode" className={labelClass}>{t('job_field_work_mode')}</label>
+                        <select id="work-mode" value={workMode} onChange={e => setWorkMode(e.target.value)} required className={inputClass}>
+                            <option value="">{t('job_field_select_placeholder')}</option>
+                            {WORK_MODES.map((v) => (
+                                <option key={v} value={v}>{t(workModeLabelKey(v))}</option>
+                            ))}
+                        </select>
                     </div>
-                )}
-            </div>
+                    <div>
+                        <label htmlFor="employment-type" className={labelClass}>{t('job_field_employment_type')}</label>
+                        <select id="employment-type" value={employmentType} onChange={e => setEmploymentType(e.target.value)} required className={inputClass}>
+                            <option value="">{t('job_field_select_placeholder')}</option>
+                            {EMPLOYMENT_TYPES.map((v) => (
+                                <option key={v} value={v}>{t(employmentTypeLabelKey(v))}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="experience-level" className={labelClass}>{t('job_field_experience_level')}</label>
+                        <select id="experience-level" value={experienceLevel} onChange={e => setExperienceLevel(e.target.value)} required className={inputClass}>
+                            <option value="">{t('job_field_select_placeholder')}</option>
+                            {EXPERIENCE_LEVELS.map((v) => (
+                                <option key={v} value={v}>{t(experienceLevelLabelKey(v))}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label htmlFor="department" className={labelClass}>{t('job_field_department')}</label>
+                    <input type="text" id="department" value={department} onChange={e => setDepartment(e.target.value)} required className={inputClass} />
+                </div>
+                <div>
+                    <label htmlFor="responsibilities" className={labelClass}>{t('job_field_responsibilities')}</label>
+                    <textarea id="responsibilities" value={responsibilities} onChange={e => setResponsibilities(e.target.value)} rows={4} required className={inputClass} />
+                </div>
+            </section>
+
+            <section className="space-y-4 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <h3 className={sectionHeadingClass}>{t('job_section_requirements')}</h3>
+                <div>
+                    <label htmlFor="required-qualifications" className={labelClass}>{t('job_field_required_qualifications')}</label>
+                    <textarea id="required-qualifications" value={requiredQualifications} onChange={e => setRequiredQualifications(e.target.value)} rows={4} required className={inputClass} />
+                </div>
+                <div>
+                    <label htmlFor="nice-to-have" className={labelClass}>
+                        {t('job_field_nice_to_have')} <span className="font-normal text-gray-400 dark:text-gray-500">{t('job_field_optional')}</span>
+                    </label>
+                    <textarea id="nice-to-have" value={niceToHaveQualifications} onChange={e => setNiceToHaveQualifications(e.target.value)} rows={3} className={inputClass} />
+                </div>
+                <div>
+                    <label htmlFor="required-skills" className={labelClass}>{t('job_field_required_skills')}</label>
+                    {renderSkillInput('required-skills', requiredSkills, setRequiredSkills, requiredSkillDraft, setRequiredSkillDraft)}
+                    <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{t('job_field_skills_hint')}</p>
+                </div>
+                <div>
+                    <label htmlFor="preferred-skills" className={labelClass}>
+                        {t('job_field_preferred_skills')} <span className="font-normal text-gray-400 dark:text-gray-500">{t('job_field_optional')}</span>
+                    </label>
+                    {renderSkillInput('preferred-skills', preferredSkills, setPreferredSkills, preferredSkillDraft, setPreferredSkillDraft)}
+                    <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{t('job_field_skills_hint')}</p>
+                </div>
+            </section>
+
+            <section className="space-y-4 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <h3 className={sectionHeadingClass}>{t('job_section_compensation')}</h3>
+                <div>
+                    <label htmlFor="salary" className={labelClass}>{t('job_form_salary_label')} <span className="font-normal text-gray-400 dark:text-gray-500">{t('job_field_optional')}</span></label>
+                    <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+                        <input type="text" id="salary" value={salaryRange} onChange={e => setSalaryRange(e.target.value)} placeholder={t('job_form_salary_placeholder')} className={inputClass} />
+                        <button type="button" onClick={handleAnalyzeSalary} disabled={isAiBusy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 sm:flex-shrink-0">
+                            {aiLoading === 'salary'
+                                ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                : <LineChart className="h-4 w-4" aria-hidden="true" />}
+                            {aiLoading === 'salary' ? t('job_form_analyzing_short') : t('job_form_analyze_rate')}
+                        </button>
+                    </div>
+                    {salarySuggestion && (
+                        <div className="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200 dark:text-blue-100 dark:bg-blue-950/30 dark:border-blue-900/60">
+                            <p className="font-semibold">{t('job_form_salary_suggestion')}</p>
+                            <p><strong>{t('job_form_yearly_label')}:</strong> {salarySuggestion.yearly}</p>
+                            <p><strong>{t('job_form_monthly_label')}:</strong> {salarySuggestion.monthly}</p>
+                        </div>
+                    )}
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                    <label className={checkboxRowClass}>
+                        <input type="checkbox" checked={visaSponsorship} onChange={e => setVisaSponsorship(e.target.checked)} className={checkboxClass} />
+                        {t('job_field_visa_sponsorship')}
+                    </label>
+                    <label className={checkboxRowClass}>
+                        <input type="checkbox" checked={relocation} onChange={e => setRelocation(e.target.checked)} className={checkboxClass} />
+                        {t('job_field_relocation')}
+                    </label>
+                </div>
+                <div>
+                    <label htmlFor="language-requirement" className={labelClass}>
+                        {t('job_field_language_requirement')} <span className="font-normal text-gray-400 dark:text-gray-500">{t('job_field_optional')}</span>
+                    </label>
+                    <input type="text" id="language-requirement" value={languageRequirement} onChange={e => setLanguageRequirement(e.target.value)} className={inputClass} />
+                </div>
+            </section>
+
+            <section className="space-y-4 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <h3 className={sectionHeadingClass}>{t('job_section_hiring')}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="application-deadline" className={labelClass}>{t('job_field_application_deadline')}</label>
+                        <input type="date" id="application-deadline" value={applicationDeadline} onChange={e => setApplicationDeadline(e.target.value)} required className={inputClass} />
+                    </div>
+                    <div>
+                        <label htmlFor="headcount" className={labelClass}>{t('job_field_headcount')}</label>
+                        <input type="number" id="headcount" min={1} value={headcount} onChange={e => setHeadcount(e.target.value)} required className={inputClass} />
+                    </div>
+                </div>
+                <div>
+                    <label htmlFor="interview-process" className={labelClass}>
+                        {t('job_field_interview_process')} <span className="font-normal text-gray-400 dark:text-gray-500">{t('job_field_optional')}</span>
+                    </label>
+                    <textarea id="interview-process" value={interviewProcess} onChange={e => setInterviewProcess(e.target.value)} rows={3} className={inputClass} />
+                </div>
+                <label className={checkboxRowClass}>
+                    <input type="checkbox" checked={campusNewGrad} onChange={e => setCampusNewGrad(e.target.checked)} className={checkboxClass} />
+                    {t('job_field_campus_new_grad')}
+                </label>
+            </section>
         </>
     );
 

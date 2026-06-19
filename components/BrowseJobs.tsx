@@ -35,6 +35,11 @@ import {
   useJobPreferences,
   type JobPreferences,
 } from '../hooks/useJobPreferences';
+import {
+  workModeLabelKey,
+  employmentTypeLabelKey,
+  experienceLevelLabelKey,
+} from '../constants/jobPostingFields';
 
 function reviewTierBadge(
   tier: 'hired' | 'offer' | 'interviewed',
@@ -1093,6 +1098,152 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                         {job.description}
                       </p>
                     )}
+
+                    {/* ── Structured posting fields ── rendered only when the
+                        employer filled them in (legacy postings skip every row). */}
+                    {(() => {
+                      const pills: React.ReactNode[] = [];
+                      if (job.work_mode) {
+                        pills.push(
+                          <span key="work_mode" className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            {t(workModeLabelKey(job.work_mode))}
+                          </span>,
+                        );
+                      }
+                      if (job.employment_type) {
+                        pills.push(
+                          <span key="employment_type" className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            {t(employmentTypeLabelKey(job.employment_type))}
+                          </span>,
+                        );
+                      }
+                      if (job.experience_level) {
+                        pills.push(
+                          <span key="experience_level" className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            {t(experienceLevelLabelKey(job.experience_level))}
+                          </span>,
+                        );
+                      }
+                      if (job.campus_new_grad) {
+                        pills.push(
+                          <span key="campus_new_grad" className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 dark:border-indigo-800/50 dark:bg-indigo-900/20 dark:text-indigo-300">
+                            {t('job_field_campus_new_grad')}
+                          </span>,
+                        );
+                      }
+
+                      const facts: Array<{ key: string; label: string; value: string }> = [];
+                      if (job.department) {
+                        facts.push({ key: 'department', label: t('job_field_department'), value: job.department });
+                      }
+                      if (job.application_deadline) {
+                        facts.push({ key: 'application_deadline', label: t('job_field_application_deadline'), value: job.application_deadline });
+                      }
+                      if (typeof job.headcount === 'number') {
+                        facts.push({ key: 'headcount', label: t('job_field_headcount'), value: String(job.headcount) });
+                      }
+                      if (job.language_requirement) {
+                        facts.push({ key: 'language_requirement', label: t('job_field_language_requirement'), value: job.language_requirement });
+                      }
+
+                      const blocks: Array<{ key: string; label: string; value: string }> = [];
+                      if (job.responsibilities) {
+                        blocks.push({ key: 'responsibilities', label: t('job_field_responsibilities'), value: job.responsibilities });
+                      }
+                      if (job.required_qualifications) {
+                        blocks.push({ key: 'required_qualifications', label: t('job_field_required_qualifications'), value: job.required_qualifications });
+                      }
+                      if (job.nice_to_have_qualifications) {
+                        blocks.push({ key: 'nice_to_have', label: t('job_field_nice_to_have'), value: job.nice_to_have_qualifications });
+                      }
+                      if (job.interview_process) {
+                        blocks.push({ key: 'interview_process', label: t('job_field_interview_process'), value: job.interview_process });
+                      }
+
+                      const skillRows: Array<{ key: string; label: string; skills: string[] }> = [];
+                      if (job.required_skills && job.required_skills.length > 0) {
+                        skillRows.push({ key: 'required_skills', label: t('job_field_required_skills'), skills: job.required_skills });
+                      }
+                      if (job.preferred_skills && job.preferred_skills.length > 0) {
+                        skillRows.push({ key: 'preferred_skills', label: t('job_field_preferred_skills'), skills: job.preferred_skills });
+                      }
+
+                      const notePills: React.ReactNode[] = [];
+                      if (job.visa_sponsorship) {
+                        notePills.push(
+                          <span key="visa_sponsorship" className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-300">
+                            {t('job_field_visa_sponsorship')}
+                          </span>,
+                        );
+                      }
+                      if (job.relocation) {
+                        notePills.push(
+                          <span key="relocation" className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-300">
+                            {t('job_field_relocation')}
+                          </span>,
+                        );
+                      }
+
+                      const hasAnything =
+                        pills.length > 0 ||
+                        facts.length > 0 ||
+                        blocks.length > 0 ||
+                        skillRows.length > 0 ||
+                        notePills.length > 0;
+                      if (!hasAnything) return null;
+
+                      return (
+                        <div className="mt-4 space-y-4">
+                          {(pills.length > 0 || notePills.length > 0) && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {pills}
+                              {notePills}
+                            </div>
+                          )}
+
+                          {facts.length > 0 && (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {facts.map((fact) => (
+                                <div key={fact.key} className="text-xs">
+                                  <span className="font-semibold text-slate-500 dark:text-slate-400">{fact.label}: </span>
+                                  <span className="text-slate-700 dark:text-slate-300">{fact.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {skillRows.map((row) => (
+                            <div key={row.key}>
+                              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {row.label}
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {row.skills.map((skill, idx) => (
+                                  <span
+                                    key={`${row.key}-${idx}`}
+                                    className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+                                  >
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+
+                          {blocks.map((block) => (
+                            <div key={block.key}>
+                              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {block.label}
+                              </p>
+                              <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line">
+                                {block.value}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
                     <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/70 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">

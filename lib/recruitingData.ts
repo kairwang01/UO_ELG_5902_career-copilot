@@ -25,6 +25,24 @@ export interface JobPosting {
   is_active: boolean;
   created_at: string;
   updated_at: string | null;
+  // Structured, server-validated fields (filterable / matchable / packet-ready).
+  // Optional because legacy postings predate them.
+  work_mode: string | null;
+  employment_type: string | null;
+  experience_level: string | null;
+  department: string | null;
+  responsibilities: string | null;
+  required_qualifications: string | null;
+  nice_to_have_qualifications: string | null;
+  required_skills: string[];
+  preferred_skills: string[];
+  application_deadline: string | null;
+  headcount: number | null;
+  visa_sponsorship: boolean;
+  relocation: boolean;
+  language_requirement: string | null;
+  interview_process: string | null;
+  campus_new_grad: boolean;
 }
 
 export interface JobPostingWithCount extends JobPosting {
@@ -44,10 +62,24 @@ export interface JobPostingPatch {
   location: string;
   description: string;
   salary_range: string;
-  company_name?: string | null;
-  company_size?: string | null;
-  industry?: string | null;
-  founded_year?: string | null;
+  // Structured fields the employer fills in the form. company_* are intentionally
+  // NOT here — the callable reads them from the employer's server-side profile.
+  work_mode?: string;
+  employment_type?: string;
+  experience_level?: string;
+  department?: string;
+  responsibilities?: string;
+  required_qualifications?: string;
+  nice_to_have_qualifications?: string;
+  required_skills?: string[];
+  preferred_skills?: string[];
+  application_deadline?: string;
+  headcount?: number | null;
+  visa_sponsorship?: boolean;
+  relocation?: boolean;
+  language_requirement?: string;
+  interview_process?: string;
+  campus_new_grad?: boolean;
 }
 
 const toIsoString = (value: unknown): string => {
@@ -78,6 +110,22 @@ const mapJobPosting = (id: string, data: DocumentData): JobPosting => ({
   is_active: data.is_active ?? true,
   created_at: toIsoString(data.created_at),
   updated_at: data.updated_at ? toIsoString(data.updated_at) : null,
+  work_mode: data.work_mode ?? null,
+  employment_type: data.employment_type ?? null,
+  experience_level: data.experience_level ?? null,
+  department: data.department ?? null,
+  responsibilities: data.responsibilities ?? null,
+  required_qualifications: data.required_qualifications ?? null,
+  nice_to_have_qualifications: data.nice_to_have_qualifications ?? null,
+  required_skills: Array.isArray(data.required_skills) ? data.required_skills.map(String) : [],
+  preferred_skills: Array.isArray(data.preferred_skills) ? data.preferred_skills.map(String) : [],
+  application_deadline: data.application_deadline ?? null,
+  headcount: typeof data.headcount === 'number' ? data.headcount : null,
+  visa_sponsorship: data.visa_sponsorship === true,
+  relocation: data.relocation === true,
+  language_requirement: data.language_requirement ?? null,
+  interview_process: data.interview_process ?? null,
+  campus_new_grad: data.campus_new_grad === true,
 });
 
 const mapApplication = (id: string, data: DocumentData): JobApplication => ({
@@ -140,11 +188,29 @@ export const saveJobPosting = async (
   patch: JobPostingPatch,
   existingJobId?: string,
 ): Promise<void> => {
+  // Forward content + structured fields; the callable validates and stores them.
+  // company_* are deliberately omitted (server reads them from the employer doc).
   const posting = {
     title: patch.title,
     location: patch.location,
     description: patch.description,
     salary_range: patch.salary_range,
+    work_mode: patch.work_mode,
+    employment_type: patch.employment_type,
+    experience_level: patch.experience_level,
+    department: patch.department,
+    responsibilities: patch.responsibilities,
+    required_qualifications: patch.required_qualifications,
+    nice_to_have_qualifications: patch.nice_to_have_qualifications,
+    required_skills: patch.required_skills,
+    preferred_skills: patch.preferred_skills,
+    application_deadline: patch.application_deadline,
+    headcount: patch.headcount,
+    visa_sponsorship: patch.visa_sponsorship,
+    relocation: patch.relocation,
+    language_requirement: patch.language_requirement,
+    interview_process: patch.interview_process,
+    campus_new_grad: patch.campus_new_grad,
   };
   if (existingJobId) {
     const fn = httpsCallable<{ jobId: string; posting: typeof posting }, { jobId: string }>(firebaseFunctions, 'updateJobPosting');
