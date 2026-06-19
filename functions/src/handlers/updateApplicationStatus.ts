@@ -81,8 +81,22 @@ const STATUS_ALIASES: Record<string, ApplicationStatus> = {
 interface UpdateApplicationStatusRequest {
   applicationId?: unknown;
   status?: unknown;
+  action?: unknown;
   reason?: unknown;
   candidateNote?: unknown;
+}
+
+const STATUS_INDEX = new Map<string, number>(
+  KNOWN_STATUSES.filter((status) => status !== "Rejected").map((status, index) => [status, index]),
+);
+
+const TRANSITION_ACTIONS = new Set(["advance", "skip", "reject", "reopen"]);
+type TransitionAction = "advance" | "skip" | "reject" | "reopen";
+
+interface ResolvedTransition {
+  action: TransitionAction;
+  nextStatus: ApplicationStatus;
+  skippedStatuses: string[];
 }
 
 function cleanText(value: unknown, maxLen: number): string {
@@ -100,18 +114,111 @@ function normalizeStatus(value: unknown): ApplicationStatus | null {
   return STATUS_ALIASES[raw] ?? STATUS_ALIASES[lower] ?? null;
 }
 
+function statusIndex(status: ApplicationStatus): number {
+  return STATUS_INDEX.get(status) ?? -1;
+}
+
+function getNextStatus(status: ApplicationStatus): ApplicationStatus | null {
+  const current = statusIndex(status);
+  if (current < 0 || current >= KNOWN_STATUSES.length - 2) return null;
+  return KNOWN_STATUSES[current + 1];
+}
+
+function skippedBetween(fromStatus: ApplicationStatus, toStatus: ApplicationStatus): string[] {
+  const from = statusIndex(fromStatus);
+  const to = statusIndex(toStatus);
+  if (from < 0 || to < 0 || to <= from + 1) return [];
+  return KNOWN_STATUSES.slice(from + 1, to);
+}
+
+function cleanAction(value: unknown): TransitionAction | null {
+  const action = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return TRANSITION_ACTIONS.has(action) ? (action as TransitionAction) : null;
+}
+
+function requireReason(action: TransitionAction, reason: string): void {
+  if ((action === "skip" || action === "reject" || action === "reopen") && !reason) {
+    throw new HttpsError("invalid-argument", "A reason is required for skip, reject, and reopen actions.");
+  }
+}
+
+function resolveTransition(previousStatus: ApplicationStatus, data: UpdateApplicationStatusRequest, reason: string): ResolvedTransition {
+  const requestedAction = cleanAction(data.action);
+  const requestedStatus = normalizeStatus(data.status);
+
+  const resolveWithAction = (action: TransitionAction): ResolvedTransition => {
+    if (action === "advance") {
+      if (previousStatus === "Rejected") {
+        throw new HttpsError("failed-precondition", "Rejected applications must be reopened before advancing.");
+      }
+      const next = getNextStatus(previousStatus);
+      if (!next) throw new HttpsError("failed-precondition", "This application is already at the final tracked stage.");
+      return { action, nextStatus: next, skippedStatuses: [] };
+    }
+
+    if (action === "reject") {
+      if (previousStatus === "Rejected") {
+        return { action, nextStatus: "Rejected", skippedStatuses: [] };
+      }
+      if (previousStatus === "Signed") {
+        throw new HttpsError("failed-precondition", "Signed applications are already at the final tracked stage.");
+      }
+      requireReason(action, reason);
+      return { action, nextStatus: "Rejected", skippedStatuses: [] };
+    }
+
+    if (action === "reopen") {
+      if (previousStatus !== "Rejected") {
+        throw new HttpsError("failed-precondition", "Only rejected applications can be reopened.");
+      }
+      const target = requestedStatus && requestedStatus !== "Rejected" ? requestedStatus : "Applied";
+      requireReason(action, reason);
+      return { action, nextStatus: target, skippedStatuses: [] };
+    }
+
+    if (previousStatus === "Rejected") {
+      throw new HttpsError("failed-precondition", "Rejected applications must be reopened before changing stages.");
+    }
+    if (!requestedStatus || requestedStatus === "Rejected") {
+      throw new HttpsError("invalid-argument", "A later stage is required when skipping.");
+    }
+    const from = statusIndex(previousStatus);
+    const to = statusIndex(requestedStatus);
+    if (from < 0 || to <= from + 1) {
+      throw new HttpsError("invalid-argument", "Skip actions must move to a later non-adjacent stage.");
+    }
+    requireReason(action, reason);
+    return { action, nextStatus: requestedStatus, skippedStatuses: skippedBetween(previousStatus, requestedStatus) };
+  };
+
+  if (requestedAction) return resolveWithAction(requestedAction);
+
+  // Backward-compatible path for clients that still send only `{ status }`.
+  if (!requestedStatus) throw new HttpsError("invalid-argument", "Unknown application status.");
+  if (previousStatus === requestedStatus) {
+    return { action: previousStatus === "Rejected" ? "reject" : "advance", nextStatus: requestedStatus, skippedStatuses: [] };
+  }
+  if (requestedStatus === "Rejected") return resolveWithAction("reject");
+  if (previousStatus === "Rejected") return resolveWithAction("reopen");
+  const from = statusIndex(previousStatus);
+  const to = statusIndex(requestedStatus);
+  if (to === from + 1) return { action: "advance", nextStatus: requestedStatus, skippedStatuses: [] };
+  if (to > from + 1) return resolveWithAction("skip");
+  throw new HttpsError("invalid-argument", "Application stages can only move forward, be rejected, or be reopened.");
+}
+
 export const updateApplicationStatusFunction = onCall({ invoker: "public" }, async (request) => {
-  const uid = requireAuth(request);
-  const data = (request.data ?? {}) as UpdateApplicationStatusRequest;
+  return updateApplicationStatusImpl(requireAuth(request), request.data ?? {});
+});
+
+// Core implementation exported for emulator integration tests. The onCall wrapper
+// above only extracts auth; every authorization and transition rule lives here.
+export async function updateApplicationStatusImpl(uid: string, rawData: unknown) {
+  const data = (rawData ?? {}) as UpdateApplicationStatusRequest;
 
   const applicationId = cleanText(data.applicationId, 256);
   if (!applicationId || applicationId.includes("/")) {
     throw new HttpsError("invalid-argument", "applicationId is required.");
-  }
-
-  const nextStatus = normalizeStatus(data.status);
-  if (!nextStatus) {
-    throw new HttpsError("invalid-argument", "Unknown application status.");
   }
 
   const reason = cleanText(data.reason, 500);
@@ -139,11 +246,15 @@ export const updateApplicationStatusFunction = onCall({ invoker: "public" }, asy
     }
 
     const previousStatus = normalizeStatus(app.status) ?? "Applied";
+    const transition = resolveTransition(previousStatus, data, reason);
+    const { action, nextStatus, skippedStatuses } = transition;
     if (previousStatus === nextStatus) {
       return {
         applicationId,
         previousStatus,
         status: nextStatus,
+        action,
+        skippedStatuses,
         eventId: null,
         changed: false,
       };
@@ -155,6 +266,9 @@ export const updateApplicationStatusFunction = onCall({ invoker: "public" }, asy
     tx.update(appRef, {
       status: nextStatus,
       last_status_note: candidateNote || null,
+      last_status_action: action,
+      skipped_statuses: skippedStatuses,
+      last_status_at: admin.firestore.FieldValue.serverTimestamp(),
     });
     tx.create(eventRef, {
       application_id: applicationId,
@@ -163,6 +277,8 @@ export const updateApplicationStatusFunction = onCall({ invoker: "public" }, asy
       employer_id: uid,
       from_status: previousStatus,
       to_status: nextStatus,
+      action,
+      skipped_statuses: skippedStatuses,
       actor_id: uid,
       actor_role: "employer",
       reason: reason || null,
@@ -174,8 +290,10 @@ export const updateApplicationStatusFunction = onCall({ invoker: "public" }, asy
       applicationId,
       previousStatus,
       status: nextStatus,
+      action,
+      skippedStatuses,
       eventId: eventRef.id,
       changed: true,
     };
   });
-});
+}

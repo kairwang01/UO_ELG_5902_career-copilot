@@ -29,6 +29,8 @@ import {
     getApplicantResumeFile,
     getApplicantResumeText,
     updateApplicationStatus,
+    type ApplicationStatusAction,
+    type ApplicationStatusHistoryEvent,
     type JobApplicant,
 } from '../services/aiClient';
 import { saveToShortlist } from '../lib/shortlistData';
@@ -41,10 +43,13 @@ import {
     APPLICATION_PIPELINE_STAGES,
     getApplicationStatusIndex,
     getApplicationStatusLabelKey,
+    getLaterApplicationPipelineStatuses,
     getNextApplicationPipelineStatus,
+    getSkippedApplicationStatuses,
     isApplicationRejectedStatus,
     normalizeApplicationStatus,
     type ApplicationPipelineStatus,
+    type ApplicationPipelineStageStatus,
 } from '../lib/applicationPipeline';
 import type { JobPosting } from '../lib/recruitingData';
 import { collectCandidateSkills, matchSkills } from '../lib/skillMatch';
@@ -420,20 +425,18 @@ function SelectField<T extends string>({
 
 interface StageControlProps {
     applicant: Applicant;
-    statusOptions: ApplicationPipelineStatus[];
     statusSavingId: string | null;
     getStatusLabel: (status: string) => string;
     onStatusChange: (
         applicant: Applicant,
         nextStatusValue: string,
-        meta?: { reason?: string; candidateNote?: string },
+        meta?: { action?: ApplicationStatusAction; reason?: string; candidateNote?: string },
     ) => Promise<boolean>;
     t: (key: string) => string;
 }
 
 const StageControl: React.FC<StageControlProps> = ({
     applicant,
-    statusOptions,
     statusSavingId,
     getStatusLabel,
     onStatusChange,
@@ -441,43 +444,43 @@ const StageControl: React.FC<StageControlProps> = ({
 }) => {
     const [reason, setReason] = useState('');
     const [candidateNote, setCandidateNote] = useState('');
+    const [skipTarget, setSkipTarget] = useState<ApplicationPipelineStageStatus | ''>('');
     const currentStatus = normalizeApplicationStatus(applicant.status);
     const nextStatus = getNextApplicationPipelineStatus(currentStatus);
+    const skipOptions = getLaterApplicationPipelineStatuses(currentStatus);
+    const skippedStatuses = skipTarget ? getSkippedApplicationStatuses(currentStatus, skipTarget) : [];
     const isSaving = statusSavingId === applicant.id;
-    const canAdvance = Boolean(nextStatus) && !isSaving && currentStatus !== 'Rejected';
+    const isRejected = currentStatus === 'Rejected';
+    const isFinalSigned = currentStatus === 'Signed';
+    const canAdvance = Boolean(nextStatus) && !isSaving && !isRejected;
+    const reasonTrimmed = reason.trim();
+    const canSkip = Boolean(skipTarget) && !isSaving && !isRejected && reasonTrimmed.length > 0;
+    const canReject = !isSaving && !isRejected && !isFinalSigned && reasonTrimmed.length > 0;
+    const canReopen = !isSaving && isRejected && reasonTrimmed.length > 0;
 
-    const submitStatusChange = async (targetStatus: string) => {
+    const submitStatusChange = async (targetStatus: string, action: ApplicationStatusAction) => {
         if (targetStatus === currentStatus || isSaving) return;
         const ok = await onStatusChange(applicant, targetStatus, {
+            action,
             reason,
             candidateNote,
         });
         if (ok) {
             setReason('');
             setCandidateNote('');
+            setSkipTarget('');
         }
     };
 
     const handleAdvance = () => {
         if (!nextStatus || isSaving) return;
-        void submitStatusChange(nextStatus);
+        void submitStatusChange(nextStatus, 'advance');
     };
 
     return (
         <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                <SelectField<ApplicationPipelineStatus>
-                    id={`applicant-stage-${applicant.id}`}
-                    label={t('applicant_funnel_stage_control_label')}
-                    value={currentStatus}
-                    onChange={(value) => void submitStatusChange(value)}
-                    disabled={isSaving}
-                >
-                    {statusOptions.map(status => (
-                        <option key={status} value={status}>{getStatusLabel(status)}</option>
-                    ))}
-                </SelectField>
-
+            <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     onClick={handleAdvance}
@@ -489,6 +492,62 @@ const StageControl: React.FC<StageControlProps> = ({
                         ? formatTranslation(t('applicant_funnel_advance_to'), { status: getStatusLabel(nextStatus) })
                         : t('applicant_funnel_stage_final')}
                 </button>
+                    {!isRejected ? (
+                        <button
+                            type="button"
+                            onClick={() => void submitStatusChange('Rejected', 'reject')}
+                            disabled={!canReject}
+                            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-rose-900/60 dark:bg-gray-900 dark:text-rose-300 dark:hover:bg-rose-950/20 dark:disabled:border-slate-800 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
+                        >
+                            <X className="h-4 w-4" />
+                            {t('applicant_funnel_reject_action')}
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => void submitStatusChange('Applied', 'reopen')}
+                            disabled={!canReopen}
+                            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-emerald-900/60 dark:bg-gray-900 dark:text-emerald-300 dark:hover:bg-emerald-950/20 dark:disabled:border-slate-800 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
+                        >
+                            <RotateCcw className="h-4 w-4" />
+                            {t('applicant_funnel_reopen_action')}
+                        </button>
+                    )}
+                </div>
+                {!isRejected && skipOptions.length > 0 && (
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                        <SelectField<ApplicationPipelineStageStatus | ''>
+                            id={`applicant-skip-${applicant.id}`}
+                            label={t('applicant_funnel_skip_target_label')}
+                            value={skipTarget}
+                            onChange={setSkipTarget}
+                            disabled={isSaving}
+                        >
+                            <option value="">{t('applicant_funnel_skip_target_placeholder')}</option>
+                            {skipOptions.map(status => (
+                                <option key={status} value={status}>{getStatusLabel(status)}</option>
+                            ))}
+                        </SelectField>
+                        <button
+                            type="button"
+                            onClick={() => skipTarget && void submitStatusChange(skipTarget, 'skip')}
+                            disabled={!canSkip}
+                            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-blue-900/60 dark:bg-gray-900 dark:text-blue-300 dark:hover:bg-blue-950/20 dark:disabled:border-slate-800 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
+                        >
+                            <ArrowRight className="h-4 w-4" />
+                            {skipTarget
+                                ? formatTranslation(t('applicant_funnel_skip_to'), { status: getStatusLabel(skipTarget) })
+                                : t('applicant_funnel_skip_action')}
+                        </button>
+                        {skippedStatuses.length > 0 && (
+                            <p className="text-xs leading-5 text-blue-800/80 dark:text-blue-200/80 md:col-span-2">
+                                {formatTranslation(t('applicant_funnel_skip_preview'), {
+                                    stages: skippedStatuses.map(getStatusLabel).join(', '),
+                                })}
+                            </p>
+                        )}
+                    </div>
+                )}
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <label className="space-y-1 text-xs font-medium text-blue-900 dark:text-blue-100">
@@ -499,7 +558,7 @@ const StageControl: React.FC<StageControlProps> = ({
                         onChange={(event) => setReason(event.target.value)}
                         disabled={isSaving}
                         maxLength={500}
-                        placeholder={t('applicant_funnel_status_reason_placeholder')}
+                        placeholder={isRejected ? t('applicant_funnel_reopen_reason_placeholder') : t('applicant_funnel_status_reason_placeholder')}
                         className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-gray-800 transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-blue-900/60 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:disabled:bg-slate-900"
                     />
                 </label>
@@ -519,10 +578,88 @@ const StageControl: React.FC<StageControlProps> = ({
             <p className="mt-2 text-xs leading-5 text-blue-800/80 dark:text-blue-200/80">
                 {isSaving
                     ? t('applicant_funnel_status_updating')
-                    : nextStatus
-                        ? t('applicant_funnel_stage_control_helper')
-                        : t('applicant_funnel_stage_final_helper')}
+                    : isRejected
+                        ? t('applicant_funnel_reopen_helper')
+                        : nextStatus
+                            ? t('applicant_funnel_stage_control_helper')
+                            : t('applicant_funnel_stage_final_helper')}
             </p>
+        </div>
+    );
+};
+
+const StatusHistory: React.FC<{
+    history: ApplicationStatusHistoryEvent[] | undefined;
+    getStatusLabel: (status: string) => string;
+    t: (key: string) => string;
+}> = ({ history, getStatusLabel, t }) => {
+    const rows = history ?? [];
+    const actionLabel = (action: string | null): string => {
+        switch (action) {
+            case 'advance': return t('applicant_funnel_history_action_advance');
+            case 'skip': return t('applicant_funnel_history_action_skip');
+            case 'reject': return t('applicant_funnel_history_action_reject');
+            case 'reopen': return t('applicant_funnel_history_action_reopen');
+            default: return t('applicant_funnel_history_action_update');
+        }
+    };
+    const formatEventDate = (value: string | null): string => {
+        if (!value) return t('applicant_funnel_history_pending_time');
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return t('applicant_funnel_history_pending_time');
+        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">{t('applicant_funnel_history_title')}</h4>
+                    <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{t('applicant_funnel_history_desc')}</p>
+                </div>
+                <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+            </div>
+            {rows.length === 0 ? (
+                <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500 dark:bg-gray-900/70 dark:text-gray-400">
+                    {t('applicant_funnel_history_empty')}
+                </p>
+            ) : (
+                <ol className="mt-3 space-y-3">
+                    {rows.map((event, index) => (
+                        <li key={event.id ?? `${event.from_status}-${event.to_status}-${index}`} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 dark:border-gray-700/70 dark:bg-gray-900/70">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">
+                                    {actionLabel(event.action)}
+                                </span>
+                                <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500">{formatEventDate(event.created_at)}</span>
+                            </div>
+                            <p className="mt-2 text-sm font-medium text-gray-800 dark:text-gray-100">
+                                {formatTranslation(t('applicant_funnel_history_from_to'), {
+                                    from: getStatusLabel(event.from_status),
+                                    to: getStatusLabel(event.to_status),
+                                })}
+                            </p>
+                            {event.skipped_statuses.length > 0 && (
+                                <p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">
+                                    {formatTranslation(t('applicant_funnel_history_skipped'), {
+                                        stages: event.skipped_statuses.map(getStatusLabel).join(', '),
+                                    })}
+                                </p>
+                            )}
+                            {event.reason && (
+                                <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">
+                                    <span className="font-semibold">{t('applicant_funnel_history_reason_label')} </span>{event.reason}
+                                </p>
+                            )}
+                            {event.candidate_note && (
+                                <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                                    <span className="font-semibold">{t('applicant_funnel_history_candidate_note_label')} </span>{event.candidate_note}
+                                </p>
+                            )}
+                        </li>
+                    ))}
+                </ol>
+            )}
         </div>
     );
 };
@@ -927,7 +1064,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     const handleStatusChange = useCallback(async (
         applicant: Applicant,
         nextStatusValue: string,
-        meta?: { reason?: string; candidateNote?: string },
+        meta?: { action?: ApplicationStatusAction; reason?: string; candidateNote?: string },
     ): Promise<boolean> => {
         const nextStatus = normalizeApplicationStatus(nextStatusValue);
         if (normalizeApplicationStatus(applicant.status) === nextStatus) return true;
@@ -944,12 +1081,32 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         );
 
         try {
-            await updateApplicationStatus(
+            const result = await updateApplicationStatus(
                 applicant.id,
                 nextStatus,
                 meta?.reason ?? '',
                 meta?.candidateNote ?? '',
+                meta?.action,
             );
+            if (result.changed) {
+                const optimisticEvent: ApplicationStatusHistoryEvent = {
+                    id: result.eventId,
+                    action: result.action,
+                    from_status: result.previousStatus,
+                    to_status: result.status,
+                    reason: meta?.reason?.trim() || null,
+                    candidate_note: meta?.candidateNote?.trim() || null,
+                    skipped_statuses: result.skippedStatuses ?? [],
+                    created_at: new Date().toISOString(),
+                };
+                const appendHistory = (entry: Applicant): Applicant => (
+                    entry.id === applicant.id
+                        ? { ...entry, status: result.status, status_history: [optimisticEvent, ...(entry.status_history ?? [])] }
+                        : entry
+                );
+                setApplicants((current) => current.map(appendHistory));
+                setSelectedApplicant((current) => current?.id === applicant.id ? appendHistory(current) : current);
+            }
             return true;
         } catch {
             setApplicants(previousApplicants);
@@ -1362,7 +1519,6 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                 </div>
                                 <StageControl
                                     applicant={selectedApplicant}
-                                    statusOptions={statusOptions}
                                     statusSavingId={statusSavingId}
                                     getStatusLabel={getStatusLabel}
                                     onStatusChange={handleStatusChange}
@@ -1376,6 +1532,8 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
 
                             <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
+
+                            <StatusHistory history={selectedApplicant.status_history} getStatusLabel={getStatusLabel} t={t} />
 
                             {selectedRecommendation && RecommendationIcon && (
                                 <div className={`rounded-xl border p-4 ${RECOMMENDATION_TONE_CLASS[selectedRecommendation.tone]}`}>
@@ -1426,6 +1584,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
 
                             <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
+                            <StatusHistory history={selectedApplicant.status_history} getStatusLabel={getStatusLabel} t={t} />
                             <div className="mx-auto max-w-sm rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
                                 <FileWarning className="mx-auto h-10 w-10 text-amber-500" />
                                 <p className="mt-3 font-semibold text-gray-700 dark:text-gray-200">
@@ -1456,7 +1615,6 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                 <div className="text-left">
                                     <StageControl
                                         applicant={selectedApplicant}
-                                        statusOptions={statusOptions}
                                         statusSavingId={statusSavingId}
                                         getStatusLabel={getStatusLabel}
                                         onStatusChange={handleStatusChange}

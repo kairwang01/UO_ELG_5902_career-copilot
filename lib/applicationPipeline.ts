@@ -226,6 +226,20 @@ export function getNextApplicationPipelineStatus(status: unknown): ApplicationPi
   return APPLICATION_PIPELINE_STAGES[current + 1].status;
 }
 
+export function getLaterApplicationPipelineStatuses(status: unknown, options: { includeNext?: boolean } = {}): ApplicationPipelineStageStatus[] {
+  const current = getApplicationStatusIndex(status);
+  if (current < 0) return [];
+  const start = current + (options.includeNext ? 1 : 2);
+  return APPLICATION_PIPELINE_STAGES.slice(start).map((stage) => stage.status);
+}
+
+export function getSkippedApplicationStatuses(fromStatus: unknown, toStatus: unknown): ApplicationPipelineStageStatus[] {
+  const from = getApplicationStatusIndex(fromStatus);
+  const to = getApplicationStatusIndex(toStatus);
+  if (from < 0 || to < 0 || to <= from + 1) return [];
+  return APPLICATION_PIPELINE_STAGES.slice(from + 1, to).map((stage) => stage.status);
+}
+
 export function getApplicationStatusLabelKey(status: unknown): string {
   const normalized = normalizeApplicationStatus(status);
   if (normalized === 'Rejected') return 'applications_status_rejected';

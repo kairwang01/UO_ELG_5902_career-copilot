@@ -314,6 +314,7 @@ export interface JobApplicant {
   potentialGaps: string[];
   suggestedQuestions: string[];
   talent_profile: TalentProfile | null;
+  status_history: ApplicationStatusHistoryEvent[];
 }
 
 export interface ListJobApplicantsResult {
@@ -324,8 +325,23 @@ export interface UpdateApplicationStatusResult {
   applicationId: string;
   previousStatus: string;
   status: string;
+  action: ApplicationStatusAction;
+  skippedStatuses: string[];
   eventId: string | null;
   changed: boolean;
+}
+
+export type ApplicationStatusAction = 'advance' | 'skip' | 'reject' | 'reopen';
+
+export interface ApplicationStatusHistoryEvent {
+  id: string | null;
+  action: string | null;
+  from_status: string;
+  to_status: string;
+  reason: string | null;
+  candidate_note: string | null;
+  skipped_statuses: string[];
+  created_at: string | null;
 }
 
 /**
@@ -345,13 +361,14 @@ export const updateApplicationStatus = (
   status: string,
   reason = '',
   candidateNote = '',
+  action?: ApplicationStatusAction,
 ): Promise<UpdateApplicationStatusResult> =>
   callDedicated(async () => {
     const fn = httpsCallable<
-      { applicationId: string; status: string; reason?: string; candidateNote?: string },
+      { applicationId: string; status: string; reason?: string; candidateNote?: string; action?: ApplicationStatusAction },
       UpdateApplicationStatusResult
     >(firebaseFunctions, 'updateApplicationStatus', { timeout: 60_000 });
-    const res = await fn({ applicationId, status, reason, candidateNote });
+    const res = await fn({ applicationId, status, reason, candidateNote, action });
     return res.data;
   });
 
