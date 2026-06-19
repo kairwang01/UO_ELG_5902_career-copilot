@@ -77,10 +77,15 @@ export const useLocalization = (initialLanguage?: string) => {
         let isMounted = true;
         const fetchTranslations = async () => {
             setIsLoaded(false);
-            const loadedTranslations = await getTranslations(language);
-            if (isMounted) {
-                setTranslations(loadedTranslations);
-                setIsLoaded(true);
+            try {
+                const loadedTranslations = await getTranslations(language);
+                if (isMounted) setTranslations(loadedTranslations);
+            } catch {
+                // Non-fatal: the English fallback dict + key fallback still render.
+                // Crucially, isLoaded MUST still settle below — otherwise every gate
+                // that waits on it (the workspace/portal loading spinner) freezes forever.
+            } finally {
+                if (isMounted) setIsLoaded(true);
             }
         };
         fetchTranslations();
