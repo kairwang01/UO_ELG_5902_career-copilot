@@ -6,6 +6,7 @@ import { SiteMobileNav } from './SiteMobileNav';
 import { SiteLanguageSwitcher } from './SiteLanguageSwitcher';
 import { useSiteSession } from '../hooks/useSiteSession';
 import BrandLogo from '../../components/BrandLogo';
+import { businessPortalNavPath } from '../../lib/access/navigationDecisions';
 
 export const SiteHeader: React.FC = () => {
   const { pathname } = useLocation();
@@ -14,6 +15,7 @@ export const SiteHeader: React.FC = () => {
   const { session, isAdmin, isBusiness } = useSiteSession();
   const workspaceHref = SITE_ROUTES.workspace;
   const workspaceLabel = t('site_nav_workspace');
+  const businessHref = businessPortalNavPath(isBusiness);
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : `${SITE_ROUTES.workspace}?auth=signup`;
@@ -79,14 +81,14 @@ export const SiteHeader: React.FC = () => {
             <>
               {isBusiness ? (
                 <Link
-                  to={SITE_ROUTES.portal}
+                  to={businessHref}
                   className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
                 >
                   {t('site_nav_business_portal')}
                 </Link>
               ) : (
                 <Link
-                  to={SITE_ROUTES.employers}
+                  to={businessHref}
                   className="hidden sm:inline-flex min-h-[38px] items-center text-sm font-medium text-[var(--site-text-muted)] hover:text-[var(--site-text)] whitespace-nowrap"
                 >
                   {t('site_nav_join_business')}

@@ -13,6 +13,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { useSiteSession } from '../hooks/useSiteSession';
+import { signedInHomeRedirectPath } from '../../lib/access/navigationDecisions';
 
 export const JobseekerHomePage: React.FC = () => {
   const { t } = useMarketingI18n();
@@ -24,8 +25,14 @@ export const JobseekerHomePage: React.FC = () => {
   // workspace "home" button passes ?home=1 to explicitly VIEW the public homepage,
   // so that path must not redirect (otherwise "return to homepage" bounces back).
   const forceHomeView = new URLSearchParams(search).get('home') === '1';
-  if (ready && session && !forceHomeView) {
-    return <Navigate to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace} replace />;
+  const redirectPath = signedInHomeRedirectPath({
+    ready,
+    hasSession: Boolean(session),
+    forceHomeView,
+    isBusiness,
+  });
+  if (redirectPath) {
+    return <Navigate to={redirectPath} replace />;
   }
   const proofPoints = [
     t('site_tool_resume_report'),

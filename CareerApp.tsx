@@ -50,6 +50,7 @@ import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import WorkspaceTour from './components/onboarding/WorkspaceTour';
 import { isOnboardingDue, isTourDone, loadBirthdayLocal, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
 import { hasBusinessPortalAccess, normalizeBusinessSubscriptionStatus } from './lib/access/businessAccess';
+import { decideWorkspaceShell } from './lib/access/navigationDecisions';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -202,7 +203,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // Admin authority is handled by the dedicated /admin route. It must not
   // override the user's product role here: admin-candidates still need the
   // candidate workspace, and admin-employers still need the hiring portal.
-  const isKnownWorkspaceRole = isCandidate || isEmployer || profileRole === 'agency';
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
   useModalBehavior(closeMobileNav, isMobileNavOpen);
 
@@ -1414,11 +1414,20 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     return renderAppEntry();
   };
 
-  const isWorkspaceSessionLoading = Boolean(session && (!isProfileLoaded || !isLangLoaded));
-  const canShowWorkspaceShell = Boolean(session && !showHomePageOverride && view !== 'business' && isProfileLoaded && isLangLoaded);
-  const showCandidateShell = canShowWorkspaceShell && isCandidate && !isPortalEntry;
-  const showEmployerShell = canShowWorkspaceShell && isEmployer && isPortalEntry;
-  const showUnsupportedRole = canShowWorkspaceShell && !isKnownWorkspaceRole;
+  const workspaceShell = decideWorkspaceShell({
+    entry,
+    hasSession: Boolean(session),
+    profileLoaded: isProfileLoaded,
+    languageLoaded: isLangLoaded,
+    showHomePageOverride,
+    currentView: view,
+    role: profileRole,
+    subscriptionStatus: profile?.subscription_status,
+  });
+  const isWorkspaceSessionLoading = workspaceShell === 'loading';
+  const showCandidateShell = workspaceShell === 'candidate';
+  const showEmployerShell = workspaceShell === 'employer';
+  const showUnsupportedRole = workspaceShell === 'unsupported';
   const canUseCareerCoach = Boolean(session && isLangLoaded && !isWorkspaceSessionLoading);
 
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;

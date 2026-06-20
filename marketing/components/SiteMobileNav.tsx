@@ -4,6 +4,7 @@ import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { useSiteSession } from '../hooks/useSiteSession';
 import { SiteLanguageSwitcher } from './SiteLanguageSwitcher';
+import { businessPortalNavPath } from '../../lib/access/navigationDecisions';
 
 export const SiteMobileNav: React.FC = () => {
   const [open, setOpen] = useState(false);
@@ -13,6 +14,7 @@ export const SiteMobileNav: React.FC = () => {
   const { session, isAdmin, isBusiness } = useSiteSession();
   const workspaceHref = SITE_ROUTES.workspace;
   const workspaceLabel = t('site_nav_workspace');
+  const businessHref = businessPortalNavPath(isBusiness);
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : `${SITE_ROUTES.workspace}?auth=signup`;
@@ -82,7 +84,7 @@ export const SiteMobileNav: React.FC = () => {
           {session ? (
             <>
               <Link
-                to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.employers}
+                to={businessHref}
                 className={linkClass}
                 onClick={() => setOpen(false)}
               >
