@@ -19,7 +19,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
-import { deductCredits, refundCredits } from "../credits/deductCredits";
+import { deductCredits, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
 
@@ -95,7 +95,7 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
     throw new HttpsError("invalid-argument", "Request payload is too large.");
   }
 
-  // Charge BEFORE the model call (atomic, server-side). Free helpers skip this.
+  // Charge BEFORE the model call (atomic, server-side).
   const cost = spec.creditKey ? TOOL_CREDIT_COSTS[spec.creditKey] : 0;
   let charged = false;
   if (spec.creditKey) {
@@ -104,6 +104,14 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
       throw new HttpsError("already-exists", "This AI request was already submitted. Please wait for the current result.");
     }
     charged = deduction.charged;
+  } else {
+    // Free helper: no credit charge, but still enforce the free-tier daily run cap
+    // and record the run (credit_cost 0) so every AI call is metered — closes the
+    // unbounded free-LLM faucet where creditKey:null tools bypassed all quotas.
+    const run = await recordFreeToolRun(uid, tool, { requestId });
+    if (run.duplicate) {
+      throw new HttpsError("already-exists", "This AI request was already submitted. Please wait for the current result.");
+    }
   }
 
   try {

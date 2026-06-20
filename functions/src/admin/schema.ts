@@ -146,7 +146,8 @@ export interface UsageEventDoc {
   uid: string;
   tool: string;
   credit_cost: number;
-  status: "deducted" | "refunded";
+  // "free" = a $0 helper run, metered for the daily run cap but never charged.
+  status: "deducted" | "refunded" | "free";
   day_key?: string;
   request_id?: string | null;
   balance_after?: number | null;

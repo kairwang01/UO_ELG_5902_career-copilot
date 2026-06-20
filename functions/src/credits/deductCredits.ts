@@ -229,6 +229,70 @@ export async function deductCredits(
   );
 }
 
+export interface RecordFreeRunResult {
+  counted: boolean;
+  duplicate: boolean;
+}
+
+/**
+ * Meters a FREE AI tool run (credit_cost 0). Free helpers (creditKey:null in the tool
+ * registry) don't deduct credits, but they must still (a) count toward the free-tier
+ * daily run cap — otherwise they are an unbounded free-LLM faucet — and (b) leave a
+ * usage event + counter so ALL AI usage is observable. Mirrors deductCredits'
+ * idempotency (same uid+requestId records the run at most once) without touching the
+ * credit balance or the ledger.
+ *
+ * @throws HttpsError("resource-exhausted") — free-tier daily run cap reached.
+ */
+export async function recordFreeToolRun(
+  uid: string,
+  tool: string,
+  options: DeductCreditsOptions = {}
+): Promise<RecordFreeRunResult> {
+  await ensurePlatformCaches();
+
+  const requestId = normalizeRequestId(options.requestId);
+  const eventRef = usageEventRef(uid, requestId);
+
+  if (requestId) {
+    const existing = await eventRef.get();
+    if (existing.exists) {
+      return { counted: false, duplicate: true };
+    }
+  }
+
+  // Enforce the daily run cap BEFORE running. cost 0 → the credit-spend guards are
+  // inert, but the per-user run count (which free runs now increment) is what bites.
+  await checkQuotasOrThrow(uid, 0, tool);
+
+  let duplicate = false;
+  await db.runTransaction(async (tx) => {
+    if (requestId) {
+      const existing = await tx.get(eventRef);
+      if (existing.exists) {
+        duplicate = true;
+        return;
+      }
+    }
+    const dayKey = utcDayKey();
+    tx.set(eventRef, {
+      uid,
+      tool,
+      credit_cost: 0,
+      status: "free",
+      day_key: dayKey,
+      request_id: requestId ?? null,
+      balance_after: null,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    // Increment runs (+1) and credits (+0): the run counter is what the free-tier
+    // cap reads, so a free run consumes one of the day's allowance.
+    writeUsageCounters(tx, uid, 0, dayKey);
+  });
+
+  return { counted: !duplicate, duplicate };
+}
+
 /**
  * Refunds `amount` credits to `users/{uid}` — used to reverse a deduction when the
  * downstream LLM call fails AFTER credits were already taken. Best-effort and

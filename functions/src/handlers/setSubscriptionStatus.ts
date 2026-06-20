@@ -89,12 +89,50 @@ function normalizePlanKey(raw: string): { plan: string; audience: "candidate" | 
   return { plan: raw, audience: "candidate" };
 }
 
-export const setSubscriptionStatusFunction = onCall(async (request) => {
-  const uid = requireAuth(request);
+/** Server-only entitlement/intent doc (same collection grantMonthlyCredits gates on).
+ *  Clients are denied by firestore.rules; only a real payment (Stripe webhook) or an
+ *  admin sets `active: true`. We also park unpaid plan intents here as `pending_plan`. */
+const BILLING_COLLECTION = "billing";
 
-  const data = request.data as SetSubscriptionStatusRequest;
-  const rawKey = typeof data?.planKey === "string" ? data.planKey.trim() : "";
+/**
+ * Explicit, opt-in DEMO/PREVIEW switch (ALLOW_DEMO_GRANTS="true", set ONLY in a
+ * demo/staging functions/.env). When on, selecting a paid/business plan activates
+ * immediately without payment — but the grant is tagged grant_source:"demo_preview"
+ * and NEVER writes billing.active, so it can never masquerade as a real paid
+ * subscription. Off (production default): an unpaid privileged selection is held as
+ * pending intent and grants nothing. Read at call-time so config/tests can toggle it.
+ */
+function demoGrantsEnabled(): boolean {
+  return process.env.ALLOW_DEMO_GRANTS === "true";
+}
 
+export interface SubscriptionSelectionResult {
+  status: "active" | "pending_payment";
+  subscription_status: string;
+  credits: number;
+  role: string;
+  /** How the activation was authorized — absent on pending. */
+  grant_source?: "paid" | "demo_preview" | "self_service";
+  /** The plan awaiting payment — present only on pending_payment. */
+  pending_plan?: string;
+}
+
+/**
+ * Applies a plan selection for `uid` (exported for tests; the callable wraps it).
+ *
+ * PAID-ENTITLEMENT GATE: a "privileged" selection — the employer role and/or a paid
+ * monthly credit allotment — only activates when the user has a real billing
+ * entitlement (`billing/{uid}.active === true`) OR demo grants are enabled. Otherwise
+ * the selection is parked as pending intent and NOTHING is granted (no role flip, no
+ * credits). A plain free candidate plan is not privileged and stays self-service.
+ * The admin/manual path (adminSetSubscription) is unaffected.
+ */
+export async function applySubscriptionSelection(
+  uid: string,
+  rawKeyInput: unknown,
+  opts: { fullName?: unknown; companyName?: unknown } = {},
+): Promise<SubscriptionSelectionResult> {
+  const rawKey = typeof rawKeyInput === "string" ? rawKeyInput.trim() : "";
   if (!rawKey) {
     throw new HttpsError("invalid-argument", "planKey is required.");
   }
@@ -108,15 +146,21 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
     throw new HttpsError("invalid-argument", `Unknown plan key: ${rawKey}`);
   }
 
-  const fullName = cleanName(data?.fullName, 120);
-  const companyName = cleanName(data?.companyName, 160);
+  const fullName = cleanName(opts.fullName, 120);
+  const companyName = cleanName(opts.companyName, 160);
 
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
   const renewalRef = db.collection(CREDIT_RENEWALS_COLLECTION).doc(uid);
+  const billingRef = db.collection(BILLING_COLLECTION).doc(uid);
 
   // This month's allotment for the selected plan (0 for free / add-ons / unknown).
   const period = currentCreditPeriod();
   const monthlyGrant = monthlyCreditsFor(plan);
+
+  // Privileged = grants paid entitlements (employer role and/or paid credits). These
+  // must be earned. A free candidate plan is not privileged and needs no entitlement.
+  const isPrivileged = audience === "business" || monthlyGrant > 0;
+  const demo = demoGrantsEnabled();
 
   // Transaction so this can't race the onUserCreated trigger (which may create the
   // doc with the default role:'candidate'). Whichever writer commits first wins the
@@ -126,7 +170,37 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
     // All reads must precede all writes in a Firestore transaction.
     const snap = await tx.get(userRef);
     const renewalSnap = await tx.get(renewalRef);
+    const billingSnap = isPrivileged ? await tx.get(billingRef) : null;
     const now = admin.firestore.FieldValue.serverTimestamp();
+
+    const entitled = !!(billingSnap?.exists && billingSnap.get("active") === true);
+
+    // GATE: an unpaid privileged selection (no entitlement, demo off) never activates.
+    // Park the intent so a future Stripe webhook can complete it; grant nothing.
+    if (isPrivileged && !entitled && !demo) {
+      tx.set(
+        billingRef,
+        {
+          pending_plan: plan,
+          pending_audience: audience,
+          pending_requested_at: now,
+          active: false, // only a real payment/admin may ever set this true
+        },
+        { merge: true },
+      );
+      return {
+        status: "pending_payment",
+        subscription_status: snap.exists ? (snap.get(USER_FIELDS.subscriptionStatus) ?? "free") : "free",
+        credits: snap.exists ? (Number(snap.get(USER_FIELDS.credits)) || 0) : 0,
+        role: snap.exists ? (snap.get(USER_FIELDS.role) ?? "candidate") : "candidate",
+        pending_plan: plan,
+      };
+    }
+
+    // ACTIVATION — real entitlement, an explicit demo grant, or a non-privileged free
+    // plan. grant_source keeps a demo grant from ever looking like a real paid one.
+    const grantSource: "paid" | "demo_preview" | "self_service" =
+      !isPrivileged ? "self_service" : entitled ? "paid" : "demo_preview";
 
     // Grant the plan's monthly credits at most once per calendar month, PLAN-AWARE:
     // pay only the positive difference. A first selection grants the full allotment;
@@ -142,7 +216,7 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
     if (monthlyGrant > 0) {
       tx.set(
         renewalRef,
-        { period, plan, granted_amount: newGrantedAmount, granted_at: now },
+        { period, plan, granted_amount: newGrantedAmount, granted_at: now, grant_source: grantSource },
         { merge: true },
       );
     }
@@ -160,9 +234,11 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
       if (audience === "business" && companyName) doc[USER_FIELDS.companyName] = companyName;
       tx.set(userRef, doc);
       return {
+        status: "active",
         subscription_status: plan,
         credits: startingCredits,
         role: audience === "business" ? "employer" : "candidate",
+        grant_source: grantSource,
       };
     }
 
@@ -189,9 +265,20 @@ export const setSubscriptionStatusFunction = onCall(async (request) => {
 
     // Return the authoritative values so the frontend can sync its local state.
     return {
+      status: "active",
       subscription_status: plan,
       credits: newCredits,
       role: audience === "business" ? "employer" : snap.get(USER_FIELDS.role),
+      grant_source: grantSource,
     };
+  });
+}
+
+export const setSubscriptionStatusFunction = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const data = request.data as SetSubscriptionStatusRequest;
+  return applySubscriptionSelection(uid, data?.planKey, {
+    fullName: data?.fullName,
+    companyName: data?.companyName,
   });
 });
