@@ -2551,7 +2551,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                     )}
 
                     <div className="mt-5">
-                        <ApplicationMessageThread applicationId={selectedApplicant.id} viewerRole="employer" t={t} />
+                        <ApplicationMessageThread key={selectedApplicant.id} applicationId={selectedApplicant.id} viewerRole="employer" t={t} />
                     </div>
                 </section>
             </div>

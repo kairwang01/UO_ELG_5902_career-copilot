@@ -283,6 +283,9 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const [reloadKey, setReloadKey] = useState(0);
 
   const markReviewPath = (path: string) => {
+    // Any edit makes the persisted "Saved" indicator stale — clear it so the user
+    // knows there are unsaved changes again.
+    setSavedAt(null);
     setPrefillReview((state) => {
       if (!state) return null;
       const nextPaths = state.paths.filter((p) => p !== path);

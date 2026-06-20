@@ -680,11 +680,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       setAiModel(undefined);
     } else if (transition === 'signed_in') {
       setIsProfileLoaded(false);
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('payment_success') === 'true' || urlParams.get('checkout') === 'success') {
-        addToast(latestTRef.current('payment_success_plan_upgraded'), 'success');
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } else if (session?.user && session.user.emailVerified === false) {
+      // Checkout success/cancel is handled in the mount effect below (runs on every
+      // load), since the full-page redirect back from checkout is a RESTORE, not a
+      // sign-in transition — handling it here would never fire after that reload.
+      if (session?.user && session.user.emailVerified === false) {
         // Surface the "verify your email" reminder the signup modal can't show
         // (the auth listener navigates away before it renders). Fires only on a
         // genuine sign-in transition, never on reload or token refresh.
@@ -741,15 +740,24 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
 
   useEffect(() => {
-    const handleStripeRedirect = () => {
+    // Runs on EVERY load (not only the sign-in transition), so the full-page redirect
+    // back from checkout still surfaces feedback AND refreshes the plan/credits via
+    // getProfile() — covers both /workspace?checkout=success and /portal?checkout=success.
+    const handleCheckoutReturn = () => {
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('payment_cancelled') === 'true' || urlParams.get('checkout') === 'cancel') {
+        const checkout = urlParams.get('checkout');
+        const paid = urlParams.get('payment_success') === 'true' || checkout === 'success';
+        const cancelled = urlParams.get('payment_cancelled') === 'true' || checkout === 'cancel';
+        if (paid) {
+            addToast(latestTRef.current('payment_success_plan_upgraded'), 'success');
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (cancelled) {
             addToast(latestTRef.current('payment_cancelled_try_again'), 'info');
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     };
     if (session) { getProfile(); }
-    handleStripeRedirect();
+    handleCheckoutReturn();
   }, [session, getProfile]);
   
   useEffect(() => {
@@ -1248,8 +1256,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       onToggleTheme: toggleTheme,
       activeTool,
       onToolSelect: (tool: string | null) => {
-        setActiveTool(tool);
-        if (tool) setWorkspaceView('toolkit');
+        // Route through openWorkspaceTool so the ?tool= query is written — otherwise the
+        // URL-sync effect re-reads an empty query and immediately clears activeTool.
+        if (tool) {
+          openWorkspaceTool(tool);
+        } else {
+          setActiveTool(null);
+        }
         setIsMobileNavOpen(false);
       },
       onLogout: () => data.auth.signOut(),

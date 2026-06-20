@@ -28,7 +28,7 @@ const PLAN_LABELS: Record<string, { name: string; amount: string; cadence: strin
 
 const SimulatedCheckoutPage: React.FC = () => {
   const [params] = useSearchParams();
-  const { session, ready } = useSession();
+  const { session, ready, profile } = useSession();
   const plan = params.get('plan') ?? '';
   const audience = params.get('audience') === 'business' ? 'business' : 'candidate';
   const info = PLAN_LABELS[plan];
@@ -67,6 +67,20 @@ const SimulatedCheckoutPage: React.FC = () => {
     return (
       <div className="mx-auto max-w-md p-8 text-center text-slate-600">
         <p>Please sign in to continue checkout. <a className="text-blue-600 underline" href="/workspace?auth=signin">Sign in</a></p>
+      </div>
+    );
+  }
+
+  // Guard the back-button-after-pay path: if this plan is already active, don't show a
+  // live Pay button that would re-run confirmSimulatedCheckout.
+  if (ready && session && profile?.subscription_status === plan) {
+    return (
+      <div className="mx-auto max-w-md p-8 text-center">
+        <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">You're already on {info.name}.</p>
+        <p className="mt-2 text-slate-600 dark:text-slate-300">
+          No need to pay again.{' '}
+          <a className="text-blue-600 underline" href={audience === 'business' ? '/portal' : '/workspace'}>Go to your workspace</a>
+        </p>
       </div>
     );
   }
@@ -115,7 +129,7 @@ const SimulatedCheckoutPage: React.FC = () => {
               disabled={paying}
               className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
             >
-              {paying ? 'Processing…' : `Pay ${info.amount}`}
+              {paying ? 'Confirming your plan…' : `Pay ${info.amount}`}
             </button>
             <button
               type="button"

@@ -34,6 +34,7 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!applicationId) return;
@@ -42,7 +43,12 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
   }, [applicationId, t]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
+    // Only auto-scroll if the reader is already near the bottom — don't yank the
+    // panel down while they're scrolled up re-reading an earlier message.
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+    if (nearBottom) endRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
   const applyTemplate = (key: MessageTemplateKey) => {
@@ -72,7 +78,7 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
       <div className="border-b border-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-800 dark:border-slate-700 dark:text-slate-100">
         {t('msg_thread_title')}
       </div>
-      <div className="max-h-72 space-y-2 overflow-y-auto px-4 py-3">
+      <div ref={scrollRef} className="max-h-72 space-y-2 overflow-y-auto px-4 py-3">
         {messages.length === 0 ? (
           <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{t('msg_thread_empty')}</p>
         ) : (
