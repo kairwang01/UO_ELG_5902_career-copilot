@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import type { UserProfile } from '../types';
 import { ethers } from 'ethers';
 import { useModalBehavior } from '../hooks/useModalBehavior';
@@ -45,11 +45,17 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
     typeof window !== 'undefined' &&
     typeof (window as any).ethereum !== 'undefined';
   useModalBehavior(onClose);
+  const mountedRef = useRef(true);
+
+  React.useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   React.useEffect(() => {
+    let active = true;
     const fetchUnlockFee = async () => {
       if (!hasWallet) {
-        setUnlockFee(t('unlock_modal_fee_unavailable'));
+        if (active) setUnlockFee(t('unlock_modal_fee_unavailable'));
         return;
       }
       try {
@@ -60,12 +66,15 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
           provider,
         );
         const feeInWei = await contract.getUnlockFee();
-        setUnlockFee(ethers.formatEther(feeInWei));
+        if (active) setUnlockFee(ethers.formatEther(feeInWei));
       } catch {
-        setUnlockFee(t('unlock_modal_fee_error'));
+        if (active) setUnlockFee(t('unlock_modal_fee_error'));
       }
     };
     fetchUnlockFee();
+    return () => {
+      active = false;
+    };
   }, [hasWallet, t]);
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -106,8 +115,9 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
       });
       await tx.wait();
 
-      onUnlocked(candidate);
+      if (mountedRef.current) onUnlocked(candidate);
     } catch (err) {
+      if (!mountedRef.current) return;
       const code =
         typeof err === 'object' && err !== null && 'code' in err
           ? String((err as { code?: unknown }).code)
@@ -118,7 +128,7 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
         setError(t('unlock_error_failed'));
       }
     } finally {
-      setIsPaying(false);
+      if (mountedRef.current) setIsPaying(false);
     }
   };
 

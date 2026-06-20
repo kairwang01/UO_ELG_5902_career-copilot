@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Target } from 'lucide-react';
 import { useJobPreferences, prefsSummaryLine } from '../hooks/useJobPreferences';
 import type { JobPreferences } from '../hooks/useJobPreferences';
@@ -79,12 +79,18 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
   const [isExpanded, setIsExpanded] = useState(!storedPrefs);
   const [form, setForm] = useState<JobPreferences>(storedPrefs ?? DEFAULT_PREFS);
   const [savedFlash, setSavedFlash] = useState(false);
+  const savedFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (savedFlashTimerRef.current) clearTimeout(savedFlashTimerRef.current);
+  }, []);
 
   const handleSave = () => {
     save(form);
     setSavedFlash(true);
     setIsExpanded(false);
-    setTimeout(() => setSavedFlash(false), 2000);
+    if (savedFlashTimerRef.current) clearTimeout(savedFlashTimerRef.current);
+    savedFlashTimerRef.current = setTimeout(() => setSavedFlash(false), 2000);
   };
 
   const summary = storedPrefs ? prefsSummaryLine(storedPrefs) : null;

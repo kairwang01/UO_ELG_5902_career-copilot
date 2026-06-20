@@ -56,9 +56,17 @@ const ModelRoutingManagedNote: React.FC<{ t: (key: string) => string }> = ({
   const [isBusiness, setIsBusiness] = useState<boolean | null>(null);
 
   useEffect(() => {
+    let active = true;
     listModels()
-      .then(({ isBusiness: biz }) => setIsBusiness(!!biz))
-      .catch(() => setIsBusiness(false));
+      .then(({ isBusiness: biz }) => {
+        if (active) setIsBusiness(!!biz);
+      })
+      .catch(() => {
+        if (active) setIsBusiness(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Hide while loading or if business (BusinessCustomApi handles that case)
@@ -146,9 +154,11 @@ const Account: React.FC<AccountProps> = ({
 
       // Ensure wallet is unlocked and connected by requesting accounts. This prevents errors on subsequent calls.
       await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+      if (!mountedRef.current) return;
 
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const network = await provider.getNetwork();
+      if (!mountedRef.current) return;
 
       if (network.chainId !== BigInt(TARGET_CHAIN_ID)) {
         setIsWrongNetwork(true);
@@ -167,11 +177,13 @@ const Account: React.FC<AccountProps> = ({
         provider,
       );
       const balance = await contract.balanceOf(walletAddress);
+      if (!mountedRef.current) return;
 
       if (balance > 0) {
         const userTokenId = await contract.getTokenIdOfOwner(walletAddress);
         const staked = await contract.isStaked(userTokenId);
         const rewards = await contract.getRewards(walletAddress);
+        if (!mountedRef.current) return;
 
         const newValues = {
           nft_minted: true,
@@ -201,12 +213,15 @@ const Account: React.FC<AccountProps> = ({
 
         await data.profiles.update(session.user.id, newValues);
       }
+      if (!mountedRef.current) return;
       setMessage(null); // Clear info message on successful sync
     } catch (err) {
       console.error('Error syncing with blockchain:', err);
-      setMessage({ type: 'error', text: t('account_web3_sync_failed') });
+      if (mountedRef.current) {
+        setMessage({ type: 'error', text: t('account_web3_sync_failed') });
+      }
     } finally {
-      setIsSyncing(false);
+      if (mountedRef.current) setIsSyncing(false);
     }
   }, [walletAddress, session.user.id, t]);
 
@@ -217,6 +232,7 @@ const Account: React.FC<AccountProps> = ({
   }, [walletAddress, syncWithBlockchain]);
 
   useEffect(() => {
+    let active = true;
     const checkEligibility = async () => {
       if (walletAddress && resumeText) {
         const analysesQuery = query(
@@ -225,6 +241,7 @@ const Account: React.FC<AccountProps> = ({
           limit(1),
         );
         const analysesSnapshot = await getDocs(analysesQuery);
+        if (!active) return;
         const latestScore = analysesSnapshot.empty
           ? 0
           : Number(analysesSnapshot.docs[0].data().score ?? 0);
@@ -234,6 +251,9 @@ const Account: React.FC<AccountProps> = ({
       }
     };
     checkEligibility();
+    return () => {
+      active = false;
+    };
   }, [walletAddress, resumeText, session.user.id]);
 
   const getProfile = async () => {
@@ -393,6 +413,7 @@ const Account: React.FC<AccountProps> = ({
         throw error;
       }
 
+      if (!mountedRef.current) return;
       setWalletAddress(address);
       setMessage({
         type: 'success',
@@ -404,12 +425,14 @@ const Account: React.FC<AccountProps> = ({
       });
     } catch (error: any) {
       console.error('Error updating wallet:', error);
-      setMessage({
-        type: 'error',
-        text: t('account_web3_wallet_update_failed'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: t('account_web3_wallet_update_failed'),
+        });
+      }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -420,11 +443,13 @@ const Account: React.FC<AccountProps> = ({
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
+        if (!mountedRef.current) return;
 
         if (address) {
           await updateWallet(address);
         }
       } catch (error) {
+        if (!mountedRef.current) return;
         if ((error as any).code === 4001) {
           setMessage({
             type: 'error',
@@ -435,7 +460,7 @@ const Account: React.FC<AccountProps> = ({
           console.error(error);
         }
       } finally {
-        setWeb3Busy(false);
+        if (mountedRef.current) setWeb3Busy(false);
       }
     } else {
       setMessage({ type: 'error', text: t('account_web3_no_wallet') });
@@ -454,8 +479,10 @@ const Account: React.FC<AccountProps> = ({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: TARGET_CHAIN_ID_HEX }],
       });
+      if (!mountedRef.current) return;
       syncWithBlockchain();
     } catch (switchError: any) {
+      if (!mountedRef.current) return;
       if (switchError.code === 4902) {
         try {
           await (window as any).ethereum.request({
@@ -475,6 +502,7 @@ const Account: React.FC<AccountProps> = ({
             ],
           });
         } catch (addError) {
+          if (!mountedRef.current) return;
           setMessage({
             type: 'error',
             text: t('account_web3_add_network_failed'),
@@ -484,7 +512,7 @@ const Account: React.FC<AccountProps> = ({
         setMessage({ type: 'error', text: t('account_web3_switch_failed') });
       }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -505,8 +533,10 @@ const Account: React.FC<AccountProps> = ({
       );
 
       const tx = await contract.mint(walletAddress);
+      if (!mountedRef.current) return;
       setMessage({ type: 'info', text: t('account_web3_minting_wait') });
       const receipt = await tx.wait();
+      if (!mountedRef.current) return;
 
       const mintEvent = receipt.logs.find((log: any) => {
         try {
@@ -526,6 +556,7 @@ const Account: React.FC<AccountProps> = ({
           nft_minted: true,
           nft_token_id: newTokenId,
         });
+        if (!mountedRef.current) return;
         setMessage({
           type: 'success',
           text: t('account_web3_mint_success').replace(
@@ -537,12 +568,14 @@ const Account: React.FC<AccountProps> = ({
         throw new Error(t('account_web3_mint_missing_event'));
       }
     } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text: error.message || t('account_web3_mint_failed'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: error.message || t('account_web3_mint_failed'),
+        });
+      }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -567,6 +600,7 @@ const Account: React.FC<AccountProps> = ({
         signer,
       );
       const tx = await contract[action](tokenId);
+      if (!mountedRef.current) return;
       setMessage({
         type: 'info',
         text: t(
@@ -574,12 +608,14 @@ const Account: React.FC<AccountProps> = ({
         ),
       });
       await tx.wait();
+      if (!mountedRef.current) return;
 
       const newStakedStatus = !nftStaked;
       setNftStaked(newStakedStatus);
       await data.profiles.update(session.user.id, {
         nft_staked: newStakedStatus,
       });
+      if (!mountedRef.current) return;
       setMessage({
         type: 'success',
         text: t(
@@ -589,18 +625,20 @@ const Account: React.FC<AccountProps> = ({
         ),
       });
     } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text:
-          error.message ||
-          t(
-            nftStaked
-              ? 'account_web3_unstake_failed'
-              : 'account_web3_stake_failed',
-          ),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text:
+            error.message ||
+            t(
+              nftStaked
+                ? 'account_web3_unstake_failed'
+                : 'account_web3_stake_failed',
+            ),
+        });
+      }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -618,24 +656,30 @@ const Account: React.FC<AccountProps> = ({
       );
 
       const tx = await contract.claimRewards();
+      if (!mountedRef.current) return;
       setMessage({ type: 'info', text: t('account_web3_claim_wait') });
       await tx.wait();
+      if (!mountedRef.current) return;
 
       const rewards = await contract.getRewards(walletAddress);
       const newEarnings = parseFloat(ethers.formatEther(rewards));
+      if (!mountedRef.current) return;
       setNftEarnings(newEarnings);
 
       await data.profiles.update(session.user.id, {
         nft_earnings: newEarnings,
       });
+      if (!mountedRef.current) return;
       setMessage({ type: 'success', text: t('account_web3_claim_success') });
     } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text: error.message || t('account_web3_claim_failed'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: error.message || t('account_web3_claim_failed'),
+        });
+      }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 

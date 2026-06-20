@@ -441,6 +441,11 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
     // schedule a duplicate interview / write a duplicate scorecard (the callables have no dedup).
     const submittingRef = useRef(false);
     const scorecardSavingRef = useRef(false);
+    const mountedRef = useRef(true);
+
+    useEffect(() => () => {
+        mountedRef.current = false;
+    }, []);
 
     // Per-card busy flag so cancel / complete buttons disable only their own card.
     const [actionId, setActionId] = useState<string | null>(null);
@@ -466,12 +471,13 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
                 listInterviewsForApplication(applicationId),
                 listScorecardsForApplication(applicationId, employerUid),
             ]);
+            if (!mountedRef.current) return;
             setInterviews(interviewResult);
             setScorecards(scorecardResult);
         } catch (err) {
-            setLoadError(err instanceof Error ? err.message : t('interview_error'));
+            if (mountedRef.current) setLoadError(err instanceof Error ? err.message : t('interview_error'));
         } finally {
-            setLoading(false);
+            if (mountedRef.current) setLoading(false);
         }
     }, [applicationId, employerUid, t]);
 
@@ -544,13 +550,14 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
                     notes,
                 });
             }
+            if (!mountedRef.current) return;
             closeForm();
             await loadInterviews();
         } catch (err) {
-            setFormError(err instanceof Error ? err.message : t('interview_error'));
+            if (mountedRef.current) setFormError(err instanceof Error ? err.message : t('interview_error'));
         } finally {
             submittingRef.current = false;
-            setSubmitting(false);
+            if (mountedRef.current) setSubmitting(false);
         }
     };
 
@@ -559,11 +566,12 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
         setActionId(interviewId);
         try {
             await updateInterview(patch);
+            if (!mountedRef.current) return;
             await loadInterviews();
         } catch (err) {
-            setLoadError(err instanceof Error ? err.message : t('interview_error'));
+            if (mountedRef.current) setLoadError(err instanceof Error ? err.message : t('interview_error'));
         } finally {
-            setActionId(null);
+            if (mountedRef.current) setActionId(null);
         }
     };
 
@@ -617,13 +625,14 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
                 nextSteps,
                 privateNotes,
             });
+            if (!mountedRef.current) return;
             closeScorecardForm();
             await loadInterviews();
         } catch (err) {
-            setScorecardError(err instanceof Error ? err.message : t('scorecard_error'));
+            if (mountedRef.current) setScorecardError(err instanceof Error ? err.message : t('scorecard_error'));
         } finally {
             scorecardSavingRef.current = false;
-            setScorecardSaving(false);
+            if (mountedRef.current) setScorecardSaving(false);
         }
     };
 

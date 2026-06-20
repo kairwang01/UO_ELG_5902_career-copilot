@@ -73,6 +73,18 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const [introLoading, setIntroLoading] = useState<Record<string, boolean>>({});
 
   const applyInFlightRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const platformRunRef = useRef(0);
+  const whyFitRunRef = useRef<Record<string, number>>({});
+  const introRunRef = useRef<Record<string, number>>({});
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    platformRunRef.current += 1;
+    whyFitRunRef.current = {};
+    introRunRef.current = {};
+  }, []);
+
   // Pre-submit review: the candidate confirms what the employer will receive
   // before the application is actually created.
   const [pendingApply, setPendingApply] = useState<{ job: ApplyReviewJob; score: number | undefined } | null>(null);
@@ -254,11 +266,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // Free platform-posting load only. The external AI search is credit-charging, so
   // it must be started by an explicit click instead of auto-running on page entry.
   const loadPlatformJobs = useCallback(async () => {
+    const runId = platformRunRef.current + 1;
+    platformRunRef.current = runId;
     setPlatformLoading(true);
     setError(null);
     try {
       await fetchAppliedJobs();
       const internal = await fetchInternalJobs();
+      if (!mountedRef.current || runId !== platformRunRef.current) return;
       setInternalJobData(internal.meta);
       setResult(internal.opps.length > 0
         ? {
@@ -269,9 +284,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
           }
         : null);
     } catch {
-      setResult(null);
+      if (mountedRef.current && runId === platformRunRef.current) setResult(null);
     } finally {
-      setPlatformLoading(false);
+      if (mountedRef.current && runId === platformRunRef.current) setPlatformLoading(false);
     }
   }, [fetchAppliedJobs, fetchInternalJobs, t]);
 
@@ -286,21 +301,30 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // 4c: Why am I a fit?
   const handleWhyFit = useCallback(async (job: Opportunity) => {
     if (whyFitLoading[job.url] || whyFitCache[job.url]) return;
+    const runId = (whyFitRunRef.current[job.url] ?? 0) + 1;
+    whyFitRunRef.current[job.url] = runId;
     setWhyFitLoading((prev) => ({ ...prev, [job.url]: true }));
     try {
       const jobDesc = `${job.jobTitle} at ${job.company} (${job.location})\n\n${job.summary}`;
       const res = await calculateCompatibility(resumeText, jobDesc);
+      if (!mountedRef.current || whyFitRunRef.current[job.url] !== runId) return;
       setWhyFitCache((prev) => ({ ...prev, [job.url]: res }));
     } catch (err) {
-      addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
+      if (mountedRef.current && whyFitRunRef.current[job.url] === runId) {
+        addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
+      }
     } finally {
-      setWhyFitLoading((prev) => ({ ...prev, [job.url]: false }));
+      if (mountedRef.current && whyFitRunRef.current[job.url] === runId) {
+        setWhyFitLoading((prev) => ({ ...prev, [job.url]: false }));
+      }
     }
   }, [resumeText, whyFitCache, whyFitLoading, addToast, t]);
 
   // 4c: Intro message
   const handleIntroMessage = useCallback(async (job: Opportunity) => {
     if (introLoading[job.url] || introCache[job.url]) return;
+    const runId = (introRunRef.current[job.url] ?? 0) + 1;
+    introRunRef.current[job.url] = runId;
     setIntroLoading((prev) => ({ ...prev, [job.url]: true }));
     try {
       const details: Record<string, string> = {
@@ -317,11 +341,16 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         2,   // style: conversational
         3,   // confidence: neutral
       );
+      if (!mountedRef.current || introRunRef.current[job.url] !== runId) return;
       setIntroCache((prev) => ({ ...prev, [job.url]: res }));
     } catch (err) {
-      addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
+      if (mountedRef.current && introRunRef.current[job.url] === runId) {
+        addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
+      }
     } finally {
-      setIntroLoading((prev) => ({ ...prev, [job.url]: false }));
+      if (mountedRef.current && introRunRef.current[job.url] === runId) {
+        setIntroLoading((prev) => ({ ...prev, [job.url]: false }));
+      }
     }
   }, [resumeText, market, introCache, introLoading, addToast, t]);
 

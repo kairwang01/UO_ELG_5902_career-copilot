@@ -28,6 +28,11 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
   // Ref (not the formLoading state) so a synchronous double-submit — e.g. a quick double
   // Enter before setFormLoading commits — is actually blocked.
   const savingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -47,10 +52,12 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
 
   useEffect(() => {
     if (!isBusiness || formLoadedRef.current) return;
+    let active = true;
     formLoadedRef.current = true;
     setFormLoading(true);
     getBusinessLlmConfig()
       .then((cfg) => {
+        if (!active) return;
         if (cfg.configured) {
           setForm({ base_url: cfg.base_url, api_key: '', model: cfg.model });
           setMaskedKey(cfg.api_key_masked);
@@ -60,7 +67,12 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
       .catch(() => {
         // Non-fatal; keep the form editable so the business user can reconnect.
       })
-      .finally(() => setFormLoading(false));
+      .finally(() => {
+        if (active) setFormLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [isBusiness]);
 
   const handleFormSave = useCallback(async (event: React.FormEvent) => {
@@ -89,17 +101,19 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
         api_key: form.api_key,
         model: form.model.trim(),
       });
+      if (!mountedRef.current) return;
       setForm((prev) => ({ ...prev, api_key: '' }));
       setMaskedKey(null);
       formLoadedRef.current = false;
       setAiModel('custom');
       setFormMsg({ type: 'success', text: t?.('account_custom_endpoint_saved') ?? 'Custom endpoint saved.' });
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       const msg = err instanceof Error ? err.message : t?.('account_custom_endpoint_save_error') ?? 'Save failed. Check your inputs and try again.';
       setFormMsg({ type: 'error', text: msg });
     } finally {
       savingRef.current = false;
-      setFormLoading(false);
+      if (mountedRef.current) setFormLoading(false);
     }
   }, [form, maskedKey, t]);
 

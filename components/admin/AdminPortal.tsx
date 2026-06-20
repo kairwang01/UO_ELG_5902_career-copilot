@@ -143,6 +143,7 @@ const AdminPortal: React.FC = () => {
   // Tracks the latest selected user so a slow report fetch for a previous user can't
   // paint its data under a user the admin has since switched to.
   const selectedUidRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
   const [userReport, setUserReport] = useState<Record<string, unknown> | null>(null);
   const [subStatus, setSubStatus] = useState('');
   const [admins, setAdmins] = useState<AdminRow[]>([]);
@@ -221,9 +222,18 @@ const AdminPortal: React.FC = () => {
   const [defaultModelToast, setDefaultModelToast] = useState<{ ok?: string; err?: string } | null>(null);
 
   useEffect(() => {
-    data.auth.getSession().then(setSession);
-    const { unsubscribe } = data.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => unsubscribe();
+    let active = true;
+    data.auth.getSession().then((s) => {
+      if (active) setSession(s);
+    });
+    const { unsubscribe } = data.auth.onAuthStateChange((_e, s) => {
+      if (active) setSession(s);
+    });
+    return () => {
+      active = false;
+      mountedRef.current = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -232,14 +242,26 @@ const AdminPortal: React.FC = () => {
       setAdminRole(null);
       return;
     }
+    let active = true;
     adminCheckAccess()
-      .then((r) => setIsAdmin(r.admin))
-      .catch(() => setIsAdmin(false));
+      .then((r) => {
+        if (active) setIsAdmin(r.admin);
+      })
+      .catch(() => {
+        if (active) setIsAdmin(false);
+      });
     // Fetch fine-grained role — backend is authoritative; UI just mirrors it for hiding elements.
     // resolveRoleWithFallback handles permission-denied/not-found during rollout gracefully.
     resolveRoleWithFallback(adminWhoAmI)
-      .then((role) => setAdminRole(role))
-      .catch(() => setAdminRole('admin'));
+      .then((role) => {
+        if (active) setAdminRole(role);
+      })
+      .catch(() => {
+        if (active) setAdminRole('admin');
+      });
+    return () => {
+      active = false;
+    };
   }, [session]);
 
   // ── data loaders ──────────────────────────────────────────────────────────
@@ -248,12 +270,14 @@ const AdminPortal: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      setDashboard(await adminGetDashboard());
+      const dashboardData = await adminGetDashboard();
+      if (!mountedRef.current) return;
+      setDashboard(dashboardData);
       setLastRefreshed(new Date());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load dashboard');
+      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load dashboard');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
@@ -261,22 +285,25 @@ const AdminPortal: React.FC = () => {
     setError(null);
     try {
       const cfg = await adminGetLlmConfig();
+      if (!mountedRef.current) return;
       setLlm(cfg);
       setGeminiModel(cfg.gemini_model ?? '');
       setGeminiFallbackModel(cfg.gemini_fallback_model ?? '');
       setKairllmUrl(cfg.kairllm_base_url ?? '');
       setDeepseekUrl(cfg.deepseek_base_url ?? '');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load LLM config');
+      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load LLM config');
     }
   }, []);
 
   const loadQuotas = useCallback(async () => {
     setError(null);
     try {
-      setQuotas(await adminGetQuotas());
+      const quotaData = await adminGetQuotas();
+      if (!mountedRef.current) return;
+      setQuotas(quotaData);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load quotas');
+      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load quotas');
     }
   }, []);
 
@@ -287,10 +314,11 @@ const AdminPortal: React.FC = () => {
       setError(null);
       try {
         const res = await adminListUsers(50, cursor);
+        if (!mountedRef.current) return;
         setUsers((prev) => (cursor ? [...prev, ...res.users] : res.users));
         setUserCursor(res.next_cursor);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load users');
+        if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load users');
       }
     },
     [],
@@ -300,9 +328,10 @@ const AdminPortal: React.FC = () => {
     setError(null);
     try {
       const res = await adminListAdmins();
+      if (!mountedRef.current) return;
       setAdmins(res.admins);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load admins');
+      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load admins');
     }
   }, []);
 
@@ -311,12 +340,13 @@ const AdminPortal: React.FC = () => {
     setAuditLoaded(false);
     try {
       const res = await adminGetAuditLog();
+      if (!mountedRef.current) return;
       setAuditLog(res.entries);
       setLastRefreshed(new Date());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load audit log');
+      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load audit log');
     } finally {
-      setAuditLoaded(true);
+      if (mountedRef.current) setAuditLoaded(true);
     }
   }, []);
 
@@ -325,12 +355,13 @@ const AdminPortal: React.FC = () => {
     setModelsLoaded(false);
     try {
       const res = await adminListModels();
+      if (!mountedRef.current) return;
       setModels(res.models);
       setDefaultModelId(res.defaultModelId ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load models');
+      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load models');
     } finally {
-      setModelsLoaded(true);
+      if (mountedRef.current) setModelsLoaded(true);
     }
   }, []);
 
@@ -339,11 +370,12 @@ const AdminPortal: React.FC = () => {
     setPromptsLoaded(false);
     try {
       const res = await adminGetPrompts();
+      if (!mountedRef.current) return;
       setPrompts(res.prompts);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load prompts');
+      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load prompts');
     } finally {
-      setPromptsLoaded(true);
+      if (mountedRef.current) setPromptsLoaded(true);
     }
   }, []);
 
@@ -353,11 +385,14 @@ const AdminPortal: React.FC = () => {
     setPromptVersions([]);
     try {
       const res = await adminListPromptVersions({ promptKey });
+      if (!mountedRef.current) return;
       setPromptVersions(res.versions);
     } catch (e) {
-      setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Failed to load versions' });
+      if (mountedRef.current) {
+        setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Failed to load versions' });
+      }
     } finally {
-      setPromptVersionsLoading(false);
+      if (mountedRef.current) setPromptVersionsLoading(false);
     }
   }, []);
 
@@ -433,12 +468,12 @@ const AdminPortal: React.FC = () => {
     selectedUidRef.current = uid;
     try {
       const report = await adminGetUserReport(uid);
-      if (selectedUidRef.current !== uid) return; // admin switched users mid-fetch
+      if (!mountedRef.current || selectedUidRef.current !== uid) return; // admin switched users mid-fetch
       setUserReport(report);
       const profile = (report as { profile?: { subscription_status?: string } }).profile;
       setSubStatus(profile?.subscription_status ?? '');
     } catch (e) {
-      if (selectedUidRef.current !== uid) return;
+      if (!mountedRef.current || selectedUidRef.current !== uid) return;
       setError(e instanceof Error ? e.message : 'Failed to load user report');
     }
   };

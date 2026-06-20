@@ -432,18 +432,26 @@ interface InterviewRowProps {
 const InterviewRow: React.FC<InterviewRowProps> = ({ interview, t, onInterviewChange }) => {
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState(false);
+  const mountedRef = useRef(true);
   const isCancelled = interview.interview_status === 'cancelled';
   const FormatIcon = INTERVIEW_FORMAT_ICONS[interview.format] ?? CalendarClock;
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const handleConfirm = async () => {
     setConfirming(true);
     setConfirmError(false);
     try {
       await confirmInterview(interview.id);
+      if (!mountedRef.current) return;
       onInterviewChange();
     } catch {
-      setConfirmError(true);
-      setConfirming(false);
+      if (mountedRef.current) {
+        setConfirmError(true);
+        setConfirming(false);
+      }
     }
   };
 
@@ -778,11 +786,18 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   // Live subscription so the timeline stays fresh across tabs and when the employer
   // reschedules/cancels — no manual reload needed.
   const [interviews, setInterviews] = useState<ApplicationInterview[]>([]);
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const reloadInterviews = useCallback(() => {
     if (!uid) return;
     listInterviewsForCandidate(uid)
-      .then(setInterviews)
+      .then((rows) => {
+        if (mountedRef.current) setInterviews(rows);
+      })
       .catch(() => {/* best-effort: interviews are supplementary */});
   }, [uid]);
 

@@ -320,15 +320,18 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
     if (!eid) return;
     if (reviewCacheRef.current[eid] !== undefined) return;  // already loaded
     if (fetchingReviews.current.has(eid)) return;           // already in-flight
+    let cancelled = false;
     fetchingReviews.current.add(eid);
     (async () => {
       try {
         const reviews = await listCompanyReviews(eid);
+        if (cancelled) return;
         const agg = aggregateRating(reviews);
         const entry = { ...agg, reviews };
         reviewCacheRef.current = { ...reviewCacheRef.current, [eid]: entry };
         setReviewCache((prev) => ({ ...prev, [eid]: entry }));
       } catch {
+        if (cancelled) return;
         // non-fatal — silently skip; card just won't show a rating chip
         const entry = { avg: 0, count: 0, reviews: [] };
         reviewCacheRef.current = { ...reviewCacheRef.current, [eid]: entry };
@@ -337,10 +340,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
         fetchingReviews.current.delete(eid);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [expandedId, jobs]);
 
   // ── eager-load employer responsiveness for the visible jobs ─────────────────
   useEffect(() => {
+    let cancelled = false;
     const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)));
     eids.forEach((eid) => {
       if (respCacheRef.current[eid] !== undefined || fetchingResp.current.has(eid)) return;
@@ -352,10 +359,12 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
           const count = typeof d?.count === 'number' ? d.count : 0;
           const sum = typeof d?.sum_days === 'number' ? d.sum_days : 0;
           const lastMs = d?.last_action_at?.toMillis?.() ?? null;
+          if (cancelled) return;
           const entry: RespEntry = { avgDays: count >= 3 ? sum / count : null, lastActionMs: lastMs };
           respCacheRef.current = { ...respCacheRef.current, [eid]: entry };
           setRespCache((prev) => ({ ...prev, [eid]: entry }));
         } catch {
+          if (cancelled) return;
           const entry: RespEntry = { avgDays: null, lastActionMs: null };
           respCacheRef.current = { ...respCacheRef.current, [eid]: entry };
           setRespCache((prev) => ({ ...prev, [eid]: entry }));
@@ -364,10 +373,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
         }
       })();
     });
+    return () => {
+      cancelled = true;
+    };
   }, [jobs]);
 
   // ── eager-load company rating aggregate for the visible jobs ────────────────
   useEffect(() => {
+    let cancelled = false;
     const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)));
     eids.forEach((eid) => {
       if (ratingCacheRef.current[eid] !== undefined || fetchingRatings.current.has(eid)) return;
@@ -375,9 +388,11 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
       (async () => {
         try {
           const entry = await getEmployerRating(eid);
+          if (cancelled) return;
           ratingCacheRef.current = { ...ratingCacheRef.current, [eid]: entry };
           setRatingCache((prev) => ({ ...prev, [eid]: entry }));
         } catch {
+          if (cancelled) return;
           const entry = { avg: 0, count: 0 };
           ratingCacheRef.current = { ...ratingCacheRef.current, [eid]: entry };
           setRatingCache((prev) => ({ ...prev, [eid]: entry }));
@@ -386,6 +401,9 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
         }
       })();
     });
+    return () => {
+      cancelled = true;
+    };
   }, [jobs]);
 
   // ── distinct locations ────────────────────────────────────────────────────

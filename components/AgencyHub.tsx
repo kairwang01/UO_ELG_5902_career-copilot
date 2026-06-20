@@ -1914,12 +1914,14 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     setJobsFetchError(false);
     try {
       const jobs = await listActiveEmployerJobs(session.user.id);
+      if (!isMountedRef.current) return;
       setInternalJobs(jobs);
     } catch {
+      if (!isMountedRef.current) return;
       setInternalJobs([]);
       setJobsFetchError(true);
     } finally {
-      setIsLoadingJobs(false);
+      if (isMountedRef.current) setIsLoadingJobs(false);
     }
   }, [session.user.id]);
 
@@ -1936,6 +1938,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     setIsExtractingJd(true);
     try {
       const result = await extractTextFromUrl(jdUrl);
+      if (!isMountedRef.current) return;
       if (result.extractedText && result.extractedText.trim()) {
         setSelectedInternalJobId("");
         setJobDescription(result.extractedText);
@@ -1947,9 +1950,10 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         addToast(t("agency_jd_import_empty"), "error");
       }
     } catch {
+      if (!isMountedRef.current) return;
       addToast(t("agency_jd_import_failed"), "error");
     } finally {
-      setIsExtractingJd(false);
+      if (isMountedRef.current) setIsExtractingJd(false);
     }
   };
 

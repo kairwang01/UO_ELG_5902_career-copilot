@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BookmarkCheck,
@@ -517,19 +517,25 @@ export function PortalShortlist({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const { addToast } = useSharedToast();
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await listShortlist(employerUid);
+      if (!mountedRef.current) return;
       setEntries(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("shortlist_load_error"));
+      if (mountedRef.current) setError(err instanceof Error ? err.message : t("shortlist_load_error"));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [employerUid, t]);
 
@@ -542,12 +548,13 @@ export function PortalShortlist({
     setBusyEntryId(id);
     try {
       await removeFromShortlist(employerUid, id);
+      if (!mountedRef.current) return;
       setEntries((prev) => prev.filter((e) => e.id !== id));
       addToast(t("shortlist_removed"), "success");
     } catch {
-      addToast(t("shortlist_action_error"), "error");
+      if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
     } finally {
-      setBusyEntryId(null);
+      if (mountedRef.current) setBusyEntryId(null);
     }
   };
 
@@ -558,6 +565,7 @@ export function PortalShortlist({
       await updateShortlistEntry(employerUid, entry.id, {
         status: "contacted",
       });
+      if (!mountedRef.current) return;
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entry.id ? { ...e, status: "contacted" } : e,
@@ -565,9 +573,9 @@ export function PortalShortlist({
       );
       addToast(t("shortlist_marked_contacted"), "success");
     } catch {
-      addToast(t("shortlist_action_error"), "error");
+      if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
     } finally {
-      setBusyEntryId(null);
+      if (mountedRef.current) setBusyEntryId(null);
     }
   };
 
@@ -589,6 +597,7 @@ export function PortalShortlist({
     setBusyEntryId(id);
     try {
       await updateShortlistEntry(employerUid, id, { notes: editNotes });
+      if (!mountedRef.current) return;
       setEntries((prev) =>
         prev.map((e) => (e.id === id ? { ...e, notes: editNotes } : e)),
       );
@@ -598,9 +607,9 @@ export function PortalShortlist({
       setEditingId(null);
       setEditNotes("");
     } catch {
-      addToast(t("shortlist_action_error"), "error");
+      if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
     } finally {
-      setBusyEntryId(null);
+      if (mountedRef.current) setBusyEntryId(null);
     }
   };
 

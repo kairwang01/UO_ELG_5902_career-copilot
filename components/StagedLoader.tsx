@@ -101,6 +101,7 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
   const [stepIndex, setStepIndex] = useState(0);
   const [visible, setVisible] = useState(true);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Tips: shuffle once per mount, then rotate.
   const tipsRef = useRef<string[] | null>(null);
@@ -108,6 +109,7 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
   const tips = tipsRef.current;
   const [tipIndex, setTipIndex] = useState(0);
   const [tipVisible, setTipVisible] = useState(true);
+  const tipFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Inject fade keyframes once.
   useEffect(() => {
@@ -136,13 +138,14 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
     if (stepIndex >= displaySteps.length - 1) return; // Hold on last step.
     timerRef.current = setTimeout(() => {
       setVisible(false);
-      setTimeout(() => {
+      fadeTimerRef.current = setTimeout(() => {
         setStepIndex((i) => Math.min(i + 1, displaySteps.length - 1));
         setVisible(true);
       }, 200); // matches fade-out duration
     }, intervalMs);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
     };
   }, [stepIndex, displaySteps.length, intervalMs]);
 
@@ -151,12 +154,15 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
     if (!showTips || tips.length <= 1) return;
     const id = setInterval(() => {
       setTipVisible(false);
-      setTimeout(() => {
+      tipFadeTimerRef.current = setTimeout(() => {
         setTipIndex((i) => (i + 1) % tips.length);
         setTipVisible(true);
       }, 250);
     }, tipIntervalMs);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      if (tipFadeTimerRef.current) clearTimeout(tipFadeTimerRef.current);
+    };
   }, [showTips, tipIntervalMs, tips.length]);
 
   // Progress bar target: spread across steps, cap at ~88% to avoid false "done".

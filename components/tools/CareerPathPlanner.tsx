@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Compass } from 'lucide-react';
 import { generateCareerPath, generateSkillBridgeProject } from '../../services/aiClient';
 import type { CareerPathResult, SkillBridgeProject } from '../../types';
@@ -40,6 +40,11 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   const [generatedProject, setGeneratedProject] = useState<SkillBridgeProject | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
   const [lastProjectSkill, setLastProjectSkill] = useState<string | null>(null);
+  const projectRunRef = useRef(0);
+
+  useEffect(() => () => {
+    projectRunRef.current += 1;
+  }, []);
 
   // SmartSuggest: derive role chips from resume (pure, no AI)
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
@@ -48,17 +53,22 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerateProject = async (skill: string) => {
+    const runId = projectRunRef.current + 1;
+    projectRunRef.current = runId;
     setLastProjectSkill(skill);
     setGeneratingProjectForSkill(skill);
     setGeneratedProject(null);
     setProjectError(null);
     try {
         const project = await generateSkillBridgeProject(resumeText, desiredRole, skill);
+        if (projectRunRef.current !== runId) return;
         setGeneratedProject(project);
     } catch (err) {
-        setProjectError(err instanceof Error ? err.message : t('tool_career_path_project_failed'));
+        if (projectRunRef.current === runId) {
+          setProjectError(err instanceof Error ? err.message : t('tool_career_path_project_failed'));
+        }
     } finally {
-        setGeneratingProjectForSkill(null);
+        if (projectRunRef.current === runId) setGeneratingProjectForSkill(null);
     }
   };
 

@@ -458,6 +458,11 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     const appliedInitialJobIdRef = useRef<string | null>(null);
     const searchFormRef = useRef<HTMLFormElement>(null);
     const roleBriefRef = useRef<HTMLTextAreaElement>(null);
+    const mountedRef = useRef(true);
+
+    useEffect(() => () => {
+        mountedRef.current = false;
+    }, []);
 
     const { addToast } = useSharedToast();
     const usesExternalJobs = Array.isArray(postedJobsProp);
@@ -509,12 +514,14 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         setInternalJobsError(null);
         try {
             const jobs = await listActiveEmployerJobs(profile.id);
+            if (!mountedRef.current) return;
             setInternalPostedJobs(jobs);
         } catch {
+            if (!mountedRef.current) return;
             setInternalPostedJobs([]);
             setInternalJobsError(t('talent_posted_jobs_error'));
         } finally {
-            setInternalJobsLoaded(true);
+            if (mountedRef.current) setInternalJobsLoaded(true);
         }
     }, [onRetryPostedJobs, profile.id, t, usesExternalJobs]);
 
@@ -606,7 +613,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
             if (requestId !== verifiedRequestIdRef.current) return;
             setSearchError(err instanceof Error ? err.message : t('talent_search_error'));
         } finally {
-            setSearchLoading(false);
+            if (requestId === verifiedRequestIdRef.current) setSearchLoading(false);
         }
     };
 
@@ -657,7 +664,15 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     // Load this employer's hidden-candidate set once so prior hides persist across searches.
     useEffect(() => {
         if (!profile?.id) return;
-        listHiddenCandidateIds(profile.id).then(setHiddenIds).catch(() => { /* non-fatal */ });
+        let active = true;
+        listHiddenCandidateIds(profile.id)
+            .then((ids) => {
+                if (active) setHiddenIds(ids);
+            })
+            .catch(() => { /* non-fatal */ });
+        return () => {
+            active = false;
+        };
     }, [profile?.id]);
 
     const handleHideCandidate = async (candidate: MatchedCandidate) => {

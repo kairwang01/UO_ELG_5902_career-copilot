@@ -78,12 +78,18 @@ export const CopyButton: React.FC<{ text: string; label?: string; copiedLabel?: 
   className = '',
 }) => {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+  }, []);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard unavailable (permissions/insecure context) — leave the label as-is.
     }
@@ -177,7 +183,14 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
   const [isDocxExporting, setIsDocxExporting] = useState(false);
   const [status, setStatus] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const printTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const safeBaseFilename = sanitizeFilename(baseFilename);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (printTimerRef.current) clearTimeout(printTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -305,15 +318,16 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
     `);
     printWindow.document.close();
 
-    setTimeout(() => {
+    if (printTimerRef.current) clearTimeout(printTimerRef.current);
+    printTimerRef.current = setTimeout(() => {
         try {
             printWindow.focus();
             printWindow.print();
             printWindow.close();
-            setStatus({ tone: 'success', message: 'PDF print dialog opened.' });
+            if (mountedRef.current) setStatus({ tone: 'success', message: 'PDF print dialog opened.' });
         } catch (e) {
             console.error("Printing failed:", e);
-            setStatus({ tone: 'error', message: 'PDF export failed. Please try again.' });
+            if (mountedRef.current) setStatus({ tone: 'error', message: 'PDF export failed. Please try again.' });
             printWindow.close();
         }
     }, 250);
@@ -366,6 +380,7 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
       });
 
       const blob = await Packer.toBlob(doc);
+      if (!mountedRef.current) return;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -376,9 +391,9 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
       window.URL.revokeObjectURL(url);
       setStatus({ tone: 'success', message: 'DOCX export started.' });
     } catch {
-      setStatus({ tone: 'error', message: 'DOCX export failed. Please try again.' });
+      if (mountedRef.current) setStatus({ tone: 'error', message: 'DOCX export failed. Please try again.' });
     } finally {
-      setIsDocxExporting(false);
+      if (mountedRef.current) setIsDocxExporting(false);
     }
   };
 

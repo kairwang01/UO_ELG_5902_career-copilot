@@ -684,10 +684,19 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const mountedRef = useRef(true);
   const autoFillRunRef = useRef(0);
+  const headshotRunRef = useRef(0);
   const saveDraftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDraftRef = useRef('');
   const resumeFingerprint = useMemo(() => portfolioDraftResumeFingerprint(resumeText), [resumeText]);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    autoFillRunRef.current++;
+    headshotRunRef.current++;
+    if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
+  }, []);
 
   useEffect(() => {
     setPortfolioContent(null);
@@ -756,18 +765,21 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
 
     if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
     setDraftStatus('saving');
+    let cancelled = false;
     saveDraftTimerRef.current = setTimeout(() => {
       savePortfolioDraft(uid, draft)
         .then(() => {
+          if (cancelled || !mountedRef.current) return;
           lastSavedDraftRef.current = serializedDraft;
           setDraftStatus('saved');
         })
         .catch(() => {
-          setDraftStatus('error');
+          if (!cancelled && mountedRef.current) setDraftStatus('error');
         });
     }, 900);
 
     return () => {
+      cancelled = true;
       if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
     };
   }, [details, draftHydrated, portfolioContent, projects, resumeFingerprint, resumeText, session?.user?.id]);
@@ -858,7 +870,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     setError(null);
     try {
       const extractedContent = await generatePortfolioWebsite(resumeSnapshot);
-      if (autoFillRunRef.current !== runId || resumeSnapshot !== resumeText) return;
+      if (!mountedRef.current || autoFillRunRef.current !== runId || resumeSnapshot !== resumeText) return;
 
       setPortfolioContent(extractedContent);
       setDetails(prev => ({
@@ -872,17 +884,16 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       });
       addToast(t('tool_portfolio_auto_fill_success'), 'success');
     } catch (err) {
-      if (autoFillRunRef.current === runId) {
+      if (mountedRef.current && autoFillRunRef.current === runId) {
         setError(err instanceof Error ? err.message : t('tool_portfolio_auto_fill_error'));
       }
     } finally {
-      if (autoFillRunRef.current === runId) setAutoFillLoading(false);
+      if (mountedRef.current && autoFillRunRef.current === runId) setAutoFillLoading(false);
     }
   };
 
   // Bumped on each generate/cancel so a late (or cancelled) result is ignored —
   // the user can never be trapped on the "Generating…" spinner.
-  const headshotRunRef = useRef(0);
   const handleGenerateHeadshots = async () => {
     if (!uploadedImage) {
       setHeadshotError(t('tool_portfolio_photo_required'));
@@ -898,7 +909,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             new Promise<string[]>((_, reject) =>
                 setTimeout(() => reject(new Error(t('tool_portfolio_headshot_timeout'))), 120_000)),
         ]);
-        if (headshotRunRef.current !== runId) return; // cancelled / superseded
+        if (!mountedRef.current || headshotRunRef.current !== runId) return; // cancelled / superseded
         if (!Array.isArray(results) || results.length === 0) {
           setHeadshotError(t('tool_portfolio_headshot_empty'));
           setHeadshotStep('photo_uploaded');
@@ -907,7 +918,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         setGeneratedImages(results.map(imgData => ({ mimeType: 'image/jpeg', data: imgData })));
         setHeadshotStep('generated');
     } catch (err) {
-        if (headshotRunRef.current !== runId) return;
+        if (!mountedRef.current || headshotRunRef.current !== runId) return;
         setHeadshotError(err instanceof Error ? err.message : t('tool_portfolio_headshot_failed'));
         setHeadshotStep('photo_uploaded');
     }
@@ -918,6 +929,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     if (!file) return;
     try {
         const resizedImage = await resizeImage(file, 800);
+        if (!mountedRef.current) return;
         setUploadedImage(resizedImage);
         setHeadshotStep('photo_uploaded');
         setHeadshotError(null);
@@ -930,6 +942,10 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      if (!mountedRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       setCameraStream(stream);
       setHeadshotStep('camera');
       setHeadshotError(null);
@@ -1009,6 +1025,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
     try {
       await deletePortfolioDraft(uid);
+      if (!mountedRef.current) return;
       lastSavedDraftRef.current = '';
       setPortfolioContent(null);
       setDetails(prev => ({ tagline: '', bio: '', theme: prev.theme }));
@@ -1018,6 +1035,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setDraftStatus('idle');
       addToast(t('tool_portfolio_draft_cleared'), 'success');
     } catch (err) {
+      if (!mountedRef.current) return;
       setDraftStatus('error');
       setError(err instanceof Error ? err.message : t('tool_portfolio_draft_save_failed'));
     }
@@ -1028,6 +1046,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     if (!file) return;
     try {
         const resizedImage = await resizeImage(file, 600);
+        if (!mountedRef.current) return;
         setProjects(prev => prev.map(p => p.id === id ? { ...p, image: resizedImage } : p));
     } catch (err) {
         setError(t('tool_portfolio_image_process_failed'));
