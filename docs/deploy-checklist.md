@@ -94,3 +94,21 @@ messaging, bulk, sourcing hide, SessionContext) ships in the same bundle.
 - Candidate: prefill review → save; apply with screener answers.
 - Employer: applicant packet shows screener answers; bulk action + message; Talent Discovery hide persists.
 - Billing: a paid plan select with no `billing.active` (prod, `ALLOW_DEMO_GRANTS` unset) → stays `pending_payment` (no role/credit grant).
+
+---
+
+## Deployment log
+
+### 2026-06-20 — `career-copilot-a3168` (commit `9b8639a`)
+**Deployed:**
+- `firestore:rules` (application_messages, hidden_candidates) ✅
+- `firestore:indexes` (application_messages composite) ✅
+- functions (created): `bulkUpdateApplicationStatus`, `sendApplicationMessage` ✅
+- functions (updated): `aiProxy`, `createJobApplication`, `createJobPosting`, `updateJobPosting`, `listJobApplicants`, `onUserCreated` ✅
+- Verified live via `firebase functions:list`.
+
+**Held (require an explicit decision / secret — NOT deployed):**
+- `createCheckoutSession`, `stripeWebhook` — `functions/.env` has no `STRIPE_*` / `APP_BASE_URL`; would 500 at runtime. Deploy after setting the env vars in §0.
+- `setSubscriptionStatus` (new billing gate) — without `ALLOW_DEMO_GRANTS=true` or a live Stripe webhook, every paid-plan selection becomes permanent `pending_payment`. Decide: set `ALLOW_DEMO_GRANTS=true` (demo) **or** wire Stripe (prod), then deploy.
+
+**Still outstanding:** frontend rebuild + host publish (carries 515a00a + the full arc UI). Runtime note: Cloud Functions are on the deprecated Node.js 20 — schedule a `firebase-functions` + runtime bump.
