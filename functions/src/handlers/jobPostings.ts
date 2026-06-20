@@ -74,6 +74,29 @@ function strArray(v: unknown, maxItems: number, maxLen: number): string[] {
   return out;
 }
 
+// Indeed/LinkedIn-style screener questions. Server-assigns stable ids and caps the
+// count. `expected` is a SCREENING SIGNAL only (shown as met/gap in the employer
+// packet) — it NEVER auto-rejects an applicant.
+const SCREENER_TYPES = new Set(["yes_no", "short_text"]);
+function screenerQuestions(
+  v: unknown,
+): { id: string; prompt: string; type: string; required: boolean; expected: string | null }[] {
+  if (!Array.isArray(v)) return [];
+  const out: { id: string; prompt: string; type: string; required: boolean; expected: string | null }[] = [];
+  for (const item of v) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const q = item as Record<string, unknown>;
+    const prompt = str(q.prompt, 300);
+    if (!prompt) continue;
+    const type = typeof q.type === "string" && SCREENER_TYPES.has(q.type) ? q.type : "short_text";
+    const expectedRaw = typeof q.expected === "string" ? q.expected : "";
+    const expected = type === "yes_no" && (expectedRaw === "yes" || expectedRaw === "no") ? expectedRaw : null;
+    out.push({ id: `q${out.length + 1}`, prompt, type, required: q.required === true, expected });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 async function loadPoster(uid: string): Promise<Poster> {
   const snap = await db.collection("users").doc(uid).get();
   if (!snap.exists) throw new HttpsError("not-found", "We could not load your profile. Please sign out and back in.");
@@ -153,6 +176,7 @@ function buildContent(input: Record<string, unknown>): Record<string, unknown> {
     language_requirement: strOrNull(input.language_requirement, 200),
     interview_process: strOrNull(input.interview_process, 4000),
     campus_new_grad: input.campus_new_grad === true,
+    screener_questions: screenerQuestions(input.screener_questions),
   };
 }
 

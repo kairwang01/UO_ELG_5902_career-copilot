@@ -106,6 +106,10 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
     const [headcount, setHeadcount] = useState('');
     const [interviewProcess, setInterviewProcess] = useState('');
     const [campusNewGrad, setCampusNewGrad] = useState(false);
+    // Screener questions (Indeed/LinkedIn style). Ids are server-assigned on save.
+    const [screenerQuestions, setScreenerQuestions] = useState<
+        { prompt: string; type: 'yes_no' | 'short_text'; required: boolean; expected: string | null }[]
+    >([]);
 
     // UI/Loading state
     const [loading, setLoading] = useState(false);
@@ -178,6 +182,11 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setHeadcount(existingJob.headcount ? String(existingJob.headcount) : '');
             setInterviewProcess(existingJob.interview_process || '');
             setCampusNewGrad(!!existingJob.campus_new_grad);
+            setScreenerQuestions(
+                (existingJob.screener_questions || []).map((q) => ({
+                    prompt: q.prompt, type: q.type, required: q.required, expected: q.expected,
+                })),
+            );
             // Key responsibilities are not saved, so they will be blank on edit.
         }
     }, [existingJob]);
@@ -334,6 +343,15 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 language_requirement: languageRequirement.trim(),
                 interview_process: interviewProcess.trim(),
                 campus_new_grad: campusNewGrad,
+                screener_questions: screenerQuestions
+                    .filter((q) => q.prompt.trim())
+                    .map((q, i) => ({
+                        id: `q${i + 1}`,
+                        prompt: q.prompt.trim(),
+                        type: q.type,
+                        required: q.required,
+                        expected: q.type === 'yes_no' ? q.expected : null,
+                    })),
                 // Snapshot company name + context at create time; profile fields are
                 // trusted (read from server-provisioned user doc, not user input).
                 company_name: profile.company_name ?? null,
@@ -640,6 +658,71 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                     <input type="checkbox" checked={campusNewGrad} onChange={e => setCampusNewGrad(e.target.checked)} className={checkboxClass} />
                     {t('job_field_campus_new_grad')}
                 </label>
+            </section>
+
+            <section className="space-y-4 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <h3 className={sectionHeadingClass}>{t('job_section_screener')}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('job_screener_desc')}</p>
+                <div className="space-y-3">
+                    {screenerQuestions.map((q, i) => (
+                        <div key={i} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                            <div className="flex items-start gap-2">
+                                <input
+                                    type="text"
+                                    value={q.prompt}
+                                    onChange={e => setScreenerQuestions(list => list.map((x, xi) => xi === i ? { ...x, prompt: e.target.value } : x))}
+                                    placeholder={t('job_screener_prompt_placeholder')}
+                                    maxLength={300}
+                                    className={inputClass}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setScreenerQuestions(list => list.filter((_, xi) => xi !== i))}
+                                    className="mt-2 shrink-0 text-xs font-semibold text-gray-400 hover:text-red-500"
+                                >
+                                    {t('job_screener_remove')}
+                                </button>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-3">
+                                <select
+                                    value={q.type}
+                                    onChange={e => setScreenerQuestions(list => list.map((x, xi) => xi === i ? { ...x, type: e.target.value as 'yes_no' | 'short_text', expected: e.target.value === 'yes_no' ? x.expected : null } : x))}
+                                    className={`${inputClass} w-auto`}
+                                >
+                                    <option value="short_text">{t('job_screener_type_text')}</option>
+                                    <option value="yes_no">{t('job_screener_type_yes_no')}</option>
+                                </select>
+                                <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                                    <input type="checkbox" checked={q.required} onChange={e => setScreenerQuestions(list => list.map((x, xi) => xi === i ? { ...x, required: e.target.checked } : x))} className={checkboxClass} />
+                                    {t('job_screener_required')}
+                                </label>
+                                {q.type === 'yes_no' && (
+                                    <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                                        {t('job_screener_expected')}
+                                        <select
+                                            value={q.expected ?? ''}
+                                            onChange={e => setScreenerQuestions(list => list.map((x, xi) => xi === i ? { ...x, expected: e.target.value || null } : x))}
+                                            className={`${inputClass} w-auto`}
+                                        >
+                                            <option value="">{t('job_screener_expected_any')}</option>
+                                            <option value="yes">{t('apply_review_screener_yes')}</option>
+                                            <option value="no">{t('apply_review_screener_no')}</option>
+                                        </select>
+                                    </label>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {screenerQuestions.length < 8 && (
+                        <button
+                            type="button"
+                            onClick={() => setScreenerQuestions(list => [...list, { prompt: '', type: 'short_text', required: false, expected: null }])}
+                            className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                            + {t('job_screener_add')}
+                        </button>
+                    )}
+                </div>
             </section>
         </>
     );

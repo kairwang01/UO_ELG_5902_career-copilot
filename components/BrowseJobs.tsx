@@ -563,12 +563,13 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
       requiredSkills: job.required_skills,
       experienceLevel: job.experience_level,
       workMode: job.work_mode,
+      screenerQuestions: job.screener_questions,
     });
   }, [session, appliedJobs, addToast, t]);
 
   // Step 2 — actually submit, only after the candidate confirms in the modal.
   // The server re-enforces the ready-Talent-Profile precondition (bypass-safe).
-  const confirmApply = useCallback(async () => {
+  const confirmApply = useCallback(async (answers: { questionId: string; answer: string }[]) => {
     if (!session?.user || !reviewJob) return;
     const jobId = reviewJob.id;
     if (appliedJobs.has(jobId) || applyInFlight.current === jobId) return;
@@ -576,7 +577,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
     setApplyingId(jobId);
     try {
       const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
-      await createJobApplication({ jobId, compatibilityScore: null });
+      await createJobApplication({ jobId, compatibilityScore: null, screenerAnswers: answers });
       setAppliedJobs((prev) => new Set(prev).add(jobId));
       addToast(t('browse_jobs_apply_success'), 'success');
       setReviewJob(null);

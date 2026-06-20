@@ -3181,5 +3181,22 @@
   "applicant_funnel_bulk_partial_toast": "已完成 {{succeeded}} 位，{{failed}} 位失败。",
   "applicant_funnel_bulk_default_advance_message": "感谢你的申请。我们将推进你进入下一阶段，后续会尽快补充具体安排。",
   "applicant_funnel_bulk_default_rejection_message": "感谢你的时间和申请。本岗位暂不继续推进，但我们感谢你的关注。",
-  "applicant_funnel_select_applicant": "选择 {{name}} 进行批量操作"
+  "applicant_funnel_select_applicant": "选择 {{name}} 进行批量操作",
+  "apply_review_screener_title": "筛选问题",
+  "apply_review_screener_yes": "是",
+  "apply_review_screener_no": "否",
+  "apply_review_need_screener": "请回答必答的筛选问题",
+  "applicant_funnel_screener_title": "筛选问题作答",
+  "applicant_funnel_screener_no_answer": "未作答",
+  "applicant_funnel_screener_signal": "筛选信号",
+  "job_section_screener": "筛选问题",
+  "job_screener_desc": "最多向候选人提 8 个快速问题。设置偏好答案后，它只会在候选人卡片中显示为筛选信号，绝不会自动拒绝任何人。",
+  "job_screener_prompt_placeholder": "例如：你是否有在加拿大工作的许可？",
+  "job_screener_remove": "移除",
+  "job_screener_type_text": "简答",
+  "job_screener_type_yes_no": "是 / 否",
+  "job_screener_required": "必答",
+  "job_screener_expected": "偏好答案",
+  "job_screener_expected_any": "无偏好",
+  "job_screener_add": "添加问题"
 }

@@ -9,6 +9,23 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from './firebaseClient';
 
+/** Indeed/LinkedIn-style screener question. `expected` is a SCREENING SIGNAL only
+ *  (shown as met/gap in the employer packet) — it never auto-rejects. */
+export interface ScreenerQuestion {
+  id: string;
+  prompt: string;
+  type: 'yes_no' | 'short_text';
+  required: boolean;
+  expected: string | null;
+}
+
+/** A candidate's answer to one screener question (prompt frozen at apply time). */
+export interface ScreenerAnswer {
+  question_id: string;
+  prompt: string;
+  answer: string;
+}
+
 export interface JobPosting {
   id: string;
   employer_id: string;
@@ -43,6 +60,7 @@ export interface JobPosting {
   language_requirement: string | null;
   interview_process: string | null;
   campus_new_grad: boolean;
+  screener_questions: ScreenerQuestion[];
 }
 
 export interface JobPostingWithCount extends JobPosting {
@@ -80,6 +98,7 @@ export interface JobPostingPatch {
   language_requirement?: string;
   interview_process?: string;
   campus_new_grad?: boolean;
+  screener_questions?: ScreenerQuestion[];
 }
 
 const toIsoString = (value: unknown): string => {
@@ -126,6 +145,7 @@ const mapJobPosting = (id: string, data: DocumentData): JobPosting => ({
   language_requirement: data.language_requirement ?? null,
   interview_process: data.interview_process ?? null,
   campus_new_grad: data.campus_new_grad === true,
+  screener_questions: Array.isArray(data.screener_questions) ? (data.screener_questions as ScreenerQuestion[]) : [],
 });
 
 const mapApplication = (id: string, data: DocumentData): JobApplication => ({
@@ -211,6 +231,7 @@ export const saveJobPosting = async (
     language_requirement: patch.language_requirement,
     interview_process: patch.interview_process,
     campus_new_grad: patch.campus_new_grad,
+    screener_questions: patch.screener_questions,
   };
   if (existingJobId) {
     const fn = httpsCallable<{ jobId: string; posting: typeof posting }, { jobId: string }>(firebaseFunctions, 'updateJobPosting');

@@ -5,6 +5,7 @@ import { loadTalentProfile } from '../services/talentProfile';
 import { isTalentProfileReady, hasMeaningfulEntry, type TalentProfile } from '../lib/talentProfile';
 import { collectCandidateSkills, matchSkills } from '../lib/skillMatch';
 import { data } from '../lib/data';
+import type { ScreenerQuestion } from '../lib/recruitingData';
 
 export interface ApplyReviewJob {
   id: string;
@@ -14,6 +15,8 @@ export interface ApplyReviewJob {
   requiredSkills?: string[];
   experienceLevel?: string | null;
   workMode?: string | null;
+  /** Indeed/LinkedIn-style screener questions the candidate answers before submitting. */
+  screenerQuestions?: ScreenerQuestion[];
 }
 
 interface ApplyReviewModalProps {
@@ -21,8 +24,8 @@ interface ApplyReviewModalProps {
   job: ApplyReviewJob | null;
   uid: string;
   t: (key: string) => string;
-  /** Performs the real submission (createJobApplication). Resolves when done. */
-  onConfirm: () => Promise<void>;
+  /** Performs the real submission (createJobApplication) with the screener answers. */
+  onConfirm: (answers: { questionId: string; answer: string }[]) => Promise<void>;
   onClose: () => void;
   /** Optional: jump to the Talent Profile editor (used when info is incomplete). */
   onEditProfile?: () => void;
@@ -48,6 +51,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   // Keep the body-scroll lock for the whole time the modal is open (not just
   // while idle); only suppress Esc-to-close mid-submit via the guard.
@@ -63,6 +67,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
     setResumeFileName(null);
     setHasResumeText(false);
     setResumeSnippet('');
+    setAnswers({});
     Promise.all([loadTalentProfile(uid), data.profiles.get(uid)])
       .then(([tp, profileRes]) => {
         if (!active) return;
@@ -85,8 +90,10 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
 
   const ready = useMemo(() => isTalentProfileReady(profile), [profile]);
   const hasResume = Boolean(resumeFileName) || hasResumeText;
+  const screenerQuestions = job?.screenerQuestions ?? [];
+  const requiredUnanswered = screenerQuestions.some((q) => q.required && !(answers[q.id] ?? '').trim());
   // A resume is required to apply — HR review depends on it (server re-enforces).
-  const canSubmit = ready && hasResume;
+  const canSubmit = ready && hasResume && !requiredUnanswered;
   const name = profile?.basic?.name?.trim() || '';
   const targetRole = typeof profile?.intention?.targetRole === 'string' ? profile.intention.targetRole.trim() : '';
   const eduCount = countMeaningful(profile?.education);
@@ -116,7 +123,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
     if (submitting || !canSubmit) return;
     setSubmitting(true);
     try {
-      await onConfirm();
+      await onConfirm(screenerQuestions.map((q) => ({ questionId: q.id, answer: (answers[q.id] ?? '').trim() })));
     } finally {
       // The parent closes the modal on success; reset so a re-open is clean.
       setSubmitting(false);
@@ -239,6 +246,49 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
                 </div>
               )}
 
+              {/* Screener questions (Indeed/LinkedIn Easy-Apply style) */}
+              {screenerQuestions.length > 0 && (
+                <div className="mt-3 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    {t('apply_review_screener_title')}
+                  </p>
+                  <div className="mt-2 space-y-3">
+                    {screenerQuestions.map((q) => (
+                      <div key={q.id}>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                          {q.prompt}{q.required && <span className="text-red-500"> *</span>}
+                        </label>
+                        {q.type === 'yes_no' ? (
+                          <div className="mt-1.5 flex gap-2">
+                            {(['yes', 'no'] as const).map((opt) => (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => setAnswers((a) => ({ ...a, [q.id]: opt }))}
+                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                                  answers[q.id] === opt
+                                    ? 'border-blue-600 bg-blue-600 text-white'
+                                    : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300'
+                                }`}
+                              >
+                                {t(opt === 'yes' ? 'apply_review_screener_yes' : 'apply_review_screener_no')}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={answers[q.id] ?? ''}
+                            onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {!canSubmit && (
                 <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-900/50 dark:bg-amber-950/20">
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-200">
@@ -250,6 +300,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
                     {!targetRole && <li>• {t('apply_review_need_target')}</li>}
                     {eduCount === 0 && expCount === 0 && <li>• {t('apply_review_need_history')}</li>}
                     {!hasResume && <li>• {t('apply_review_need_resume')}</li>}
+                    {requiredUnanswered && <li>• {t('apply_review_need_screener')}</li>}
                   </ul>
                   {!onEditProfile && (
                     <p className="mt-2 text-xs font-medium text-amber-800/90 dark:text-amber-200/90">{t('apply_review_sidebar_hint')}</p>

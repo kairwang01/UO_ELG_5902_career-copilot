@@ -20,6 +20,7 @@ import { httpsCallable } from 'firebase/functions';
 import { app as firebaseApp, firebaseFunctions } from '../../lib/firebaseClient';
 import { CopyButton, renderFormattedText, ToolError } from './ToolUtils';
 import { loadJobPreferences, preferencesToPromptBlock, prefsSummaryLine } from '../../hooks/useJobPreferences';
+import type { ScreenerQuestion } from '../../lib/recruitingData';
 
 interface OpportunityFinderProps {
   resumeText: string;
@@ -60,7 +61,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
 
   // ---- salary chip: Map<internalJobId, { salary_range?: string, location?: string }> ----
-  const [internalJobData, setInternalJobData] = useState<Map<string, { salary_range?: string; location?: string }>>(new Map());
+  type InternalJobMeta = { salary_range?: string; location?: string; screener_questions?: ScreenerQuestion[] };
+  const [internalJobData, setInternalJobData] = useState<Map<string, InternalJobMeta>>(new Map());
 
   // ---- per-card AI action state ----
   type WhyFitResult = { compatibilityScore: number; summary: string };
@@ -81,10 +83,19 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         return;
     }
     if (appliedJobs.has(jobId)) return;
-    setPendingApply({ job: { id: jobId, title, company }, score: compatibilityScore });
+    const meta = internalJobData.get(jobId);
+    setPendingApply({
+      job: {
+        id: jobId,
+        title,
+        company,
+        screenerQuestions: meta?.screener_questions ?? [],
+      },
+      score: compatibilityScore,
+    });
   };
 
-  const confirmApply = async () => {
+  const confirmApply = async (answers: { questionId: string; answer: string }[]) => {
     if (!session?.user || !pendingApply) return;
     const { job, score } = pendingApply;
     if (appliedJobs.has(job.id) || applyInFlightRef.current === job.id) return;
@@ -96,7 +107,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         // client-side creates, and the ready-Talent-Profile precondition is
         // re-enforced server-side.
         const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
-        await createJobApplication({ jobId: job.id, compatibilityScore: score ?? null });
+        await createJobApplication({ jobId: job.id, compatibilityScore: score ?? null, screenerAnswers: answers });
         setAppliedJobs(prev => new Set(prev).add(job.id));
         addToast(t('tool_opportunity_finder_apply_success'), 'success');
         setPendingApply(null);
@@ -153,9 +164,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // the AI's external suggestions. Additive and free; never blocks external search.
   const fetchInternalJobs = useCallback(async (): Promise<{
     opps: Opportunity[];
-    meta: Map<string, { salary_range?: string; location?: string }>;
+    meta: Map<string, InternalJobMeta>;
   }> => {
-    const empty = { opps: [] as Opportunity[], meta: new Map<string, { salary_range?: string; location?: string }>() };
+    const empty = { opps: [] as Opportunity[], meta: new Map<string, InternalJobMeta>() };
     if (!sessionUserId) return empty;
     try {
       const db = getFirestore(firebaseApp);
@@ -163,7 +174,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         query(collection(db, 'job_postings'), where('is_active', '==', true), limit(25)),
       );
       const opps: Opportunity[] = [];
-      const meta = new Map<string, { salary_range?: string; location?: string }>();
+      const meta = new Map<string, InternalJobMeta>();
       snap.docs.forEach((docSnap) => {
         const d = docSnap.data() as Record<string, unknown>;
         const id = docSnap.id;
@@ -181,6 +192,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         meta.set(id, {
           salary_range: d.salary_range as string | undefined,
           location: d.location as string | undefined,
+          screener_questions: Array.isArray(d.screener_questions) ? (d.screener_questions as ScreenerQuestion[]) : [],
         });
       });
       return { opps, meta };

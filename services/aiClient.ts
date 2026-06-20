@@ -368,6 +368,7 @@ export interface JobApplicant {
   suggestedQuestions: string[];
   talent_profile: TalentProfile | null;
   status_history: ApplicationStatusHistoryEvent[];
+  screener_answers: { question_id: string; prompt: string; answer: string }[];
 }
 
 export interface ListJobApplicantsResult {

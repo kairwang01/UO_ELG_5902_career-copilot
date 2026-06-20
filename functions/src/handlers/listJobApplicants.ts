@@ -44,6 +44,12 @@ const db = admin.firestore();
 /** Hard per-request cap — each analyzed applicant is one LLM call. */
 const MATCH_CANDIDATE_CAP = 25;
 
+interface ScreenerAnswer {
+  question_id: string;
+  prompt: string;
+  answer: string;
+}
+
 interface SafeApplicant {
   id: string;
   candidate_name: string;
@@ -56,6 +62,7 @@ interface SafeApplicant {
   suggestedQuestions: string[];
   talent_profile: TalentProfileSnapshot | null;
   status_history: StatusHistoryEvent[];
+  screener_answers: ScreenerAnswer[];
 }
 
 interface ApplicationRow {
@@ -64,6 +71,7 @@ interface ApplicationRow {
   candidate_name: string;
   application_date: string | null;
   status: string;
+  screener_answers: ScreenerAnswer[];
 }
 
 interface StatusHistoryEvent {
@@ -117,6 +125,7 @@ function emptyApplicant(
     suggestedQuestions: [],
     talent_profile: talentProfile,
     status_history: statusHistory,
+    screener_answers: a.screener_answers,
   };
 }
 
@@ -162,6 +171,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
         candidate_name: typeof data.candidate_name === "string" ? data.candidate_name : "Candidate",
         application_date: isoFromTimestamp(data.application_date),
         status: typeof data.status === "string" ? data.status : "Applied",
+        screener_answers: Array.isArray(data.screener_answers) ? (data.screener_answers as ScreenerAnswer[]) : [],
       };
     })
     .filter((a) => a.candidate_id);
@@ -314,6 +324,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
           suggestedQuestions: strArr(parsed.suggestedQuestions),
           talent_profile: talentProfileById.get(a.candidate_id) ?? null,
           status_history: statusHistoryByAppId.get(a.application_id) ?? [],
+          screener_answers: a.screener_answers,
         };
       } catch (e) {
         console.error(`listJobApplicants: match failed for candidate ${a.candidate_id}:`, e);

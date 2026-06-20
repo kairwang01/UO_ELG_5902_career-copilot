@@ -34,6 +34,7 @@ const RESUME_BUCKET = process.env.RESUME_STORAGE_BUCKET || "career-copilot-a3168
 interface CreateJobApplicationRequest {
   jobId: string;
   compatibilityScore?: number | null;
+  screenerAnswers?: { questionId: string; answer: string }[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -63,10 +64,47 @@ const isTalentProfileReady = (profile: FirebaseFirestore.DocumentData | undefine
   return hasName && hasTarget && hasHistory;
 };
 
-export const createJobApplicationFunction = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const data = request.data as CreateJobApplicationRequest;
+/**
+ * Builds the stored screener answers from the candidate's raw answers, validated
+ * against the JOB's questions. Required questions must be answered. The 'expected'
+ * field is NEVER compared here — knockout is a display-only screening signal in the
+ * employer packet, never an auto-reject. The prompt is frozen onto each answer so the
+ * packet renders correctly even if the job's questions are later edited.
+ */
+function buildScreenerAnswers(
+  questions: unknown,
+  rawAnswers: unknown,
+): { question_id: string; prompt: string; answer: string }[] {
+  if (!Array.isArray(questions) || questions.length === 0) return [];
+  const answerMap = new Map<string, string>();
+  if (Array.isArray(rawAnswers)) {
+    for (const a of rawAnswers) {
+      if (!isRecord(a)) continue;
+      const qid = typeof a.questionId === "string" ? a.questionId : "";
+      const ans = typeof a.answer === "string" ? a.answer.trim().slice(0, 2000) : "";
+      if (qid) answerMap.set(qid, ans);
+    }
+  }
+  const out: { question_id: string; prompt: string; answer: string }[] = [];
+  for (const q of questions) {
+    if (!isRecord(q)) continue;
+    const qid = typeof q.id === "string" ? q.id : "";
+    const prompt = typeof q.prompt === "string" ? q.prompt : "";
+    if (!qid) continue;
+    const answer = answerMap.get(qid) ?? "";
+    if (q.required === true && !answer) {
+      throw new HttpsError("failed-precondition", `Please answer the required screening question: "${prompt}"`);
+    }
+    out.push({ question_id: qid, prompt, answer });
+  }
+  return out;
+}
 
+export async function createJobApplicationImpl(
+  uid: string,
+  data: CreateJobApplicationRequest,
+  email?: string,
+) {
   if (!data.jobId?.trim()) {
     throw new HttpsError("invalid-argument", "jobId is required.");
   }
@@ -80,6 +118,9 @@ export const createJobApplicationFunction = onCall(async (request) => {
   if (jobData.is_active === false) {
     throw new HttpsError("failed-precondition", "This job is no longer accepting applications.");
   }
+
+  // Screener answers (Indeed/LinkedIn-style), validated against the job's questions.
+  const screenerAnswers = buildScreenerAnswers(jobData.screener_questions, data.screenerAnswers);
 
   // 2. Enforce the reusable Talent Profile requirement server-side. The UI also
   // blocks early, but this is the authoritative apply path and must be bypass-safe.
@@ -107,7 +148,7 @@ export const createJobApplicationFunction = onCall(async (request) => {
   const tpBasic = talentProfile?.basic as Record<string, unknown> | undefined;
   const tpName = typeof tpBasic?.name === "string" ? tpBasic.name.trim() : "";
   const fullName = typeof userData?.full_name === "string" ? userData.full_name.trim() : "";
-  const candidateName: string = tpName || fullName || request.auth?.token.email || "Candidate";
+  const candidateName: string = tpName || fullName || email || "Candidate";
 
   // 5. Legacy dedup: applications created before deterministic ids used an
   //    auto-id, so a re-apply would not collide on the new id. Catch those with a
@@ -147,6 +188,7 @@ export const createJobApplicationFunction = onCall(async (request) => {
       candidate_name: candidateName,
       status: "Applied",
       compatibility_score: data.compatibilityScore ?? null,
+      screener_answers: screenerAnswers,
       notes: null,
       application_date: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -156,6 +198,7 @@ export const createJobApplicationFunction = onCall(async (request) => {
       employer_id: jobData.employer_id ?? null,
       resume_text_snapshot: resumeText,
       talent_profile_snapshot: talentProfile ?? null,
+      screener_answers_snapshot: screenerAnswers,
       resume_file_snapshot_path: null,
       resume_file_snapshot_name: null,
       submitted_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -188,4 +231,11 @@ export const createJobApplicationFunction = onCall(async (request) => {
   }
 
   return { applicationId };
-});
+}
+
+export const createJobApplicationFunction = onCall((request) =>
+  createJobApplicationImpl(
+    requireAuth(request),
+    (request.data ?? {}) as CreateJobApplicationRequest,
+    request.auth?.token?.email,
+  ));

@@ -2524,6 +2524,32 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                         </div>
                     )}
 
+                    {selectedApplicant.screener_answers.length > 0 && (
+                        <div className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                            <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t('applicant_funnel_screener_title')}</h4>
+                            <dl className="mt-2 space-y-2.5">
+                                {selectedApplicant.screener_answers.map((sa) => {
+                                    const q = job.screener_questions.find((x) => x.id === sa.question_id);
+                                    // 'expected' is a SCREENING SIGNAL, never an auto-reject — flag a mismatch only.
+                                    const isSignal = !!q?.expected && q.type === 'yes_no' && sa.answer.trim().toLowerCase() !== q.expected;
+                                    return (
+                                        <div key={sa.question_id}>
+                                            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{sa.prompt}</dt>
+                                            <dd className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-slate-800 dark:text-slate-100">
+                                                <span>{sa.answer || t('applicant_funnel_screener_no_answer')}</span>
+                                                {isSignal && (
+                                                    <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                                                        {t('applicant_funnel_screener_signal')}
+                                                    </span>
+                                                )}
+                                            </dd>
+                                        </div>
+                                    );
+                                })}
+                            </dl>
+                        </div>
+                    )}
+
                     <div className="mt-5">
                         <ApplicationMessageThread applicationId={selectedApplicant.id} viewerRole="employer" t={t} />
                     </div>

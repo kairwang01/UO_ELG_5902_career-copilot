@@ -3102,5 +3102,22 @@
   "applicant_funnel_bulk_partial_toast": "Batch action completed for {{succeeded}} candidates; {{failed}} failed.",
   "applicant_funnel_bulk_default_advance_message": "Thanks for your application. We are moving you to the next stage and will follow up with details shortly.",
   "applicant_funnel_bulk_default_rejection_message": "Thank you for your time and interest. We will not be moving forward with this role, but we appreciate your application.",
-  "applicant_funnel_select_applicant": "Select {{name}} for batch actions"
+  "applicant_funnel_select_applicant": "Select {{name}} for batch actions",
+  "apply_review_screener_title": "Screening questions",
+  "apply_review_screener_yes": "Yes",
+  "apply_review_screener_no": "No",
+  "apply_review_need_screener": "Answer the required screening questions",
+  "applicant_funnel_screener_title": "Screening responses",
+  "applicant_funnel_screener_no_answer": "No answer",
+  "applicant_funnel_screener_signal": "Screening signal",
+  "job_section_screener": "Screening questions",
+  "job_screener_desc": "Ask applicants up to 8 quick questions. A preferred answer shows as a screening signal in your packet — it never auto-rejects anyone.",
+  "job_screener_prompt_placeholder": "e.g. Are you authorized to work in Canada?",
+  "job_screener_remove": "Remove",
+  "job_screener_type_text": "Short text",
+  "job_screener_type_yes_no": "Yes / No",
+  "job_screener_required": "Required",
+  "job_screener_expected": "Preferred answer",
+  "job_screener_expected_any": "No preference",
+  "job_screener_add": "Add question"
 }

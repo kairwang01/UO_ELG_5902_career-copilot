@@ -47,6 +47,23 @@ describe('createJobPosting callable', () => {
     await expect(createJobPostingImpl('cand', { posting: validPosting() })).rejects.toThrow(/employer/i);
   });
 
+  it('stores screener questions with server ids, caps at 8, drops empties, coerces types', async () => {
+    await db.collection('users').doc('emp').set(EMPLOYER);
+    const screener_questions = [
+      { prompt: 'Authorized to work in Canada?', type: 'yes_no', required: true, expected: 'yes' },
+      { prompt: 'Years of React?', type: 'short_text', required: false, expected: 'yes' }, // expected stripped (not yes_no)
+      { prompt: '', type: 'yes_no', required: true }, // empty prompt → dropped
+      { type: 'yes_no' }, // no prompt → dropped
+      ...Array.from({ length: 10 }, (_, i) => ({ prompt: `Extra ${i}`, type: 'short_text', required: false })),
+    ];
+    const { jobId } = await createJobPostingImpl('emp', { posting: validPosting({ screener_questions }) });
+    const q = (await db.collection('job_postings').doc(jobId).get()).data()!.screener_questions;
+    expect(q.length).toBe(8); // capped at 8 valid
+    expect(q[0]).toMatchObject({ id: 'q1', prompt: 'Authorized to work in Canada?', type: 'yes_no', required: true, expected: 'yes' });
+    expect(q[1]).toMatchObject({ id: 'q2', type: 'short_text', expected: null }); // expected only valid for yes_no
+    expect(q.every((x: { prompt: string }) => x.prompt.length > 0)).toBe(true); // empties dropped
+  });
+
   it('employer CAN create a job; company comes from server profile, not the request', async () => {
     await db.collection('users').doc('emp').set(EMPLOYER);
     const { jobId } = await createJobPostingImpl('emp', { posting: validPosting({ company_name: 'FORGED-INC' }) });
