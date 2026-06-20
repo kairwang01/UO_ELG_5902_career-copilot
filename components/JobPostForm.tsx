@@ -108,7 +108,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
     const [campusNewGrad, setCampusNewGrad] = useState(false);
     // Screener questions (Indeed/LinkedIn style). Ids are server-assigned on save.
     const [screenerQuestions, setScreenerQuestions] = useState<
-        { prompt: string; type: 'yes_no' | 'short_text'; required: boolean; expected: string | null }[]
+        { _uid: string; prompt: string; type: 'yes_no' | 'short_text'; required: boolean; expected: string | null }[]
     >([]);
 
     // UI/Loading state
@@ -184,6 +184,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setCampusNewGrad(!!existingJob.campus_new_grad);
             setScreenerQuestions(
                 (existingJob.screener_questions || []).map((q) => ({
+                    _uid: Math.random().toString(36).slice(2, 10),
                     prompt: q.prompt, type: q.type, required: q.required, expected: q.expected,
                 })),
             );
@@ -665,7 +666,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 <p className="text-xs text-gray-500 dark:text-gray-400">{t('job_screener_desc')}</p>
                 <div className="space-y-3">
                     {screenerQuestions.map((q, i) => (
-                        <div key={i} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                        <div key={q._uid} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
                             <div className="flex items-start gap-2">
                                 <input
                                     type="text"
@@ -716,7 +717,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                     {screenerQuestions.length < 8 && (
                         <button
                             type="button"
-                            onClick={() => setScreenerQuestions(list => [...list, { prompt: '', type: 'short_text', required: false, expected: null }])}
+                            onClick={() => setScreenerQuestions(list => [...list, { _uid: Math.random().toString(36).slice(2, 10), prompt: '', type: 'short_text', required: false, expected: null }])}
                             className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
                         >
                             + {t('job_screener_add')}

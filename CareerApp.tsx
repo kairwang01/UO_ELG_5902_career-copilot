@@ -807,6 +807,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       setError(t('resume_analysis_required'));
       return;
     }
+    const uidAtStart = session?.user?.id ?? null;
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
@@ -816,9 +817,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       if (!success) {
           throw new Error(t('credit_deduction_failed'));
       }
-      
+
       const result = await analyzeResume(resumeText, resumeImages, market);
-      
+
+      // If the user signed out or switched accounts mid-call, don't render results
+      // into — or write the profile of — a session that's no longer current.
+      if (currentUserIdRef.current !== uidAtStart) return;
+
       if (session?.user) {
         try {
             const eventId = await logToolUsage(session.user.id, 'resume-analysis', { market });

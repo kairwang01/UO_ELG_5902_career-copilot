@@ -1673,14 +1673,24 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     );
 
     const handleBulkSubmit = async () => {
-        const applicationIds = [...selectedApplicantIds];
-        if (applicationIds.length === 0) {
-            setStatusUpdateError(t('applicant_funnel_bulk_select_one'));
-            return;
-        }
         const reason = bulkReason.trim();
         if (bulkAction === 'reject' && !reason) {
             setStatusUpdateError(t('applicant_funnel_bulk_reason_required'));
+            return;
+        }
+        // Drop candidates the action can't apply to — advancing/rejecting a Rejected
+        // or Signed applicant is a server no-op, which would otherwise inflate the
+        // "advanced N" success count with untouched rows.
+        const statusById = new Map(applicants.map((a) => [a.id, a.status]));
+        const applicationIds = [...selectedApplicantIds].filter((id) => {
+            const s = statusById.get(id);
+            if (s === undefined) return false;
+            if (bulkAction === 'advance') return !isApplicationRejectedStatus(s) && s !== 'Signed';
+            if (bulkAction === 'reject') return !isApplicationRejectedStatus(s);
+            return true;
+        });
+        if (applicationIds.length === 0) {
+            setStatusUpdateError(t('applicant_funnel_bulk_select_one'));
             return;
         }
 

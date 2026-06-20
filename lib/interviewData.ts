@@ -6,7 +6,7 @@
  * the employer schedules / reschedules / cancels / completes; the candidate only
  * confirms.
  */
-import { collection, getDocs, query, where, type DocumentData } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where, type DocumentData } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from './firebaseClient';
 
@@ -63,6 +63,20 @@ export async function listInterviewsForApplication(applicationId: string): Promi
 export async function listInterviewsForCandidate(uid: string): Promise<ApplicationInterview[]> {
   const snap = await getDocs(query(collection(firestoreDb, 'application_interviews'), where('candidate_id', '==', uid)));
   return snap.docs.map((d) => mapInterview(d.id, d.data())).sort(byScheduled);
+}
+
+/** Live subscription to a candidate's interviews — keeps the timeline fresh across
+ *  tabs and when the employer reschedules/cancels, with no manual reload. */
+export function subscribeInterviewsForCandidate(
+  uid: string,
+  onChange: (interviews: ApplicationInterview[]) => void,
+  onError?: (error: unknown) => void,
+): () => void {
+  return onSnapshot(
+    query(collection(firestoreDb, 'application_interviews'), where('candidate_id', '==', uid)),
+    (snap) => onChange(snap.docs.map((d) => mapInterview(d.id, d.data())).sort(byScheduled)),
+    (error) => onError?.(error),
+  );
 }
 
 export interface ScheduleInterviewInput {

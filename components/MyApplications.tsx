@@ -5,7 +5,7 @@ import type { AppSession as Session } from '../lib/data';
 import { ArrowDownUp, Bell, Briefcase, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, MapPin, MessageSquare, Phone, RotateCcw, Search, Star, Video, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
 import ApplicationMessageThread from './ApplicationMessageThread';
-import { listInterviewsForCandidate, confirmInterview, type ApplicationInterview } from '../lib/interviewData';
+import { listInterviewsForCandidate, subscribeInterviewsForCandidate, confirmInterview, type ApplicationInterview } from '../lib/interviewData';
 import {
   APPLICATION_FILTER_GROUPS,
   APPLICATION_FILTER_LABEL_KEYS,
@@ -775,7 +775,8 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   }, [uid]);
 
   // ── Interviews state ──────────────────────────────────────────────────────
-  // Loaded once per candidate; reload() refetches after a candidate confirms.
+  // Live subscription so the timeline stays fresh across tabs and when the employer
+  // reschedules/cancels — no manual reload needed.
   const [interviews, setInterviews] = useState<ApplicationInterview[]>([]);
 
   const reloadInterviews = useCallback(() => {
@@ -786,8 +787,14 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   }, [uid]);
 
   useEffect(() => {
-    reloadInterviews();
-  }, [reloadInterviews]);
+    if (!uid) return;
+    const unsub = subscribeInterviewsForCandidate(
+      uid,
+      setInterviews,
+      () => {/* best-effort: interviews are supplementary */},
+    );
+    return () => unsub();
+  }, [uid]);
 
   // Group interviews by application id so each card gets only its own.
   const interviewsByApp = useMemo(() => {

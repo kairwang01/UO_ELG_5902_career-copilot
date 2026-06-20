@@ -432,8 +432,9 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const hasBlockingValidation = validationIssues.length > 0;
 
   const acceptPrefillReview = () => {
+    // Clearing the highlights + the Save button are the signal — no extra
+    // "marked as reviewed, now save" message (a confirmation of a confirmation).
     setPrefillReview(null);
-    setPrefillMsg({ kind: 'ok', text: 'AI prefill marked as reviewed. Save when the details look correct.' });
   };
 
   const clearPrefillDraft = () => {
