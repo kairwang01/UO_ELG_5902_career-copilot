@@ -13,7 +13,7 @@ import { useModalBehavior } from '../hooks/useModalBehavior';
 const INPUT_CLASS =
   'w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30';
 import { markOnboardingPending } from '../lib/onboarding';
-import { setUserSubscription } from '../services/subscriptionClient';
+import { createSubscriptionCheckout, setUserSubscription } from '../services/subscriptionClient';
 import { useToast } from './Toast';
 
 interface AuthProps {
@@ -162,7 +162,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         // Pass the name to the callable so it is written server-side at doc
         // creation (race-free). The client upsert below is a belt-and-suspenders
         // that only succeeds once the doc already exists.
-        await setUserSubscription(planKeyForServer, { fullName: trimmedName });
+        const subscriptionResult = await setUserSubscription(planKeyForServer, { fullName: trimmedName });
 
         // onUserCreated trigger usually creates users/{uid}; setUserSubscription
         // also creates the doc if the trigger is still in flight. The client only
@@ -170,13 +170,18 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         const { error: profileError } = await data.profiles.upsert({
           id: authData.id,
           full_name: trimmedName,
-          role: mode === 'business' ? 'employer' : 'candidate',
+          role: mode === 'business' && subscriptionResult.status !== 'active' ? 'candidate' : mode === 'business' ? 'employer' : 'candidate',
           updated_at: new Date().toISOString(),
         });
 
         if (profileError) {
           setError(t('auth_profile_created_setup_failed').replace('{error}', profileError.message));
         } else {
+          if (subscriptionResult.status === 'pending_payment') {
+            const checkout = await createSubscriptionCheckout(planKeyForServer);
+            window.location.assign(checkout.url);
+            return;
+          }
           // Best-effort: set Firebase Auth displayName (non-fatal if it fails).
           try {
             if (firebaseAuth.currentUser) {

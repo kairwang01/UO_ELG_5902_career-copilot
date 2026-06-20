@@ -2,15 +2,28 @@ import { httpsCallable } from 'firebase/functions';
 import { firebaseFunctions } from '../lib/firebaseClient';
 
 export interface SubscriptionUpdateResult {
+  status?: 'active' | 'pending_payment';
   subscription_status: string;
   credits: number;
   role?: 'candidate' | 'employer' | 'agency';
+  pending_plan?: string;
+  grant_source?: 'paid' | 'demo_preview' | 'self_service';
+}
+
+export interface CheckoutSessionResult {
+  id: string;
+  url: string;
 }
 
 const setSubscriptionStatusCallable = httpsCallable<
   { planKey: string; fullName?: string; companyName?: string },
   SubscriptionUpdateResult
 >(firebaseFunctions, 'setSubscriptionStatus');
+
+const createCheckoutSessionCallable = httpsCallable<
+  { planKey: string },
+  CheckoutSessionResult
+>(firebaseFunctions, 'createCheckoutSession');
 
 /**
  * Sets the caller's subscription_status via the server-only callable.
@@ -25,5 +38,10 @@ export async function setUserSubscription(
   profile?: { fullName?: string; companyName?: string },
 ): Promise<SubscriptionUpdateResult> {
   const result = await setSubscriptionStatusCallable({ planKey, ...(profile ?? {}) });
+  return result.data;
+}
+
+export async function createSubscriptionCheckout(planKey: string): Promise<CheckoutSessionResult> {
+  const result = await createCheckoutSessionCallable({ planKey });
   return result.data;
 }

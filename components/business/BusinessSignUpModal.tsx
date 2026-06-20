@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { sendEmailVerification } from 'firebase/auth';
 import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
-import { setUserSubscription } from '@/services/subscriptionClient';
+import { createSubscriptionCheckout, setUserSubscription } from '@/services/subscriptionClient';
 import {
   Dialog,
   DialogContent,
@@ -72,7 +72,8 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
       if (authData) {
         // Write the contact name + organization server-side at doc creation
         // (race-free). The client upsert below is a fallback once the doc exists.
-        await setUserSubscription(`pending_biz_${selectedPlan}`, {
+        const pendingPlanKey = `pending_biz_${selectedPlan}`;
+        const subscriptionResult = await setUserSubscription(pendingPlanKey, {
           fullName: trimmedContactName,
           companyName: trimmedOrgName,
         });
@@ -81,13 +82,18 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
           id: authData.id,
           full_name: trimmedContactName,
           company_name: trimmedOrgName || null,
-          role: 'employer',
+          ...(subscriptionResult.status === 'active' ? { role: 'employer' as const } : {}),
           updated_at: new Date().toISOString(),
         });
 
         if (profileError) {
           setError(`${t('auth_profile_setup_failed')} ${profileError.message}`);
         } else {
+          if (subscriptionResult.status === 'pending_payment') {
+            const checkout = await createSubscriptionCheckout(pendingPlanKey);
+            window.location.assign(checkout.url);
+            return;
+          }
           // Send a verification email (non-blocking, production-readiness step).
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {

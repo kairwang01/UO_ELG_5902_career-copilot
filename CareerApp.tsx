@@ -5,12 +5,12 @@ import { BarChart3 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
 import { analyzeResume, setApiStatusUpdater, setAiModel, setErrorTranslator } from './services/aiClient';
-import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
+import { DEFAULT_MARKET } from './config';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from './lib/firebaseClient';
 import { data } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
-import { setUserSubscription } from './services/subscriptionClient';
+import { createSubscriptionCheckout, setUserSubscription } from './services/subscriptionClient';
 import { useLocalization } from './hooks/useLocalization';
 import { ToastProvider, useToast } from './components/Toast';
 import { useCredits } from './contexts/CreditsContext';
@@ -433,9 +433,14 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`;
             // Carry the OAuth display name so it persists even if the doc is
             // created by this call rather than the onUserCreated trigger.
-            await setUserSubscription(planKey, {
+            const subscriptionResult = await setUserSubscription(planKey, {
               fullName: user.user_metadata?.full_name || loadPendingOnboardingName(),
             });
+            if (subscriptionResult.status === 'pending_payment') {
+              const checkout = await createSubscriptionCheckout(planKey);
+              window.location.assign(checkout.url);
+              return;
+            }
           }
 
           if (resolvedProfile.role !== role) {
@@ -590,43 +595,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     setIsRedirecting(true);
 
     try {
-        let targetPlanKey = planKey;
-        let plan;
-        const isBiz = planKey.startsWith('pending_biz_');
-
-        if (isBiz) {
-            targetPlanKey = planKey.replace('pending_biz_', '');
-            plan = BUSINESS_PLANS[targetPlanKey as keyof typeof BUSINESS_PLANS];
-        } else if (planKey.startsWith('pending_')) {
-            targetPlanKey = planKey.replace('pending_', '');
-            plan = ALL_PLANS[targetPlanKey];
-        } else {
+        const isPendingPlan = planKey.startsWith('pending_biz_') || planKey.startsWith('pending_');
+        if (!isPendingPlan) {
             throw new Error(`Invalid pending plan key format: ${planKey}`);
         }
 
-        const stripeReady = plan?.stripeLink && !plan.stripeLink.includes('/test_');
-
-        if (stripeReady) {
-            const stripeUrl = new URL(plan.stripeLink!);
-            stripeUrl.searchParams.append('client_reference_id', session.user.id);
-            if (session.user.email) {
-                stripeUrl.searchParams.append('prefilled_email', session.user.email);
-            }
-
-            setTimeout(() => {
-                window.open(stripeUrl.toString(), '_blank');
-                setIsRedirecting(false);
-            }, 1500);
-        } else {
-            await setUserSubscription(planKey);
-
-            if (isBiz) {
-                await data.profiles.update(session.user.id, { role: 'employer' });
-            }
-
-            await getProfile();
-            setIsRedirecting(false);
-        }
+        const checkout = await createSubscriptionCheckout(planKey);
+        window.location.assign(checkout.url);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setError(latestTRef.current('checkout_prepare_error').replace('{error}', message));
@@ -637,7 +612,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const handleBusinessPlanSelection = async (planKey: string) => {
     if (!session) return;
     try {
-      await setUserSubscription(`pending_biz_${planKey}`);
+      const pendingPlanKey = `pending_biz_${planKey}`;
+      const result = await setUserSubscription(pendingPlanKey);
+      if (result.status === 'pending_payment') {
+        const checkout = await createSubscriptionCheckout(pendingPlanKey);
+        window.location.assign(checkout.url);
+        return;
+      }
       await getProfile();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -649,7 +630,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (!session || candidatePlanSaving) return;
     setCandidatePlanSaving(planKey);
     try {
-      await setUserSubscription(planKey === 'free' ? 'free' : `pending_${planKey}`);
+      const pendingPlanKey = planKey === 'free' ? 'free' : `pending_${planKey}`;
+      const result = await setUserSubscription(pendingPlanKey);
+      if (result.status === 'pending_payment') {
+        const checkout = await createSubscriptionCheckout(pendingPlanKey);
+        window.location.assign(checkout.url);
+        return;
+      }
       await getProfile();
       addToast(t('portal_toast_plan_updated'), 'success');
     } catch (error) {
@@ -694,7 +681,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     } else if (transition === 'signed_in') {
       setIsProfileLoaded(false);
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('payment_success') === 'true') {
+      if (urlParams.get('payment_success') === 'true' || urlParams.get('checkout') === 'success') {
         addToast(latestTRef.current('payment_success_plan_upgraded'), 'success');
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (session?.user && session.user.emailVerified === false) {
@@ -756,7 +743,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   useEffect(() => {
     const handleStripeRedirect = () => {
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('payment_cancelled') === 'true') {
+        if (urlParams.get('payment_cancelled') === 'true' || urlParams.get('checkout') === 'cancel') {
             addToast(latestTRef.current('payment_cancelled_try_again'), 'info');
             window.history.replaceState({}, document.title, window.location.pathname);
         }
@@ -1432,7 +1419,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
   return (
-      <div className={rootClass}>
+      <div className={rootClass} data-qa-shell={workspaceShell} data-qa-auth={session ? 'signed-in' : 'signed-out'}>
         {isRedirecting && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4 animate-fade-in"><div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-8 text-center flex flex-col items-center"><h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Finalizing Your Upgrade!</h3><p className="mt-2 text-gray-600 dark:text-gray-300">To activate your new plan, we're opening our secure payment page.</p><div className="mt-6 w-12 h-12 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div></div></div>}
         <CreditModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} onConfirm={() => { setIsCreditModalOpen(false); performAnalysis(); }} onNavigateToPricing={navigateToPricing} cost={analysisCost} currentCredits={credits} />
         

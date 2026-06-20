@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { data } from '../../lib/data';
-import { setUserSubscription } from '../../services/subscriptionClient';
+import { createSubscriptionCheckout, setUserSubscription } from '../../services/subscriptionClient';
 import AgencyHub from '../AgencyHub';
 import ApplicantFunnel from '../ApplicantFunnel';
 import { PortalSidebar, type PortalPage } from './PortalSidebar';
@@ -195,7 +195,13 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     if (planSaving) return;
     setPlanSaving(true);
     try {
-      await setUserSubscription(`pending_biz_${planKey}`);
+      const pendingPlanKey = `pending_biz_${planKey}`;
+      const result = await setUserSubscription(pendingPlanKey);
+      if (result.status === 'pending_payment') {
+        const checkout = await createSubscriptionCheckout(pendingPlanKey);
+        window.location.assign(checkout.url);
+        return;
+      }
       await refreshProfile();
       addToast(t('portal_toast_plan_updated'), 'success');
     } catch (error) {

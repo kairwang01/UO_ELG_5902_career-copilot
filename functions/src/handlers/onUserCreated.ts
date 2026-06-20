@@ -13,6 +13,7 @@
 
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 
 if (!admin.apps.length) {
@@ -35,7 +36,7 @@ export const onUserCreatedFunction = functions.auth.user().onCreate(async (user)
     // and take the no-clobber "fill the gaps only" path instead.
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = Timestamp.now();
 
       if (!snap.exists) {
         tx.set(ref, {

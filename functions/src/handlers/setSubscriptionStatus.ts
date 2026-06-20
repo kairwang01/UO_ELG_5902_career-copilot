@@ -188,10 +188,27 @@ export async function applySubscriptionSelection(
         },
         { merge: true },
       );
+      if (!snap.exists) {
+        const doc: Record<string, unknown> = {
+          [USER_FIELDS.credits]: INITIAL_CREDITS,
+          [USER_FIELDS.role]: "candidate",
+          [USER_FIELDS.subscriptionStatus]: "free",
+          [USER_FIELDS.createdAt]: now,
+          [USER_FIELDS.updatedAt]: now,
+        };
+        if (fullName) doc[USER_FIELDS.fullName] = fullName;
+        if (companyName) doc[USER_FIELDS.companyName] = companyName;
+        tx.set(userRef, doc, { merge: true });
+      } else {
+        const patch: Record<string, unknown> = { [USER_FIELDS.updatedAt]: now };
+        if (fullName && !snap.get(USER_FIELDS.fullName)) patch[USER_FIELDS.fullName] = fullName;
+        if (companyName && !snap.get(USER_FIELDS.companyName)) patch[USER_FIELDS.companyName] = companyName;
+        tx.set(userRef, patch, { merge: true });
+      }
       return {
         status: "pending_payment",
         subscription_status: snap.exists ? (snap.get(USER_FIELDS.subscriptionStatus) ?? "free") : "free",
-        credits: snap.exists ? (Number(snap.get(USER_FIELDS.credits)) || 0) : 0,
+        credits: snap.exists ? (Number(snap.get(USER_FIELDS.credits)) || 0) : INITIAL_CREDITS,
         role: snap.exists ? (snap.get(USER_FIELDS.role) ?? "candidate") : "candidate",
         pending_plan: plan,
       };
