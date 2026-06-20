@@ -224,6 +224,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const answersRef = useRef<string[]>([]);
     const submittingRef = useRef(false);
     const evaluatingRef = useRef(false);
+    // False once unmounted — guards setState after the long (≤190s) AI awaits below
+    // (question generation / evaluation / unlock), so a late resolve never touches a
+    // component the user has already closed.
+    const mountedRef = useRef(true);
     const [avatarSpeaking, setAvatarSpeaking] = useState(false);
     const [report, setReport] = useState<InterviewSessionReport | null>(null);
     const [lockedReport, setLockedReport] = useState<LockedSessionReport | null>(null);
@@ -246,6 +250,8 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             .catch(() => { /* signed-out or rules — selector just hides */ });
         return () => { cancelled = true; };
     }, []);
+
+    useEffect(() => () => { mountedRef.current = false; }, []);
 
     const companyNameSuggestions = Array.from(
         new Set(postings.map((p) => p.company_name).filter((n): n is string => !!n)),
@@ -451,6 +457,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         setError(null);
         try {
             const generated = await generateInterviewQuestions(resumeText, assembleContext(), market);
+            if (!mountedRef.current) return;
             if (!generated.length) throw new Error(t('mi_error_no_questions_generated'));
             answersRef.current = [];
             submittingRef.current = false;
@@ -463,6 +470,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             setStage('interviewing');
             speak(generated[0].question, () => setPrepArmed(true));
         } catch (err) {
+            if (!mountedRef.current) return;
             setError(err instanceof Error ? err.message : t('mi_error_start_failed'));
             setStage('setup');
         }
@@ -521,6 +529,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         setStage('evaluating');
         try {
             const res = await evaluateInterviewSession(qa, assembleContext(), resumeText);
+            if (!mountedRef.current) return;
             if (res.locked) {
                 setLockedReport(res);
                 setReport(null);
@@ -531,10 +540,12 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             }
             setStage('report');
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to evaluate the interview.");
-            setReport(null);
-            setLockedReport(null);
-            setStage('report'); // report stage renders the error + retry
+            if (mountedRef.current) {
+                setError(err instanceof Error ? err.message : "Failed to evaluate the interview.");
+                setReport(null);
+                setLockedReport(null);
+                setStage('report'); // report stage renders the error + retry
+            }
         } finally {
             evaluatingRef.current = false;
         }
@@ -546,13 +557,14 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         setError(null);
         try {
             const res = await unlockInterviewReport(lockedReport.reportId);
+            if (!mountedRef.current) return;
             const { locked: _locked, ...rep } = res;
             setReport(rep as InterviewSessionReport);
             setLockedReport(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unlock failed.');
+            if (mountedRef.current) setError(err instanceof Error ? err.message : 'Unlock failed.');
         } finally {
-            setUnlocking(false);
+            if (mountedRef.current) setUnlocking(false);
         }
     };
 

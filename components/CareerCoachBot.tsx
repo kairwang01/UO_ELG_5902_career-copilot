@@ -134,6 +134,10 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
     const [isLoading, setIsLoading] = useState(false);
     const [activeTopic, setActiveTopic] = useState<CoachTopic>('jobs');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    // Drop a late reply if the assistant unmounted (e.g. the user signed out) while it
+    // was in flight — otherwise a reply built from the pre-sign-out profile lands in state.
+    const mountedRef = useRef(true);
+    useEffect(() => () => { mountedRef.current = false; }, []);
 
     useEffect(() => {
         if (isOpen) {
@@ -174,11 +178,13 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                 companyWebsite: profile?.company_website,
                 companyDescription: profile?.company_description,
             });
+            if (!mountedRef.current) return;
             setMessages(prev => [...prev, { role: 'model', content: reply }]);
         } catch {
+            if (!mountedRef.current) return;
             setMessages(prev => [...prev, { role: 'model', content: t('coach_error') }]);
         } finally {
-            setIsLoading(false);
+            if (mountedRef.current) setIsLoading(false);
         }
     };
 

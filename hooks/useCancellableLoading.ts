@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * useCancellableLoading — a near drop-in replacement for
@@ -35,6 +35,11 @@ import { useCallback, useRef, useState } from 'react';
 export function useCancellableLoading(initial = false) {
   const [loading, setLoading] = useState(initial);
   const runRef = useRef(0);
+
+  // On unmount, supersede any in-flight run so its alive() returns false — stops a
+  // late-resolving callable from calling setState (or, in tools like EnglishPro,
+  // writing the profile) on a component the user has already navigated away from.
+  useEffect(() => () => { runRef.current++; }, []);
 
   /** Start a run. Returns alive() — false once this run is cancelled/superseded. */
   const begin = useCallback((): (() => boolean) => {
