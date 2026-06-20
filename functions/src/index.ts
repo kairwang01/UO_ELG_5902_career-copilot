@@ -84,5 +84,6 @@ export { scheduleInterviewFunction          as scheduleInterview         } from 
 export { updateInterviewFunction            as updateInterview           } from "./handlers/interviews";
 export { confirmInterviewFunction           as confirmInterview          } from "./handlers/interviews";
 export { upsertScorecardFunction            as upsertScorecard           } from "./handlers/scorecards";
+export { sendApplicationMessageFunction     as sendApplicationMessage    } from "./handlers/applicationMessages";
 export { createCheckoutSessionFunction      as createCheckoutSession     } from "./handlers/stripeBilling";
 export { stripeWebhookFunction              as stripeWebhook             } from "./handlers/stripeBilling";

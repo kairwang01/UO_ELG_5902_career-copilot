@@ -3142,5 +3142,21 @@
   "ws_plan_action_analyze": "生成或刷新简历就绪度报告。",
   "ws_plan_action_profile": "完善 Talent Profile，让每次投递都有可信的结构化资料。",
   "ws_plan_action_portfolio": "基于简历证据生成作品集草稿。",
-  "ws_plan_action_apply": "投递岗位，并在 My Applications 里追踪进度。"
+  "ws_plan_action_apply": "投递岗位，并在 My Applications 里追踪进度。",
+  "msg_thread_title": "消息",
+  "msg_thread_empty": "暂无消息。",
+  "msg_compose_placeholder": "写一条消息…",
+  "msg_send": "发送",
+  "msg_send_error": "消息发送失败，请重试。",
+  "msg_load_error": "无法加载消息。",
+  "msg_template_label": "消息模板",
+  "msg_tmpl_custom": "自定义消息",
+  "msg_tmpl_interview_invite": "面试邀约",
+  "msg_tmpl_interview_invite_body": "你好，我们想邀请你参加面试。下周是否方便？请告诉我们几个合适的时间，我们再确认细节。",
+  "msg_tmpl_request_info": "补充材料",
+  "msg_tmpl_request_info_body": "感谢投递。能否再补充一些与该岗位最相关的经历细节？这有助于我们推进你的申请。",
+  "msg_tmpl_rejection": "婉拒",
+  "msg_tmpl_rejection_body": "感谢你的关注与投入。本次该岗位我们将与其他候选人继续推进，但很期待未来有机会再合作。",
+  "msg_tmpl_offer_followup": "Offer 跟进",
+  "msg_tmpl_offer_followup_body": "好消息——我们希望向你发出 offer。是否方便简短通话，沟通细节与后续安排？"
 }

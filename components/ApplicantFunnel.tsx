@@ -48,6 +48,7 @@ import { TALENT_PROFILE_SCHEMA, hasMeaningfulEntry, type Section, type TalentPro
 import { useToast } from './Toast';
 import ResumePreview from './ResumePreview';
 import FunnelChart from './FunnelChart';
+import ApplicationMessageThread from './ApplicationMessageThread';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import {
     APPLICATION_PIPELINE_STAGES,
@@ -2293,6 +2294,10 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             </div>
                         </div>
                     )}
+
+                    <div className="mt-5">
+                        <ApplicationMessageThread applicationId={selectedApplicant.id} viewerRole="employer" t={t} />
+                    </div>
                 </section>
             </div>
 

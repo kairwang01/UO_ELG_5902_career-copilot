@@ -700,6 +700,19 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // application_messages/{messageId} — in-application direct messages between the
+    // job-owning employer and the candidate (BOSS-style direct comms). BOTH parties
+    // READ the whole thread for their application — messages are shared, not
+    // employer-secret like scorecards. All WRITES are server-only via the
+    // sendApplicationMessage callable, which proves the sender is a participant and
+    // stamps an immutable, attributable, timestamped record (the audit trail itself).
+    match /application_messages/{messageId} {
+      allow read: if isSignedIn() &&
+        (resource.data.candidate_id == request.auth.uid ||
+         resource.data.employer_id == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // employer_responsiveness/{employerId} — coarse, backward-looking aggregate
     // (avg days-to-first-action, last action) derived server-side from the audit
     // log. Employer-level, NO candidate PII — any signed-in user may read it to

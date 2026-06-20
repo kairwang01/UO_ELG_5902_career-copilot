@@ -4,6 +4,7 @@ import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
 import { ArrowDownUp, Bell, Briefcase, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, MapPin, MessageSquare, Phone, RotateCcw, Search, Star, Video, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
+import ApplicationMessageThread from './ApplicationMessageThread';
 import { listInterviewsForCandidate, confirmInterview, type ApplicationInterview } from '../lib/interviewData';
 import {
   APPLICATION_FILTER_GROUPS,
@@ -565,6 +566,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interview
   const GuidanceIcon = guidance.icon;
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const currentStatusLabel = t(getApplicationStatusLabelKey(app.status));
 
   return (
@@ -721,6 +723,25 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interview
           onSubmitted={() => setReviewOpen(false)}
         />
       )}
+
+      {/* Direct messages with the recruiter — disclosed so only the opened thread
+          opens a live listener (a candidate may have many application cards). */}
+      <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
+        <button
+          type="button"
+          onClick={() => setMessagesOpen((open) => !open)}
+          aria-expanded={messagesOpen}
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700/60 dark:hover:text-slate-200"
+        >
+          {t('msg_thread_title')}
+          {messagesOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+        {messagesOpen && (
+          <div className="mt-2">
+            <ApplicationMessageThread applicationId={app.id} viewerRole="candidate" t={t} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

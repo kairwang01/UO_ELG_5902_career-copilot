@@ -208,3 +208,30 @@ describe('application_scorecards access', () => {
     await assertFails(updateDoc(doc(db, 'application_scorecards', 'sc1'), { recommendation: 'strong_hire' }));
   });
 });
+
+describe('application_messages access', () => {
+  async function seedMessage() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'application_messages', 'msg1'),
+        { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1', sender_role: 'employer', body: 'Hello' });
+    });
+  }
+  it('the candidate on the application can read the message', async () => {
+    await seedMessage();
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('cand1').firestore(), 'application_messages', 'msg1')));
+  });
+  it('the owning employer can read the message', async () => {
+    await seedMessage();
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('emp1').firestore(), 'application_messages', 'msg1')));
+  });
+  it('an unrelated user CANNOT read the thread', async () => {
+    await seedMessage();
+    await assertFails(getDoc(doc(testEnv.authenticatedContext('other').firestore(), 'application_messages', 'msg1')));
+  });
+  it('clients CANNOT write messages directly (server-only — sendApplicationMessage callable)', async () => {
+    await seedMessage();
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertFails(setDoc(doc(db, 'application_messages', 'msg2'), { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1', body: 'forged' }));
+    await assertFails(updateDoc(doc(db, 'application_messages', 'msg1'), { body: 'edited' }));
+  });
+});
