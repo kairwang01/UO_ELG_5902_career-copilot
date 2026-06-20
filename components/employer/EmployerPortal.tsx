@@ -76,6 +76,9 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const [talentPoolInitialJobId, setTalentPoolInitialJobId] = useState<string | null>(null);
   const { addToast } = useToast();
   const mainRef = useRef<HTMLElement | null>(null);
+  // Ref latch: the planSaving state lags a render, so a synchronous double-click could
+  // create two checkout sessions / two pending writes.
+  const planSavingRef = useRef(false);
   // For applicant funnel
   const [jobForFunnel, setJobForFunnel] = useState<JobPosting | null>(null);
   // Previous page before entering post-job/funnel views
@@ -192,7 +195,8 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   };
 
   const handleSelectPlan = async (planKey: string) => {
-    if (planSaving) return;
+    if (planSaving || planSavingRef.current) return;
+    planSavingRef.current = true;
     setPlanSaving(true);
     try {
       const pendingPlanKey = `pending_biz_${planKey}`;
@@ -208,6 +212,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast(t('portal_toast_plan_update_failed').replace('{error}', message), 'error');
     } finally {
+      planSavingRef.current = false;
       setPlanSaving(false);
     }
   };

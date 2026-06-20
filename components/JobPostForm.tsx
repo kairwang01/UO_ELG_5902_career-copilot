@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -113,6 +113,12 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
 
     // UI/Loading state
     const [loading, setLoading] = useState(false);
+    // Synchronous re-entry latch: a state flag lags a render, so a fast double Enter/
+    // click could fire two saveJobPosting calls → a DUPLICATE live job posting.
+    const submittingRef = useRef(false);
+    // False once unmounted — guards AI-result setState if the user leaves mid-analyze.
+    const mountedRef = useRef(true);
+    useEffect(() => () => { mountedRef.current = false; }, []);
     const [error, setError] = useState('');
     const [aiLoading, setAiLoading] = useState<null | 'description' | 'salary' | 'inclusivity' | 'format'>(null);
     const [inclusivityResults, setInclusivityResults] = useState<InclusivitySuggestion[] | null>(null);
@@ -244,6 +250,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         try {
             const { company_name, company_description } = profile;
             const result = await generateJobDescription(jobTitle, keyResponsibilities, company_name || '', company_description || '');
+            if (!mountedRef.current) return;
             setJobDescription(result.jobDescription);
             setEditorView('preview');
         } catch (err) {
@@ -262,6 +269,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         setError('');
         try {
             const result = await formatJobDescription(jobDescription);
+            if (!mountedRef.current) return;
             setJobDescription(result.formattedDescription);
             if (result.jobTitle && !jobTitle) {
                 setJobTitle(result.jobTitle);
@@ -287,6 +295,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         setSalarySuggestion(null);
         try {
             const result = await analyzeSalary(jobTitle, location, jobDescription);
+            if (!mountedRef.current) return;
             setSalarySuggestion({ yearly: result.yearlySalary, monthly: result.monthlySalary });
         } catch (err) {
             setError(err instanceof Error ? err.message : t('job_form_error_salary_failed'));
@@ -304,6 +313,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         setError('');
         try {
             const result = await checkInclusivity(jobDescription);
+            if (!mountedRef.current) return;
             setInclusivityResults(result.suggestions);
         } catch (err) {
             setError(err instanceof Error ? err.message : t('job_form_error_inclusivity_failed'));
@@ -318,6 +328,8 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setError(isAiBusy ? t('job_form_action_busy_note') : t('job_form_submit_requirements'));
             return;
         }
+        if (submittingRef.current) return; // already creating — block synchronous double-submit
+        submittingRef.current = true;
         setLoading(true);
         setError('');
 
@@ -369,6 +381,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
         } catch (err) {
             setError(err instanceof Error ? err.message : t('job_form_error_unknown'));
         } finally {
+            submittingRef.current = false;
             setLoading(false);
         }
     };

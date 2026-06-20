@@ -1078,6 +1078,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
 
             {candidateToEngage && (
                 <EngageCandidateModal
+                    // Remount on candidate change so the nested outreach draft/open-state
+                    // can't carry over from a previously engaged candidate.
+                    key={candidateToEngage.index}
                     candidate={candidateToEngage}
                     jobDescription={jobDescription}
                     employerProfile={profile}

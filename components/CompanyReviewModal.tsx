@@ -12,7 +12,7 @@
  * other errors fall back to a generic toast.
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Star, X } from "lucide-react";
 import { useToast } from "./Toast";
 import { useModalBehavior } from "../hooks/useModalBehavior";
@@ -87,6 +87,11 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [verifyError, setVerifyError] = useState(false);
+  // Ref latch: the `submitting` state lags a render, so a fast double-submit could post
+  // two reviews. mountedRef drops the tail setState if the parent closes the modal mid-submit.
+  const submittingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   useModalBehavior(onClose);
 
   const charCount = text.trim().length;
@@ -95,6 +100,8 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+    if (submittingRef.current) return; // already posting — block synchronous double-submit
+    submittingRef.current = true;
 
     setSubmitting(true);
     setVerifyError(false);
@@ -105,6 +112,7 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
       onSubmitted();
       onClose();
     } catch (err: unknown) {
+      if (!mountedRef.current) return; // modal closed mid-submit — nothing to show
       // Firebase callable errors carry a `code` field on the inner error.
       const code =
         (err as { code?: string })?.code ??
@@ -115,7 +123,8 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
         addToast(t("review_submit_error"), "error");
       }
     } finally {
-      setSubmitting(false);
+      submittingRef.current = false;
+      if (mountedRef.current) setSubmitting(false);
     }
   };
 

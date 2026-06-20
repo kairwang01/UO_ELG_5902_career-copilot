@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { data } from '@/lib/data';
 import { firestoreDb } from '@/lib/firebaseClient';
@@ -91,6 +91,10 @@ const Account: React.FC<AccountProps> = ({
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  // False once unmounted — Account loads/saves async and is remounted on session change,
+  // so a late resolve must not setState. passwordSavingRef latches a synchronous double-Enter.
+  const mountedRef = useRef(true);
+  const passwordSavingRef = useRef(false);
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
   const [web3Busy, setWeb3Busy] = useState(false);
   const [fullName, setFullName] = useState<string>('');
@@ -123,6 +127,8 @@ const Account: React.FC<AccountProps> = ({
   useEffect(() => {
     getProfile();
   }, [session]);
+
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const syncWithBlockchain = useCallback(async () => {
     if (!walletAddress) return;
@@ -236,6 +242,7 @@ const Account: React.FC<AccountProps> = ({
       const { user } = session;
 
       const { data: profileData, error } = await data.profiles.get(user.id);
+      if (!mountedRef.current) return; // navigated away / remounted mid-load
 
       if (error && !error.message.includes('not found')) {
         throw new Error(error.message);
@@ -264,19 +271,21 @@ const Account: React.FC<AccountProps> = ({
       }
     } catch (error: any) {
       console.error('Error getting profile:', error);
-      setMessage({
-        type: 'error',
-        text: t('account_profile_load_error'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: t('account_profile_load_error'),
+        });
+      }
     } finally {
-      setProfileLoading(false);
+      if (mountedRef.current) setProfileLoading(false);
     }
   };
 
   const updateProfile = async (
     event: React.FormEvent | null,
     { fullName, avatarUrl, birthDate }: { fullName: string; avatarUrl: string; birthDate: string },
-  ) => {
+  ): Promise<boolean> => {
     if (event) {
       event.preventDefault();
     }
@@ -295,18 +304,24 @@ const Account: React.FC<AccountProps> = ({
       const { error } = await data.profiles.upsert(updates);
       if (error) throw new Error(error.message);
       saveBirthdayLocal(user.id, birthDate);
-      setMessage({
-        type: 'success',
-        text: t('account_profile_updated_success'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'success',
+          text: t('account_profile_updated_success'),
+        });
+      }
+      return true;
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      setMessage({
-        type: 'error',
-        text: t('account_profile_updated_error'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: t('account_profile_updated_error'),
+        });
+      }
+      return false;
     } finally {
-      setProfileSaving(false);
+      if (mountedRef.current) setProfileSaving(false);
     }
   };
 
@@ -321,19 +336,26 @@ const Account: React.FC<AccountProps> = ({
       return;
     }
 
+    if (passwordSavingRef.current) return; // block synchronous double-submit (a double Enter)
+    passwordSavingRef.current = true;
     setPasswordSaving(true);
-    const { error } = await data.auth.updatePassword(password);
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
-      setMessage({
-        type: 'success',
-        text: t('account_password_updated_success'),
-      });
-      setPassword('');
-      setConfirmPassword('');
+    try {
+      const { error } = await data.auth.updatePassword(password);
+      if (!mountedRef.current) return;
+      if (error) {
+        setMessage({ type: 'error', text: error.message });
+      } else {
+        setMessage({
+          type: 'success',
+          text: t('account_password_updated_success'),
+        });
+        setPassword('');
+        setConfirmPassword('');
+      }
+    } finally {
+      passwordSavingRef.current = false;
+      if (mountedRef.current) setPasswordSaving(false);
     }
-    setPasswordSaving(false);
   };
 
   const handleManageSubscription = async () => {
@@ -661,9 +683,12 @@ const Account: React.FC<AccountProps> = ({
         <Avatar
           url={avatarUrl}
           size={150}
-          onUpload={(url) => {
+          onUpload={async (url) => {
+            const prev = avatarUrl;
             setAvatarUrl(url);
-            updateProfile(null, { fullName, avatarUrl: url, birthDate });
+            const ok = await updateProfile(null, { fullName, avatarUrl: url, birthDate });
+            // Save failed — revert the preview so we don't show an image that didn't persist.
+            if (!ok && mountedRef.current) setAvatarUrl(prev);
           }}
           altText={t('ws_profile_avatar_alt')}
           uploadLabel={t('account_avatar_upload')}
