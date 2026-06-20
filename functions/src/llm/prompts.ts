@@ -12,6 +12,10 @@
  *    {{improvementsBlock}}   — mapped list of "- area: suggestion" lines
  *    {{resumeText}}          — resume plain text
  *
+ *  extractTalentProfile:
+ *    {{resumeText}}          — resume plain text
+ *    {{targetLanguage}}      — output language for generated free-text fields
+ *
  *  convertResumeFormat:
  *    {{marketName}}          — target job market name
  *    {{coverLetterBlock}}    — conditional cover-letter section (empty when not provided)
@@ -212,6 +216,7 @@ export const PROMPT_TEMPLATES: Record<string, string> = {
 
 STRICT RULES:
 - Use ONLY facts that appear in the resume. NEVER invent names, employers, schools, dates, GPAs, links, tools, or metrics. If something is not in the resume, omit the field or leave it empty.
+- LANGUAGE: write generated free-text fields (summaries, responsibilities, project background/result, strengths) in {{targetLanguage}}. Preserve proper nouns, employers, schools, product names, URLs, emails, phone numbers, technical skill/tool names, and dates exactly as appropriate. If {{targetLanguage}} is "the same language as the resume", keep the resume's source language.
 - DATES: output every date as YYYY-MM-DD. If only month+year are known, use the 1st of that month (e.g. "Sept 2023" -> "2023-09-01"). If only a year is known, use "YYYY-01-01". For ongoing / "Present" / "Current" / unknown end dates, leave the field empty.
 - basic: full name, email, phone, country, and current city if shown.
 - intention.targetRole: infer the single most likely target role from the candidate's most recent / most senior position or any stated objective/summary (e.g. "Product Manager", "Software Engineer"). intention.roleCategory: the closest broad category. These are a best-guess STARTING POINT the candidate will confirm — base them only on resume evidence, never invent an unrelated role.

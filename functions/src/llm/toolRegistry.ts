@@ -80,6 +80,23 @@ const OPPORTUNITY_SCHEMA = {
 // the client can map the result straight into the form (no remapping layer).
 const _S = { type: Type.STRING };
 const _SA = { type: Type.ARRAY, items: { type: Type.STRING } };
+const TALENT_PROFILE_TARGET_LANGUAGES: Record<string, string> = {
+  en: "English",
+  fr: "French",
+  zh: "Simplified Chinese",
+  es: "Spanish",
+  de: "German",
+  ja: "Japanese",
+  vi: "Vietnamese",
+  source: "the same language as the resume",
+};
+
+function normalizeTalentProfileLanguage(value: unknown): string {
+  if (typeof value !== "string") return TALENT_PROFILE_TARGET_LANGUAGES.en;
+  const key = value.trim().toLowerCase();
+  return TALENT_PROFILE_TARGET_LANGUAGES[key] ?? TALENT_PROFILE_TARGET_LANGUAGES.en;
+}
+
 const TALENT_PROFILE_EXTRACT_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -111,7 +128,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   extractTalentProfile: {
     creditKey: null,
     build: (p) => ({
-      prompt: buildPrompt("extractTalentProfile", { resumeText: p.resumeText ?? "" }),
+      prompt: buildPrompt("extractTalentProfile", {
+        resumeText: p.resumeText ?? "",
+        targetLanguage: normalizeTalentProfileLanguage(p.targetLanguage),
+      }),
       responseSchema: TALENT_PROFILE_EXTRACT_SCHEMA,
     }),
   },

@@ -566,8 +566,8 @@ export interface ExtractedTalentProfile {
   portfolio?: Record<string, string | string[]>[];
   additional?: Record<string, string>;
 }
-export const extractTalentProfile = (resumeText: string) =>
-  callTool<ExtractedTalentProfile>('extractTalentProfile', { resumeText });
+export const extractTalentProfile = (resumeText: string, options?: { targetLanguage?: string }) =>
+  callTool<ExtractedTalentProfile>('extractTalentProfile', { resumeText, targetLanguage: options?.targetLanguage ?? 'en' });
 
 export const convertResumeFormat = (resumeText: string, marketName: string, coverLetterText?: string) =>
   callTool<FormattedResume>('convertResumeFormat', { resumeText, marketName, coverLetterText });

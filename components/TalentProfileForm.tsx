@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Loader2, Save, Sparkles } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Loader2, Save, Sparkles, X } from 'lucide-react';
 import {
   TALENT_PROFILE_SCHEMA,
   emptyTalentProfile,
@@ -27,6 +27,17 @@ interface TalentProfileFormProps {
 
 const inputCls =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100';
+
+const PREFILL_LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English (recommended)', note: 'Best default for North America and most ATS/recruiter workflows.' },
+  { value: 'fr', label: 'French', note: 'Useful for French or bilingual Canadian applications.' },
+  { value: 'zh', label: 'Chinese (Simplified)', note: 'Useful when reviewing details before translating or localizing.' },
+  { value: 'es', label: 'Spanish', note: 'Use when the target employer expects Spanish materials.' },
+  { value: 'de', label: 'German', note: 'Use for German-language applications.' },
+  { value: 'ja', label: 'Japanese', note: 'Use for Japanese-language applications.' },
+  { value: 'vi', label: 'Vietnamese', note: 'Use for Vietnamese-language applications.' },
+  { value: 'source', label: 'Keep resume language', note: 'Preserve the language used in the uploaded resume.' },
+];
 
 // ── Chip editor (chips fields + skill groups) ───────────────────────────────
 const ChipEditor: React.FC<{
@@ -117,6 +128,8 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [prefilling, setPrefilling] = useState(false);
+  const [prefillDialogOpen, setPrefillDialogOpen] = useState(false);
+  const [prefillLanguage, setPrefillLanguage] = useState('en');
   const [prefillMsg, setPrefillMsg] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ basic: true, intention: true });
   const [loadError, setLoadError] = useState(false);
@@ -127,15 +140,25 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   // sections (never overwrites what the candidate already typed); skills are
   // unioned. The AI output is schema-coerced (sanitizeExtractedProfile) so dates
   // and select values populate correctly.
-  const handlePrefill = async () => {
+  const openPrefillDialog = () => {
     if (!resumeText || resumeText.trim().length < 40) {
       setPrefillMsg({ kind: 'info', text: 'Add or upload your resume first (the “Resume” tab), then prefill here.' });
+      return;
+    }
+    setPrefillMsg(null);
+    setPrefillDialogOpen(true);
+  };
+
+  const handlePrefill = async (targetLanguage: string) => {
+    if (!resumeText || resumeText.trim().length < 40) {
+      setPrefillMsg({ kind: 'info', text: 'Add or upload your resume first (the “Resume” tab), then prefill here.' });
+      setPrefillDialogOpen(false);
       return;
     }
     setPrefilling(true);
     setPrefillMsg(null);
     try {
-      const ex = sanitizeExtractedProfile(await extractTalentProfile(resumeText));
+      const ex = sanitizeExtractedProfile(await extractTalentProfile(resumeText, { targetLanguage }));
       // Decide which sections will actually receive data (from current state) so
       // we can expand exactly those — the user must see everything before saving.
       const touched = new Set<string>();
@@ -171,11 +194,13 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         return next;
       });
       if (touched.size) setOpen((o) => ({ ...o, ...Object.fromEntries([...touched].map((id) => [id, true])) }));
-      setPrefillMsg({ kind: 'ok', text: 'Filled from your resume — please review and edit each section before saving.' });
+      const langLabel = PREFILL_LANGUAGE_OPTIONS.find((opt) => opt.value === targetLanguage)?.label ?? 'your selected language';
+      setPrefillMsg({ kind: 'ok', text: `Drafted from your resume in ${langLabel}. Please review and edit each section before saving.` });
     } catch (err) {
       setPrefillMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Could not read your resume. Please fill the form manually.' });
     } finally {
       setPrefilling(false);
+      setPrefillDialogOpen(false);
     }
   };
 
@@ -315,7 +340,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Talent Profile</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Fill this once. It pre-fills every job application and lets employers discover you. References are shown to employers as “available on request”.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" onClick={handlePrefill} disabled={prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+          <button type="button" onClick={openPrefillDialog} disabled={prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
             {prefilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {prefilling ? 'Reading your resume…' : 'Prefill from my resume'}
           </button>
@@ -332,6 +357,79 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
           {savedAt && <span className="text-gray-400">Saved</span>}
         </p>
       </div>
+
+      {prefillDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-slate-800">
+              <div>
+                <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
+                  <Sparkles className="h-3.5 w-3.5" /> Resume prefill
+                </p>
+                <h3 className="mt-2 text-lg font-bold text-gray-950 dark:text-gray-50">Choose the draft language</h3>
+                <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-slate-400">
+                  AI will extract facts from your resume and fill empty Talent Profile fields. It will not save automatically.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrefillDialogOpen(false)}
+                disabled={prefilling}
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-gray-200"
+                aria-label="Close prefill dialog"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <div>
+                <label htmlFor="talent-profile-prefill-language" className="mb-1 block text-sm font-semibold text-gray-800 dark:text-gray-100">
+                  Output language
+                </label>
+                <select
+                  id="talent-profile-prefill-language"
+                  value={prefillLanguage}
+                  onChange={(e) => setPrefillLanguage(e.target.value)}
+                  className={inputCls}
+                  disabled={prefilling}
+                >
+                  {PREFILL_LANGUAGE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-slate-400">
+                  {PREFILL_LANGUAGE_OPTIONS.find((option) => option.value === prefillLanguage)?.note}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                Treat this as a first draft. Review names, dates, target role, achievements, skills, and any missing sections before saving or applying.
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPrefillDialogOpen(false)}
+                disabled={prefilling}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { handlePrefill(prefillLanguage).catch(() => {}); }}
+                disabled={prefilling}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {prefilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {prefilling ? 'Reading resume…' : 'Prefill draft'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">{TALENT_PROFILE_SCHEMA.map(renderSection)}</div>
 
