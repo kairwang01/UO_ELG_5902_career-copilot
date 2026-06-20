@@ -3119,5 +3119,9 @@
   "job_screener_required": "Required",
   "job_screener_expected": "Preferred answer",
   "job_screener_expected_any": "No preference",
-  "job_screener_add": "Add question"
+  "job_screener_add": "Add question",
+  "talent_hide_button": "Hide from results",
+  "talent_hide_toast": "Candidate hidden from your search.",
+  "talent_hide_error": "Could not hide this candidate.",
+  "talent_why_match_title": "Why this match"
 }

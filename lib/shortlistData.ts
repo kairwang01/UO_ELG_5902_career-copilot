@@ -7,6 +7,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   type DocumentData,
   type Timestamp,
@@ -136,4 +137,26 @@ export async function updateShortlistEntry(
 ): Promise<void> {
   const ref = doc(firestoreDb, 'users', employerUid, 'shortlists', entryId);
   await updateDoc(ref, patch as DocumentData);
+}
+
+// ---- Hidden candidates (Talent Discovery "don't surface again") --------------
+
+function hiddenCol(employerUid: string) {
+  return collection(firestoreDb, 'users', employerUid, 'hidden_candidates');
+}
+
+/** Hide a discovered candidate so they no longer appear in this employer's search. */
+export async function hideCandidate(employerUid: string, candidateId: string): Promise<void> {
+  await setDoc(doc(hiddenCol(employerUid), candidateId), { hidden_at: serverTimestamp() });
+}
+
+/** Un-hide a previously hidden candidate. */
+export async function unhideCandidate(employerUid: string, candidateId: string): Promise<void> {
+  await deleteDoc(doc(hiddenCol(employerUid), candidateId));
+}
+
+/** The set of candidate ids this employer has hidden (used to filter search results). */
+export async function listHiddenCandidateIds(employerUid: string): Promise<Set<string>> {
+  const snap = await getDocs(hiddenCol(employerUid));
+  return new Set(snap.docs.map((d) => d.id));
 }

@@ -3198,5 +3198,9 @@
   "job_screener_required": "必答",
   "job_screener_expected": "偏好答案",
   "job_screener_expected_any": "无偏好",
-  "job_screener_add": "添加问题"
+  "job_screener_add": "添加问题",
+  "talent_hide_button": "从结果中隐藏",
+  "talent_hide_toast": "已从你的搜索中隐藏该候选人。",
+  "talent_hide_error": "隐藏候选人失败。",
+  "talent_why_match_title": "为什么匹配"
 }

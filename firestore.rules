@@ -552,6 +552,13 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
 
+      // hidden_candidates/{candidateId} — per-employer "do not surface this candidate
+      // in Talent Discovery again" signal. Owner-only; the doc is a lightweight marker.
+      match /hidden_candidates/{candidateId} {
+        allow read: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId);
+      }
+
       // tool_results/{toolKey} — the candidate's latest saved AI-tool output,
       // so a PAID user can revisit it for free next time instead of re-spending
       // credits ("Try next" re-runs the tool). Owner-read; writes are gated to

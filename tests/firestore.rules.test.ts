@@ -209,6 +209,22 @@ describe('application_scorecards access', () => {
   });
 });
 
+describe('hidden_candidates (Talent Discovery hide) access', () => {
+  it('the owner can hide, read, and un-hide a candidate', async () => {
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertSucceeds(setDoc(doc(db, 'users', 'emp1', 'hidden_candidates', 'cand9'), { hidden_at: ts() }));
+    await assertSucceeds(getDoc(doc(db, 'users', 'emp1', 'hidden_candidates', 'cand9')));
+  });
+  it('another employer CANNOT read or write your hidden set', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'emp1', 'hidden_candidates', 'cand9'), { hidden_at: ts() });
+    });
+    const other = testEnv.authenticatedContext('emp2').firestore();
+    await assertFails(getDoc(doc(other, 'users', 'emp1', 'hidden_candidates', 'cand9')));
+    await assertFails(setDoc(doc(other, 'users', 'emp1', 'hidden_candidates', 'cand10'), { hidden_at: ts() }));
+  });
+});
+
 describe('application_messages access', () => {
   async function seedMessage() {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
