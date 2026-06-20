@@ -87,17 +87,6 @@ const toDate = (value: unknown): Date => {
   return new Date();
 };
 
-const ProgressLine: React.FC<{ value: number; tone?: 'ready' | 'gap' | 'risk' }> = ({ value, tone = 'ready' }) => {
-  const toneClass =
-    tone === 'risk' ? 'bg-red-600' : tone === 'gap' ? 'bg-amber-500' : 'bg-emerald-600';
-
-  return (
-    <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-      <div className={`h-full rounded-full ${toneClass}`} style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }} />
-    </div>
-  );
-};
-
 const MetricCard: React.FC<{
   label: string;
   value: string;
@@ -598,15 +587,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_current_skill_title')}</h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{t('dashboard_current_skill_desc')}</p>
           {hasSkillSignals ? (
-            <div className="mt-5 space-y-4">
-              {topSkills.slice(0, 4).map((skill, index) => (
-                <div key={skill} className="space-y-2">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{skill}</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-500">{82 - index * 9}%</span>
-                  </div>
-                  <ProgressLine value={82 - index * 9} tone={index > 1 ? 'gap' : 'ready'} />
-                </div>
+            // Plain chips from real resume keywords — no proficiency %: we have no
+            // per-skill measurement, so attaching a number would be fabricated data.
+            <div className="mt-5 flex flex-wrap gap-2">
+              {topSkills.slice(0, 4).map((skill) => (
+                <span
+                  key={skill}
+                  className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-medium text-slate-800 dark:text-slate-200"
+                >
+                  {skill}
+                </span>
               ))}
             </div>
           ) : (

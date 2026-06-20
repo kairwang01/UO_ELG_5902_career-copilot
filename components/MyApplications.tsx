@@ -601,9 +601,11 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interview
           >
             {currentStatusLabel}
           </span>
+          {/* compatibility_score is a lexical keyword-overlap heuristic, not the AI match —
+              labelled "keyword overlap" so the number isn't read as a precise AI score. */}
           {app.compatibility_score != null && (
             <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">
-              {t('applications_match')} {app.compatibility_score}%
+              {t('applications_keyword_overlap')} {app.compatibility_score}%
             </span>
           )}
         </div>

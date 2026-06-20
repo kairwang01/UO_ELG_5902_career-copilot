@@ -3,13 +3,11 @@ import ApplyReviewModal, { type ApplyReviewJob } from './ApplyReviewModal';
 import {
   Briefcase,
   Building2,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   Clock3,
   MapPin,
-  MessageSquare,
   Search,
   SlidersHorizontal,
   RotateCcw,
@@ -942,11 +940,6 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
             const employerRating = eid ? (ratingCache[eid] ?? null) : null;
             const respBadge = responsivenessBadge(eid ? respCache[eid] : null, t);
             const reviewsOpen = eid ? (reviewsExpanded[eid] ?? false) : false;
-            const applicationStages = [
-              { label: t('browse_jobs_status_viewed'), active: true, icon: Clock3 },
-              { label: t('browse_jobs_status_applied'), active: isApplied, icon: CheckCircle2 },
-              { label: t('browse_jobs_status_interview'), active: false, icon: MessageSquare },
-            ];
 
             return (
               <article
@@ -1073,33 +1066,6 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                 {/* expanded content */}
                 {isExpanded && (
                   <div id={detailsId} className="animate-panel-expand border-t border-slate-100 dark:border-slate-700 px-5 pb-5 pt-4">
-                    <div className="mb-4 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/50 sm:grid-cols-3">
-                      {applicationStages.map((stage, index) => {
-                        const Icon = stage.icon;
-                        return (
-                          <div
-                            key={stage.label}
-                            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold ${
-                              stage.active
-                                ? 'text-blue-800 dark:text-blue-200'
-                                : 'text-slate-500 dark:text-slate-500'
-                            }`}
-                          >
-                            <span className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                              stage.active
-                                ? 'bg-blue-700 text-white dark:bg-blue-500'
-                                : 'bg-white text-slate-400 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700'
-                            }`}>
-                              <Icon className="h-3.5 w-3.5" />
-                            </span>
-                            <span>{stage.label}</span>
-                            {index < applicationStages.length - 1 && (
-                              <ChevronRight className="ml-auto hidden h-3.5 w-3.5 text-slate-300 dark:text-slate-600 sm:block" />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
                     {job.description && (
                       <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line">
                         {job.description}

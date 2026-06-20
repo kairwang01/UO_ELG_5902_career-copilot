@@ -485,9 +485,11 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                                  {internalJobData.get(jobId)!.salary_range}
                                </span>
                              )}
+                             {/* quickMatchScore = lexical keyword overlap (this is the value persisted
+                                 as the application's compatibility_score), not the AI match — keep the label honest. */}
                              {job.isInternal && job.compatibilityScore && (
                                 <div className="text-right">
-                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('tool_opportunity_finder_match_label')}</p>
+                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('applications_keyword_overlap')}</p>
                                     <p className="text-lg font-bold text-green-600">{job.compatibilityScore}%</p>
                                 </div>
                             )}
