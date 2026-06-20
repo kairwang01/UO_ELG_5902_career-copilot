@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
 import { AdminAccessDenied, AdminVerifying, resolveRoleWithFallback } from './AdminAccessGate';
@@ -140,6 +140,9 @@ const AdminPortal: React.FC = () => {
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [userCursor, setUserCursor] = useState<string | null>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  // Tracks the latest selected user so a slow report fetch for a previous user can't
+  // paint its data under a user the admin has since switched to.
+  const selectedUidRef = useRef<string | null>(null);
   const [userReport, setUserReport] = useState<Record<string, unknown> | null>(null);
   const [subStatus, setSubStatus] = useState('');
   const [admins, setAdmins] = useState<AdminRow[]>([]);
@@ -427,12 +430,15 @@ const AdminPortal: React.FC = () => {
   const openUser = async (uid: string) => {
     setError(null);
     setSelectedUid(uid);
+    selectedUidRef.current = uid;
     try {
       const report = await adminGetUserReport(uid);
+      if (selectedUidRef.current !== uid) return; // admin switched users mid-fetch
       setUserReport(report);
       const profile = (report as { profile?: { subscription_status?: string } }).profile;
       setSubStatus(profile?.subscription_status ?? '');
     } catch (e) {
+      if (selectedUidRef.current !== uid) return;
       setError(e instanceof Error ? e.message : 'Failed to load user report');
     }
   };
@@ -451,25 +457,31 @@ const AdminPortal: React.FC = () => {
       return;
     }
     setError(null);
+    const uid = selectedUid;
     try {
-      await adminAdjustCredits(selectedUid, delta, reason);
-      setUserReport(await adminGetUserReport(selectedUid));
-      setCreditReason('');
+      await adminAdjustCredits(uid, delta, reason);
+      const report = await adminGetUserReport(uid);
+      if (selectedUidRef.current === uid) {
+        setUserReport(report);
+        setCreditReason('');
+      }
       await loadUsers();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to adjust credits');
+      if (selectedUidRef.current === uid) setError(e instanceof Error ? e.message : 'Failed to adjust credits');
     }
   };
 
   const applySubscription = async () => {
     if (!selectedUid || !subStatus) return;
     setError(null);
+    const uid = selectedUid;
     try {
-      await adminSetSubscription(selectedUid, subStatus);
-      setUserReport(await adminGetUserReport(selectedUid));
+      await adminSetSubscription(uid, subStatus);
+      const report = await adminGetUserReport(uid);
+      if (selectedUidRef.current === uid) setUserReport(report);
       await loadUsers();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to set subscription');
+      if (selectedUidRef.current === uid) setError(e instanceof Error ? e.message : 'Failed to set subscription');
     }
   };
 
@@ -2076,6 +2088,9 @@ const AdminPortal: React.FC = () => {
                                   } else {
                                     setExpandedPromptKey(entry.key);
                                     setPromptDraft(entry.override ?? entry.default);
+                                    // Reset the change summary too — otherwise the previous
+                                    // prompt's summary rides along into this one's save.
+                                    setPromptChangeSummary('');
                                     // clear any lingering feedback when re-opening
                                     setPromptFeedback((prev) => {
                                       const next = { ...prev };

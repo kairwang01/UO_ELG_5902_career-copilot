@@ -2133,6 +2133,14 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     if (!isMountedRef.current) return;
     const wasCancelled = cancelBulkRef.current;
     cancelBulkRef.current = false;
+    if (wasCancelled) {
+      // All queued items were flipped to "parsing" up front, but only one is processed
+      // at a time — return the not-yet-processed ones to "queued" so they aren't stuck
+      // with a spinner (and the remove/retry controls, hidden while busy, work again).
+      setFiles((prev) => prev.map((f) =>
+        f.status === "parsing" || f.status === "analyzing" ? { ...f, status: "queued" } : f,
+      ));
+    }
     setIsAnalyzing(false);
     if (hubSettings.focusCompletedAfterRun) setCurrentFilter("complete");
     addToast(
