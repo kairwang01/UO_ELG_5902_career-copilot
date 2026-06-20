@@ -593,11 +593,13 @@ export function PortalShortlist({
         prev.map((e) => (e.id === id ? { ...e, notes: editNotes } : e)),
       );
       addToast(t("shortlist_notes_saved"), "success");
+      // Only close the editor on success — on failure keep the typed draft open so the
+      // user doesn't silently lose what they wrote.
+      setEditingId(null);
+      setEditNotes("");
     } catch {
       addToast(t("shortlist_action_error"), "error");
     } finally {
-      setEditingId(null);
-      setEditNotes("");
       setBusyEntryId(null);
     }
   };

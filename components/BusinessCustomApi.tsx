@@ -25,6 +25,9 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
   const [formLoading, setFormLoading] = useState(false);
   const [formMsg, setFormMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const formLoadedRef = useRef(false);
+  // Ref (not the formLoading state) so a synchronous double-submit — e.g. a quick double
+  // Enter before setFormLoading commits — is actually blocked.
+  const savingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -63,6 +66,7 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
   const handleFormSave = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
     setFormMsg(null);
+    if (savingRef.current) return; // already saving — ignore re-entry
 
     if (!form.base_url.startsWith('https://')) {
       setFormMsg({ type: 'error', text: t?.('account_custom_endpoint_base_url_error') ?? 'Base URL must start with https://' });
@@ -77,6 +81,7 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
       return;
     }
 
+    savingRef.current = true;
     setFormLoading(true);
     try {
       await setBusinessLlmConfig({
@@ -93,6 +98,7 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
       const msg = err instanceof Error ? err.message : t?.('account_custom_endpoint_save_error') ?? 'Save failed. Check your inputs and try again.';
       setFormMsg({ type: 'error', text: msg });
     } finally {
+      savingRef.current = false;
       setFormLoading(false);
     }
   }, [form, maskedKey, t]);

@@ -586,6 +586,11 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
             roleBriefRef.current?.focus();
             return;
         }
+        // Share the verified-fetch request token so a search and a verified-section
+        // retry (both write verifiedResults) can't clobber each other — and an unmount
+        // (cleanup bumps the ref) drops a late resolve.
+        const requestId = verifiedRequestIdRef.current + 1;
+        verifiedRequestIdRef.current = requestId;
         setSearchLoading(true);
         setSearchError(null);
         setRegularResults(null);
@@ -593,10 +598,12 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
             // One server call: candidates are read and matched server-side; only
             // safe, scored fields come back (sorted by score desc).
             const { candidates } = await discoverTalent(jobDescription);
+            if (requestId !== verifiedRequestIdRef.current) return;
             const allMatched = candidates.map((c) => toMatchedCandidate(c));
             setVerifiedResults(allMatched.filter(c => c.nft_staked));
             setRegularResults(allMatched.filter(c => !c.nft_staked));
         } catch (err) {
+            if (requestId !== verifiedRequestIdRef.current) return;
             setSearchError(err instanceof Error ? err.message : t('talent_search_error'));
         } finally {
             setSearchLoading(false);

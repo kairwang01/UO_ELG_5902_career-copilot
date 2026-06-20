@@ -86,7 +86,9 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
         if (active) { setLoadError(true); setLoading(false); }
       });
     return () => { active = false; };
-  }, [open, uid]);
+    // Keyed on job.id too: if the parent swaps the job while the modal stays open, the
+    // screener answers must reset — otherwise the prior job's answers ride into the new one.
+  }, [open, uid, job?.id]);
 
   const ready = useMemo(() => isTalentProfileReady(profile), [profile]);
   const hasResume = Boolean(resumeFileName) || hasResumeText;

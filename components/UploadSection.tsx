@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { ResumeImage } from '../types';
 import { SUPPORTED_MARKETS } from '../config';
 import { extractTextFromUrl } from '../services/aiClient';
@@ -71,6 +71,11 @@ const UploadSection: React.FC<UploadSectionProps> = ({
   const [isParsing, setIsParsing] = useState(false);
   const [isUrlProcessing, setIsUrlProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Shared token across the file-parse and URL-import paths: a newer upload/import (or
+  // unmount) bumps it so a slow earlier call can't write its content — or persist the
+  // wrong file to Storage — over the one the user actually ended on.
+  const runIdRef = useRef(0);
+  useEffect(() => () => { runIdRef.current++; }, []);
 
   const formatMessage = (key: string, values: Record<string, string | number>) =>
     Object.entries(values).reduce(
@@ -110,6 +115,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
         return;
     }
 
+    const myRun = ++runIdRef.current;
     setIsUrlProcessing(true);
     setResumeText('');
     setResumeImages(null);
@@ -118,6 +124,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
 
     try {
         const { extractedText } = await extractTextFromUrl(urlInput);
+        if (myRun !== runIdRef.current) return; // superseded by a newer upload/import or unmount
 
         if (extractedText && extractedText.trim().length > 300) {
             setResumeText(extractedText);
@@ -128,6 +135,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
             setInfoMessage(null);
         }
     } catch (err) {
+        if (myRun !== runIdRef.current) return;
         // Some sites (e.g. LinkedIn) block automated import — always leave the user a way forward.
         const detail = err instanceof Error ? err.message : t('upload_url_unknown_error');
         setError(`${detail} ${t('upload_url_import_error_suffix')}`);
@@ -143,11 +151,13 @@ const UploadSection: React.FC<UploadSectionProps> = ({
     if (!file) return;
 
     clearInputs();
+    const myRun = ++runIdRef.current;
     setIsParsing(true);
     setInfoMessage(formatMessage('upload_file_processing', { fileName: file.name }));
 
     try {
         const result = await parseFile(file);
+        if (myRun !== runIdRef.current) return; // a newer upload/import or unmount won — don't clobber it (or persist this file)
 
         if (result.images && result.images.length > 0) {
             setResumeImages(result.images);
@@ -165,6 +175,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
         // downloadable copy of exactly what the user submitted.
         onResumeFileSelected?.(file);
     } catch (parseError) {
+        if (myRun !== runIdRef.current) return;
         setError(parseFileErrorMessage(parseError));
         setInfoMessage(null);
     } finally {

@@ -30,6 +30,10 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
 
 
     useEffect(() => {
+        // alive guards both unmount (close mid-generation) and candidate-switch: the
+        // cleanup flips the prior run dead so its slow resolve can't paint the wrong
+        // candidate's email or setState on a closed modal.
+        let alive = true;
         const runTool = async () => {
             setLoading(true);
             setError(null);
@@ -38,16 +42,19 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
                     throw new Error(t('outreach_resume_unavailable'));
                 }
                 const apiResult = await generateOutreachEmail(candidate.resume_text, jobDescription, employerProfile, DEFAULT_MARKET);
+                if (!alive) return;
                 setResult(apiResult);
                 setEditableBody(apiResult.body);
                 setEditableSubject(apiResult.subject);
             } catch (err) {
+                if (!alive) return;
                 setError(err instanceof Error ? err.message : t('outreach_error_unknown'));
             } finally {
-                setLoading(false);
+                if (alive) setLoading(false);
             }
         };
         runTool();
+        return () => { alive = false; };
     }, [candidate, jobDescription, employerProfile, t]);
 
     const handleCopy = async () => {

@@ -649,7 +649,7 @@ export const InterviewPracticePage: React.FC<WorkspacePageProps> = ({ resumeText
 
 export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, session }) => {
   const hasResume = resumeText.trim().length > 0;
-  const { analysis, loading: analysisLoading } = useLatestResumeAnalysis(session);
+  const { analysis, loading: analysisLoading, error: analysisError } = useLatestResumeAnalysis(session);
   const { applications, loading: applicationsLoading } = useRecentApplications(session ?? null);
   const improvements = analysis?.improvements ?? [];
 
@@ -697,7 +697,9 @@ export const CareerPlanPage: React.FC<WorkspacePageProps> = ({ resumeText, t, on
             </div>
             {!analysis && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
-                {t('ws_plan_needs_analysis')}
+                {/* Distinguish a fetch failure from "never analyzed" so an existing user
+                    isn't falsely told to run an analysis. */}
+                {analysisError ? t('ws_resume_analysis_unavailable') : t('ws_plan_needs_analysis')}
               </div>
             )}
           </Panel>
