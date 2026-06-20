@@ -112,3 +112,10 @@ messaging, bulk, sourcing hide, SessionContext) ships in the same bundle.
 - `setSubscriptionStatus` (new billing gate) — without `ALLOW_DEMO_GRANTS=true` or a live Stripe webhook, every paid-plan selection becomes permanent `pending_payment`. Decide: set `ALLOW_DEMO_GRANTS=true` (demo) **or** wire Stripe (prod), then deploy.
 
 **Still outstanding:** frontend rebuild + host publish (carries 515a00a + the full arc UI). Runtime note: Cloud Functions are on the deprecated Node.js 20 — schedule a `firebase-functions` + runtime bump.
+
+### 2026-06-20 (later) — simulated checkout (commit `94d672e`)
+Demo fake-payment path shipped behind `BILLING_SIMULATION` (set `true` in `functions/.env`).
+- functions (created): `createCheckoutSession` (now returns the in-app sim URL while the flag is on), `confirmSimulatedCheckout` ✅ — verified live via `functions:list`.
+- `stripeWebhook` still **not** deployed (needs `STRIPE_WEBHOOK_SECRET`; unused in simulation).
+- **Frontend publish still required** (no Firebase Hosting configured — served by the project's own host): `npm run build` then publish `dist/`. The `/billing/checkout` page + Talent Discovery hide + all earlier UI ride this bundle.
+- To switch to real Stripe later: set `STRIPE_SECRET_KEY` (+ `sk_test_` for test mode) and the `STRIPE_PRICE_*`, set `BILLING_SIMULATION` unset/false, deploy `createCheckoutSession,stripeWebhook`.
