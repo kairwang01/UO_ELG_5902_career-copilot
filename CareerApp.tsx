@@ -8,7 +8,7 @@ import { analyzeResume, setApiStatusUpdater, setAiModel, setErrorTranslator } fr
 import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from './lib/firebaseClient';
-import { data, type AppSession as Session } from './lib/data';
+import { data } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
 import { setUserSubscription } from './services/subscriptionClient';
 import { useLocalization } from './hooks/useLocalization';
@@ -51,6 +51,8 @@ import WorkspaceTour from './components/onboarding/WorkspaceTour';
 import { isOnboardingDue, isTourDone, loadBirthdayLocal, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
 import { hasBusinessPortalAccess, normalizeBusinessSubscriptionStatus } from './lib/access/businessAccess';
 import { decideWorkspaceShell } from './lib/access/navigationDecisions';
+import { decideSessionTransition } from './lib/access/sessionTransitions';
+import { useSession } from './contexts/SessionContext';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -155,7 +157,10 @@ const buildLocalProfile = (
 const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState<Session | null>(null);
+  // Session now comes from the shared SessionProvider (single auth subscription for
+  // the whole app) — `authHydrated` is the provider's settled flag, `sessionResolved`
+  // fires earlier (first session value known) and gates sign-in/out detection below.
+  const { session, ready: authHydrated, sessionResolved } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs'>('home');
   const [initialAuthView, setInitialAuthView] = useState<'sign_in' | 'sign_up' | 'forgot_password'>('sign_in');
@@ -251,10 +256,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);
-  // True after Firebase fires its first onAuthStateChanged (persisted session known).
-  const [authHydrated, setAuthHydrated] = useState(false);
   // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
   const currentUserIdRef = useRef<string | null>(null);
+  // Guards the provider's first resolved session as a no-side-effect baseline (a
+  // returning user's restore must not be treated as a fresh sign-in).
+  const sessionBaselineSetRef = useRef(false);
   // Latest t() for use inside the auth listener (whose deps stay minimal so it
   // doesn't re-subscribe on every locale change).
   const latestTRef = useRef(t);
@@ -653,60 +659,53 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     }
   };
 
+  // React to the SHARED session (SessionProvider) instead of owning a private auth
+  // subscription. The provider emits session VALUES, not SIGNED_IN/SIGNED_OUT events,
+  // so intent is reconstructed via decideSessionTransition. The provider's first
+  // resolved session is a BASELINE — a returning user's restore — and fires no sign-in
+  // reset; only genuine transitions after the baseline do. Token refresh / tab refocus
+  // re-emit the same user id → 'none', so the user stays on their current page.
   useEffect(() => {
-    data.auth.getSession().then((session) => {
-      currentUserIdRef.current = session?.user?.id ?? null;
-      setSession(session);
-    });
+    if (!sessionResolved) return; // wait for the provider's first session value
+    const nextUserId = session?.user?.id ?? null;
 
-    const { unsubscribe } = data.auth.onAuthStateChange((_event, session) => {
-      setAuthHydrated(true);
+    if (!sessionBaselineSetRef.current) {
+      sessionBaselineSetRef.current = true;
+      currentUserIdRef.current = nextUserId;
+      return; // baseline established — no side-effects on the initial restore
+    }
 
-      const newUserId = session?.user?.id ?? null;
-      const userChanged = newUserId !== currentUserIdRef.current;
-      currentUserIdRef.current = newUserId;
+    const transition = decideSessionTransition(currentUserIdRef.current, nextUserId);
+    currentUserIdRef.current = nextUserId;
 
-      setSession(session);
-
-      if (_event === 'SIGNED_OUT') {
-        setView('home');
-        setProfile(null);
-        setAnalysisResult(null);
-        setResumeText('');
-        setOnboardingActive(false);
-        setShowTour(false);
-        setCredits(0);
-        sessionStorage.clear();
-        try {
-          localStorage.removeItem('preferred_ai_model');
-        } catch { /* storage unavailable */ }
-        setAiModel(undefined);
-        return;
+    if (transition === 'signed_out') {
+      setView('home');
+      setProfile(null);
+      setAnalysisResult(null);
+      setResumeText('');
+      setOnboardingActive(false);
+      setShowTour(false);
+      setCredits(0);
+      sessionStorage.clear();
+      try {
+        localStorage.removeItem('preferred_ai_model');
+      } catch { /* storage unavailable */ }
+      setAiModel(undefined);
+    } else if (transition === 'signed_in') {
+      setIsProfileLoaded(false);
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('payment_success') === 'true') {
+        addToast(latestTRef.current('payment_success_plan_upgraded'), 'success');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (session?.user && session.user.emailVerified === false) {
+        // Surface the "verify your email" reminder the signup modal can't show
+        // (the auth listener navigates away before it renders). Fires only on a
+        // genuine sign-in transition, never on reload or token refresh.
+        addToast(latestTRef.current('auth_signup_success_verify'), 'info');
       }
-
-      // Only reset the view and reload on a genuine new sign-in. Token refreshes
-      // and tab refocus fire SIGNED_IN with the same user, so we skip those to keep
-      // the user on their current page.
-      if (userChanged) {
-        setIsProfileLoaded(false);
-        if (_event === 'SIGNED_IN') {
-          const urlParams = new URLSearchParams(window.location.search);
-          if (urlParams.get('payment_success') === 'true') {
-            addToast(latestTRef.current('payment_success_plan_upgraded'), 'success');
-            window.history.replaceState({}, document.title, window.location.pathname);
-          } else if (session?.user && session.user.emailVerified === false) {
-            // Surface the "verify your email" reminder the signup modal can't show
-            // (the auth listener navigates away before it renders). Fires only on a
-            // genuine sign-in transition, never on reload or token refresh.
-            addToast(latestTRef.current('auth_signup_success_verify'), 'info');
-          }
-          setView('home');
-        }
-      }
-    });
-
-    return () => unsubscribe();
-  }, [setCredits]);
+      setView('home');
+    }
+  }, [sessionResolved, session, setCredits, addToast]);
 
   // Live profile sync: credits deducted server-side, tier changes from the admin
   // portal, and payment upgrades appear without a re-login.

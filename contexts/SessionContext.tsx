@@ -12,6 +12,13 @@ export interface SiteSessionState {
   profile: UserProfile | null;
   /** True once we've resolved the initial auth state (avoids a logged-out flash). */
   ready: boolean;
+  /**
+   * True once the FIRST session value (logged-in or out) has resolved — earlier than
+   * `ready`, which also waits for profile + admin. Consumers that must react to
+   * sign-in/out transitions (not just first paint) gate on this so they don't treat
+   * the provider's transient initial null as a sign-out.
+   */
+  sessionResolved: boolean;
   isAdmin: boolean;
   /** Employer role OR a business subscription plan. */
   isBusiness: boolean;
@@ -112,7 +119,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children })
   const ready = sessionResolved && profileSettled && adminSettled;
 
   return (
-    <SessionContext.Provider value={{ session, profile, ready, isAdmin, isBusiness }}>
+    <SessionContext.Provider value={{ session, profile, ready, sessionResolved, isAdmin, isBusiness }}>
       {children}
     </SessionContext.Provider>
   );
