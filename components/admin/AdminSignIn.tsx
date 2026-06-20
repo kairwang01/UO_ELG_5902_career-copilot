@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { data } from '@/lib/data';
 import AdminAuthLayout from './AdminAuthLayout';
 
@@ -32,26 +32,46 @@ const AdminSignIn: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Ref latch: the `loading` state lags a render, so a fast double Enter/click would fire
+  // two sign-in calls. mountedRef drops the tail setState — on success the auth-state
+  // change swaps this form out for the console.
+  const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     setMessage(null);
-    const { error: err } = await data.auth.signInWithPassword(email.trim(), password);
-    if (err) setError(authErrorMessage(err.message));
-    setLoading(false);
+    try {
+      const { error: err } = await data.auth.signInWithPassword(email.trim(), password);
+      if (!mountedRef.current) return;
+      if (err) setError(authErrorMessage(err.message));
+    } finally {
+      inFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
+    }
   };
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     setMessage(null);
-    const { error: err } = await data.auth.resetPassword(email.trim());
-    if (err) setError(authErrorMessage(err.message));
-    else setMessage('If an account exists for this email, a reset link has been sent.');
-    setLoading(false);
+    try {
+      const { error: err } = await data.auth.resetPassword(email.trim());
+      if (!mountedRef.current) return;
+      if (err) setError(authErrorMessage(err.message));
+      else setMessage('If an account exists for this email, a reset link has been sent.');
+    } finally {
+      inFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
+    }
   };
 
   return (

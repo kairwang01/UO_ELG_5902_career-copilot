@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { sendEmailVerification, updateProfile } from 'firebase/auth';
 import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
@@ -82,6 +82,12 @@ const getAuthErrorMessage = (message: string, t: AuthProps['t']): string => {
 const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }) => {
   const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
+  // Ref latch: the `loading` state lags a render, so a fast double Enter/click would fire
+  // two auth calls (worst case: two account-creation attempts). mountedRef drops the tail
+  // setState — on success the auth listener closes/unmounts this modal.
+  const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -104,20 +110,28 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     // back to Sign in) used to leave a stale loading=true behind, so the
     // submit button stayed stuck on "Signing in…" forever.
     setLoading(false);
+    inFlightRef.current = false;
   }, [mode, authView]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     setMessage(null);
-    const { error } = await data.auth.signInWithPassword(email, password);
-    if (error) {
-      setError(getAuthErrorMessage(error.message, t));
-    } else {
-      onClose();
+    try {
+      const { error } = await data.auth.signInWithPassword(email, password);
+      if (!mountedRef.current) return;
+      if (error) {
+        setError(getAuthErrorMessage(error.message, t));
+      } else {
+        onClose();
+      }
+    } finally {
+      inFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
-    setLoading(false);
   };
   
   const handleSignUp = async (event: React.FormEvent) => {
@@ -136,6 +150,8 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
       return;
     }
 
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     setMessage(null);
@@ -144,21 +160,21 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         ? `pending_biz_${selectedPlan}`
         : selectedPlan === 'free' ? 'free' : `pending_${selectedPlan}`;
 
-    const { data: authData, error: authError } = await data.auth.signUp(email, password);
+    try {
+      const { data: authData, error: authError } = await data.auth.signUp(email, password);
+      if (!mountedRef.current) return;
 
-    if (authError) {
-      if (authError.message.includes('email-already-in-use') || authError.message.includes('already registered')) {
-        setError(t('auth_error_user_exists'));
-        setAuthView('sign_in');
-      } else {
-        setError(getAuthErrorMessage(authError.message, t));
+      if (authError) {
+        if (authError.message.includes('email-already-in-use') || authError.message.includes('already registered')) {
+          setError(t('auth_error_user_exists'));
+          setAuthView('sign_in');
+        } else {
+          setError(getAuthErrorMessage(authError.message, t));
+        }
+        return;
       }
-      setLoading(false);
-      return;
-    }
 
-    if (authData) {
-      try {
+      if (authData) {
         // Pass the name to the callable so it is written server-side at doc
         // creation (race-free). The client upsert below is a belt-and-suspenders
         // that only succeeds once the doc already exists.
@@ -173,6 +189,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           role: mode === 'business' && subscriptionResult.status !== 'active' ? 'candidate' : mode === 'business' ? 'employer' : 'candidate',
           updated_at: new Date().toISOString(),
         });
+        if (!mountedRef.current) return;
 
         if (profileError) {
           setError(t('auth_profile_created_setup_failed').replace('{error}', profileError.message));
@@ -206,30 +223,40 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           // the account is created, so the inline message would never be seen —
           // show the verify-your-email notice as a global toast that persists.
           addToast(t('auth_signup_success_verify'), 'info');
-          setMessage(t('auth_signup_success_verify'));
+          if (mountedRef.current) setMessage(t('auth_signup_success_verify'));
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : t('auth_unexpected_error'));
+      } else {
+        setError(t('auth_account_create_failed'));
       }
-    } else {
-      setError(t('auth_account_create_failed'));
+    } catch (err) {
+      if (mountedRef.current) setError(err instanceof Error ? err.message : t('auth_unexpected_error'));
+    } finally {
+      inFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
-
-    setLoading(false);
   };
   
   const handlePasswordReset = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     setMessage(null);
-    const { error } = await data.auth.resetPassword(email);
-    if (error) setError(getAuthErrorMessage(error.message, t));
-    else setMessage(t('auth_message_reset_link_sent'));
-    setLoading(false);
+    try {
+      const { error } = await data.auth.resetPassword(email);
+      if (!mountedRef.current) return;
+      if (error) setError(getAuthErrorMessage(error.message, t));
+      else setMessage(t('auth_message_reset_link_sent'));
+    } finally {
+      inFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
+    }
   }
   
   const handleGoogleLogin = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     // Store plan selection for OAuth flow
     sessionStorage.setItem('pending_plan', selectedPlan);
     sessionStorage.setItem('pending_mode', mode);
@@ -240,12 +267,17 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     // Supabase-era leftover). If the user closes the popup, the promise resolves
     // with an error and, previously, loading was never reset — the button stayed
     // stuck on "Signing in…" until a full reload.
-    const { error } = await data.auth.signInWithGoogle();
-    if (error) {
-      setError(getAuthErrorMessage(error.message, t));
+    try {
+      const { error } = await data.auth.signInWithGoogle();
+      if (!mountedRef.current) return;
+      if (error) {
+        setError(getAuthErrorMessage(error.message, t));
+      }
+    } finally {
+      // On success the auth listener closes this modal; resetting is harmless.
+      inFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
-    // On success the auth listener closes this modal; resetting is harmless.
-    setLoading(false);
   }
 
   const renderContent = () => {
