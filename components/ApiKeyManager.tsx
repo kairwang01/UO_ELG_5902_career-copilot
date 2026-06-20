@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { data as dataClient } from '@/lib/data';
 import type { AppSession, ApiKey } from '@/lib/data';
 import { useToast } from './Toast';
@@ -18,10 +18,14 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   useModalBehavior(() => setGeneratedKey(null), !!generatedKey);
   const { addToast } = useToast();
+  // Guards setState if the user leaves the Settings tab while a key call is in flight.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);
     const { data, error } = await dataClient.apiKeys.list(session.user.id);
+    if (!mountedRef.current) return;
 
     if (error) {
       // Don't pop a toast on the automatic load — a transient first-render error
@@ -46,6 +50,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
     }
     setLoading(true);
     const { data, error } = await dataClient.apiKeys.create(session.user.id, newKeyName.trim());
+    if (!mountedRef.current) return;
 
     if (error) {
       addToast(`Failed to create key: ${error.message}`, 'error');
@@ -64,6 +69,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
     }
     setLoading(true);
     const { error } = await dataClient.apiKeys.remove(keyId, session.user.id);
+    if (!mountedRef.current) return;
 
     if (error) {
       addToast(`Failed to delete key: ${error.message}`, 'error');

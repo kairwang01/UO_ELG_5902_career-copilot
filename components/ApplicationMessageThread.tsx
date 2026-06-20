@@ -35,6 +35,9 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Drops a send's tail setState if this thread closed / switched applicant mid-send.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
     if (!applicationId) return;
@@ -60,16 +63,20 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
   const handleSend = async () => {
     const body = draft.trim();
     if (!body || sending) return;
+    const targetId = applicationId; // the send is bound to this id, not whatever's current on resolve
     setSending(true);
     setError(null);
     try {
-      await sendApplicationMessage(applicationId, body, viewerRole === 'employer' ? template : undefined);
-      setDraft('');
-      setTemplate('custom');
+      await sendApplicationMessage(targetId, body, viewerRole === 'employer' ? template : undefined);
+      // Don't clear a draft / show success for a thread the user has since switched away from.
+      if (mountedRef.current && applicationId === targetId) {
+        setDraft('');
+        setTemplate('custom');
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('msg_send_error'));
+      if (mountedRef.current && applicationId === targetId) setError(e instanceof Error ? e.message : t('msg_send_error'));
     } finally {
-      setSending(false);
+      if (mountedRef.current) setSending(false);
     }
   };
 

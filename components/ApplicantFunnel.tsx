@@ -437,6 +437,10 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
     const [notes, setNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
+    // Ref latches: the saving state lags a render, so a synchronous double-click could
+    // schedule a duplicate interview / write a duplicate scorecard (the callables have no dedup).
+    const submittingRef = useRef(false);
+    const scorecardSavingRef = useRef(false);
 
     // Per-card busy flag so cancel / complete buttons disable only their own card.
     const [actionId, setActionId] = useState<string | null>(null);
@@ -511,7 +515,8 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
     };
 
     const handleSubmit = async () => {
-        if (submitting) return;
+        if (submitting || submittingRef.current) return;
+        submittingRef.current = true;
         setSubmitting(true);
         setFormError(null);
         try {
@@ -544,6 +549,7 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
         } catch (err) {
             setFormError(err instanceof Error ? err.message : t('interview_error'));
         } finally {
+            submittingRef.current = false;
             setSubmitting(false);
         }
     };
@@ -594,7 +600,8 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
     };
 
     const handleScorecardSave = async (interview: ApplicationInterview) => {
-        if (scorecardSaving) return;
+        if (scorecardSaving || scorecardSavingRef.current) return;
+        scorecardSavingRef.current = true;
         setScorecardSaving(true);
         setScorecardError(null);
         try {
@@ -615,6 +622,7 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
         } catch (err) {
             setScorecardError(err instanceof Error ? err.message : t('scorecard_error'));
         } finally {
+            scorecardSavingRef.current = false;
             setScorecardSaving(false);
         }
     };
@@ -1348,24 +1356,31 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     const [bulkMessageBody, setBulkMessageBody] = useState('');
     const [bulkSaving, setBulkSaving] = useState(false);
     const detailRef = useRef<HTMLElement | null>(null);
+    // Run token for the resume-view fetch: opening another applicant's resume (or closing)
+    // supersedes an in-flight load so applicant A's resume can't paint under applicant B.
+    const resumeViewRunRef = useRef(0);
 
     // View an applicant's resume TEXT inline (server verifies the caller owns the
     // job the candidate applied to — same gate as the file download).
     const handleViewResume = async (applicant: Applicant) => {
+        const myRun = ++resumeViewRunRef.current;
         setViewingApplicant(applicant);
         setResumeViewText(null);
         setResumeViewError(null);
         setResumeViewLoading(true);
         try {
             const res = await getApplicantResumeText(applicant.id);
+            if (myRun !== resumeViewRunRef.current) return; // another applicant's resume opened / closed first
             setResumeViewText(res.resumeText ?? '');
         } catch (err) {
+            if (myRun !== resumeViewRunRef.current) return;
             setResumeViewError(err instanceof Error ? err.message : t('applicant_funnel_resume_view_error'));
         } finally {
-            setResumeViewLoading(false);
+            if (myRun === resumeViewRunRef.current) setResumeViewLoading(false);
         }
     };
     const closeResumeView = useCallback(() => {
+        resumeViewRunRef.current++; // supersede any in-flight load so it can't paint after close
         setViewingApplicant(null);
         setResumeViewText(null);
         setResumeViewError(null);
@@ -2430,6 +2445,9 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
 
                             <InterviewsSection
+                                // Remount per applicant so a half-typed scorecard/interview
+                                // draft for one candidate can't bleed into the next.
+                                key={selectedApplicant.id}
                                 applicationId={selectedApplicant.id}
                                 employerUid={employerUid}
                                 defaultStage={getStatusLabel(selectedApplicant.status)}
@@ -2488,6 +2506,9 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
 
                             <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
                             <InterviewsSection
+                                // Remount per applicant so a half-typed scorecard/interview
+                                // draft for one candidate can't bleed into the next.
+                                key={selectedApplicant.id}
                                 applicationId={selectedApplicant.id}
                                 employerUid={employerUid}
                                 defaultStage={getStatusLabel(selectedApplicant.status)}

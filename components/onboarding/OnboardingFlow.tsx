@@ -127,6 +127,10 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
   const suggested = useMemo(() => suggestCareerFields(resumeDraft), [resumeDraft]);
   const suggestedRef = useRef(suggested);
   suggestedRef.current = suggested;
+  // False once unmounted — guards setState if the user clicks "Skip all" (or leaves)
+  // while a resume parse/upload is still in flight.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   useEffect(() => {
     if (phase === 'interest') {
       setSelectedFields((prev) => (prev.length === 0 ? suggestedRef.current : prev));
@@ -144,6 +148,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
     setParseError(false);
     try {
       const parsed = await parseFile(file);
+      if (!mountedRef.current) return;
       if (parsed.text.trim()) {
         setResumeDraft(parsed.text);
         setResumeSource(file.name);
@@ -151,18 +156,19 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
         // Keep a downloadable copy of the original file (best-effort; the
         // reviewed text is the source of truth and is saved in finish()).
         try {
-          setResumeFileMeta(await uploadResumeFile(uid, file));
+          const meta = await uploadResumeFile(uid, file);
+          if (mountedRef.current) setResumeFileMeta(meta);
         } catch (err) {
           console.warn('Could not save original resume file during onboarding:', err);
-          setResumeFileMeta(null);
+          if (mountedRef.current) setResumeFileMeta(null);
         }
       } else {
         setParseError(true);
       }
     } catch {
-      setParseError(true);
+      if (mountedRef.current) setParseError(true);
     } finally {
-      setParsing(false);
+      if (mountedRef.current) setParsing(false);
     }
   };
 
@@ -172,27 +178,21 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
     setPhase('finishing');
     setSaveError(false);
     try {
-      // 1) Name → profile (allowlisted field).
+      // Name + reviewed resume → profile in ONE write. Splitting it risked a partial
+      // save (name persisted, resume lost) if the second call failed; a single update
+      // keeps it atomic. The resume text must be saved before leaving onboarding —
+      // relying on the workspace debounce lets getProfile() reload an empty
+      // resume_text and wipe the just-imported draft from local state.
+      const resumeTextToSave = resumeSource ? reviewedResumeText(resumeDraft) : '';
       const { error } = await data.profiles.update(uid, {
         full_name: fullName,
         birth_date: birthday || null,
+        ...(resumeTextToSave
+          ? { resume_text: resumeTextToSave, ...(resumeFileMeta ?? {}) } // file refs when the upload succeeded
+          : {}),
         updated_at: new Date().toISOString(),
       });
       if (error) throw new Error(error.message);
-
-      // 1b) Reviewed resume text → profile. This must be saved before leaving
-      // onboarding; relying on the workspace debounce lets getProfile() reload an
-      // empty resume_text and wipe the just-imported draft from local state.
-      const resumeTextToSave = resumeSource ? reviewedResumeText(resumeDraft) : '';
-      if (resumeTextToSave) {
-        const { error: resumeError } = await data.profiles.update(uid, {
-          resume_text: resumeTextToSave,
-          // Persist the original-file references too, when the upload succeeded.
-          ...(resumeFileMeta ?? {}),
-          updated_at: new Date().toISOString(),
-        });
-        if (resumeError) throw new Error(resumeError.message);
-      }
 
       // 2) Career fields → existing JobPreferences (drives AI search + job goals).
       const roleTexts = selectedFields
