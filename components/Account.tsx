@@ -246,13 +246,15 @@ const Account: React.FC<AccountProps> = ({
         const resolvedBirthDate = profileData.birth_date || loadBirthdayLocal(user.id);
         setBirthDate(resolvedBirthDate);
         if (resolvedBirthDate && !profileData.birth_date) {
-          void data.profiles.update(user.id, {
+          data.profiles.update(user.id, {
             birth_date: resolvedBirthDate,
             updated_at: new Date().toISOString(),
-          });
+          }).catch(() => { /* best-effort migration; the local fallback still displays */ });
         }
         setAvatarUrl(profileData.avatar_url || '');
-        setSubscriptionStatus(profileData.subscription_status);
+        // Legacy/partial docs can lack subscription_status — default to 'free' so the
+        // plan hierarchy / manage-subscription routing never branches on undefined.
+        setSubscriptionStatus(profileData.subscription_status || 'free');
         setWalletAddress(profileData.wallet_address || null);
         setNftMinted(profileData.nft_minted || false);
         setNftStaked(profileData.nft_staked || false);

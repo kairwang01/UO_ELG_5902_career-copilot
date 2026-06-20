@@ -1133,7 +1133,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                         refreshProfile={getProfile}
                         onApplyImprovements={handleApplyImprovements}
                         activeTool="website-builder"
-                        setActiveTool={(tool) => setActiveTool(tool)}
+                        // This view hardcodes the portfolio tool, so the tool's "back"
+                        // (setActiveTool(null)) must LEAVE the portfolio view — otherwise
+                        // the hardcoded prop keeps rendering it and the button does nothing.
+                        setActiveTool={(tool) => { if (tool) { setActiveTool(tool); } else { setWorkspaceView('dashboard'); } }}
                     />
                  )}
             </div>

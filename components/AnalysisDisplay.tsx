@@ -213,10 +213,13 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
     setOptimizationError(null);
     try {
       const { updatedResumeText } = await applyResumeImprovements(resumeText, result.improvements);
-      onApplyImprovements(updatedResumeText);
+      // Close the confirm UI BEFORE onApplyImprovements — the parent resets the
+      // analysis (result → null), which re-renders this view to the studio branch.
       setConfirmingApply(false);
+      onApplyImprovements(updatedResumeText);
     } catch (err) {
-      setOptimizationError(err instanceof Error ? err.message : 'Failed to apply improvements.');
+      console.error('applyResumeImprovements failed:', err);
+      setOptimizationError(t('ai_error_failed'));
     } finally {
       setIsOptimizing(false);
     }
