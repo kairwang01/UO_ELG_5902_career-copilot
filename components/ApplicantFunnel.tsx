@@ -30,7 +30,9 @@ import {
     getApplicantResumeFile,
     getApplicantResumeText,
     updateApplicationStatus,
+    bulkUpdateApplicationStatus,
     type ApplicationStatusAction,
+    type BulkApplicationStatusAction,
     type ApplicationStatusHistoryEvent,
     type JobApplicant,
 } from '../services/aiClient';
@@ -83,6 +85,7 @@ type RecencyFilter = 'all' | '7' | '30';
 type AnalysisFilter = 'all' | 'analyzed' | 'needs_review';
 type QuickFilterKey = 'all' | 'high_match' | 'recent' | 'needs_review';
 type RecommendationTone = 'strong' | 'screen' | 'review';
+type BulkActionMode = BulkApplicationStatusAction;
 
 const SCORE_OPTIONS: ScoreThreshold[] = ['all', '50', '70', '85'];
 const SORT_OPTIONS: SortKey[] = ['score', 'newest', 'name'];
@@ -1337,6 +1340,13 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     const [resumeViewText, setResumeViewText] = useState<string | null>(null);
     const [resumeViewLoading, setResumeViewLoading] = useState(false);
     const [resumeViewError, setResumeViewError] = useState<string | null>(null);
+    const [selectedApplicantIds, setSelectedApplicantIds] = useState<Set<string>>(new Set());
+    const [bulkAction, setBulkAction] = useState<BulkActionMode>('advance');
+    const [bulkReason, setBulkReason] = useState('');
+    const [bulkCandidateNote, setBulkCandidateNote] = useState('');
+    const [bulkNotify, setBulkNotify] = useState(false);
+    const [bulkMessageBody, setBulkMessageBody] = useState('');
+    const [bulkSaving, setBulkSaving] = useState(false);
     const detailRef = useRef<HTMLElement | null>(null);
 
     // View an applicant's resume TEXT inline (server verifies the caller owns the
@@ -1472,6 +1482,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             const { applicants: result } = await listJobApplicants(job.id);
 
             setApplicants(result);
+            setSelectedApplicantIds(new Set());
             // Don't auto-spotlight the top AI-scored applicant (result is score-sorted) —
             // let the selection effect pick filteredApplicants[0], i.e. the chronologically
             // newest under the default 'newest' sort, consistent with the advisory-not-
@@ -1564,6 +1575,32 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         }
     }, [filteredApplicants, selectedApplicant?.id]);
 
+    useEffect(() => {
+        const liveIds = new Set(applicants.map((applicant) => applicant.id));
+        setSelectedApplicantIds((current) => {
+            const next = new Set([...current].filter((id) => liveIds.has(id)));
+            return next.size === current.size ? current : next;
+        });
+    }, [applicants]);
+
+    const visibleApplicantIds = useMemo(
+        () => filteredApplicants.map((applicant) => applicant.id),
+        [filteredApplicants],
+    );
+    const selectedVisibleCount = useMemo(
+        () => visibleApplicantIds.filter((id) => selectedApplicantIds.has(id)).length,
+        [selectedApplicantIds, visibleApplicantIds],
+    );
+    const allVisibleSelected = visibleApplicantIds.length > 0 && selectedVisibleCount === visibleApplicantIds.length;
+
+    useEffect(() => {
+        const visibleIds = new Set(visibleApplicantIds);
+        setSelectedApplicantIds((current) => {
+            const next = new Set([...current].filter((id) => visibleIds.has(id)));
+            return next.size === current.size ? current : next;
+        });
+    }, [visibleApplicantIds]);
+
     const highMatchCount = useMemo(
         () => applicants.filter((applicant) => (applicant.compatibility_score ?? 0) >= 85).length,
         [applicants],
@@ -1605,6 +1642,73 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         setRecencyFilter('all');
         setAnalysisFilter('all');
         setSortKey('newest');
+    };
+
+    const toggleApplicantSelection = (id: string) => {
+        setSelectedApplicantIds((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleVisibleSelection = () => {
+        setSelectedApplicantIds((current) => {
+            const next = new Set(current);
+            if (allVisibleSelected) {
+                visibleApplicantIds.forEach((id) => next.delete(id));
+            } else {
+                visibleApplicantIds.forEach((id) => next.add(id));
+            }
+            return next;
+        });
+    };
+
+    const defaultBulkMessage = useMemo(
+        () => bulkAction === 'reject'
+            ? t('applicant_funnel_bulk_default_rejection_message')
+            : t('applicant_funnel_bulk_default_advance_message'),
+        [bulkAction, t],
+    );
+
+    const handleBulkSubmit = async () => {
+        const applicationIds = [...selectedApplicantIds];
+        if (applicationIds.length === 0) {
+            setStatusUpdateError(t('applicant_funnel_bulk_select_one'));
+            return;
+        }
+        const reason = bulkReason.trim();
+        if (bulkAction === 'reject' && !reason) {
+            setStatusUpdateError(t('applicant_funnel_bulk_reason_required'));
+            return;
+        }
+
+        setBulkSaving(true);
+        setStatusUpdateError(null);
+        try {
+            const result = await bulkUpdateApplicationStatus(applicationIds, bulkAction, {
+                reason,
+                candidateNote: bulkCandidateNote.trim(),
+                notify: bulkNotify,
+                messageBody: bulkNotify ? (bulkMessageBody.trim() || defaultBulkMessage) : '',
+                templateKey: bulkAction === 'reject' ? 'rejection' : 'interview_invite',
+            });
+            await fetchApplicants();
+            setSelectedApplicantIds(new Set());
+            if (result.failed > 0) {
+                addToast(formatTranslation(t('applicant_funnel_bulk_partial_toast'), {
+                    succeeded: result.succeeded,
+                    failed: result.failed,
+                }), 'info');
+            } else {
+                addToast(formatTranslation(t('applicant_funnel_bulk_success_toast'), { count: result.succeeded }), 'success');
+            }
+        } catch (err) {
+            setStatusUpdateError(err instanceof Error ? err.message : t('applicant_funnel_bulk_error'));
+        } finally {
+            setBulkSaving(false);
+        }
     };
 
     const applyQuickFilter = (filter: QuickFilterKey) => {
@@ -2046,10 +2150,122 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                     </SelectField>
                                 </div>
                             )}
-                        </div>
-                    </div>
+	                        </div>
+	                    </div>
 
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+	                    <div className="mb-4 flex-shrink-0 rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/50 dark:bg-blue-950/20">
+	                        <div className="flex flex-wrap items-center justify-between gap-2">
+	                            <label className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-blue-100 bg-white px-2.5 text-xs font-semibold text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-gray-900 dark:text-blue-200">
+	                                <input
+	                                    type="checkbox"
+	                                    checked={allVisibleSelected}
+	                                    disabled={filteredApplicants.length === 0 || bulkSaving}
+	                                    onChange={toggleVisibleSelection}
+	                                    className="h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+	                                />
+	                                {allVisibleSelected ? t('applicant_funnel_bulk_clear_visible') : t('applicant_funnel_bulk_select_visible')}
+	                            </label>
+	                            <span className="text-xs font-semibold text-blue-900 dark:text-blue-200">
+	                                {formatTranslation(t('applicant_funnel_bulk_selected'), { count: selectedApplicantIds.size })}
+	                            </span>
+	                        </div>
+
+	                        {selectedApplicantIds.size > 0 && (
+	                            <div className="mt-3 space-y-3 rounded-lg border border-blue-100 bg-white p-3 dark:border-blue-900/60 dark:bg-gray-900">
+	                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+	                                    <SelectField
+	                                        id="applicant-bulk-action"
+	                                        label={t('applicant_funnel_bulk_action_label')}
+	                                        value={bulkAction}
+	                                        onChange={(value) => {
+	                                            setBulkAction(value as BulkActionMode);
+	                                            setBulkMessageBody('');
+	                                        }}
+	                                    >
+	                                        <option value="advance">{t('applicant_funnel_bulk_action_advance')}</option>
+	                                        <option value="reject">{t('applicant_funnel_bulk_action_reject')}</option>
+	                                    </SelectField>
+	                                    <div>
+	                                        <label htmlFor="applicant-bulk-note" className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+	                                            {t('applicant_funnel_bulk_candidate_note_label')}
+	                                        </label>
+	                                        <input
+	                                            id="applicant-bulk-note"
+	                                            type="text"
+	                                            value={bulkCandidateNote}
+	                                            onChange={(event) => setBulkCandidateNote(event.target.value)}
+	                                            placeholder={t('applicant_funnel_bulk_candidate_note_placeholder')}
+	                                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:placeholder-gray-500"
+	                                        />
+	                                    </div>
+	                                </div>
+
+	                                {bulkAction === 'reject' && (
+	                                    <div>
+	                                        <label htmlFor="applicant-bulk-reason" className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+	                                            {t('applicant_funnel_bulk_reason_label')}
+	                                        </label>
+	                                        <textarea
+	                                            id="applicant-bulk-reason"
+	                                            value={bulkReason}
+	                                            onChange={(event) => setBulkReason(event.target.value)}
+	                                            rows={2}
+	                                            placeholder={t('applicant_funnel_bulk_reason_placeholder')}
+	                                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:placeholder-gray-500"
+	                                        />
+	                                    </div>
+	                                )}
+
+	                                <label className="inline-flex items-start gap-2 text-xs font-semibold text-gray-700 dark:text-gray-200">
+	                                    <input
+	                                        type="checkbox"
+	                                        checked={bulkNotify}
+	                                        onChange={(event) => setBulkNotify(event.target.checked)}
+	                                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+	                                    />
+	                                    <span>{t('applicant_funnel_bulk_notify_label')}</span>
+	                                </label>
+
+	                                {bulkNotify && (
+	                                    <div>
+	                                        <label htmlFor="applicant-bulk-message" className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+	                                            {t('applicant_funnel_bulk_message_label')}
+	                                        </label>
+	                                        <textarea
+	                                            id="applicant-bulk-message"
+	                                            value={bulkMessageBody}
+	                                            onChange={(event) => setBulkMessageBody(event.target.value)}
+	                                            rows={3}
+	                                            placeholder={defaultBulkMessage}
+	                                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:placeholder-gray-500"
+	                                        />
+	                                    </div>
+	                                )}
+
+	                                <div className="flex flex-wrap items-center gap-2">
+	                                    <button
+	                                        type="button"
+	                                        onClick={handleBulkSubmit}
+	                                        disabled={bulkSaving}
+	                                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+	                                    >
+	                                        <ClipboardCheck className="h-4 w-4" />
+	                                        {bulkSaving ? t('applicant_funnel_bulk_working') : t('applicant_funnel_bulk_apply')}
+	                                    </button>
+	                                    <button
+	                                        type="button"
+	                                        onClick={() => setSelectedApplicantIds(new Set())}
+	                                        disabled={bulkSaving}
+	                                        className="min-h-9 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+	                                    >
+	                                        {t('applicant_funnel_bulk_clear')}
+	                                    </button>
+	                                </div>
+	                            </div>
+	                        )}
+	                    </div>
+
+	                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                         {filteredApplicants.length === 0 ? (
                             <div className="flex h-full min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white px-4 py-8 text-center dark:border-gray-700 dark:bg-gray-800">
                                 <Users className="mb-3 h-10 w-10 text-gray-300 dark:text-gray-600" />
@@ -2064,52 +2280,65 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                                 </button>
                             </div>
                         ) : (
-                            filteredApplicants.map(applicant => {
-                                const score = applicant.compatibility_score ?? 0;
-                                const analyzed = hasApplicantAnalysis(applicant);
-                                const candidateName = applicant.candidate_name || t('applicant_funnel_unnamed_candidate');
-                                return (
-                                    <button
-                                        key={applicant.id}
-                                        type="button"
-                                        onClick={() => handleSelectApplicant(applicant)}
-                                        aria-current={selectedApplicant?.id === applicant.id ? 'true' : undefined}
-                                        className={`w-full rounded-xl border p-3 text-left transition-all duration-200 ${
-                                            selectedApplicant?.id === applicant.id
-                                                ? 'border-blue-500 bg-blue-50 shadow-sm ring-2 ring-blue-500/10 dark:border-blue-400 dark:bg-blue-950/30'
-                                                : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500 dark:hover:bg-gray-800/80'
-                                        }`}
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{candidateName}</p>
-                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                    {formatTranslation(t('applicant_funnel_applied_on'), { date: formatDate(applicant.application_date) })}
-                                                </p>
-                                            </div>
-                                            <div className={`shrink-0 text-lg font-bold tabular-nums ${getScoreTone(score)}`}>{score}%</div>
-                                        </div>
-                                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                                                {getStatusLabel(applicant.status)}
-                                            </span>
-                                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                                                {t('applicant_funnel_match_score')}: {score}%
-                                            </span>
-                                            {!analyzed && (
-                                                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                                                    {t('applicant_funnel_needs_review_chip')}
-                                                </span>
-                                            )}
-                                            {talentProfileHasData(applicant.talent_profile) && (
-                                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                                    {t('applicant_funnel_talent_profile_chip')}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </button>
-                                );
-                            })
+	                            filteredApplicants.map(applicant => {
+	                                const score = applicant.compatibility_score ?? 0;
+	                                const analyzed = hasApplicantAnalysis(applicant);
+	                                const candidateName = applicant.candidate_name || t('applicant_funnel_unnamed_candidate');
+	                                return (
+	                                    <div
+	                                        key={applicant.id}
+	                                        className="flex items-start gap-2"
+	                                    >
+	                                        <label className="mt-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+	                                            <span className="sr-only">{formatTranslation(t('applicant_funnel_select_applicant'), { name: candidateName })}</span>
+	                                            <input
+	                                                type="checkbox"
+	                                                checked={selectedApplicantIds.has(applicant.id)}
+	                                                onChange={() => toggleApplicantSelection(applicant.id)}
+	                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+	                                            />
+	                                        </label>
+	                                        <button
+	                                            type="button"
+	                                            onClick={() => handleSelectApplicant(applicant)}
+	                                            aria-current={selectedApplicant?.id === applicant.id ? 'true' : undefined}
+	                                            className={`min-w-0 flex-1 rounded-xl border p-3 text-left transition-all duration-200 ${
+	                                                selectedApplicant?.id === applicant.id
+	                                                    ? 'border-blue-500 bg-blue-50 shadow-sm ring-2 ring-blue-500/10 dark:border-blue-400 dark:bg-blue-950/30'
+	                                                    : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500 dark:hover:bg-gray-800/80'
+	                                            }`}
+	                                        >
+	                                            <div className="flex items-start justify-between gap-3">
+	                                                <div className="min-w-0">
+	                                                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{candidateName}</p>
+	                                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+	                                                        {formatTranslation(t('applicant_funnel_applied_on'), { date: formatDate(applicant.application_date) })}
+	                                                    </p>
+	                                                </div>
+	                                                <div className={`shrink-0 text-lg font-bold tabular-nums ${getScoreTone(score)}`}>{score}%</div>
+	                                            </div>
+	                                            <div className="mt-3 flex flex-wrap items-center gap-2">
+	                                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+	                                                    {getStatusLabel(applicant.status)}
+	                                                </span>
+	                                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+	                                                    {t('applicant_funnel_match_score')}: {score}%
+	                                                </span>
+	                                                {!analyzed && (
+	                                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+	                                                        {t('applicant_funnel_needs_review_chip')}
+	                                                    </span>
+	                                                )}
+	                                                {talentProfileHasData(applicant.talent_profile) && (
+	                                                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+	                                                        {t('applicant_funnel_talent_profile_chip')}
+	                                                    </span>
+	                                                )}
+	                                            </div>
+	                                        </button>
+	                                    </div>
+	                                );
+	                            })
                         )}
                     </div>
                 </aside>

@@ -386,6 +386,27 @@ export interface UpdateApplicationStatusResult {
 
 export type ApplicationStatusAction = 'advance' | 'skip' | 'reject' | 'reopen';
 
+export type BulkApplicationStatusAction = 'advance' | 'reject';
+
+export interface BulkApplicationStatusItemResult {
+  applicationId: string;
+  ok: boolean;
+  status?: string;
+  action?: ApplicationStatusAction;
+  changed?: boolean;
+  eventId?: string | null;
+  messageId?: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+export interface BulkApplicationStatusResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: BulkApplicationStatusItemResult[];
+}
+
 export interface ApplicationStatusHistoryEvent {
   id: string | null;
   action: string | null;
@@ -422,6 +443,34 @@ export const updateApplicationStatus = (
       UpdateApplicationStatusResult
     >(firebaseFunctions, 'updateApplicationStatus', { timeout: 60_000 });
     const res = await fn({ applicationId, status, reason, candidateNote, action });
+    return res.data;
+  });
+
+export const bulkUpdateApplicationStatus = (
+  applicationIds: string[],
+  action: BulkApplicationStatusAction,
+  options: {
+    reason?: string;
+    candidateNote?: string;
+    notify?: boolean;
+    messageBody?: string;
+    templateKey?: string;
+  } = {},
+): Promise<BulkApplicationStatusResult> =>
+  callDedicated(async () => {
+    const fn = httpsCallable<
+      {
+        applicationIds: string[];
+        action: BulkApplicationStatusAction;
+        reason?: string;
+        candidateNote?: string;
+        notify?: boolean;
+        messageBody?: string;
+        templateKey?: string;
+      },
+      BulkApplicationStatusResult
+    >(firebaseFunctions, 'bulkUpdateApplicationStatus', { timeout: 120_000 });
+    const res = await fn({ applicationIds, action, ...options });
     return res.data;
   });
 
