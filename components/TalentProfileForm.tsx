@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Loader2, Save, Sparkles, X } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Loader2, Save, Sparkles, X, AlertTriangle, RotateCcw } from 'lucide-react';
 import {
   TALENT_PROFILE_SCHEMA,
   emptyTalentProfile,
@@ -38,6 +38,121 @@ const PREFILL_LANGUAGE_OPTIONS = [
   { value: 'vi', label: 'Vietnamese', note: 'Use for Vietnamese-language applications.' },
   { value: 'source', label: 'Keep resume language', note: 'Preserve the language used in the uploaded resume.' },
 ];
+
+type PrefillReviewState = {
+  before: TalentProfile;
+  paths: string[];
+  languageLabel: string;
+};
+
+type ValidationIssue = {
+  path: string;
+  message: string;
+};
+
+const cloneProfile = (profile: TalentProfile): TalentProfile => JSON.parse(JSON.stringify(profile)) as TalentProfile;
+
+const hasVisibleValue = (value: unknown): boolean => {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.some(hasVisibleValue);
+  return false;
+};
+
+const getPathLabel = (path: string): string => {
+  const [sectionId, maybeIndexOrKey, maybeKey] = path.split('.');
+  const section = TALENT_PROFILE_SCHEMA.find((s) => s.id === sectionId);
+  if (!section) return path;
+  if (section.kind === 'skills') {
+    const group = section.groups.find((g) => g.key === maybeIndexOrKey);
+    return `${section.title} · ${group?.label ?? maybeIndexOrKey}`;
+  }
+  if (section.kind === 'object') {
+    const field = section.fields.find((f) => f.key === maybeIndexOrKey);
+    return `${section.title} · ${field?.label ?? maybeIndexOrKey}`;
+  }
+  const index = Number.parseInt(maybeIndexOrKey ?? '', 10);
+  const field = section.fields.find((f) => f.key === maybeKey);
+  return `${section.title} #${Number.isFinite(index) ? index + 1 : '?'} · ${field?.label ?? maybeKey ?? ''}`;
+};
+
+const parseFirstNumber = (value: unknown): number | null => {
+  if (typeof value !== 'string') return null;
+  const match = value.replace(',', '.').match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+};
+
+const isValidIsoDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const isValidHttpUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const collectValidationIssues = (profile: TalentProfile): ValidationIssue[] => {
+  const issues: ValidationIssue[] = [];
+  const email = typeof profile.basic.email === 'string' ? profile.basic.email.trim() : '';
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    issues.push({ path: 'basic.email', message: 'Use a valid email address.' });
+  }
+
+  TALENT_PROFILE_SCHEMA.forEach((section) => {
+    if (section.kind === 'object') {
+      const data = (profile as any)[section.id] as Record<string, unknown>;
+      section.fields.forEach((field) => {
+        const value = data?.[field.key];
+        if (field.type === 'date' && typeof value === 'string' && value.trim() && !isValidIsoDate(value.trim())) {
+          issues.push({ path: `${section.id}.${field.key}`, message: 'Use YYYY-MM-DD.' });
+        }
+      });
+      return;
+    }
+    if (section.kind !== 'list') return;
+    const items = ((profile as any)[section.id] ?? []) as Record<string, unknown>[];
+    items.forEach((item, index) => {
+      section.fields.forEach((field) => {
+        const value = item[field.key];
+        const path = `${section.id}.${index}.${field.key}`;
+        if (field.type === 'date' && typeof value === 'string' && value.trim() && !isValidIsoDate(value.trim())) {
+          issues.push({ path, message: 'Use YYYY-MM-DD.' });
+        }
+        if ((field.key === 'url' || field.key === 'link') && typeof value === 'string' && value.trim() && !isValidHttpUrl(value.trim())) {
+          issues.push({ path, message: 'Use a full http:// or https:// link.' });
+        }
+      });
+
+      const start = typeof item.startDate === 'string' ? item.startDate.trim() : '';
+      const end = typeof item.endDate === 'string' ? item.endDate.trim() : '';
+      if (start && end && isValidIsoDate(start) && isValidIsoDate(end) && start > end) {
+        issues.push({ path: `${section.id}.${index}.endDate`, message: 'End date should be after start date.' });
+      }
+      if (section.id === 'education') {
+        const gpa = typeof item.gpa === 'string' ? item.gpa.trim() : '';
+        const gpaScale = typeof item.gpaScale === 'string' ? item.gpaScale.trim() : '';
+        const gpaNumber = parseFirstNumber(gpa);
+        const scaleNumber = parseFirstNumber(gpaScale);
+        if (gpa && gpaNumber === null) {
+          issues.push({ path: `${section.id}.${index}.gpa`, message: 'Use a numeric GPA, such as 3.8.' });
+        }
+        if (gpaScale && scaleNumber === null) {
+          issues.push({ path: `${section.id}.${index}.gpaScale`, message: 'Use a numeric scale, such as 4.0.' });
+        }
+        if (gpaNumber !== null && scaleNumber !== null && gpaNumber > scaleNumber) {
+          issues.push({ path: `${section.id}.${index}.gpa`, message: 'GPA cannot be higher than the scale.' });
+        }
+      }
+    });
+  });
+
+  return issues;
+};
 
 // ── Chip editor (chips fields + skill groups) ───────────────────────────────
 const ChipEditor: React.FC<{
@@ -110,14 +225,44 @@ const FieldLabel: React.FC<{ field: FieldConfig }> = ({ field }) => (
   </label>
 );
 
-const FieldGrid: React.FC<{ fields: FieldConfig[]; data: Record<string, unknown>; onField: (key: string, v: unknown) => void }> = ({ fields, data, onField }) => (
+const FieldGrid: React.FC<{
+  fields: FieldConfig[];
+  data: Record<string, unknown>;
+  onField: (key: string, v: unknown) => void;
+  pathFor?: (key: string) => string;
+  highlightedPaths?: Set<string>;
+  issueByPath?: Map<string, string>;
+  onReviewPath?: (path: string) => void;
+}> = ({ fields, data, onField, pathFor, highlightedPaths, issueByPath, onReviewPath }) => (
   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-    {fields.map((f) => (
-      <div key={f.key} className={f.full || f.type === 'textarea' || f.type === 'chips' ? 'sm:col-span-2' : ''}>
-        <FieldLabel field={f} />
-        <FieldInput field={f} value={data[f.key]} onChange={(v) => onField(f.key, v)} />
-      </div>
-    ))}
+    {fields.map((f) => {
+      const path = pathFor?.(f.key) ?? f.key;
+      const highlighted = highlightedPaths?.has(path) ?? false;
+      const issue = issueByPath?.get(path);
+      return (
+        <div
+          key={f.key}
+          className={`${f.full || f.type === 'textarea' || f.type === 'chips' ? 'sm:col-span-2' : ''} rounded-lg ${
+            issue
+              ? 'border border-red-200 bg-red-50/60 p-2 dark:border-red-900/60 dark:bg-red-950/20'
+              : highlighted
+                ? 'border border-blue-200 bg-blue-50/70 p-2 dark:border-blue-900/60 dark:bg-blue-950/20'
+                : ''
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <FieldLabel field={f} />
+            {highlighted && onReviewPath && (
+              <button type="button" onClick={() => onReviewPath(path)} className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100">
+                Reviewed
+              </button>
+            )}
+          </div>
+          <FieldInput field={f} value={data[f.key]} onChange={(v) => onField(f.key, v)} />
+          {issue && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-300">{issue}</p>}
+        </div>
+      );
+    })}
   </div>
 );
 
@@ -130,11 +275,28 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const [prefilling, setPrefilling] = useState(false);
   const [prefillDialogOpen, setPrefillDialogOpen] = useState(false);
   const [prefillLanguage, setPrefillLanguage] = useState('en');
+  const [prefillReview, setPrefillReview] = useState<PrefillReviewState | null>(null);
   const [prefillMsg, setPrefillMsg] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ basic: true, intention: true });
   const [loadError, setLoadError] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const markReviewPath = (path: string) => {
+    setPrefillReview((state) => {
+      if (!state) return null;
+      const nextPaths = state.paths.filter((p) => p !== path);
+      return nextPaths.length ? { ...state, paths: nextPaths } : null;
+    });
+  };
+
+  const clearReviewPathsByPrefix = (prefix: string) => {
+    setPrefillReview((state) => {
+      if (!state) return null;
+      const nextPaths = state.paths.filter((p) => !p.startsWith(prefix));
+      return nextPaths.length ? { ...state, paths: nextPaths } : null;
+    });
+  };
 
   // Auto-fill from the candidate's resume. Fills ONLY empty fields / empty list
   // sections (never overwrites what the candidate already typed); skills are
@@ -159,18 +321,42 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
     setPrefillMsg(null);
     try {
       const ex = sanitizeExtractedProfile(await extractTalentProfile(resumeText, { targetLanguage }));
+      const before = cloneProfile(profile);
       // Decide which sections will actually receive data (from current state) so
       // we can expand exactly those — the user must see everything before saving.
       const touched = new Set<string>();
+      const reviewPaths = new Set<string>();
       (['basic', 'intention', 'additional'] as const).forEach((id) => {
         const exObj = ex[id] as Record<string, string> | undefined;
-        if (exObj && Object.keys(exObj).some((k) => { const cur = (profile[id] as Record<string, string>)[k]; return !cur || !String(cur).trim(); })) touched.add(id);
+        if (!exObj) return;
+        Object.keys(exObj).forEach((k) => {
+          const cur = (profile[id] as Record<string, string>)[k];
+          if ((!cur || !String(cur).trim()) && hasVisibleValue(exObj[k])) {
+            touched.add(id);
+            reviewPaths.add(`${id}.${k}`);
+          }
+        });
       });
       (['education', 'experience', 'projects', 'awards', 'portfolio'] as const).forEach((id) => {
         const exList = ex[id] as Record<string, string | string[]>[] | undefined;
-        if (exList && exList.length && !(profile[id] ?? []).some(hasMeaningfulEntry)) touched.add(id);
+        if (exList && exList.length && !(profile[id] ?? []).some(hasMeaningfulEntry)) {
+          touched.add(id);
+          exList.forEach((item, index) => {
+            Object.keys(item).forEach((key) => {
+              if (hasVisibleValue(item[key])) reviewPaths.add(`${id}.${index}.${key}`);
+            });
+          });
+        }
       });
-      if (ex.skills && Object.keys(ex.skills).some((g) => ((ex.skills as Record<string, string[]>)[g] ?? []).some((s) => !(profile.skills[g] ?? []).includes(s)))) touched.add('skills');
+      if (ex.skills) {
+        Object.keys(ex.skills).forEach((g) => {
+          const hasNewSkill = ((ex.skills as Record<string, string[]>)[g] ?? []).some((s) => !(profile.skills[g] ?? []).includes(s));
+          if (hasNewSkill) {
+            touched.add('skills');
+            reviewPaths.add(`skills.${g}`);
+          }
+        });
+      }
 
       setProfile((p) => {
         const next: TalentProfile = { ...p, basic: { ...p.basic }, intention: { ...p.intention }, additional: { ...p.additional }, skills: { ...p.skills } };
@@ -195,7 +381,13 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       });
       if (touched.size) setOpen((o) => ({ ...o, ...Object.fromEntries([...touched].map((id) => [id, true])) }));
       const langLabel = PREFILL_LANGUAGE_OPTIONS.find((opt) => opt.value === targetLanguage)?.label ?? 'your selected language';
-      setPrefillMsg({ kind: 'ok', text: `Drafted from your resume in ${langLabel}. Please review and edit each section before saving.` });
+      if (reviewPaths.size) {
+        setPrefillReview({ before, paths: [...reviewPaths], languageLabel: langLabel });
+        setPrefillMsg({ kind: 'ok', text: `Drafted ${reviewPaths.size} fields from your resume in ${langLabel}. Review the highlighted fields before saving.` });
+      } else {
+        setPrefillReview(null);
+        setPrefillMsg({ kind: 'info', text: 'No empty fields were filled. Your existing Talent Profile already has the matching resume details.' });
+      }
     } catch (err) {
       setPrefillMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Could not read your resume. Please fill the form manually.' });
     } finally {
@@ -231,22 +423,51 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   }, [uid, reloadKey]);
 
   const ready = useMemo(() => isTalentProfileReady(profile), [profile]);
+  const highlightedPaths = useMemo(() => new Set(prefillReview?.paths ?? []), [prefillReview]);
+  const validationIssues = useMemo(() => collectValidationIssues(profile), [profile]);
+  const issueByPath = useMemo(() => new Map(validationIssues.map((issue) => [issue.path, issue.message])), [validationIssues]);
+  const hasBlockingValidation = validationIssues.length > 0;
 
-  const setObjectField = (sectionId: string, key: string, v: unknown) =>
+  const acceptPrefillReview = () => {
+    setPrefillReview(null);
+    setPrefillMsg({ kind: 'ok', text: 'AI prefill marked as reviewed. Save when the details look correct.' });
+  };
+
+  const clearPrefillDraft = () => {
+    if (!prefillReview) return;
+    setProfile(cloneProfile(prefillReview.before));
+    setPrefillReview(null);
+    setSaveError(false);
+    setPrefillMsg({ kind: 'info', text: 'AI prefill cleared. Your profile is back to the version before this draft.' });
+  };
+
+  const setObjectField = (sectionId: string, key: string, v: unknown) => {
     setProfile((p) => ({ ...p, [sectionId]: { ...(p as any)[sectionId], [key]: v } }));
-  const setSkill = (group: string, v: string[]) =>
+    markReviewPath(`${sectionId}.${key}`);
+  };
+  const setSkill = (group: string, v: string[]) => {
     setProfile((p) => ({ ...p, skills: { ...p.skills, [group]: v } }));
+    markReviewPath(`skills.${group}`);
+  };
   const addItem = (sectionId: string) =>
     setProfile((p) => ({ ...p, [sectionId]: [...((p as any)[sectionId] as unknown[]), {}] }));
-  const removeItem = (sectionId: string, i: number) =>
+  const removeItem = (sectionId: string, i: number) => {
     setProfile((p) => ({ ...p, [sectionId]: ((p as any)[sectionId] as unknown[]).filter((_, idx) => idx !== i) }));
-  const setItemField = (sectionId: string, i: number, key: string, v: unknown) =>
+    clearReviewPathsByPrefix(`${sectionId}.`);
+  };
+  const setItemField = (sectionId: string, i: number, key: string, v: unknown) => {
     setProfile((p) => ({
       ...p,
       [sectionId]: ((p as any)[sectionId] as Record<string, unknown>[]).map((it, idx) => (idx === i ? { ...it, [key]: v } : it)),
     }));
+    markReviewPath(`${sectionId}.${i}.${key}`);
+  };
 
   const persist = async (markComplete: boolean): Promise<TalentProfile> => {
+    if (hasBlockingValidation) {
+      setPrefillMsg({ kind: 'error', text: 'Fix the highlighted validation issues before saving.' });
+      throw new Error('Fix validation issues before saving.');
+    }
     const next: TalentProfile = { ...profile, status: markComplete && ready ? 'complete' : profile.status };
     setSaving(true);
     setSaveError(false);
@@ -296,13 +517,31 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         {isOpen && (
           <div className="border-t border-gray-100 px-5 py-5 dark:border-slate-700">
             {section.kind === 'object' && (
-              <FieldGrid fields={section.fields} data={(profile as any)[section.id]} onField={(k, v) => setObjectField(section.id, k, v)} />
+              <FieldGrid
+                fields={section.fields}
+                data={(profile as any)[section.id]}
+                onField={(k, v) => setObjectField(section.id, k, v)}
+                pathFor={(key) => `${section.id}.${key}`}
+                highlightedPaths={highlightedPaths}
+                issueByPath={issueByPath}
+                onReviewPath={markReviewPath}
+              />
             )}
             {section.kind === 'skills' && (
               <div className="space-y-5">
                 {section.groups.map((g) => (
-                  <div key={g.key}>
-                    <p className="mb-2 text-xs font-semibold text-gray-600 dark:text-gray-300">{g.label}</p>
+                  <div
+                    key={g.key}
+                    className={`rounded-lg ${highlightedPaths.has(`skills.${g.key}`) ? 'border border-blue-200 bg-blue-50/70 p-2 dark:border-blue-900/60 dark:bg-blue-950/20' : ''}`}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">{g.label}</p>
+                      {highlightedPaths.has(`skills.${g.key}`) && (
+                        <button type="button" onClick={() => markReviewPath(`skills.${g.key}`)} className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100">
+                          Reviewed
+                        </button>
+                      )}
+                    </div>
                     <ChipEditor values={profile.skills[g.key] ?? []} onChange={(v) => setSkill(g.key, v)} placeholder={`Add ${g.label.toLowerCase()}…`} suggestions={g.suggestions} />
                   </div>
                 ))}
@@ -320,7 +559,15 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
                         <Trash2 className="h-3.5 w-3.5" /> Remove
                       </button>
                     </div>
-                    <FieldGrid fields={section.fields} data={item} onField={(k, v) => setItemField(section.id, i, k, v)} />
+                    <FieldGrid
+                      fields={section.fields}
+                      data={item}
+                      onField={(k, v) => setItemField(section.id, i, k, v)}
+                      pathFor={(key) => `${section.id}.${i}.${key}`}
+                      highlightedPaths={highlightedPaths}
+                      issueByPath={issueByPath}
+                      onReviewPath={markReviewPath}
+                    />
                   </div>
                 ))}
                 <button type="button" onClick={() => addItem(section.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:text-slate-300">
@@ -357,6 +604,51 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
           {savedAt && <span className="text-gray-400">Saved</span>}
         </p>
       </div>
+
+      {prefillReview && (
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/25">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="inline-flex items-center gap-1.5 text-sm font-bold text-blue-800 dark:text-blue-200">
+                <Sparkles className="h-4 w-4" /> Review AI-filled fields
+              </p>
+              <p className="mt-1 text-sm leading-6 text-blue-900/80 dark:text-blue-100/80">
+                {prefillReview.paths.length} highlighted field{prefillReview.paths.length === 1 ? '' : 's'} were drafted in {prefillReview.languageLabel}. Confirm each field, edit it, or clear the whole draft before saving.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button type="button" onClick={acceptPrefillReview} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">
+                <Check className="h-3.5 w-3.5" /> Accept all
+              </button>
+              <button type="button" onClick={clearPrefillDraft} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200 dark:hover:bg-blue-950/40">
+                <RotateCcw className="h-3.5 w-3.5" /> Clear draft
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {prefillReview.paths.slice(0, 8).map((path) => (
+              <button key={path} type="button" onClick={() => markReviewPath(path)} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200 dark:hover:bg-blue-950/40">
+                {getPathLabel(path)}
+              </button>
+            ))}
+            {prefillReview.paths.length > 8 && <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-200">+{prefillReview.paths.length - 8} more</span>}
+          </div>
+        </div>
+      )}
+
+      {validationIssues.length > 0 && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-100">
+          <p className="inline-flex items-center gap-1.5 font-bold">
+            <AlertTriangle className="h-4 w-4" /> Fix {validationIssues.length} validation issue{validationIssues.length === 1 ? '' : 's'} before saving
+          </p>
+          <ul className="mt-2 space-y-1">
+            {validationIssues.slice(0, 5).map((issue) => (
+              <li key={`${issue.path}:${issue.message}`}>{getPathLabel(issue.path)}: {issue.message}</li>
+            ))}
+            {validationIssues.length > 5 && <li>+{validationIssues.length - 5} more issues below.</li>}
+          </ul>
+        </div>
+      )}
 
       {prefillDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
@@ -441,11 +733,16 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
               Couldn't save. Check your connection and try again.
             </span>
           )}
-          <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
+          {!saveError && hasBlockingValidation && (
+            <span className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
+              Fix validation issues before saving.
+            </span>
+          )}
+          <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling || hasBlockingValidation} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
           </button>
           {onPrimary && (
-            <button type="button" disabled={saving || prefilling || !ready} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" disabled={saving || prefilling || !ready || hasBlockingValidation} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
               {primaryLabel ?? 'Save & apply'}
             </button>
           )}
