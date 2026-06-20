@@ -88,3 +88,4 @@ export { upsertScorecardFunction            as upsertScorecard           } from 
 export { sendApplicationMessageFunction     as sendApplicationMessage    } from "./handlers/applicationMessages";
 export { createCheckoutSessionFunction      as createCheckoutSession     } from "./handlers/stripeBilling";
 export { stripeWebhookFunction              as stripeWebhook             } from "./handlers/stripeBilling";
+export { confirmSimulatedCheckoutFunction   as confirmSimulatedCheckout  } from "./handlers/stripeBilling";

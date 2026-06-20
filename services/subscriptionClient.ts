@@ -25,6 +25,11 @@ const createCheckoutSessionCallable = httpsCallable<
   CheckoutSessionResult
 >(firebaseFunctions, 'createCheckoutSession');
 
+const confirmSimulatedCheckoutCallable = httpsCallable<
+  { planKey: string },
+  SubscriptionUpdateResult
+>(firebaseFunctions, 'confirmSimulatedCheckout');
+
 /**
  * Sets the caller's subscription_status via the server-only callable.
  *
@@ -43,5 +48,15 @@ export async function setUserSubscription(
 
 export async function createSubscriptionCheckout(planKey: string): Promise<CheckoutSessionResult> {
   const result = await createCheckoutSessionCallable({ planKey });
+  return result.data;
+}
+
+/**
+ * Confirms a SIMULATED (demo/test) checkout — only works when the backend has
+ * BILLING_SIMULATION enabled. Runs the same entitlement activation a real Stripe
+ * webhook would, so the resulting plan/role/credits are identical.
+ */
+export async function confirmSimulatedCheckout(planKey: string): Promise<SubscriptionUpdateResult> {
+  const result = await confirmSimulatedCheckoutCallable({ planKey });
   return result.data;
 }

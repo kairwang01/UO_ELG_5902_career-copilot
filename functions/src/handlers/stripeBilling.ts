@@ -51,6 +51,16 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: "2026-05-27.dahlia" });
 }
 
+/**
+ * Demo/test billing switch. When BILLING_SIMULATION=true, checkout is simulated by an
+ * in-app fake-payment page (no Stripe keys / price ids needed) that flows through the
+ * SAME entitlement path as the real Stripe webhook. Non-secret flag — enable ONLY in
+ * demo/staging; in production it stays off and the real Stripe path is used.
+ */
+function billingSimulationEnabled(): boolean {
+  return process.env.BILLING_SIMULATION === "true";
+}
+
 function appBaseUrl(): string {
   const value = process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || process.env.WEB_APP_URL;
   if (!value) {
@@ -175,6 +185,16 @@ interface CreateCheckoutRequest {
 export const createCheckoutSessionFunction = onCall(async (request) => {
   const uid = requireAuth(request);
   const plan = normalizeCheckoutPlan((request.data as CreateCheckoutRequest | undefined)?.planKey);
+
+  // Simulation mode: return an in-app fake-checkout URL with the same { url, id }
+  // shape the client already consumes (window.location.assign). No Stripe keys or
+  // price ids needed; the fake-payment page confirms via confirmSimulatedCheckout.
+  if (billingSimulationEnabled()) {
+    const simId = `sim_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const params = new URLSearchParams({ plan: plan.plan, audience: plan.audience, sim: simId });
+    return { url: `/billing/checkout?${params.toString()}`, id: simId, simulated: true };
+  }
+
   const price = process.env[plan.priceEnv];
   if (!price) {
     throw new HttpsError("failed-precondition", `${plan.priceEnv} is not configured.`);
@@ -216,6 +236,36 @@ export const createCheckoutSessionFunction = onCall(async (request) => {
   }
   return { url: session.url, id: session.id };
 });
+
+interface ConfirmSimulatedCheckoutRequest {
+  planKey: string;
+}
+
+/**
+ * Simulated-payment confirmation (demo/test only). Mirrors the Stripe webhook's
+ * checkout.session.completed → activateStripeEntitlement path, so the billing
+ * entitlement record AND the plan/role/credit activation are IDENTICAL to a real
+ * payment. Gated by BILLING_SIMULATION so it can never self-grant in production.
+ */
+export async function confirmSimulatedCheckoutImpl(uid: string, data: ConfirmSimulatedCheckoutRequest) {
+  if (!billingSimulationEnabled()) {
+    throw new HttpsError("failed-precondition", "Billing simulation is not enabled.");
+  }
+  const plan = normalizeCheckoutPlan(data?.planKey);
+  const simId = `sim_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  return activateStripeEntitlement({
+    uid,
+    plan: plan.plan,
+    audience: plan.audience,
+    stripeCustomerId: `sim_cus_${uid.slice(0, 12)}`,
+    stripeSubscriptionId: plan.mode === "subscription" ? `sim_sub_${simId}` : null,
+    checkoutSessionId: simId,
+    checkoutMode: plan.mode,
+  });
+}
+
+export const confirmSimulatedCheckoutFunction = onCall((request) =>
+  confirmSimulatedCheckoutImpl(requireAuth(request), (request.data ?? {}) as ConfirmSimulatedCheckoutRequest));
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const uid = stringOrNull(session.metadata?.uid) ?? stringOrNull(session.client_reference_id);
