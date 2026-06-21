@@ -297,6 +297,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     // (question generation / evaluation / unlock), so a late resolve never touches a
     // component the user has already closed.
     const mountedRef = useRef(true);
+    // Generation token: Cancel bumps it so an in-flight question generation that
+    // resolves afterwards is discarded, instead of forcing the user into the interview
+    // they just cancelled (mountedRef can't catch a cancel-while-still-mounted).
+    const genTokenRef = useRef(0);
     const [avatarSpeaking, setAvatarSpeaking] = useState(false);
     const [report, setReport] = useState<InterviewSessionReport | null>(null);
     const [lockedReport, setLockedReport] = useState<LockedSessionReport | null>(null);
@@ -540,9 +544,12 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         setStage('loading');
         setError(null);
         savedReportKeyRef.current = null;
+        const myToken = ++genTokenRef.current;
         try {
             const generated = await generateInterviewQuestions(resumeText, assembleContext(), market);
-            if (!mountedRef.current) return;
+            // Bail if the user cancelled/restarted while we were generating — otherwise
+            // a cancelled generation would still yank them into the interview.
+            if (!mountedRef.current || myToken !== genTokenRef.current) return;
             if (!generated.length) throw new Error(t('mi_error_no_questions_generated'));
             answersRef.current = [];
             submittingRef.current = false;
@@ -555,7 +562,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             setStage('interviewing');
             speak(generated[0].question, () => setPrepArmed(true));
         } catch (err) {
-            if (!mountedRef.current) return;
+            if (!mountedRef.current || myToken !== genTokenRef.current) return;
             setError(err instanceof Error ? err.message : t('mi_error_start_failed'));
             setStage('setup');
         }
@@ -784,7 +791,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                     t('tool_mock_interview_loader_step2'),
                     t('tool_mock_interview_loader_step3'),
                 ]}
-                onCancel={() => setStage('setup')}
+                onCancel={() => { genTokenRef.current += 1; setStage('setup'); }}
                 icon={<MessageSquare />}
                 accent="violet"
             />

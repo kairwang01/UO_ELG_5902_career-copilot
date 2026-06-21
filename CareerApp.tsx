@@ -256,6 +256,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);
+  // Latches a resume analysis as in-flight so a double-click / repeat keypress on the
+  // confirm control can't fire a second charged run before the first resolves.
+  const analysisInFlightRef = useRef(false);
   // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
   const currentUserIdRef = useRef<string | null>(null);
   // Guards the provider's first resolved session as a no-side-effect baseline (a
@@ -400,6 +403,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
       const applyProfile = async (p: UserProfile | null) => {
         if (!p) return;
+        // Account switched/signed out while we awaited the read — don't write a stale
+        // user's profile/credits/resume into the now-current session.
+        if (currentUserIdRef.current !== user.id) return;
         let resolvedProfile = p;
         const legacyBirthDate = p.role === 'candidate' && !p.birth_date ? loadBirthdayLocal(user.id) : '';
         if (legacyBirthDate) {
@@ -539,6 +545,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       if (previousPath && previousPath !== meta.resume_file_path) {
         await deleteResumeFile(previousPath);
       }
+      // Account switched while we awaited the upload — the persisted write above went
+      // to the correct (original) user's doc, but don't patch local state / toast into
+      // a now-different session.
+      if (currentUserIdRef.current !== uid) return;
       // Patch the profile locally rather than re-fetching: getProfile() would
       // reset resumeText to the persisted value, which can lag the just-parsed
       // text behind the 1.5s debounce and visibly revert the textarea.
@@ -807,6 +817,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       setError(t('resume_analysis_required'));
       return;
     }
+    if (analysisInFlightRef.current) return; // double-submit guard
+    analysisInFlightRef.current = true;
     const uidAtStart = session?.user?.id ?? null;
     setIsLoading(true);
     setError(null);
@@ -865,6 +877,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       }
     } finally {
       setIsLoading(false);
+      analysisInFlightRef.current = false;
     }
   };
 
