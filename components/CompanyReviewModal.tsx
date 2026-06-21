@@ -15,7 +15,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Star, X } from "lucide-react";
 import { useToast } from "./Toast";
-import { useModalBehavior } from "../hooks/useModalBehavior";
+import { ViewportAwareDialog } from "./ViewportAwareDialog";
 import { submitCompanyReview } from "../lib/companyReviewsData";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -92,7 +92,6 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   const submittingRef = useRef(false);
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
-  useModalBehavior(onClose);
 
   const charCount = text.trim().length;
   const canSubmit = rating >= 1 && charCount >= 20 && charCount <= 2000 && !submitting;
@@ -129,16 +128,15 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   };
 
   return (
-    /* Backdrop */
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("review_modal_title")}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <ViewportAwareDialog
+      open
+      onClose={onClose}
+      closeOnBackdrop
+      ariaLabel={t("review_modal_title")}
+      maxWidth={448}
+      zIndex={50}
     >
-      {/* Panel */}
-      <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-gray-100 dark:border-slate-700 flex flex-col">
+      <div className="relative flex flex-col rounded-2xl border border-gray-100 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-700">
           <h2 className="font-bold text-base text-gray-900 dark:text-gray-100 leading-snug">
@@ -230,7 +228,7 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 

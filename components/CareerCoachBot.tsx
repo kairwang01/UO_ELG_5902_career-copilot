@@ -199,9 +199,9 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
     const showWelcomePanel = messages.length === 0 && !isLoading;
 
     return (
-        <div className="fixed inset-0 z-[90] flex justify-center p-0 sm:left-auto sm:right-6 sm:bottom-6 sm:top-auto sm:block">
+        <div className="fixed inset-0 z-[90] flex h-[100dvh] justify-center p-0 sm:left-auto sm:right-6 sm:bottom-6 sm:top-auto sm:block sm:h-auto">
             <section
-                className="flex h-full w-full flex-col overflow-hidden border border-white/80 bg-gradient-to-b from-sky-50 via-cyan-50 to-blue-50 shadow-2xl shadow-blue-950/20 ring-1 ring-blue-100/70 dark:border-slate-700 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 sm:h-[calc(100vh-3rem)] sm:max-h-[760px] sm:w-[440px] sm:rounded-[28px]"
+                className="flex h-full w-full flex-col overflow-hidden border border-white/80 bg-gradient-to-b from-sky-50 via-cyan-50 to-blue-50 shadow-2xl shadow-blue-950/20 ring-1 ring-blue-100/70 dark:border-slate-700 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 sm:h-[calc(100dvh-3rem)] sm:max-h-[760px] sm:w-[440px] sm:rounded-[28px]"
                 role="dialog"
                 aria-modal="false"
                 aria-label={t('coach_title')}
@@ -224,7 +224,7 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
 
                 {showWelcomePanel && (
                     <div className="relative shrink-0 px-5">
-                        <div className="pointer-events-none absolute right-9 top-0 hidden h-24 w-32 -rotate-6 rounded-[26px] border border-blue-100 bg-white/80 p-3 shadow-lg shadow-blue-200/40 dark:border-slate-700 dark:bg-slate-800/80 sm:block">
+                        <div className="pointer-events-none absolute right-7 top-2 hidden h-20 w-28 -rotate-6 rounded-[22px] border border-blue-100 bg-white/80 p-3 opacity-80 shadow-lg shadow-blue-200/40 dark:border-slate-700 dark:bg-slate-800/80 md:block">
                             <div className="flex items-center gap-2">
                                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white">
                                     <Briefcase className="h-4 w-4" aria-hidden="true" />
@@ -238,8 +238,8 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                             <div className="mt-2 h-2 w-20 rounded-full bg-cyan-100 dark:bg-slate-700" />
                         </div>
 
-                        <div className="mt-10 rounded-[28px] border border-white/90 bg-white/55 p-5 shadow-sm ring-1 ring-white/60 backdrop-blur dark:border-slate-700 dark:bg-slate-900/70 dark:ring-slate-800">
-                            <h4 className="max-w-[300px] whitespace-pre-line text-[28px] font-bold leading-tight tracking-normal text-slate-950 dark:text-slate-50">
+                        <div className="mt-6 rounded-[28px] border border-white/90 bg-white/55 p-5 shadow-sm ring-1 ring-white/60 backdrop-blur dark:border-slate-700 dark:bg-slate-900/70 dark:ring-slate-800 sm:mt-8">
+                            <h4 className="max-w-[270px] whitespace-pre-line text-[26px] font-bold leading-tight tracking-normal text-slate-950 dark:text-slate-50 sm:text-[28px]">
                                 {t('coach_panel_hero')}
                             </h4>
 

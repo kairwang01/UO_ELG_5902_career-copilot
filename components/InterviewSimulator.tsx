@@ -21,6 +21,11 @@ import {
     Crown,
     Lock,
     Printer,
+    PlayCircle,
+    CheckCircle2,
+    BarChart3,
+    Send,
+    X,
 } from 'lucide-react';
 import {
     generateInterviewQuestions,
@@ -183,6 +188,53 @@ const SAMPLE = {
 };
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+const circleDash = (value: number) => {
+    const pct = Math.max(0, Math.min(100, value));
+    return `${pct} 100`;
+};
+
+const MiniTimerRing: React.FC<{
+    value: number;
+    max: number;
+    label: string;
+    tone?: 'blue' | 'amber' | 'red' | 'emerald';
+}> = ({ value, max, label, tone = 'blue' }) => {
+    const pct = max > 0 ? (value / max) * 100 : 0;
+    const stroke =
+        tone === 'red' ? 'stroke-red-400' :
+        tone === 'amber' ? 'stroke-amber-400' :
+        tone === 'emerald' ? 'stroke-emerald-400' :
+        'stroke-blue-400';
+    return (
+        <div className="relative h-24 w-24 shrink-0">
+            <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
+                <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-slate-200 dark:stroke-white/10" strokeWidth="3.5" />
+                <circle cx="18" cy="18" r="15.9" fill="none" className={stroke} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={circleDash(pct)} />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="font-mono text-xl font-bold tabular-nums text-slate-950 dark:text-white">{fmtTime(value)}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-white/45">{label}</span>
+            </div>
+        </div>
+    );
+};
+
+const AudioWave: React.FC<{ active?: boolean }> = ({ active }) => (
+    <div className="flex h-8 items-end gap-1" aria-hidden="true">
+        {Array.from({ length: 18 }).map((_, index) => (
+            <span
+                key={index}
+                className={`w-1 rounded-full ${active ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                style={{
+                    height: `${8 + ((index * 7) % 20)}px`,
+                    opacity: active ? 0.55 + ((index % 4) * 0.12) : 0.45,
+                    animation: active ? `mi-wave 900ms ${index * 35}ms ease-in-out infinite alternate` : undefined,
+                }}
+            />
+        ))}
+    </div>
+);
 
 const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, onClose, t, session, profile, navigateToPricing }) => {
     const isPaid = PAID_STATUSES.has(profile?.subscription_status ?? '');
@@ -700,132 +752,202 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
         const timeLeft = phase === 'prep' ? prepLeft : answerLeft;
         const timeMax = phase === 'prep' ? PREP_SECONDS : ANSWER_SECONDS;
         const urgent = phase === 'answer' && answerLeft <= 30;
+        const progressPct = questions.length ? ((currentIndex + 1) / questions.length) * 100 : 0;
+        const timerTone = urgent ? 'red' : phase === 'prep' ? 'amber' : 'blue';
         return (
-            <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full flex flex-col lg:flex-row h-full animate-fade-in overflow-hidden">
-                {/* Left: the interviewer */}
-                <div className="lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-6 flex flex-col items-center gap-4">
-                    <InterviewerAvatar
-                        speaking={avatarSpeaking}
-                        imageUrl={INTERVIEWER_IMAGE}
-                        name={t('mi_avatar_name')}
-                        roleLabel={t('mi_avatar_role')}
-                    />
-                    <div className="text-center">
-                        <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
-                            {t('mi_q_progress').replace('{n}', String(currentIndex + 1)).replace('{total}', String(questions.length))}
-                        </p>
-                        <div className="mt-2 flex items-center justify-center gap-2">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                                phase === 'prep'
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                            }`}>
-                                <Timer className="h-3 w-3" />
-                                {phase === 'prep' ? t('mi_phase_prep') : t('mi_phase_answer')}
-                            </span>
+            <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-xl animate-fade-in dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50">
+                <header className="flex flex-col gap-4 border-b border-slate-200 bg-white p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between dark:border-slate-700 dark:bg-slate-900">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                            <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            Practice room
                         </div>
-                        <p className={`mt-2 text-4xl font-mono font-bold tabular-nums ${urgent ? 'text-red-600 dark:text-red-400 animate-pulse' : 'text-gray-800 dark:text-gray-100'}`}>
-                            {fmtTime(timeLeft)}
-                        </p>
-                        {/* time progress */}
-                        <div className="mt-2 h-1.5 w-40 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
-                            <div
-                                className={`h-full rounded-full transition-all duration-1000 ${urgent ? 'bg-red-500' : phase === 'prep' ? 'bg-amber-500' : 'bg-blue-600'}`}
-                                style={{ width: `${(timeLeft / timeMax) * 100}%` }}
-                            />
-                        </div>
+                        <h3 className="mt-2 truncate text-xl font-bold tracking-tight sm:text-2xl">{jobTitle || 'Interview practice'}</h3>
                     </div>
-                    <div className="mt-auto">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                            {t('mi_q_progress').replace('{n}', String(currentIndex + 1)).replace('{total}', String(questions.length))}
+                        </span>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
+                            phase === 'prep'
+                                ? 'border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/25 dark:text-amber-200'
+                                : urgent
+                                    ? 'border border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-900/25 dark:text-red-200'
+                                    : 'border border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/50 dark:bg-blue-900/25 dark:text-blue-200'
+                        }`}>
+                            <Timer className="h-3.5 w-3.5" />
+                            {phase === 'prep' ? t('mi_phase_prep') : t('mi_phase_answer')}
+                        </span>
+                    </div>
+                </header>
+
+                <div className="h-1 bg-slate-100 dark:bg-slate-800">
+                    <div className="h-full rounded-r-full bg-blue-600 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                </div>
+
+                <main className="grid flex-1 gap-4 overflow-y-auto bg-slate-50 p-4 sm:p-5 xl:grid-cols-[260px_minmax(0,1fr)_260px] dark:bg-slate-950">
+                    <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                        <InterviewerAvatar
+                            speaking={avatarSpeaking}
+                            imageUrl={INTERVIEWER_IMAGE}
+                            name={t('mi_avatar_name')}
+                            roleLabel={t('mi_avatar_role')}
+                        />
+                        <div className="mt-4 grid grid-cols-2 gap-2 text-center">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Mode</p>
+                                <p className="mt-1 truncate text-xs font-bold text-slate-900 dark:text-slate-100">
+                                    {t(INTERVIEW_TYPES.find((it) => it.id === interviewType)?.labelKey ?? 'mi_type_comprehensive')}
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Level</p>
+                                <p className="mt-1 truncate text-xs font-bold text-slate-900 dark:text-slate-100">
+                                    {t(DIFFICULTY_OPTIONS.find((opt) => opt.id === difficulty)?.labelKey ?? 'mi_difficulty_advanced')}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-950/30">
+                            <p className="text-xs font-bold text-blue-900 dark:text-blue-200">Real pacing</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">15s prep, 3m answer, one report after the session.</p>
+                        </div>
+                    </aside>
+
+                    <section className="flex min-h-[520px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-700 dark:bg-slate-900">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/70">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+                                    {q?.category || 'Interview question'}
+                                </span>
+                                <span className="text-xs font-semibold text-slate-500">
+                                    {currentIndex + 1} / {questions.length}
+                                </span>
+                            </div>
+                            <p className="mt-4 text-2xl font-semibold leading-tight text-slate-950 lg:text-3xl dark:text-slate-50">
+                                {q?.question}
+                            </p>
+                        </div>
+
+                        {phase === 'prep' ? (
+                            <div className="mt-4 flex flex-1 flex-col items-center justify-center gap-5 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center dark:border-amber-900/50 dark:bg-amber-950/25">
+                                <MiniTimerRing value={timeLeft} max={timeMax} label="Prep" tone={timerTone} />
+                                <div>
+                                    <p className="text-base font-bold text-amber-950 dark:text-amber-100">{t('mi_prep_hint')}</p>
+                                    <p className="mt-2 max-w-md text-sm leading-6 text-amber-900/70 dark:text-amber-100/70">Pick one story, one result, and one tradeoff. Start early when ready.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={startAnsweringNow}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800"
+                                >
+                                    <PlayCircle className="h-4 w-4" />
+                                    {t('mi_start_now')}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="mt-4 flex flex-1 flex-col gap-4">
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+                                    <div className="flex items-center gap-3">
+                                        {isSpeechSupported && (
+                                            <button
+                                                type="button"
+                                                onClick={toggleListening}
+                                                aria-pressed={isListening}
+                                                aria-label={isListening ? t('mi_mic_stop') : t('mi_mic_start')}
+                                                className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition ${
+                                                    isListening
+                                                        ? 'bg-red-500 text-white animate-pulse-mic'
+                                                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+                                                }`}
+                                                title={isListening ? t('mi_mic_stop') : t('mi_mic_start')}
+                                            >
+                                                <Mic className="h-5 w-5" />
+                                            </button>
+                                        )}
+                                        <AudioWave active={isListening} />
+                                        <span className="hidden text-xs font-semibold text-slate-600 sm:inline dark:text-slate-300">
+                                            {isListening ? 'Listening' : 'Voice optional'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <textarea
+                                    ref={answerBoxRef}
+                                    value={answerDraft}
+                                    onChange={(e) => setAnswerDraft(e.target.value)}
+                                    placeholder={t('mi_answer_placeholder')}
+                                    className="min-h-[190px] flex-1 resize-none rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-900 shadow-inner outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                                />
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <p className="text-xs text-slate-500">{t('mi_autosubmit_note')}</p>
+                                    <button
+                                        type="button"
+                                        onClick={submitAnswer}
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800"
+                                    >
+                                        <Send className="h-4 w-4" />
+                                        {isLast ? t('mi_submit_last') : t('mi_submit_answer')}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {error && (
+                            <p className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">{error}</p>
+                        )}
+                    </section>
+
+                    <aside className="space-y-4">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Timer</p>
+                                    <p className={`mt-1 font-mono text-3xl font-bold tabular-nums ${urgent ? 'text-red-600 animate-pulse dark:text-red-300' : 'text-slate-950 dark:text-white'}`}>{fmtTime(timeLeft)}</p>
+                                </div>
+                                <MiniTimerRing value={timeLeft} max={timeMax} label={phase === 'prep' ? 'Prep' : 'Answer'} tone={timerTone} />
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                            <p className="text-sm font-bold text-slate-950 dark:text-white">Answer focus</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {['Context', 'Action', 'Result', 'Learning'].map((tag) => (
+                                    <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{tag}</span>
+                                ))}
+                            </div>
+                        </div>
+
                         {!confirmEndEarly ? (
                             <button
                                 type="button"
                                 onClick={() => setConfirmEndEarly(true)}
-                                className="text-xs text-gray-400 underline transition hover:text-red-600 dark:text-slate-500 dark:hover:text-red-400"
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-red-900 dark:hover:bg-red-950/30"
                             >
+                                <X className="h-4 w-4" />
                                 {t('mi_end_interview')}
                             </button>
                         ) : (
-                            <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3 text-left dark:border-red-900/50 dark:bg-red-950/30 animate-panel-expand">
-                                <p className="text-xs leading-relaxed text-red-700 dark:text-red-300">{t('mi_end_confirm')}</p>
-                                <div className="flex gap-2">
+                            <div className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4 animate-panel-expand dark:border-red-900/50 dark:bg-red-950/30">
+                                <p className="text-xs leading-5 text-red-700 dark:text-red-200">{t('mi_end_confirm')}</p>
+                                <div className="grid grid-cols-2 gap-2">
                                     <button
                                         type="button"
                                         onClick={endInterviewEarly}
-                                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700"
+                                        className="rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-700"
                                     >
                                         {t('mi_end_interview')}
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setConfirmEndEarly(false)}
-                                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/50"
+                                        className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-100 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-200 dark:hover:bg-red-950/40"
                                     >
                                         {t('action_cancel')}
                                     </button>
                                 </div>
                             </div>
                         )}
-                    </div>
-                </div>
-
-                {/* Right: question + answer area */}
-                <div className="flex-1 flex flex-col p-6 gap-4 min-h-[420px]">
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
-                        <span className="inline-block mb-2 px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wide bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
-                            {q?.category}
-                        </span>
-                        <p className="text-lg font-semibold text-gray-800 dark:text-gray-100 leading-relaxed">{q?.question}</p>
-                    </div>
-
-                    {phase === 'prep' ? (
-                        <div className="flex-1 flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-900/10 p-6 text-center">
-                            <p className="text-sm text-amber-700 dark:text-amber-300 max-w-md">{t('mi_prep_hint')}</p>
-                            <button
-                                type="button"
-                                onClick={startAnsweringNow}
-                                className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg"
-                            >
-                                {t('mi_start_now')}
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            <textarea
-                                ref={answerBoxRef}
-                                value={answerDraft}
-                                onChange={(e) => setAnswerDraft(e.target.value)}
-                                placeholder={t('mi_answer_placeholder')}
-                                className="flex-1 min-h-[160px] w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 p-4 transition shadow-sm resize-none"
-                            />
-                            <div className="flex items-center gap-3">
-                                {isSpeechSupported && (
-                                    <button
-                                        type="button"
-                                        onClick={toggleListening}
-                                        aria-pressed={isListening}
-                                        aria-label={isListening ? t('mi_mic_stop') : t('mi_mic_start')}
-                                        className={`p-2.5 rounded-full transition-colors shrink-0 ${isListening ? 'bg-red-500 text-white animate-pulse-mic' : 'bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-slate-500'}`}
-                                        title={isListening ? t('mi_mic_stop') : t('mi_mic_start')}
-                                    >
-                                        <Mic className="h-5 w-5" />
-                                    </button>
-                                )}
-                                <p className="text-xs text-gray-400 dark:text-slate-500 flex-1">{t('mi_autosubmit_note')}</p>
-                                <button
-                                    type="button"
-                                    onClick={submitAnswer}
-                                    className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-sm font-bold rounded-lg shrink-0"
-                                >
-                                    {isLast ? t('mi_submit_last') : t('mi_submit_answer')}
-                                </button>
-                            </div>
-                        </>
-                    )}
-
-                    {error && (
-                        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                    )}
-                </div>
+                    </aside>
+                </main>
             </div>
         );
     }
@@ -1029,22 +1151,21 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
 
     // ── Setup stage ───────────────────────────────────────────────────────────
     return (
-        <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full flex flex-col h-full animate-fade-in relative">
-            {/* Disclaimer modal — must be accepted before the interview starts */}
+        <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-fade-in dark:border-slate-700 dark:bg-slate-900">
             {showDisclaimer && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-xl p-4">
-                    <div className="max-w-lg w-full bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 space-y-4">
-                        <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+                        <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950 dark:text-slate-50">
                             <AlertTriangle className="h-5 w-5 text-amber-500" />
                             {t('mi_disclaimer_title')}
                         </h4>
-                        <ul className="space-y-2 text-sm text-gray-600 dark:text-slate-300 list-disc list-inside">
+                        <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                             <li>{t('mi_disclaimer_p1')}</li>
                             <li>{t('mi_disclaimer_p2')}</li>
                             <li>{t('mi_disclaimer_p3')}</li>
                             <li>{t('mi_disclaimer_p4')}</li>
                         </ul>
-                        <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                        <label className="mt-4 flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                             <input
                                 type="checkbox"
                                 checked={disclaimerChecked}
@@ -1053,11 +1174,11 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                             />
                             <span>{t('mi_disclaimer_check')}</span>
                         </label>
-                        <div className="flex justify-end gap-3 pt-1">
+                        <div className="mt-5 flex justify-end gap-3">
                             <button
                                 type="button"
                                 onClick={() => setShowDisclaimer(false)}
-                                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+                                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
                             >
                                 {t('mi_disclaimer_cancel')}
                             </button>
@@ -1065,7 +1186,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                 type="button"
                                 disabled={!disclaimerChecked}
                                 onClick={beginInterview}
-                                className="px-4 py-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 dark:disabled:bg-blue-900/50 rounded-lg"
+                                className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900/50"
                             >
                                 {t('mi_disclaimer_accept')}
                             </button>
@@ -1074,241 +1195,153 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                 </div>
             )}
 
-            <form onSubmit={handleStartClicked} className="p-6 space-y-5">
-                    {/* Promo feature grid — the 8 selling points */}
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-blue-50/40 dark:from-slate-800/60 dark:to-blue-900/10 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <p className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                                <Flame className="h-4 w-4 text-orange-500" />
-                                {t('mi_promo_title')}
-                            </p>
-                            <button
-                                type="button"
-                                onClick={fillSample}
-                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                                {t('tool_mock_interview_try_example')}
-                            </button>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                            {PROMO_FEATURES.map((f) => (
-                                <div
-                                    key={f.titleKey}
-                                    className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 shadow-sm"
-                                >
-                                    <div className="flex items-center gap-1.5 mb-1">
-                                        <span className={`inline-flex items-center justify-center h-6 w-6 rounded-md shrink-0 ${f.tint}`}>
-                                            {f.icon}
-                                        </span>
-                                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight">
-                                            {t(f.titleKey)}
-                                        </span>
-                                    </div>
-                                    <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400">
-                                        {t(f.descKey)}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                        {/* real-flow pacing note */}
-                        <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                            <Timer className="h-3.5 w-3.5 shrink-0" />
-                            {t('mi_flow_note')}
+            <div className="border-b border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="max-w-2xl">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-400">Mock interview</p>
+                        <h3 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-slate-50 sm:text-3xl">
+                            Practice for a real conversation.
+                        </h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                            Set the role, run a timed interview, then review concise evidence-based feedback.
                         </p>
                     </div>
+                    <button
+                        type="button"
+                        onClick={fillSample}
+                        className="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                        {t('tool_mock_interview_try_example')}
+                    </button>
+                </div>
+            </div>
 
-                    {/* ① Interview type */}
-                    <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                        <SectionHeader n={1} titleKey="mi_section_1_title" />
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                            {INTERVIEW_TYPES.map((it) => (
-                                <button
-                                    key={it.id}
-                                    type="button"
-                                    onClick={() => setInterviewType(it.id)}
-                                    aria-pressed={interviewType === it.id}
-                                    className={`rounded-lg border p-3 text-left transition-colors ${
-                                        interviewType === it.id
-                                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-600'
-                                            : 'border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
-                                    }`}
-                                >
-                                    <span className={`block text-sm font-semibold ${interviewType === it.id ? 'text-blue-700 dark:text-blue-300' : 'text-gray-800 dark:text-gray-100'}`}>
-                                        {t(it.labelKey)}
-                                    </span>
-                                    <span className="block text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">{t(it.descKey)}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </section>
+            <form onSubmit={handleStartClicked} className="grid gap-5 bg-slate-50 p-4 text-slate-950 dark:bg-slate-950 dark:text-slate-50 sm:p-6 xl:grid-cols-[minmax(330px,0.95fr)_minmax(420px,1.25fr)_minmax(280px,0.8fr)]">
+                <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 xl:p-5">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Role setup</p>
+                        <h4 className="mt-1 text-xl font-bold">What are you practicing for?</h4>
+                    </div>
 
-                    {/* ② Target role */}
-                    <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-                        <SectionHeader n={2} titleKey="mi_section_2_title" />
+                    <div>
+                        <label htmlFor="mi-job-title" className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Role target</label>
+                        <input
+                            id="mi-job-title"
+                            type="text"
+                            className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
+                            placeholder={t('mi_job_title_placeholder')}
+                            value={jobTitle}
+                            onChange={(e) => setJobTitle(e.target.value)}
+                        />
+                        {(postings.length > 0 || applications.length > 0) && (
+                            <select
+                                defaultValue=""
+                                onChange={(e) => handleJobSourcePick(e.target.value)}
+                                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                                aria-label={t('mi_job_source_label')}
+                            >
+                                <option value="" disabled>{t('mi_job_source_placeholder')}</option>
+                                {applications.length > 0 && (
+                                    <optgroup label={t('mi_job_group_applied')}>
+                                        {applications.map((app) => (
+                                            <option key={`app-${app.id}`} value={`app:${app.id}`}>
+                                                {app.job_title}{app.status ? ` — ${app.status}` : ''}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                                {postings.length > 0 && (
+                                    <optgroup label={t('mi_job_group_platform')}>
+                                        {postings.map((p) => (
+                                            <option key={`job-${p.id}`} value={`job:${p.id}`}>
+                                                {p.title}{p.company_name ? ` · ${p.company_name}` : ''}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                            </select>
+                        )}
+                    </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label htmlFor="mi-job-title" className={labelCls}>{t('mi_job_title_label')}</label>
-                                <input
-                                    id="mi-job-title"
-                                    type="text"
-                                    className={inputCls}
-                                    placeholder={t('mi_job_title_placeholder')}
-                                    value={jobTitle}
-                                    onChange={(e) => setJobTitle(e.target.value)}
-                                />
-                            </div>
-                            {(postings.length > 0 || applications.length > 0) && (
-                                <div>
-                                    <label htmlFor="mi-job-source" className={labelCls}>{t('mi_job_source_label')}</label>
-                                    <select
-                                        id="mi-job-source"
-                                        defaultValue=""
-                                        onChange={(e) => handleJobSourcePick(e.target.value)}
-                                        className={inputCls}
-                                    >
-                                        <option value="" disabled>{t('mi_job_source_placeholder')}</option>
-                                        {applications.length > 0 && (
-                                            <optgroup label={t('mi_job_group_applied')}>
-                                                {applications.map((app) => (
-                                                    <option key={`app-${app.id}`} value={`app:${app.id}`}>
-                                                        {app.job_title}{app.status ? ` — ${app.status}` : ''}
-                                                    </option>
-                                                ))}
-                                            </optgroup>
-                                        )}
-                                        {postings.length > 0 && (
-                                            <optgroup label={t('mi_job_group_platform')}>
-                                                {postings.map((p) => (
-                                                    <option key={`job-${p.id}`} value={`job:${p.id}`}>
-                                                        {p.title}{p.company_name ? ` · ${p.company_name}` : ''}
-                                                    </option>
-                                                ))}
-                                            </optgroup>
-                                        )}
-                                    </select>
-                                </div>
-                            )}
-                        </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        {INTERVIEW_TYPES.map((it) => (
+                            <button
+                                key={it.id}
+                                type="button"
+                                onClick={() => setInterviewType(it.id)}
+                                aria-pressed={interviewType === it.id}
+                                className={`rounded-xl border px-3 py-3 text-left transition ${
+                                    interviewType === it.id
+                                        ? 'border-blue-500 bg-blue-50 text-blue-900 dark:border-blue-500 dark:bg-blue-950/30 dark:text-blue-100'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                                }`}
+                            >
+                                <span className="block text-sm font-bold">{t(it.labelKey)}</span>
+                                <span className="mt-1 block truncate text-[11px] text-slate-500">{t(it.descKey)}</span>
+                            </button>
+                        ))}
+                    </div>
 
-                        <div>
-                            <label htmlFor="mi-job-desc" className={labelCls}>{t('mi_job_desc_label')}</label>
+                    <details className="group rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70" open>
+                        <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold">
+                            Role brief
+                            <ChevronDown className="h-4 w-4 text-slate-400 transition group-open:rotate-180" />
+                        </summary>
+                        <div className="mt-3 space-y-2">
                             <textarea
-                                id="mi-job-desc"
                                 rows={3}
-                                className={inputCls}
+                                className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                                 placeholder={t('mi_job_desc_placeholder')}
                                 value={jobDescription}
                                 onChange={(e) => setJobDescription(e.target.value)}
+                                aria-label={t('mi_job_desc_label')}
                             />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label htmlFor="mi-job-resp" className={labelCls}>{t('mi_job_resp_label')}</label>
+                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                                 <textarea
-                                    id="mi-job-resp"
-                                    rows={3}
-                                    className={inputCls}
+                                    rows={2}
+                                    className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                                     placeholder={t('mi_job_resp_placeholder')}
                                     value={jobResponsibilities}
                                     onChange={(e) => setJobResponsibilities(e.target.value)}
+                                    aria-label={t('mi_job_resp_label')}
                                 />
-                            </div>
-                            <div>
-                                <label htmlFor="mi-job-req" className={labelCls}>{t('mi_job_req_label')}</label>
                                 <textarea
-                                    id="mi-job-req"
-                                    rows={3}
-                                    className={inputCls}
+                                    rows={2}
+                                    className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                                     placeholder={t('mi_job_req_placeholder')}
                                     value={jobRequirements}
                                     onChange={(e) => setJobRequirements(e.target.value)}
+                                    aria-label={t('mi_job_req_label')}
                                 />
                             </div>
                         </div>
-                    </section>
+                    </details>
 
-                    {/* ③ Profile */}
-                    <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-                        <SectionHeader n={3} titleKey="mi_section_3_title" />
-
-                        {/* Resume status */}
-                        <div className={`rounded-lg px-3 py-2 flex items-center gap-2 text-sm ${
-                            resumeText
-                                ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-                                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
-                        }`}>
-                            <FileText className="h-4 w-4 shrink-0" />
-                            <span>{resumeText ? t('mi_resume_attached') : t('mi_resume_missing')}</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label htmlFor="mi-experience" className={labelCls}>{t('mi_experience_label')}</label>
-                                <select
-                                    id="mi-experience"
-                                    value={experience}
-                                    onChange={(e) => setExperience(e.target.value as Experience)}
-                                    className={inputCls}
-                                >
-                                    {EXPERIENCE_OPTIONS.map((opt) => (
-                                        <option key={opt.id} value={opt.id}>{t(opt.labelKey)}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className={labelCls}>{t('mi_salary_label')}</label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className={inputCls}
-                                        placeholder={t('mi_salary_min_ph')}
-                                        value={salaryMin}
-                                        onChange={(e) => setSalaryMin(e.target.value)}
-                                        aria-label={t('mi_salary_min_ph')}
-                                    />
-                                    <span className="text-gray-400 shrink-0">–</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className={inputCls}
-                                        placeholder={t('mi_salary_max_ph')}
-                                        value={salaryMax}
-                                        onChange={(e) => setSalaryMax(e.target.value)}
-                                        aria-label={t('mi_salary_max_ph')}
-                                    />
-                                    <select
-                                        value={salaryCurrency}
-                                        onChange={(e) => setSalaryCurrency(e.target.value)}
-                                        className="bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 shrink-0"
-                                        aria-label={t('mi_salary_currency_label')}
-                                    >
-                                        {SALARY_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* ④ Interview settings */}
-                    <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-4">
-                        <SectionHeader n={4} titleKey="mi_section_4_title" />
-
-                        {/* Difficulty switcher */}
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                         <div>
-                            <span className={labelCls}>{t('mi_difficulty_label')}</span>
-                            <div className="inline-flex rounded-lg border border-gray-300 dark:border-slate-600 overflow-hidden" role="group" aria-label={t('mi_difficulty_label')}>
+                            <label htmlFor="mi-experience" className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{t('mi_experience_label')}</label>
+                            <select
+                                id="mi-experience"
+                                value={experience}
+                                onChange={(e) => setExperience(e.target.value as Experience)}
+                                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                            >
+                                {EXPERIENCE_OPTIONS.map((opt) => (
+                                    <option key={opt.id} value={opt.id}>{t(opt.labelKey)}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Difficulty</span>
+                            <div className="mt-2 grid grid-cols-3 rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-950">
                                 {DIFFICULTY_OPTIONS.map((opt) => (
                                     <button
                                         key={opt.id}
                                         type="button"
                                         onClick={() => setDifficulty(opt.id)}
                                         aria-pressed={difficulty === opt.id}
-                                        className={`px-4 py-1.5 text-sm font-semibold transition-colors ${
-                                            difficulty === opt.id
-                                                ? 'bg-blue-700 text-white'
-                                                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                        className={`rounded-lg px-2 py-2 text-xs font-bold transition ${
+                                            difficulty === opt.id ? 'bg-blue-700 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
                                         }`}
                                     >
                                         {t(opt.labelKey)}
@@ -1316,134 +1349,172 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                 ))}
                             </div>
                         </div>
+                    </div>
 
-                        {/* Company info (optional, collapsible) */}
-                        <div className="rounded-lg border border-gray-200 dark:border-slate-600">
-                            <button
-                                type="button"
-                                onClick={() => setCompanyOpen((v) => !v)}
-                                aria-expanded={companyOpen}
-                                className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-lg"
-                            >
-                                <span className="flex items-center gap-2">
-                                    <Building2 className="h-4 w-4 text-gray-400" />
-                                    {t('mi_company_section')}
-                                </span>
-                                <ChevronDown className={`h-4 w-4 transition-transform ${companyOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                            {companyOpen && (
-                                <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                        <label htmlFor="mi-company-name" className={labelCls}>{t('mi_company_name_label')}</label>
-                                        <input
-                                            id="mi-company-name"
-                                            type="text"
-                                            list="mi-company-names"
-                                            className={inputCls}
-                                            placeholder={t('mi_company_name_ph')}
-                                            value={companyName}
-                                            onChange={(e) => setCompanyName(e.target.value)}
-                                        />
-                                        <datalist id="mi-company-names">
-                                            {companyNameSuggestions.map((n) => <option key={n} value={n} />)}
-                                        </datalist>
-                                    </div>
-                                    <div>
-                                        <label htmlFor="mi-company-type" className={labelCls}>{t('mi_company_type_label')}</label>
-                                        <select
-                                            id="mi-company-type"
-                                            value={companyType}
-                                            onChange={(e) => setCompanyType(e.target.value)}
-                                            className={inputCls}
-                                        >
-                                            <option value="">{t('mi_company_type_ph')}</option>
-                                            {COMPANY_TYPES.map((c) => <option key={c.id} value={c.id}>{t(c.labelKey)}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label htmlFor="mi-company-industry" className={labelCls}>{t('mi_company_industry_label')}</label>
-                                        <select
-                                            id="mi-company-industry"
-                                            value={companyIndustry}
-                                            onChange={(e) => setCompanyIndustry(e.target.value)}
-                                            className={inputCls}
-                                        >
-                                            <option value="">{t('mi_company_industry_ph')}</option>
-                                            {COMPANY_INDUSTRIES.map((c) => <option key={c.id} value={c.id}>{t(c.labelKey)}</option>)}
-                                        </select>
-                                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                        <button
+                            type="button"
+                            onClick={() => setCompanyOpen((v) => !v)}
+                            aria-expanded={companyOpen}
+                            className="flex w-full items-center justify-between text-sm font-bold text-slate-800 dark:text-slate-100"
+                        >
+                            <span className="inline-flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-blue-700 dark:text-blue-400" />
+                                Company context
+                            </span>
+                            <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${companyOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {companyOpen && (
+                            <div className="mt-3 grid gap-2">
+                                <input
+                                    type="text"
+                                    list="mi-company-names"
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                                    placeholder={t('mi_company_name_ph')}
+                                    value={companyName}
+                                    onChange={(e) => setCompanyName(e.target.value)}
+                                />
+                                <datalist id="mi-company-names">
+                                    {companyNameSuggestions.map((n) => <option key={n} value={n} />)}
+                                </datalist>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <select value={companyType} onChange={(e) => setCompanyType(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                                        <option value="">{t('mi_company_type_ph')}</option>
+                                        {COMPANY_TYPES.map((c) => <option key={c.id} value={c.id}>{t(c.labelKey)}</option>)}
+                                    </select>
+                                    <select value={companyIndustry} onChange={(e) => setCompanyIndustry(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                                        <option value="">{t('mi_company_industry_ph')}</option>
+                                        {COMPANY_INDUSTRIES.map((c) => <option key={c.id} value={c.id}>{t(c.labelKey)}</option>)}
+                                    </select>
                                 </div>
-                            )}
-                        </div>
-                    </section>
-
-                    {/* (e) Error box with retry */}
-                    {error && (
-                        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
-                            <svg className="h-5 w-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
-                            <div className="flex-1">
-                                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-                                <button
-                                    type="submit"
-                                    className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:underline"
-                                >
-                                    {t('tool_mock_interview_retry')}
-                                </button>
                             </div>
+                        )}
+                    </div>
+
+                    {error && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+                            {error}
                         </div>
                     )}
+                </section>
 
-                    {isPaid ? (
-                        <button type="submit" className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg text-base shadow-lg shadow-blue-700/20">
-                            {t('tool_mock_interview_start_button')}
-                        </button>
-                    ) : (
-                        /* Paid gate — the form stays fully explorable (desire first),
-                           the action is where the upgrade happens. Server enforces
-                           the same gate (MI_PAID_ONLY), this is just the UX. */
-                        <div className="rounded-xl border-2 border-amber-300 dark:border-amber-700/60 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/15 dark:to-orange-900/10 p-5 text-center space-y-3">
-                            <p className="font-bold text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2">
-                                <Crown className="h-5 w-5 text-amber-500" />
-                                {t('mi_paid_only_title')}
+                <section className="flex min-h-[540px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 xl:p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Practice preview</p>
+                            <h3 className="mt-1 text-2xl font-bold tracking-tight">{jobTitle.trim() || 'Target role practice'}</h3>
+                        </div>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${resumeText ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'}`}>
+                            {resumeText ? <CheckCircle2 className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                            {resumeText ? 'Resume context ready' : t('mi_resume_missing')}
+                        </span>
+                    </div>
+
+                    <div className="mt-6 grid flex-1 gap-4 lg:grid-cols-[220px_1fr]">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+                            <InterviewerAvatar
+                                speaking={false}
+                                imageUrl={INTERVIEWER_IMAGE}
+                                name={t('mi_avatar_name')}
+                                roleLabel={t('mi_avatar_role')}
+                            />
+                            <div className="mt-4 grid grid-cols-2 gap-2 text-center">
+                                <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Prep</p>
+                                    <p className="mt-1 font-mono text-lg font-bold">0:15</p>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Answer</p>
+                                    <p className="mt-1 font-mono text-lg font-bold">3:00</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/70">
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">{INTERVIEW_TYPES.find((it) => it.id === interviewType) ? t(INTERVIEW_TYPES.find((it) => it.id === interviewType)!.labelKey) : 'Interview'}</span>
+                                <span className="text-xs text-slate-500">{t(DIFFICULTY_OPTIONS.find((opt) => opt.id === difficulty)?.labelKey ?? 'mi_difficulty_advanced')}</span>
+                            </div>
+                            <p className="mt-6 text-2xl font-semibold leading-tight text-slate-950 dark:text-slate-50">
+                                Tell me about the most relevant project or experience for this role.
                             </p>
-                            <p className="text-sm text-gray-600 dark:text-slate-300 max-w-md mx-auto">{t('mi_paid_only_desc')}</p>
+                            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                                Timed practice, voice or typed answers, and one clear report after the session.
+                            </p>
+                            <div className="mt-auto rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                                <div className="flex items-center justify-between gap-3">
+                                    <AudioWave />
+                                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Mic and typing supported</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700 dark:bg-slate-900">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <Timer className="h-4 w-4 text-blue-700 dark:text-blue-400" />
+                            <span>{t('mi_flow_note')}</span>
+                        </div>
+                        {isPaid ? (
+                            <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800">
+                                <PlayCircle className="h-4 w-4" />
+                                {t('tool_mock_interview_start_button')}
+                            </button>
+                        ) : (
                             <button
                                 type="button"
                                 onClick={navigateToPricing ?? onClose}
-                                className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow-lg shadow-amber-500/25"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
                             >
+                                <Crown className="h-4 w-4" />
                                 {t('mi_paid_only_cta')}
                             </button>
-                        </div>
-                    )}
+                        )}
+                    </div>
+                </section>
 
-                    {/* FAQ — positioning (why not a generic chatbot) */}
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-                        <p className="font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2 mb-2">
-                            <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            {t('mi_faq_title')}
-                        </p>
-                        <div className="divide-y divide-gray-100 dark:divide-slate-700">
-                            {FAQ_ITEMS.map((f) => (
-                                <div key={f.qKey} className="py-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setOpenFaq(openFaq === f.qKey ? null : f.qKey)}
-                                        aria-expanded={openFaq === f.qKey}
-                                        className="w-full flex items-center justify-between text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-blue-700 dark:hover:text-blue-300"
-                                    >
-                                        <span>{t(f.qKey)}</span>
-                                        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${openFaq === f.qKey ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    {openFaq === f.qKey && (
-                                        <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-slate-400 whitespace-pre-line">
-                                            {t(f.aKey)}
-                                        </p>
-                                    )}
+                <aside className="space-y-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 xl:p-5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Report</p>
+                                <h3 className="mt-1 text-xl font-bold">What you get</h3>
+                            </div>
+                            <BarChart3 className="h-5 w-5 text-blue-700 dark:text-blue-400" />
+                        </div>
+                        <div className="mt-5 space-y-3">
+                            {[
+                                ['Structure', 'STAR'],
+                                ['Evidence', 'Specificity'],
+                                ['Delivery', 'Clarity'],
+                            ].map(([label, value]) => (
+                                <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                    <p className="text-xs font-semibold text-slate-500">{label}</p>
+                                    <p className="mt-1 text-sm font-bold text-slate-950 dark:text-slate-100">{value}</p>
                                 </div>
                             ))}
                         </div>
                     </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                        <p className="text-sm font-bold text-slate-950 dark:text-white">Concise coaching</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {['STAR structure', 'Metric result', 'Role fit', 'Follow-up risk'].map((tag) => (
+                                <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{tag}</span>
+                            ))}
+                        </div>
+                    </div>
+
+                    {!isPaid && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/25">
+                            <p className="flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-100">
+                                <Crown className="h-4 w-4" />
+                                {t('mi_paid_only_title')}
+                            </p>
+                            <p className="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">{t('mi_paid_only_desc')}</p>
+                        </div>
+                    )}
+                </aside>
             </form>
         </div>
     );

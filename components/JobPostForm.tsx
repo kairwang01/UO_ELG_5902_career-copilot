@@ -15,7 +15,7 @@ import { generateJobDescription, analyzeSalary, checkInclusivity, formatJobDescr
 import type { InclusivitySuggestion, UserProfile } from '../types';
 import { saveJobPosting, type JobPosting } from '../lib/recruitingData';
 import { renderFormattedText } from './tools/ToolUtils';
-import { useModalBehavior } from '../hooks/useModalBehavior';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 import {
     WORK_MODES,
     EMPLOYMENT_TYPES,
@@ -38,18 +38,11 @@ interface JobPostFormProps {
 
 // Simple modal component for inclusivity results
 const InclusivityModal: React.FC<{ suggestions: InclusivitySuggestion[]; onClose: () => void; t: (key: string) => string }> = ({ suggestions, onClose, t }) => {
-    useModalBehavior(onClose);
-    const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (e.target === e.currentTarget) {
-            onClose();
-        }
-    };
-    
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in" onClick={handleOverlayClick}>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh] animate-fade-scale" onClick={(e) => e.stopPropagation()}>
+        <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="job-inclusivity-title" maxWidth={512} zIndex={60}>
+            <div className="flex min-h-[320px] flex-col rounded-xl bg-white shadow-2xl dark:bg-gray-800">
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">{t('job_form_inclusivity_results_title')}</h3>
+                    <h3 id="job-inclusivity-title" className="text-lg font-bold text-gray-800 dark:text-white">{t('job_form_inclusivity_results_title')}</h3>
                 </div>
                 <div className="flex-grow overflow-y-auto p-6 space-y-4">
                     {suggestions.length === 0 ? (
@@ -71,7 +64,7 @@ const InclusivityModal: React.FC<{ suggestions: InclusivitySuggestion[]; onClose
                     <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">{t('job_form_close')}</button>
                 </div>
             </div>
-        </div>
+        </ViewportAwareDialog>
     );
 };
 
@@ -122,8 +115,6 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
     const [error, setError] = useState('');
     const [aiLoading, setAiLoading] = useState<null | 'description' | 'salary' | 'inclusivity' | 'format'>(null);
     const [inclusivityResults, setInclusivityResults] = useState<InclusivitySuggestion[] | null>(null);
-    // While the nested InclusivityModal is open, Escape should close that layer, not the form.
-    useModalBehavior(onClose, !embedded && !inclusivityResults);
     const [salarySuggestion, setSalarySuggestion] = useState<{ yearly: string; monthly: string; } | null>(null);
     const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
 
@@ -197,12 +188,6 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             // Key responsibilities are not saved, so they will be blank on edit.
         }
     }, [existingJob]);
-
-    const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (e.target === e.currentTarget) {
-            onClose();
-        }
-    };
 
     // Chip-input helpers for the skill arrays: add the trimmed draft on Enter (no
     // duplicates), remove an individual chip, and clear the draft afterwards.
@@ -432,6 +417,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                 onKeyDown={(e) => handleSkillKeyDown(e, draft, skills, setSkills, setDraft)}
                 onBlur={() => addSkill(draft, skills, setSkills, setDraft)}
                 placeholder={t('job_field_skills_placeholder')}
+                aria-label={id === 'required-skills' ? t('job_field_required_skills') : t('job_field_preferred_skills')}
                 className="block w-full bg-transparent px-1 py-1 text-sm text-gray-900 focus:outline-none dark:text-gray-100 dark:placeholder:text-gray-500"
             />
         </div>
@@ -537,7 +523,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                             </div>
                         </div>
                     ) : (
-                        <div className="animate-fade-in p-4 border rounded-lg bg-gray-50 min-h-[350px] max-h-[calc(100vh-450px)] overflow-y-auto text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                        <div className="animate-fade-in p-4 border rounded-lg bg-gray-50 min-h-[350px] max-h-[calc(100dvh-450px)] overflow-y-auto text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
                             {jobDescription.trim() ? renderFormattedText(jobDescription) : <p className="text-gray-500 text-center dark:text-gray-400">{t('job_form_preview_empty')}</p>}
                         </div>
                     )}
@@ -686,12 +672,14 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                                     value={q.prompt}
                                     onChange={e => setScreenerQuestions(list => list.map((x, xi) => xi === i ? { ...x, prompt: e.target.value } : x))}
                                     placeholder={t('job_screener_prompt_placeholder')}
+                                    aria-label={`${t('job_screener_prompt_placeholder')} ${i + 1}`}
                                     maxLength={300}
                                     className={inputClass}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setScreenerQuestions(list => list.filter((_, xi) => xi !== i))}
+                                    aria-label={`${t('job_screener_remove')} ${i + 1}`}
                                     className="mt-2 shrink-0 text-xs font-semibold text-gray-400 hover:text-red-500"
                                 >
                                     {t('job_screener_remove')}
@@ -701,6 +689,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                                 <select
                                     value={q.type}
                                     onChange={e => setScreenerQuestions(list => list.map((x, xi) => xi === i ? { ...x, type: e.target.value as 'yes_no' | 'short_text', expected: e.target.value === 'yes_no' ? x.expected : null } : x))}
+                                    aria-label={`${t('job_section_screener')} ${i + 1} ${t('job_screener_type_text')}`}
                                     className={`${inputClass} w-auto`}
                                 >
                                     <option value="short_text">{t('job_screener_type_text')}</option>
@@ -716,6 +705,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                                         <select
                                             value={q.expected ?? ''}
                                             onChange={e => setScreenerQuestions(list => list.map((x, xi) => xi === i ? { ...x, expected: e.target.value || null } : x))}
+                                            aria-label={`${t('job_screener_expected')} ${i + 1}`}
                                             className={`${inputClass} w-auto`}
                                         >
                                             <option value="">{t('job_screener_expected_any')}</option>
@@ -769,8 +759,16 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
 
     return (
         <>
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in" onClick={handleOverlayClick}>
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-fade-scale" onClick={(e) => e.stopPropagation()}>
+            <ViewportAwareDialog
+                open
+                onClose={onClose}
+                closeOnBackdrop={!inclusivityResults}
+                closeOnEscape={!inclusivityResults}
+                ariaLabel={isEditing ? t('job_form_edit_title') : t('job_form_create_title')}
+                maxWidth={896}
+                zIndex={50}
+            >
+                <div className="flex min-h-[520px] flex-col rounded-xl bg-white shadow-2xl dark:bg-gray-800">
                     <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                         <h3 className="text-xl font-bold text-gray-800 dark:text-white">{isEditing ? t('job_form_edit_title') : t('job_form_create_title')}</h3>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full p-1" aria-label={t('job_form_close')}>
@@ -795,7 +793,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
                         </button>
                     </div>
                 </div>
-            </div>
+            </ViewportAwareDialog>
             {inclusivityResults && <InclusivityModal suggestions={inclusivityResults} onClose={() => setInclusivityResults(null)} t={t} />}
         </>
     );

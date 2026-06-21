@@ -34,8 +34,8 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 w-[90vw] -translate-x-1/2 -translate-y-1/2',
-          'rounded-2xl bg-white dark:bg-gray-800 p-8 shadow-xl max-h-[90vh] overflow-y-auto',
+          'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 sm:w-[90vw]',
+          'rounded-2xl bg-white dark:bg-gray-800 p-5 sm:p-8 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain',
           'dialog-content-anim',
           maxWidthClass,
           className,

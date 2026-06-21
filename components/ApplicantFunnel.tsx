@@ -51,7 +51,7 @@ import { useToast } from './Toast';
 import ResumePreview from './ResumePreview';
 import FunnelChart from './FunnelChart';
 import ApplicationMessageThread from './ApplicationMessageThread';
-import { useModalBehavior } from '../hooks/useModalBehavior';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 import {
     APPLICATION_PIPELINE_STAGES,
     getApplicationStatusIndex,
@@ -1394,9 +1394,6 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
         setResumeViewText(null);
         setResumeViewError(null);
     }, []);
-    // Match the app's modal standard: Esc-to-close + body scroll lock while open.
-    useModalBehavior(closeResumeView, Boolean(viewingApplicant));
-
     // Download the original resume FILE of an applicant (server verifies the
     // caller owns the job the candidate applied to). Applicants who only pasted
     // text — and pre-feature applicants — return { available:false } gracefully.
@@ -2597,18 +2594,10 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             </div>
 
             {viewingApplicant && (
-                <div
-                    className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
-                    role="dialog"
-                    aria-modal="true"
-                    onClick={closeResumeView}
-                >
-                    <div
-                        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-2xl dark:bg-gray-800"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                <ViewportAwareDialog open onClose={closeResumeView} closeOnBackdrop labelledBy="applicant-resume-view-title" maxWidth={672} zIndex={70}>
+                    <div className="flex min-h-[420px] flex-col rounded-xl bg-white shadow-2xl dark:bg-gray-800">
                         <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-3 dark:border-gray-700">
-                            <h3 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-gray-100">
+                            <h3 id="applicant-resume-view-title" className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-gray-100">
                                 {formatTranslation(t('applicant_funnel_resume_modal_title'), {
                                     name: viewingApplicant.candidate_name || t('applicant_funnel_unnamed_candidate'),
                                 })}
@@ -2660,7 +2649,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             </button>
                         </div>
                     </div>
-                </div>
+                </ViewportAwareDialog>
             )}
         </div>
     );

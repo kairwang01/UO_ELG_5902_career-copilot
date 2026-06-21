@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { UserProfile } from '../types';
 import ResumePreview from './ResumePreview';
 import OutreachModal from './OutreachModal';
-import { useModalBehavior } from '../hooks/useModalBehavior';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -19,24 +19,18 @@ interface EngageCandidateModalProps {
 
 const EngageCandidateModal: React.FC<EngageCandidateModalProps> = ({ candidate, jobDescription, employerProfile, onClose, t }) => {
     const [isOutreachModalOpen, setIsOutreachModalOpen] = useState(false);
-    // While the nested OutreachModal is open, Escape should close that layer, not this one.
-    useModalBehavior(onClose, !isOutreachModalOpen);
-
-    const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (e.target === e.currentTarget) {
-            onClose();
-        }
-    };
 
     return (
-        <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in"
-            onClick={handleOverlayClick}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="engage-candidate-title"
+        <ViewportAwareDialog
+            open
+            onClose={onClose}
+            closeOnBackdrop={!isOutreachModalOpen}
+            closeOnEscape={!isOutreachModalOpen}
+            labelledBy="engage-candidate-title"
+            maxWidth={768}
+            zIndex={60}
         >
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-fade-scale" onClick={(e) => e.stopPropagation()}>
+            <div className="flex min-h-[420px] flex-col rounded-xl bg-white shadow-2xl dark:bg-slate-800">
                 <div className="flex-shrink-0 flex items-center justify-between p-4 border-b dark:border-slate-700">
                     <h3 id="engage-candidate-title" className="text-xl font-bold text-gray-800 dark:text-gray-100">
                         {t('engage_candidate_title').replace('{n}', String(candidate.index + 1))}
@@ -101,7 +95,7 @@ const EngageCandidateModal: React.FC<EngageCandidateModalProps> = ({ candidate, 
                     t={t}
                 />
             )}
-        </div>
+        </ViewportAwareDialog>
     );
 };
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
 
 /**
@@ -26,6 +26,17 @@ const STEPS: TourStep[] = [
 ];
 
 interface Rect { top: number; left: number; width: number; height: number }
+interface ViewportRect { top: number; left: number; width: number; height: number }
+
+const getViewport = (): ViewportRect => {
+  const vv = window.visualViewport;
+  return {
+    top: vv?.offsetTop ?? 0,
+    left: vv?.offsetLeft ?? 0,
+    width: vv?.width ?? window.innerWidth,
+    height: vv?.height ?? window.innerHeight,
+  };
+};
 
 const isVisible = (el: Element): boolean => {
   const r = el.getBoundingClientRect();
@@ -44,13 +55,18 @@ const WorkspaceTour: React.FC<{ t: (key: string) => string; onClose: () => void 
 
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
+  const [viewport, setViewport] = useState<ViewportRect>(() => getViewport());
+  const rafRef = useRef<number | null>(null);
 
   useModalBehavior(onClose, true);
 
   const measure = useCallback(() => {
+    rafRef.current = null;
     const step = steps[index];
     if (!step) return;
     const el = document.querySelector(step.target);
+    const nextViewport = getViewport();
+    setViewport(nextViewport);
     if (!el || !isVisible(el)) { setRect(null); return; }
     el.scrollIntoView({ block: 'nearest', behavior: 'instant' as ScrollBehavior });
     const r = el.getBoundingClientRect();
@@ -58,12 +74,21 @@ const WorkspaceTour: React.FC<{ t: (key: string) => string; onClose: () => void 
   }, [steps, index]);
 
   useEffect(() => {
+    const schedule = () => {
+      if (rafRef.current !== null) return;
+      rafRef.current = window.requestAnimationFrame(measure);
+    };
     measure();
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, { capture: true, passive: true });
+    window.visualViewport?.addEventListener('resize', schedule, { passive: true });
+    window.visualViewport?.addEventListener('scroll', schedule, { passive: true });
     return () => {
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
+      if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+      window.visualViewport?.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('scroll', schedule);
     };
   }, [measure]);
 
@@ -80,13 +105,15 @@ const WorkspaceTour: React.FC<{ t: (key: string) => string; onClose: () => void 
 
   // Card placement: below the spotlight when there's room, otherwise above;
   // clamped horizontally so it never leaves the viewport on mobile.
-  const cardW = Math.min(340, window.innerWidth - 24);
+  const cardW = Math.min(340, viewport.width - 24);
   let cardTop = 0;
-  let cardLeft = 12;
+  let cardLeft = viewport.left + 12;
   if (rect) {
     const below = rect.top + rect.height + PAD + 12;
-    cardTop = below + 190 < window.innerHeight ? below : Math.max(12, rect.top - PAD - 200);
-    cardLeft = Math.min(Math.max(12, rect.left), window.innerWidth - cardW - 12);
+    const viewportBottom = viewport.top + viewport.height;
+    const viewportRight = viewport.left + viewport.width;
+    cardTop = below + 190 < viewportBottom ? below : Math.max(viewport.top + 12, rect.top - PAD - 200);
+    cardLeft = Math.min(Math.max(viewport.left + 12, rect.left), viewportRight - cardW - 12);
   }
 
   return (

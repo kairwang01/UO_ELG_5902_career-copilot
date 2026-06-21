@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronRight, Check, Loader2, Save, Sparkles, X, AlertTriangle, RotateCcw } from 'lucide-react';
 import {
   TALENT_PROFILE_SCHEMA,
@@ -12,6 +12,7 @@ import {
 } from '../lib/talentProfile';
 import { loadTalentProfile, saveTalentProfile } from '../services/talentProfile';
 import { extractTalentProfile } from '../services/aiClient';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 interface TalentProfileFormProps {
   uid: string;
@@ -160,7 +161,11 @@ const ChipEditor: React.FC<{
   onChange: (next: string[]) => void;
   placeholder?: string;
   suggestions?: string[];
-}> = ({ values, onChange, placeholder, suggestions }) => {
+  inputId?: string;
+  ariaLabel?: string;
+  ariaDescribedBy?: string;
+  invalid?: boolean;
+}> = ({ values, onChange, placeholder, suggestions, inputId, ariaLabel, ariaDescribedBy, invalid }) => {
   const [draft, setDraft] = useState('');
   const add = (v: string) => {
     const t = v.trim();
@@ -178,10 +183,14 @@ const ChipEditor: React.FC<{
           </span>
         ))}
         <input
+          id={inputId}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(draft); } }}
           placeholder={placeholder ?? 'Add…'}
+          aria-label={ariaLabel ?? placeholder ?? 'Add item'}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={invalid || undefined}
           className="min-w-[120px] flex-1 border-none bg-transparent px-1 py-1 text-sm text-gray-900 focus:outline-none dark:text-gray-100"
         />
       </div>
@@ -199,27 +208,48 @@ const ChipEditor: React.FC<{
 };
 
 // ── Single field renderer ───────────────────────────────────────────────────
-const FieldInput: React.FC<{ field: FieldConfig; value: unknown; onChange: (v: unknown) => void }> = ({ field, value, onChange }) => {
+const fieldDomId = (path: string) => `talent-field-${path.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
+const fieldIssueId = (path: string) => `${fieldDomId(path)}-issue`;
+
+const FieldInput: React.FC<{
+  field: FieldConfig;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  id: string;
+  describedBy?: string;
+  invalid?: boolean;
+}> = ({ field, value, onChange, id, describedBy, invalid }) => {
   if (field.type === 'chips') {
-    return <ChipEditor values={Array.isArray(value) ? (value as string[]) : []} onChange={onChange} placeholder={field.placeholder} suggestions={field.suggestions} />;
+    return (
+      <ChipEditor
+        values={Array.isArray(value) ? (value as string[]) : []}
+        onChange={onChange}
+        placeholder={field.placeholder}
+        suggestions={field.suggestions}
+        inputId={id}
+        ariaLabel={field.label}
+        ariaDescribedBy={describedBy}
+        invalid={invalid}
+      />
+    );
   }
   const str = typeof value === 'string' ? value : '';
   if (field.type === 'textarea') {
-    return <textarea value={str} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} rows={3} className={`${inputCls} resize-y`} />;
+    return <textarea id={id} value={str} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} rows={3} aria-describedby={describedBy} aria-invalid={invalid || undefined} className={`${inputCls} resize-y`} />;
   }
   if (field.type === 'select') {
     return (
-      <select value={str} onChange={(e) => onChange(e.target.value)} className={inputCls}>
+      <select id={id} value={str} onChange={(e) => onChange(e.target.value)} aria-describedby={describedBy} aria-invalid={invalid || undefined} className={inputCls}>
         <option value="">Select…</option>
         {(field.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     );
   }
-  return <input type={field.type === 'date' ? 'date' : 'text'} value={str} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} className={inputCls} />;
+  return <input id={id} type={field.type === 'date' ? 'date' : 'text'} value={str} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} aria-describedby={describedBy} aria-invalid={invalid || undefined} className={inputCls} />;
 };
 
-const FieldLabel: React.FC<{ field: FieldConfig }> = ({ field }) => (
-  <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-300">
+const FieldLabel: React.FC<{ field: FieldConfig; htmlFor: string }> = ({ field, htmlFor }) => (
+  <label htmlFor={htmlFor} className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-300">
     {field.label}{field.optional && <span className="ml-1 font-normal text-gray-400">(optional)</span>}
     {field.help && <span className="mt-0.5 block text-[11px] font-normal leading-4 text-gray-400 dark:text-slate-500">{field.help}</span>}
   </label>
@@ -239,6 +269,8 @@ const FieldGrid: React.FC<{
       const path = pathFor?.(f.key) ?? f.key;
       const highlighted = highlightedPaths?.has(path) ?? false;
       const issue = issueByPath?.get(path);
+      const inputId = fieldDomId(path);
+      const issueId = issue ? fieldIssueId(path) : undefined;
       return (
         <div
           key={f.key}
@@ -251,15 +283,15 @@ const FieldGrid: React.FC<{
           }`}
         >
           <div className="flex items-start justify-between gap-2">
-            <FieldLabel field={f} />
+            <FieldLabel field={f} htmlFor={inputId} />
             {highlighted && onReviewPath && (
               <button type="button" onClick={() => onReviewPath(path)} className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100">
                 Reviewed
               </button>
             )}
           </div>
-          <FieldInput field={f} value={data[f.key]} onChange={(v) => onField(f.key, v)} />
-          {issue && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-300">{issue}</p>}
+          <FieldInput field={f} value={data[f.key]} onChange={(v) => onField(f.key, v)} id={inputId} describedBy={issueId} invalid={Boolean(issue)} />
+          {issue && <p id={issueId} className="mt-1 text-xs font-medium text-red-600 dark:text-red-300">{issue}</p>}
         </div>
       );
     })}
@@ -281,6 +313,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const [loadError, setLoadError] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const prefillButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const markReviewPath = (path: string) => {
     // Any edit makes the persisted "Saved" indicator stale — clear it so the user
@@ -430,6 +463,11 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const validationIssues = useMemo(() => collectValidationIssues(profile), [profile]);
   const issueByPath = useMemo(() => new Map(validationIssues.map((issue) => [issue.path, issue.message])), [validationIssues]);
   const hasBlockingValidation = validationIssues.length > 0;
+  const readyStatusId = 'talent-profile-ready-status';
+  const validationSummaryId = 'talent-profile-validation-summary';
+  const saveErrorId = 'talent-profile-save-error';
+  const saveButtonDescription = hasBlockingValidation ? validationSummaryId : saveError ? saveErrorId : undefined;
+  const primaryButtonDescription = hasBlockingValidation ? validationSummaryId : !ready ? readyStatusId : saveError ? saveErrorId : undefined;
 
   const acceptPrefillReview = () => {
     // Clearing the highlights + the Save button are the signal — no extra
@@ -546,7 +584,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
                         </button>
                       )}
                     </div>
-                    <ChipEditor values={profile.skills[g.key] ?? []} onChange={(v) => setSkill(g.key, v)} placeholder={`Add ${g.label.toLowerCase()}…`} suggestions={g.suggestions} />
+                    <ChipEditor values={profile.skills[g.key] ?? []} onChange={(v) => setSkill(g.key, v)} placeholder={`Add ${g.label.toLowerCase()}…`} suggestions={g.suggestions} ariaLabel={`${g.label} skills`} />
                   </div>
                 ))}
               </div>
@@ -591,7 +629,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Talent Profile</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Fill this once. It pre-fills every job application and lets employers discover you. References are shown to employers as “available on request”.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" onClick={openPrefillDialog} disabled={prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+          <button ref={prefillButtonRef} type="button" onClick={openPrefillDialog} disabled={prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
             {prefilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {prefilling ? 'Reading your resume…' : 'Prefill from my resume'}
           </button>
@@ -601,7 +639,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
             </span>
           )}
         </div>
-        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium">
+        <p id={readyStatusId} className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium">
           {ready
             ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"><Check className="h-3.5 w-3.5" /> Ready to apply</span>
             : <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">Add your name, a target role, and one education or experience entry to be ready to apply.</span>}
@@ -641,7 +679,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       )}
 
       {validationIssues.length > 0 && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-100">
+        <div id={validationSummaryId} className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-100">
           <p className="inline-flex items-center gap-1.5 font-bold">
             <AlertTriangle className="h-4 w-4" /> Fix {validationIssues.length} validation issue{validationIssues.length === 1 ? '' : 's'} before saving
           </p>
@@ -654,78 +692,84 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         </div>
       )}
 
-      {prefillDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-slate-800">
-              <div>
-                <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
-                  <Sparkles className="h-3.5 w-3.5" /> Resume prefill
-                </p>
-                <h3 className="mt-2 text-lg font-bold text-gray-950 dark:text-gray-50">Choose the draft language</h3>
-                <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-slate-400">
-                  AI will extract facts from your resume and fill empty Talent Profile fields. It will not save automatically.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPrefillDialogOpen(false)}
-                disabled={prefilling}
-                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-gray-200"
-                aria-label="Close prefill dialog"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      <ViewportAwareDialog
+        open={prefillDialogOpen}
+        anchorRef={prefillButtonRef}
+        strategy="anchor-or-center"
+        labelledBy="talent-profile-prefill-title"
+        describedBy="talent-profile-prefill-desc"
+        onClose={() => {
+          if (!prefilling) setPrefillDialogOpen(false);
+        }}
+        className="rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-slate-800">
+          <div>
+            <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
+              <Sparkles className="h-3.5 w-3.5" /> Resume prefill
+            </p>
+            <h3 id="talent-profile-prefill-title" className="mt-2 text-lg font-bold text-gray-950 dark:text-gray-50">Choose the draft language</h3>
+            <p id="talent-profile-prefill-desc" className="mt-1 text-sm leading-6 text-gray-500 dark:text-slate-400">
+              AI will extract facts from your resume and fill empty Talent Profile fields. It will not save automatically.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPrefillDialogOpen(false)}
+            disabled={prefilling}
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-gray-200"
+            aria-label="Close prefill dialog"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-            <div className="space-y-4 px-5 py-5">
-              <div>
-                <label htmlFor="talent-profile-prefill-language" className="mb-1 block text-sm font-semibold text-gray-800 dark:text-gray-100">
-                  Output language
-                </label>
-                <select
-                  id="talent-profile-prefill-language"
-                  value={prefillLanguage}
-                  onChange={(e) => setPrefillLanguage(e.target.value)}
-                  className={inputCls}
-                  disabled={prefilling}
-                >
-                  {PREFILL_LANGUAGE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-slate-400">
-                  {PREFILL_LANGUAGE_OPTIONS.find((option) => option.value === prefillLanguage)?.note}
-                </p>
-              </div>
+        <div className="space-y-4 px-5 py-5">
+          <div>
+            <label htmlFor="talent-profile-prefill-language" className="mb-1 block text-sm font-semibold text-gray-800 dark:text-gray-100">
+              Output language
+            </label>
+            <select
+              id="talent-profile-prefill-language"
+              value={prefillLanguage}
+              onChange={(e) => setPrefillLanguage(e.target.value)}
+              className={inputCls}
+              disabled={prefilling}
+            >
+              {PREFILL_LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-slate-400">
+              {PREFILL_LANGUAGE_OPTIONS.find((option) => option.value === prefillLanguage)?.note}
+            </p>
+          </div>
 
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-                Treat this as a first draft. Review names, dates, target role, achievements, skills, and any missing sections before saving or applying.
-              </div>
-            </div>
-
-            <div className="flex flex-col-reverse gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setPrefillDialogOpen(false)}
-                disabled={prefilling}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => { handlePrefill(prefillLanguage).catch(() => {}); }}
-                disabled={prefilling}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-              >
-                {prefilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {prefilling ? 'Reading resume…' : 'Prefill draft'}
-              </button>
-            </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            Treat this as a first draft. Review names, dates, target role, achievements, skills, and any missing sections before saving or applying.
           </div>
         </div>
-      )}
+
+        <div className="flex flex-col-reverse gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setPrefillDialogOpen(false)}
+            disabled={prefilling}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => { handlePrefill(prefillLanguage).catch(() => {}); }}
+            disabled={prefilling}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {prefilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {prefilling ? 'Reading resume…' : 'Prefill draft'}
+          </button>
+        </div>
+      </ViewportAwareDialog>
 
       <div className="space-y-3">{TALENT_PROFILE_SCHEMA.map(renderSection)}</div>
 
@@ -733,7 +777,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
           {saveError && (
-            <span className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
+            <span id={saveErrorId} className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
               Couldn't save. Check your connection and try again.
             </span>
           )}
@@ -742,11 +786,11 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
               Fix validation issues before saving.
             </span>
           )}
-          <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling || hasBlockingValidation} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
+          <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling || hasBlockingValidation} aria-describedby={saveButtonDescription} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
           </button>
           {onPrimary && (
-            <button type="button" disabled={saving || prefilling || !ready || hasBlockingValidation} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" disabled={saving || prefilling || !ready || hasBlockingValidation} aria-describedby={primaryButtonDescription} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
               {primaryLabel ?? 'Save & apply'}
             </button>
           )}

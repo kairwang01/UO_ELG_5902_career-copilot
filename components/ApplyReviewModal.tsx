@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Briefcase, FileText, GraduationCap, CheckCircle2, AlertCircle, Loader2, X, ShieldCheck, Target } from 'lucide-react';
-import { useModalBehavior } from '../hooks/useModalBehavior';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 import { loadTalentProfile } from '../services/talentProfile';
 import { isTalentProfileReady, hasMeaningfulEntry, type TalentProfile } from '../lib/talentProfile';
 import { collectCandidateSkills, matchSkills } from '../lib/skillMatch';
@@ -56,7 +56,6 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
   // Keep the body-scroll lock for the whole time the modal is open (not just
   // while idle); only suppress Esc-to-close mid-submit via the guard.
   const handleModalClose = useCallback(() => { if (!submitting) onClose(); }, [submitting, onClose]);
-  useModalBehavior(handleModalClose, open);
 
   useEffect(() => {
     if (!open) return;
@@ -117,10 +116,6 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
 
   if (!open || !job) return null;
 
-  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget && !submitting) onClose();
-  };
-
   const handleConfirm = async () => {
     if (submitting || !canSubmit) return;
     setSubmitting(true);
@@ -142,19 +137,19 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
     : hasResumeText
       ? t('apply_review_resume_text_only')
       : t('apply_review_resume_none');
+  const incompleteReasonId = 'apply-review-incomplete-reasons';
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[95] p-4 animate-fade-in"
-      onClick={handleOverlayClick}
+    <ViewportAwareDialog
+      open={open}
+      onClose={handleModalClose}
+      closeOnBackdrop={!submitting}
+      closeOnEscape={!submitting}
+      labelledBy="apply-review-title"
+      maxWidth={448}
+      zIndex={95}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="apply-review-title"
-        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] overflow-y-auto animate-fade-scale"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="rounded-2xl bg-white shadow-2xl dark:bg-slate-800">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-700 px-5 py-4">
           <div className="min-w-0">
@@ -255,44 +250,59 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
                     {t('apply_review_screener_title')}
                   </p>
                   <div className="mt-2 space-y-3">
-                    {screenerQuestions.map((q) => (
-                      <div key={q.id}>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                          {q.prompt}{q.required && <span className="text-red-500"> *</span>}
-                        </label>
-                        {q.type === 'yes_no' ? (
-                          <div className="mt-1.5 flex gap-2">
-                            {(['yes', 'no'] as const).map((opt) => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setAnswers((a) => ({ ...a, [q.id]: opt }))}
-                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                                  answers[q.id] === opt
-                                    ? 'border-blue-600 bg-blue-600 text-white'
-                                    : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300'
-                                }`}
-                              >
-                                {t(opt === 'yes' ? 'apply_review_screener_yes' : 'apply_review_screener_no')}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={answers[q.id] ?? ''}
-                            onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
-                            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                          />
-                        )}
-                      </div>
-                    ))}
+                    {screenerQuestions.map((q) => {
+                      const labelId = `apply-screener-label-${q.id}`;
+                      const inputId = `apply-screener-answer-${q.id}`;
+                      return (
+                        <div key={q.id}>
+                          {q.type === 'yes_no' ? (
+                            <>
+                              <p id={labelId} className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                                {q.prompt}{q.required && <span aria-hidden="true" className="text-red-500"> *</span>}
+                              </p>
+                              <div className="mt-1.5 flex gap-2" role="group" aria-labelledby={labelId} aria-required={q.required || undefined}>
+                                {(['yes', 'no'] as const).map((opt) => (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => setAnswers((a) => ({ ...a, [q.id]: opt }))}
+                                    aria-pressed={answers[q.id] === opt}
+                                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                                      answers[q.id] === opt
+                                        ? 'border-blue-600 bg-blue-600 text-white'
+                                        : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300'
+                                    }`}
+                                  >
+                                    {t(opt === 'yes' ? 'apply_review_screener_yes' : 'apply_review_screener_no')}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <label id={labelId} htmlFor={inputId} className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                                {q.prompt}{q.required && <span aria-hidden="true" className="text-red-500"> *</span>}
+                              </label>
+                              <input
+                                id={inputId}
+                                type="text"
+                                value={answers[q.id] ?? ''}
+                                onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                                aria-labelledby={labelId}
+                                aria-required={q.required || undefined}
+                                className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                              />
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               {!canSubmit && (
-                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-900/50 dark:bg-amber-950/20">
+                <div id={incompleteReasonId} className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-900/50 dark:bg-amber-950/20">
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-200">
                     <AlertCircle className="h-4 w-4" />
                     {t('apply_review_incomplete_title')}
@@ -341,6 +351,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
             type="button"
             onClick={handleConfirm}
             disabled={submitting || loading || loadError || !canSubmit}
+            aria-describedby={!canSubmit && !loading && !loadError ? incompleteReasonId : undefined}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-600"
           >
             {submitting ? (
@@ -357,7 +368,7 @@ const ApplyReviewModal: React.FC<ApplyReviewModalProps> = ({ open, job, uid, t, 
           </button>
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 

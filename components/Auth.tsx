@@ -7,7 +7,7 @@ import { BUSINESS_PLANS } from '@/config';
 import type { Plan } from '@/types';
 import { X } from 'lucide-react';
 import { BrandMark } from './BrandLogo';
-import { useModalBehavior } from '../hooks/useModalBehavior';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 // Unified input styling (was inconsistent — sign-in inputs lacked dark mode).
 const INPUT_CLASS =
@@ -96,8 +96,6 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string>(mode === 'business' ? 'single_post' : 'free');
-  useModalBehavior(onClose, true);
-
   useEffect(() => {
     setAuthView(initialView);
   }, [initialView]);
@@ -373,12 +371,8 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-[100] p-4 animate-fade-in">
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-8 space-y-4 relative animate-fade-scale"
-      >
+    <ViewportAwareDialog open onClose={onClose} closeOnBackdrop ariaLabel={mode === 'business' ? t('auth_business_signin_desc') : t('auth_welcome_back')} maxWidth={448} zIndex={100}>
+      <div className="relative space-y-4 rounded-2xl bg-white p-8 shadow-2xl dark:bg-slate-900">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
@@ -391,7 +385,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         {error && <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-center text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">{error}</div>}
         {renderContent()}
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { lockBodyScroll } from './modalEnvironment';
 
 /**
  * Shared behavior for hand-rolled modal overlays: closes on Escape and locks
@@ -12,13 +13,11 @@ export function useModalBehavior(onClose: () => void, enabled: boolean = true) {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKeyDown);
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const releaseScrollLock = lockBodyScroll();
 
     return () => {
       document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
     };
   }, [onClose, enabled]);
 }

@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { useLocalization } from '../../hooks/useLocalization';
+import { ViewportAwareDialog } from '../ViewportAwareDialog';
 
 interface CreditModalProps {
   isOpen: boolean;
@@ -13,18 +13,11 @@ interface CreditModalProps {
 }
 
 const CreditModal: React.FC<CreditModalProps> = ({ isOpen, onClose, onConfirm, onNavigateToPricing, cost, currentCredits }) => {
-  useModalBehavior(onClose, isOpen);
   const { t } = useLocalization();
 
   if (!isOpen) return null;
 
   const hasEnoughCredits = currentCredits >= cost;
-
-  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
 
   const handleNavigateToPricing = () => {
     onClose();
@@ -32,14 +25,8 @@ const CreditModal: React.FC<CreditModalProps> = ({ isOpen, onClose, onConfirm, o
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[90] p-4 animate-fade-in" onClick={handleOverlayClick}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="credit-modal-title"
-        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-6 text-center animate-fade-scale"
-        onClick={e => e.stopPropagation()}
-      >
+    <ViewportAwareDialog open={isOpen} onClose={onClose} closeOnBackdrop labelledBy="credit-modal-title" maxWidth={384} zIndex={90}>
+      <div className="rounded-xl bg-white p-6 text-center shadow-2xl dark:bg-slate-800">
         <h3 id="credit-modal-title" className="text-xl font-bold text-gray-800 dark:text-gray-100">
           {hasEnoughCredits
             ? t('credit_modal_confirm_title').replace('{cost}', String(cost))
@@ -69,7 +56,7 @@ const CreditModal: React.FC<CreditModalProps> = ({ isOpen, onClose, onConfirm, o
           )}
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 

@@ -9,7 +9,7 @@ import type { AppSession as Session } from '../lib/data';
 import { applyResumeImprovements } from '../services/aiClient';
 import { renderFormattedText } from './tools/ToolUtils';
 import ResumePreview from './ResumePreview';
-import { useModalBehavior } from '../hooks/useModalBehavior';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 
 interface AnalysisDisplayProps {
@@ -79,21 +79,13 @@ const ScoreCircle: React.FC<{ score: number, t: (key: string) => string }> = ({ 
 };
 
 const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; resumeText: string; market: string; t: (key: string) => string; }> = ({ isOpen, onClose, resumeText, market, t }) => {
-  useModalBehavior(onClose, isOpen);
-
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl flex flex-col h-[90vh]"
-        onClick={e => e.stopPropagation()}
-      >
+    <ViewportAwareDialog open={isOpen} onClose={onClose} closeOnBackdrop labelledBy="resume-reference-title" maxWidth={768} zIndex={50}>
+      <div className="flex h-full min-h-[360px] flex-col rounded-xl bg-white shadow-2xl dark:bg-slate-800">
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{t('analysis_reference_title')}</h3>
+          <h3 id="resume-reference-title" className="text-lg font-bold text-gray-800 dark:text-gray-100">{t('analysis_reference_title')}</h3>
           <button 
             onClick={onClose} 
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-slate-700"
@@ -107,7 +99,7 @@ const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; res
            <ResumePreview resumeText={resumeText} market={market} t={t} />
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 

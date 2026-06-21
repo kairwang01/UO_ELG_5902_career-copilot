@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, EmptyState, FieldLabel, PrimaryButton, SectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
 import { at } from './adminText';
-import { useModalBehavior } from '../../hooks/useModalBehavior';
+import { ViewportAwareDialog } from '../ViewportAwareDialog';
 import { API_KEY_SCOPES, type ApiKeyScope } from '../../lib/access/permissions';
 import {
   apiPlatform,
@@ -60,8 +60,6 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   const [secretCopied, setSecretCopied] = useState(false);
   const [busyKeyId, setBusyKeyId] = useState<string | null>(null);
   const mountedRef = useRef(true);
-
-  useModalBehavior(() => setKeyModalApp(null), !!keyModalApp && !createdSecret);
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -448,8 +446,8 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
 
       {/* Issue-key modal */}
       {keyModalApp && !createdSecret && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 animate-fade-in" onClick={() => setKeyModalApp(null)}>
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <ViewportAwareDialog open onClose={() => setKeyModalApp(null)} closeOnBackdrop ariaLabel={`${at('api.modal.issue_title')} — ${keyModalApp.name}`} maxWidth={448} zIndex={80}>
+          <div className="rounded-lg bg-white p-6 shadow-xl">
             <SectionHeading>{at('api.modal.issue_title')} — {keyModalApp.name}</SectionHeading>
             <div className="mt-4 space-y-4">
               <div>
@@ -491,14 +489,14 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
               </button>
             </div>
           </div>
-        </div>
+        </ViewportAwareDialog>
       )}
 
       {/* Show-once secret modal — no backdrop/ESC close: storing the key must
           be acknowledged explicitly before the secret disappears for good. */}
       {createdSecret && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+        <ViewportAwareDialog open onClose={closeSecretModal} closeOnBackdrop={false} closeOnEscape={false} ariaLabel={at('api.secret.title')} maxWidth={448} zIndex={80}>
+          <div className="rounded-lg bg-white p-6 shadow-xl">
             <SectionHeading>{at('api.secret.title')}</SectionHeading>
             <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               {at('api.secret.warning')}
@@ -528,7 +526,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
               {at('api.secret.confirm')}
             </button>
           </div>
-        </div>
+        </ViewportAwareDialog>
       )}
     </div>
   );

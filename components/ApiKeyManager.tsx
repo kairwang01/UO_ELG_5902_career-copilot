@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { data as dataClient } from '@/lib/data';
 import type { AppSession, ApiKey } from '@/lib/data';
 import { useToast } from './Toast';
-import { useModalBehavior } from '../hooks/useModalBehavior';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 interface ApiKeyManagerProps {
   session: AppSession;
@@ -16,7 +16,6 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
   const [fetchError, setFetchError] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
-  useModalBehavior(() => setGeneratedKey(null), !!generatedKey);
   const { addToast } = useToast();
   // Guards setState if the user leaves the Settings tab while a key call is in flight.
   const mountedRef = useRef(true);
@@ -87,9 +86,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
       </p>
       
       {generatedKey && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[80] p-4 animate-fade-in" onClick={() => setGeneratedKey(null)}>
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Your New API Key</h3>
+          <ViewportAwareDialog open onClose={() => setGeneratedKey(null)} closeOnBackdrop labelledBy="generated-api-key-title" maxWidth={448} zIndex={80}>
+              <div className="rounded-lg bg-white p-6 shadow-xl dark:bg-slate-800">
+                  <h3 id="generated-api-key-title" className="text-lg font-bold text-gray-900 dark:text-gray-100">Your New API Key</h3>
                   <p className="text-sm text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md my-4">
                       Please copy your new API key now. You won’t be able to see it again!
                   </p>
@@ -111,7 +110,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
                       I have copied my key
                   </button>
               </div>
-          </div>
+          </ViewportAwareDialog>
       )}
       
       <div className="flex flex-col sm:flex-row gap-3">

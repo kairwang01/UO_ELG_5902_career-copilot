@@ -190,6 +190,10 @@ html.dark body {
   0%, 100% { opacity: 0.8; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.05); }
 }
+@keyframes mi-wave {
+  from { transform: scaleY(0.55); opacity: 0.48; }
+  to { transform: scaleY(1.15); opacity: 1; }
+}
 @keyframes aurora {
   from { background-position: 50% 50%, 50% 50%; }
   to { background-position: 350% 50%, 350% 50%; }
@@ -219,6 +223,33 @@ html.dark body {
 }
 .dialog-overlay-anim[data-state='open'] { animation: dialog-overlay-in 0.18s ease-out; }
 .dialog-content-anim[data-state='open'] { animation: dialog-content-in 0.2s ease-out; }
+
+/* Viewport-aware dialogs are rendered into document.body and positioned with
+   viewport coordinates from JavaScript. Keeping the final state transform-free
+   avoids the common long-page bug where a fixed modal is accidentally anchored
+   to a transformed/overflowing workspace container instead of the screen. */
+.viewport-aware-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  overflow: hidden;
+  background: rgb(15 23 42 / 45%);
+  backdrop-filter: blur(8px);
+  animation: dialog-overlay-in 0.18s ease-out;
+}
+
+.viewport-aware-dialog-panel {
+  position: fixed;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-width: calc(100vw - 2rem);
+  animation: fade-scale 0.18s ease-out both;
+  transition: top 0.12s ease-out, left 0.12s ease-out, width 0.12s ease-out;
+}
+
+/* The panel takes programmatic focus on open (for screen-reader context); keep the
+   visible focus ring on the interactive controls inside, not the container box. */
+.viewport-aware-dialog-panel:focus { outline: none; }
 
 /* Onboarding completion checkmark — circle sweeps in, then the tick draws. */
 @keyframes check-stroke {

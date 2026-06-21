@@ -14,7 +14,7 @@ import { SUPPORTED_MARKETS, DEFAULT_MARKET } from "../config";
 import { DownloadButtons } from "./tools/ToolUtils";
 import { listActiveEmployerJobs, type JobPosting } from "../lib/recruitingData";
 import { useToast } from "./Toast";
-import { useModalBehavior } from "../hooks/useModalBehavior";
+import { ViewportAwareDialog } from "./ViewportAwareDialog";
 import {
   BarChart3,
   BookOpen,
@@ -214,22 +214,12 @@ const AgencySettingsModal = ({
   onClose: () => void;
   t: TranslationFn;
 }) => {
-  useModalBehavior(onClose);
   const update = (patch: Partial<HubSettings>) =>
     onChange({ ...settings, ...patch });
 
   return (
-    <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agency-settings-title"
-    >
-      <div
-        className="w-full max-w-lg rounded-2xl bg-gray-50 dark:bg-slate-900 shadow-2xl animate-fade-scale"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="agency-settings-title" maxWidth={512} zIndex={90}>
+      <div className="rounded-2xl bg-gray-50 shadow-2xl dark:bg-slate-900">
         <div className="flex items-start justify-between gap-4 border-b border-gray-200 dark:border-slate-800 p-5">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-blue-600 p-2 text-white">
@@ -277,7 +267,7 @@ const AgencySettingsModal = ({
           />
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 
@@ -321,21 +311,11 @@ const AgencyHistoryModal = ({
   onClose: () => void;
   t: TranslationFn;
 }) => {
-  useModalBehavior(onClose);
   const recent = [...files].reverse();
 
   return (
-    <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agency-history-title"
-    >
-      <div
-        className="flex max-h-[86vh] w-full max-w-2xl flex-col rounded-2xl bg-white dark:bg-slate-900 shadow-2xl animate-fade-scale"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="agency-history-title" maxWidth={672} zIndex={90}>
+      <div className="flex min-h-[360px] flex-col rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
         <div className="flex items-start justify-between gap-4 border-b border-gray-200 dark:border-slate-800 p-5">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-green-600 p-2 text-white">
@@ -427,7 +407,7 @@ const AgencyHistoryModal = ({
           )}
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 
@@ -931,22 +911,12 @@ const AnalysisResultModal = ({
   onClose: () => void;
   t: TranslationFn;
 }) => {
-  useModalBehavior(onClose);
   if (!file.result) return null;
   const { score, summary, strengths, improvements, keywords } = file.result;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[80] p-4 animate-fade-in"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agency-analysis-title"
-    >
-      <div
-        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-fade-scale"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="agency-analysis-title" maxWidth={672} zIndex={80}>
+      <div className="flex min-h-[420px] flex-col rounded-2xl bg-white shadow-2xl dark:bg-slate-800">
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-100 dark:border-slate-700">
           <div className="flex items-center gap-4">
             <CandidateAvatar name={file.fileName} />
@@ -1060,7 +1030,7 @@ const AnalysisResultModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 
@@ -1328,16 +1298,8 @@ const ExpandableSummary: React.FC<{
       {/* Full summary in a modal (not inline) so it never pushes the candidate
           list down — mirrors the Blind Resume / Prep Kit modal experience. */}
       {open && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
-          onClick={() => setOpen(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-2xl animate-fade-scale dark:bg-slate-800"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <ViewportAwareDialog open onClose={() => setOpen(false)} closeOnBackdrop ariaLabel={name || t("agency_table_summary")} maxWidth={512} zIndex={70}>
+          <div className="flex min-h-[280px] flex-col rounded-xl bg-white shadow-2xl dark:bg-slate-800">
             <div className="flex items-center justify-between border-b border-gray-100 p-4 dark:border-slate-700">
               <h3 className="font-bold text-gray-900 dark:text-gray-100">{name || t("agency_table_summary")}</h3>
               <button
@@ -1353,7 +1315,7 @@ const ExpandableSummary: React.FC<{
               {text}
             </div>
           </div>
-        </div>
+        </ViewportAwareDialog>
       )}
     </>
   );
@@ -1620,7 +1582,6 @@ const PitchModal: React.FC<{
   t: (key: string) => string;
 }> = ({ file, onClose, t }) => {
   const { addToast } = useToast();
-  useModalBehavior(onClose);
   if (!file.pitchEmail) return null;
 
   const copyToClipboard = async () => {
@@ -1634,17 +1595,8 @@ const PitchModal: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agency-pitch-title"
-    >
-      <div
-        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-fade-scale"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="agency-pitch-title" maxWidth={672} zIndex={70}>
+      <div className="flex min-h-[420px] flex-col rounded-xl bg-white shadow-2xl dark:bg-slate-800">
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
           <h3
             id="agency-pitch-title"
@@ -1698,7 +1650,7 @@ const PitchModal: React.FC<{
           </button>
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 
@@ -1707,7 +1659,6 @@ const PrepKitModal: React.FC<{
   onClose: () => void;
   t: TranslationFn;
 }> = ({ file, onClose, t }) => {
-  useModalBehavior(onClose);
   if (!file.prepKit) return null;
 
   const {
@@ -1729,17 +1680,8 @@ const PrepKitModal: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agency-prep-title"
-    >
-      <div
-        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-fade-scale"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="agency-prep-title" maxWidth={768} zIndex={70}>
+      <div className="flex min-h-[480px] flex-col rounded-xl bg-white shadow-2xl dark:bg-slate-800">
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
           <h3
             id="agency-prep-title"
@@ -1810,7 +1752,7 @@ const PrepKitModal: React.FC<{
           </div>
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 
@@ -1819,21 +1761,11 @@ const BlindResumeModal: React.FC<{
   onClose: () => void;
   t: TranslationFn;
 }> = ({ file, onClose, t }) => {
-  useModalBehavior(onClose);
   if (!file.blindResumeText) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agency-blind-title"
-    >
-      <div
-        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-fade-scale"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="agency-blind-title" maxWidth={896} zIndex={70}>
+      <div className="flex min-h-[520px] flex-col rounded-xl bg-white shadow-2xl dark:bg-slate-800">
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
           <h3
             id="agency-blind-title"
@@ -1863,7 +1795,7 @@ const BlindResumeModal: React.FC<{
           </div>
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 

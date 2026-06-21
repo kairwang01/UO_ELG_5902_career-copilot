@@ -3,8 +3,8 @@ import { generateOutreachEmail } from '../services/aiClient';
 import type { ProfessionalEmailResult, UserProfile } from '../types';
 import { DEFAULT_MARKET } from '../config';
 import { useToast } from './Toast';
-import { useModalBehavior } from '../hooks/useModalBehavior';
 import { Loader2 } from 'lucide-react';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -20,7 +20,6 @@ interface OutreachModalProps {
 }
 
 const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription, employerProfile, onClose, t }) => {
-    useModalBehavior(onClose);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<ProfessionalEmailResult | null>(null);
@@ -67,21 +66,9 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
         }
     };
     
-    const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (e.target === e.currentTarget) {
-            onClose();
-        }
-    };
-
     return (
-        <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in"
-            onClick={handleOverlayClick}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="outreach-modal-title"
-        >
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-fade-scale" onClick={(e) => e.stopPropagation()}>
+        <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="outreach-modal-title" maxWidth={672} zIndex={70}>
+            <div className="flex min-h-[360px] flex-col rounded-xl bg-white shadow-2xl dark:bg-slate-800">
                 <div className="p-4 border-b dark:border-slate-700">
                     <h3 id="outreach-modal-title" className="text-lg font-bold text-gray-800 dark:text-gray-100">
                         {t('outreach_modal_title').replace('{n}', String(candidate.index + 1))}
@@ -117,7 +104,7 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
                     </button>
                 </div>
             </div>
-        </div>
+        </ViewportAwareDialog>
     );
 };
 
