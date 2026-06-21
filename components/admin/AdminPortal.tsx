@@ -164,6 +164,18 @@ const DEFAULT_PLAN_QUOTAS: Record<AdminPlanKey, AdminPlanQuota> = {
 
 const TOOL_KEYS = Object.keys(TOOL_CREDIT_COSTS).sort();
 
+// Per-field semantics for the plan-quota table. CRITICAL: `0` means different things —
+// for daily runs/credits the runtime gate is `> 0` (so 0 = unlimited), but active_job
+// uses `active >= limit` (so 0 = NONE allowed, blocks posting). monthly_grant is an
+// amount, not a limit. Surfacing this prevents the classic "I set it to 0 = unlimited"
+// misconfiguration.
+const PLAN_QUOTA_FIELDS: { key: keyof AdminPlanQuota; header: string; tip: string; zeroLabel: string | null }[] = [
+  { key: 'daily_run_limit', header: 'Daily runs', tip: 'Max AI tool runs per day for this plan. 0 = Unlimited (the plan relies on credits instead).', zeroLabel: 'Unlimited' },
+  { key: 'daily_credit_limit', header: 'Daily credits', tip: 'Max credits a user on this plan can spend per day. 0 = Unlimited.', zeroLabel: 'Unlimited' },
+  { key: 'monthly_credit_grant', header: 'Monthly grant', tip: 'Credits granted at the start of each billing cycle. 0 = no grant.', zeroLabel: null },
+  { key: 'active_job_limit', header: 'Active jobs', tip: 'Max simultaneously OPEN job posts. 0 = None allowed (blocks posting) — set a positive number for employer plans.', zeroLabel: 'None' },
+];
+
 const effectivePlanQuota = (quotas: AdminQuotas, plan: AdminPlanKey): AdminPlanQuota => ({
   ...DEFAULT_PLAN_QUOTAS[plan],
   ...(quotas.plan_quotas?.[plan] ?? {}),
@@ -194,6 +206,7 @@ const AdminPortal: React.FC = () => {
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [llm, setLlm] = useState<Record<string, string>>({});
   const [quotas, setQuotas] = useState<AdminQuotas>({});
+  const [quotasLoadedAt, setQuotasLoadedAt] = useState<number | null>(null);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [userCursor, setUserCursor] = useState<string | null>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
@@ -360,6 +373,7 @@ const AdminPortal: React.FC = () => {
       const quotaData = await adminGetQuotas();
       if (!mountedRef.current) return;
       setQuotas(quotaData);
+      setQuotasLoadedAt(Date.now());
     } catch (e) {
       if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load quotas');
     }
@@ -2634,7 +2648,15 @@ const AdminPortal: React.FC = () => {
               <div>
                 <SectionHeading>Plan quotas</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
-                  Per-user limits by subscription status. 0 means unlimited for run/credit fields.
+                  Per-user limits by subscription status. For daily runs &amp; credits, <strong>0 = Unlimited</strong>;
+                  for active jobs, <strong>0 = none allowed</strong> (blocks posting). Hover a column for details.
+                </p>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Source: <code>platform_config/quotas</code> (Firestore).{' '}
+                  {quotasLoadedAt
+                    ? `Loaded ${new Date(quotasLoadedAt).toLocaleTimeString()}.`
+                    : 'Loading…'}{' '}
+                  Server enforcement cache refreshes within ~60s of a save.
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -2642,10 +2664,14 @@ const AdminPortal: React.FC = () => {
                   <thead className="text-xs text-gray-500 border-b border-gray-200">
                     <tr>
                       <th className="text-left py-2 pr-3 font-medium">Plan</th>
-                      <th className="text-left py-2 px-3 font-medium">Daily runs</th>
-                      <th className="text-left py-2 px-3 font-medium">Daily credits</th>
-                      <th className="text-left py-2 px-3 font-medium">Monthly grant</th>
-                      <th className="text-left py-2 pl-3 font-medium">Active jobs</th>
+                      {PLAN_QUOTA_FIELDS.map((f) => (
+                        <th key={f.key} className="text-left py-2 px-3 font-medium" title={f.tip}>
+                          <span className="inline-flex items-center gap-1">
+                            {f.header}
+                            <span aria-hidden="true" className="text-gray-300 cursor-help">ⓘ</span>
+                          </span>
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -2656,15 +2682,27 @@ const AdminPortal: React.FC = () => {
                           <td className="py-2 pr-3 whitespace-nowrap font-medium text-gray-800">
                             {PLAN_LABELS[plan]}
                           </td>
-                          {(['daily_run_limit', 'daily_credit_limit', 'monthly_credit_grant', 'active_job_limit'] as const).map((field) => (
-                            <td key={field} className="py-2 px-3 min-w-[130px]">
+                          {PLAN_QUOTA_FIELDS.map((f) => (
+                            <td key={f.key} className="py-2 px-3 min-w-[130px]">
                               <input
                                 type="number"
                                 min={0}
-                                value={row[field]}
-                                onChange={(e) => setPlanQuotaField(plan, field, Number(e.target.value))}
+                                value={row[f.key]}
+                                onChange={(e) => setPlanQuotaField(plan, f.key, Number(e.target.value))}
                                 className={textInput}
+                                aria-label={`${PLAN_LABELS[plan]} ${f.header}`}
                               />
+                              {row[f.key] === 0 && f.zeroLabel && (
+                                <span
+                                  className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                    f.zeroLabel === 'Unlimited'
+                                      ? 'bg-blue-50 text-blue-700'
+                                      : 'bg-amber-50 text-amber-700'
+                                  }`}
+                                >
+                                  {f.zeroLabel}
+                                </span>
+                              )}
                             </td>
                           ))}
                         </tr>

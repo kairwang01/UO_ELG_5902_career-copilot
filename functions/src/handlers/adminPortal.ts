@@ -305,10 +305,51 @@ export const adminGetQuotasFunction = onCall({ invoker: "public" }, async (reque
   return getQuotasConfigForAdmin();
 });
 
+type QuotaChange = { field: string; from: unknown; to: unknown };
+
+/** Field-level diff of two quota configs for an auditable "who changed what from→to" trail. */
+function diffQuotaConfig(before: QuotasDoc, after: QuotasDoc): QuotaChange[] {
+  const changes: QuotaChange[] = [];
+  const norm = (v: unknown) => (v === undefined ? null : v);
+  const push = (field: string, from: unknown, to: unknown) => {
+    if (JSON.stringify(norm(from)) !== JSON.stringify(norm(to))) {
+      changes.push({ field, from: norm(from), to: norm(to) });
+    }
+  };
+  const b = before as unknown as Record<string, unknown>;
+  const a = after as unknown as Record<string, unknown>;
+  for (const k of [
+    "daily_tool_run_limit", "daily_credit_spend_limit", "per_user_daily_credit_limit",
+    "free_max_output_tokens", "mi_min_tier", "mi_report_unlock_credits", "enabled",
+  ]) {
+    if (k in a) push(k, b[k], a[k]);
+  }
+  for (const plan of PLAN_KEYS) {
+    const bp = (before.plan_quotas?.[plan] ?? {}) as Record<string, unknown>;
+    const ap = (after.plan_quotas?.[plan] ?? {}) as Record<string, unknown>;
+    for (const f of ["daily_run_limit", "daily_credit_limit", "monthly_credit_grant", "active_job_limit"]) {
+      push(`plan.${plan}.${f}`, bp[f], ap[f]);
+    }
+  }
+  const toolKeys = new Set([
+    ...Object.keys(before.tool_quotas ?? {}),
+    ...Object.keys(after.tool_quotas ?? {}),
+  ]);
+  for (const tool of toolKeys) {
+    const bt = (before.tool_quotas?.[tool] ?? {}) as Record<string, unknown>;
+    const at = (after.tool_quotas?.[tool] ?? {}) as Record<string, unknown>;
+    push(`tool.${tool}.enabled`, bt.enabled, at.enabled);
+    push(`tool.${tool}.credit_cost`, bt.credit_cost, at.credit_cost);
+    push(`tool.${tool}.allowed_plans`, bt.allowed_plans, at.allowed_plans);
+  }
+  return changes;
+}
+
 /** Update global / per-user daily limits (0 = unlimited). */
 export const adminUpdateQuotasFunction = onCall({ invoker: "public" }, async (request) => {
   const { uid: adminUid } = await requireRole(request, "admin");
   const data = (request.data ?? {}) as QuotasDoc;
+  const before = await getQuotasConfigForAdmin();
 
   for (const key of Object.keys(data.plan_quotas ?? {})) {
     if (!PLAN_KEYS.includes(key as (typeof PLAN_KEYS)[number])) {
@@ -401,12 +442,15 @@ export const adminUpdateQuotasFunction = onCall({ invoker: "public" }, async (re
     patch.mi_report_unlock_credits = v;
   }
 
+  const changes = diffQuotaConfig(before, patch);
   await db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.quotas).set(patch, { merge: true });
   await refreshPlatformCaches();
   await logAdminAction({
     admin_uid: adminUid,
     action: "update_quotas",
-    details: patch as unknown as Record<string, unknown>,
+    // Auditable field-level diff (who changed which plan/tool from → to) rather than a
+    // full config dump, so the audit log replays exactly what each admin edited.
+    details: { changed_count: changes.length, changes },
   });
   return getQuotasConfigForAdmin();
 });
