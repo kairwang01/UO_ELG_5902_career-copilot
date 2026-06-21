@@ -42,3 +42,4 @@ beta/qa-screenshots/*.png
 # Local tooling / scratch / AI companions (not part of the app)
 .claude/
 .workbuddy/
+.agents/
