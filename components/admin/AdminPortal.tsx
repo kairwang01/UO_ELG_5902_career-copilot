@@ -2618,7 +2618,7 @@ const AdminPortal: React.FC = () => {
 
             {/* User detail panel */}
             {selectedUid && userReport ? (
-              <Card className="p-5 space-y-5 sticky top-20">
+              <Card className="p-5 space-y-5 md:sticky md:top-4 md:max-h-[calc(100vh-6rem)] md:overflow-y-auto">
                 <div>
                   <SectionHeading>User detail</SectionHeading>
                   <p className="mt-1 font-mono text-[11px] text-gray-500 break-all">{selectedUid}</p>
@@ -2772,7 +2772,7 @@ const AdminPortal: React.FC = () => {
                 </details>
               </Card>
             ) : selectedUid ? (
-              <Card className="p-5">
+              <Card className="p-5 md:sticky md:top-4">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
                   Loading user report…

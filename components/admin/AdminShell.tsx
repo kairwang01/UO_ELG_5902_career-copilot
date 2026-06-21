@@ -34,9 +34,9 @@ const AdminShell: React.FC<AdminShellProps> = ({
   const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? 'Console';
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] flex">
+    <div className="h-screen overflow-hidden bg-[#f0f2f5] flex">
       {/* Sidebar */}
-      <aside className="hidden md:flex w-60 lg:w-64 shrink-0 flex-col bg-[#0f2744] text-white">
+      <aside className="hidden md:flex sticky top-0 h-screen w-60 lg:w-64 shrink-0 flex-col bg-[#0f2744] text-white">
         <div className="px-5 py-6 border-b border-white/10">
           <div className="flex items-center gap-2.5">
             <BrandLogo size="sm" surface="dark" subtitle="Admin Console" />
@@ -70,7 +70,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
       </aside>
 
       {/* Main column */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex h-screen flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
