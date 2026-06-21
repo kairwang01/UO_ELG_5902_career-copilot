@@ -858,7 +858,12 @@ const AdminPortal: React.FC = () => {
                               onChange={async (e) => {
                                 const newId = e.target.value;
                                 if (!newId || newId === defaultModelId) return;
-                                if (!window.confirm(t('admin.set_default_confirm'))) return;
+                                if (!window.confirm(t('admin.set_default_confirm'))) {
+                                  // Controlled select won't re-render on a no-op cancel, so the
+                                  // DOM would stay stuck on the un-committed option — revert it.
+                                  e.target.value = defaultModelId ?? '';
+                                  return;
+                                }
                                 setDefaultModelChanging(true);
                                 setDefaultModelToast(null);
                                 try {
@@ -890,18 +895,21 @@ const AdminPortal: React.FC = () => {
                                 Saving…
                               </span>
                             )}
-                            {defaultModelToast?.ok && (
-                              <span className="text-[11px] text-emerald-700 flex items-center gap-1">
-                                <span aria-hidden="true">✓</span>
-                                {defaultModelToast.ok}
-                              </span>
-                            )}
-                            {defaultModelToast?.err && (
-                              <span className="text-[11px] text-red-600 flex items-center gap-1">
-                                <span aria-hidden="true">✕</span>
-                                {defaultModelToast.err}
-                              </span>
-                            )}
+                            {/* Live region so the set-default result is announced to screen readers. */}
+                            <span role="status" aria-live="polite">
+                              {defaultModelToast?.ok && (
+                                <span className="text-[11px] text-emerald-700 flex items-center gap-1">
+                                  <span aria-hidden="true">✓</span>
+                                  {defaultModelToast.ok}
+                                </span>
+                              )}
+                              {defaultModelToast?.err && (
+                                <span className="text-[11px] text-red-600 flex items-center gap-1">
+                                  <span aria-hidden="true">✕</span>
+                                  {defaultModelToast.err}
+                                </span>
+                              )}
+                            </span>
                           </div>
                         ) : (
                           /* Read-only for admin/reviewer */

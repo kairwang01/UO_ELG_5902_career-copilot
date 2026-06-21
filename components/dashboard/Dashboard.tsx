@@ -453,9 +453,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-blue-700 dark:text-blue-400">{t('dashboard_workbench_kicker')}</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
               {formatCopy(t('dashboard_workbench_welcome'), { name: firstName })}
-            </h2>
+            </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
               {t('dashboard_workbench_desc')}
             </p>

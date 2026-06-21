@@ -177,7 +177,7 @@ const PageHeader: React.FC<{
           <Icon className="h-4 w-4" />
           {label}
         </div>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">{title}</h2>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">{title}</h1>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">{description}</p>
       </div>
       <button

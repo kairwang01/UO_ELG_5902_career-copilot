@@ -133,7 +133,7 @@ const STATUS_CHIP_CLASSES: Record<ApplicationStatusGroup, string> = {
     'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
   hired: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
   rejected:
-    'bg-gray-100 text-gray-500 dark:bg-slate-700/50 dark:text-slate-400',
+    'bg-gray-100 text-gray-600 dark:bg-slate-700/50 dark:text-slate-300',
 };
 
 const STATUS_GUIDANCE: Record<
@@ -420,7 +420,7 @@ const INTERVIEW_STATUS_CLASSES: Record<string, string> = {
   scheduled: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
   rescheduled: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
   completed: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  cancelled: 'bg-gray-100 text-gray-500 dark:bg-slate-700/50 dark:text-slate-400',
+  cancelled: 'bg-gray-100 text-gray-600 dark:bg-slate-700/50 dark:text-slate-300',
 };
 
 interface InterviewRowProps {
@@ -706,7 +706,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interview
       {/* Rejected: process-ended label + find-similar CTA */}
       {isRejected && (
         <div className="mt-3 flex items-center justify-between gap-2">
-          <span className="text-[10px] text-gray-400 dark:text-slate-500 italic">
+          <span className="text-[10px] text-gray-500 dark:text-slate-400 italic">
             {t('applications_process_ended')}
           </span>
           <button
@@ -1032,7 +1032,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
               {/* Notification list */}
               <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/60">
                 {notifications.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-xs text-gray-400 dark:text-slate-500">
+                  <p className="px-4 py-6 text-center text-xs text-gray-500 dark:text-slate-400">
                     {t('notifications_empty')}
                   </p>
                 ) : (
@@ -1140,7 +1140,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
                     className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${
                       isActive
                         ? 'bg-white/20 text-white'
-                        : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400'
+                        : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'
                     }`}
                   >
                     {counts[s]}

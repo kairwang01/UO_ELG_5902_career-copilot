@@ -272,13 +272,14 @@ export const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({ t }) => {
           </div>
         </div>
 
-        {/* dots + arrows */}
-        <div className="mt-8 flex items-center justify-center gap-3">
+        {/* dots + arrows — hit areas are ≥24px (WCAG 2.5.8) while the visual dots stay
+            small via an inner span; the row sits in 36px-tall tap targets for mobile. */}
+        <div className="mt-8 flex items-center justify-center gap-1">
           <button
             type="button"
             aria-label="Previous"
             onClick={() => setIdx((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
-            className="p-1 rounded-full text-[var(--site-text-muted)] hover:text-[var(--site-text)]"
+            className="grid h-9 w-9 place-items-center rounded-full text-[var(--site-text-muted)] transition-colors hover:bg-black/5 hover:text-[var(--site-text)]"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -287,17 +288,22 @@ export const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({ t }) => {
               key={s.id}
               type="button"
               aria-label={t(s.tagKey)}
+              aria-current={i === idx}
               onClick={() => setIdx(i)}
-              className={`h-2 rounded-full transition-all ${
-                i === idx ? 'w-6 bg-[var(--site-action)]' : 'w-2 bg-slate-300 hover:bg-slate-400'
-              }`}
-            />
+              className="grid h-9 place-items-center px-2 rounded-full"
+            >
+              <span
+                className={`block h-2 rounded-full transition-all ${
+                  i === idx ? 'w-6 bg-[var(--site-action)]' : 'w-2 bg-slate-300'
+                }`}
+              />
+            </button>
           ))}
           <button
             type="button"
             aria-label="Next"
             onClick={() => setIdx((i) => (i + 1) % SLIDES.length)}
-            className="p-1 rounded-full text-[var(--site-text-muted)] hover:text-[var(--site-text)]"
+            className="grid h-9 w-9 place-items-center rounded-full text-[var(--site-text-muted)] transition-colors hover:bg-black/5 hover:text-[var(--site-text)]"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
