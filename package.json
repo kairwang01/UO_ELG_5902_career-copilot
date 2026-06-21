@@ -11,6 +11,7 @@
     "seed:emulator": "firebase emulators:exec --only auth,firestore --project demo-careercopilot \"node scripts/seed-emulator.mjs\"",
     "smoke:auth-routing": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-careercopilot \"node scripts/auth-routing-smoke.mjs\"",
     "smoke:sourcing-outreach": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-careercopilot \"node scripts/sourcing-outreach-smoke.mjs\"",
+    "smoke:hiring-loop": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-careercopilot \"node scripts/hiring-loop-smoke.mjs\"",
     "scan:functional-bugs": "node scripts/scan-functional-bug-signatures.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-careercopilot \"vitest run tests/firestore.rules.test.ts\"",
     "test:callables": "firebase emulators:exec --only firestore --project demo-careercopilot \"vitest run tests/jobPostings.callable.test.ts tests/applicationStatus.callable.test.ts tests/bulkApplicationActions.callable.test.ts tests/interviews.callable.test.ts tests/scorecards.callable.test.ts tests/usageCounters.callable.test.ts tests/revenueControls.callable.test.ts tests/stripeBilling.callable.test.ts tests/applicationMessages.callable.test.ts tests/sourcingOutreach.callable.test.ts tests/jobApplications.callable.test.ts tests/simulatedCheckout.callable.test.ts\""
