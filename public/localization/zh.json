@@ -3225,5 +3225,9 @@
   "credit_modal_insufficient_body": "本次需要 {cost} 积分,你当前只有 {current}。",
   "credit_modal_cancel": "取消",
   "credit_modal_confirm_cta": "运行",
-  "credit_modal_get_more_cta": "获取更多积分"
+  "credit_modal_get_more_cta": "获取更多积分",
+  "mi_history_title": "最近练习",
+  "mi_history_count": "已保存 {n} 次练习",
+  "mi_history_empty": "完成一次模拟面试后，报告会保存在这里，方便之后回看。",
+  "mi_history_recent": "最近"
 }

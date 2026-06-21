@@ -3225,5 +3225,9 @@
   "credit_modal_insufficient_body": "This needs {cost} credits, but you have {current}.",
   "credit_modal_cancel": "Cancel",
   "credit_modal_confirm_cta": "Run it",
-  "credit_modal_get_more_cta": "Get more credits"
+  "credit_modal_get_more_cta": "Get more credits",
+  "mi_history_title": "Recent practice",
+  "mi_history_count": "{n} saved sessions",
+  "mi_history_empty": "Completed interview reports will appear here after your next practice session.",
+  "mi_history_recent": "Recent"
 }

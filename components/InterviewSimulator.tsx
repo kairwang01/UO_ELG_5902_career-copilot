@@ -21,6 +21,7 @@ import {
     Crown,
     Lock,
     Printer,
+    History,
     PlayCircle,
     CheckCircle2,
     BarChart3,
@@ -40,6 +41,7 @@ import type { UserProfile } from '../types';
 import StagedLoader from './StagedLoader';
 import { useRecentApplications } from '../hooks/useRecentApplications';
 import { listAllActiveJobPostings, type JobPosting } from '../lib/recruitingData';
+import { saveInterviewSession, subscribeInterviewSessions, type InterviewSessionHistoryItem } from '../lib/interviewSessionHistory';
 import InterviewerAvatar from './InterviewerAvatar';
 import { DownloadButtons } from './tools/ToolUtils';
 
@@ -194,6 +196,20 @@ const circleDash = (value: number) => {
     return `${pct} 100`;
 };
 
+const historyTitle = (item: InterviewSessionHistoryItem): string => {
+    const match = item.job_description.match(/^Job Title:\s*(.+)$/im);
+    return (match?.[1] ?? '').trim() || 'Interview practice';
+};
+
+const historyDate = (iso: string): string => {
+    if (!iso) return '';
+    try {
+        return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(iso));
+    } catch {
+        return '';
+    }
+};
+
 const MiniTimerRing: React.FC<{
     value: number;
     max: number;
@@ -238,6 +254,7 @@ const AudioWave: React.FC<{ active?: boolean }> = ({ active }) => (
 
 const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, onClose, t, session, profile, navigateToPricing }) => {
     const isPaid = PAID_STATUSES.has(profile?.subscription_status ?? '');
+    const sessionUserId = session?.user?.id ?? null;
     const [stage, setStage] = useState<'setup' | 'loading' | 'interviewing' | 'evaluating' | 'report'>('setup');
     const [showDisclaimer, setShowDisclaimer] = useState(false);
     const [disclaimerChecked, setDisclaimerChecked] = useState(false);
@@ -285,6 +302,9 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const [lockedReport, setLockedReport] = useState<LockedSessionReport | null>(null);
     const [unlocking, setUnlocking] = useState(false);
     const [openBreakdown, setOpenBreakdown] = useState<number | null>(null);
+    const [historyItems, setHistoryItems] = useState<InterviewSessionHistoryItem[]>([]);
+    const [historyOpen, setHistoryOpen] = useState(true);
+    const savedReportKeyRef = useRef<string | null>(null);
 
     const [error, setError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
@@ -302,6 +322,18 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             .catch(() => { /* signed-out or rules — selector just hides */ });
         return () => { cancelled = true; };
     }, []);
+
+    useEffect(() => {
+        if (!sessionUserId) {
+            setHistoryItems([]);
+            return;
+        }
+        return subscribeInterviewSessions(
+            sessionUserId,
+            setHistoryItems,
+            () => { /* non-fatal side panel */ },
+        );
+    }, [sessionUserId]);
 
     useEffect(() => () => { mountedRef.current = false; }, []);
 
@@ -507,6 +539,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         warmUpTts(); // prime TTS now so the engine is warm by the time Q1 is spoken
         setStage('loading');
         setError(null);
+        savedReportKeyRef.current = null;
         try {
             const generated = await generateInterviewQuestions(resumeText, assembleContext(), market);
             if (!mountedRef.current) return;
@@ -575,6 +608,27 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         setTimeout(() => answerBoxRef.current?.focus(), 50);
     };
 
+    const persistInterviewHistory = (rep: InterviewSessionReport) => {
+        if (!sessionUserId) return;
+        const reportKey = `${jobTitle}|${rep.overallScore}|${rep.summary.slice(0, 120)}|${answersRef.current.join('|').slice(0, 400)}`;
+        if (savedReportKeyRef.current === reportKey) return;
+        savedReportKeyRef.current = reportKey;
+        const exchanges = rep.perQuestion.map((pq, i) => ({
+            question: pq.question,
+            answer: answersRef.current[i] ?? '',
+            score: pq.score,
+            feedback: pq.feedback,
+        }));
+        void saveInterviewSession(sessionUserId, {
+            jobDescription: assembleContext(),
+            marketName: market,
+            overallSummary: rep.summary,
+            exchanges,
+        }).catch(() => {
+            if (savedReportKeyRef.current === reportKey) savedReportKeyRef.current = null;
+        });
+    };
+
     const finishAndEvaluate = async (qa: { question: string; answer: string }[]) => {
         if (evaluatingRef.current) return;
         evaluatingRef.current = true;
@@ -588,6 +642,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             } else {
                 const { locked: _locked, ...rep } = res;
                 setReport(rep as InterviewSessionReport);
+                persistInterviewHistory(rep as InterviewSessionReport);
                 setLockedReport(null);
             }
             setStage('report');
@@ -612,6 +667,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             if (!mountedRef.current) return;
             const { locked: _locked, ...rep } = res;
             setReport(rep as InterviewSessionReport);
+            persistInterviewHistory(rep as InterviewSessionReport);
             setLockedReport(null);
         } catch (err) {
             if (mountedRef.current) setError(err instanceof Error ? err.message : 'Unlock failed.');
@@ -690,6 +746,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
         submittingRef.current = false;
         setReport(null);
         setLockedReport(null);
+        savedReportKeyRef.current = null;
         setOpenBreakdown(null);
         setError(null);
         setConfirmEndEarly(false);
@@ -1474,6 +1531,59 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                 </section>
 
                 <aside className="space-y-4">
+                    {sessionUserId && (
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 xl:p-5">
+                            <button
+                                type="button"
+                                onClick={() => setHistoryOpen((v) => !v)}
+                                aria-expanded={historyOpen}
+                                className="flex w-full items-center justify-between gap-3 text-left"
+                            >
+                                <span className="inline-flex items-center gap-2">
+                                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
+                                        <History className="h-4 w-4" />
+                                    </span>
+                                    <span>
+                                        <span className="block text-sm font-bold text-slate-950 dark:text-white">{t('mi_history_title')}</span>
+                                        <span className="block text-xs text-slate-500 dark:text-slate-400">
+                                            {t('mi_history_count').replace('{n}', String(historyItems.length))}
+                                        </span>
+                                    </span>
+                                </span>
+                                <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {historyOpen && (
+                                <div className="mt-4 space-y-2">
+                                    {historyItems.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                                            {t('mi_history_empty')}
+                                        </div>
+                                    ) : (
+                                        historyItems.slice(0, 4).map((item) => (
+                                            <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">{historyTitle(item)}</p>
+                                                        <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                                            {historyDate(item.started_at) || t('mi_history_recent')}
+                                                            {item.market_name ? ` · ${item.market_name}` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+                                                        {item.exchanges.length} Q
+                                                    </span>
+                                                </div>
+                                                {item.overall_summary && (
+                                                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{item.overall_summary}</p>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 xl:p-5">
                         <div className="flex items-center justify-between gap-3">
                             <div>
