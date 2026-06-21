@@ -1,23 +1,27 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from '../lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
-import { ArrowDownUp, Bell, Briefcase, CheckCircle2, Circle, Clock3, MessageSquare, RotateCcw, Search, Star, X } from 'lucide-react';
+import { ArrowDownUp, Bell, Briefcase, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, MapPin, MessageSquare, Phone, RotateCcw, Search, Star, Video, X } from 'lucide-react';
 import CompanyReviewModal from './CompanyReviewModal';
+import ApplicationMessageThread from './ApplicationMessageThread';
+import { listInterviewsForCandidate, subscribeInterviewsForCandidate, confirmInterview, type ApplicationInterview } from '../lib/interviewData';
 import {
   APPLICATION_FILTER_GROUPS,
   APPLICATION_FILTER_LABEL_KEYS,
-  APPLICATION_PIPELINE_STAGES,
   applicationMatchesFilter,
+  buildApplicationPipelinePlan,
   getApplicationStatusGroup,
-  getApplicationStatusIndex,
   getApplicationStatusLabelKey,
   isApplicationClosedStatus,
-  isApplicationHiredStatus,
   isApplicationRejectedStatus,
+  isApplicationReviewEligible,
   normalizeApplicationStatus,
+  normalizeSkippedApplicationStatuses,
   type ApplicationFilterGroup,
+  type ApplicationPipelineStageStatus,
   type ApplicationPipelineStatus,
+  type ApplicationTimelineStageState,
   type ApplicationStatusGroup,
 } from '../lib/applicationPipeline';
 import {
@@ -34,12 +38,28 @@ interface ApplicationRow {
   status: ApplicationPipelineStatus;
   application_date?: { toMillis?: () => number; toDate?: () => Date };
   compatibility_score?: number | null;
+  // Candidate-facing note the employer attached to the latest status change.
+  last_status_note?: string | null;
+  // Stages the employer explicitly skipped instead of completing.
+  skipped_statuses: ApplicationPipelineStageStatus[];
+  // First time the employer opened this applicant's resume (anti-ghosting receipt).
+  employer_viewed_at?: { toMillis?: () => number; toDate?: () => Date } | null;
 }
 
 type FilterStatus = ApplicationFilterGroup;
 type ApplicationSortKey = 'newest' | 'match' | 'title';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTimestamp(ts?: { toDate?: () => Date } | null): string {
+  try {
+    const d = ts?.toDate?.();
+    if (d) return d.toLocaleDateString();
+  } catch {
+    // ignore
+  }
+  return '';
+}
 
 function formatDate(row: ApplicationRow): string {
   try {
@@ -58,6 +78,37 @@ function applicationTime(row: ApplicationRow): number {
     return 0;
   }
 }
+
+// `scheduled_at` is an <input type="datetime-local"> value like '2026-07-01T14:00'.
+// Render it in the viewer's locale; fall back to the raw value if it can't parse.
+function formatInterviewDateTime(value?: string): string {
+  if (!value) return '';
+  try {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString([], {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    }
+  } catch {
+    // ignore
+  }
+  return value;
+}
+
+const isHttpLink = (value?: string): boolean =>
+  !!value && /^https?:\/\//i.test(value.trim());
+
+const INTERVIEW_FORMAT_ICONS: Record<string, React.ElementType> = {
+  phone: Phone,
+  video: Video,
+  onsite: MapPin,
+};
 
 const normalizeFilterText = (value: string) =>
   value
@@ -82,7 +133,7 @@ const STATUS_CHIP_CLASSES: Record<ApplicationStatusGroup, string> = {
     'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
   hired: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
   rejected:
-    'bg-gray-100 text-gray-500 dark:bg-slate-700/50 dark:text-slate-400',
+    'bg-gray-100 text-gray-600 dark:bg-slate-700/50 dark:text-slate-300',
 };
 
 const STATUS_GUIDANCE: Record<
@@ -149,93 +200,358 @@ function sortLabel(sort: ApplicationSortKey, t: (k: string) => string): string {
   return t(`applications_sort_${sort}`);
 }
 
-// ─── Stepper ──────────────────────────────────────────────────────────────────
+// ─── Progress Timeline ────────────────────────────────────────────────────────
 
-interface StepperProps {
+interface ProgressTimelineProps {
   status: ApplicationPipelineStatus;
+  skippedStatuses?: ApplicationPipelineStageStatus[];
   t: (k: string) => string;
 }
 
-const Stepper: React.FC<StepperProps> = ({ status, t }) => {
-  const current = getApplicationStatusIndex(status);
-  const isComplete = isApplicationHiredStatus(status);
-  const isRejected = isApplicationRejectedStatus(status);
+type MainStageState = ApplicationTimelineStageState;
+
+const MAIN_STAGE_CLASSES: Record<MainStageState, {
+  circle: string;
+  label: string;
+  connector: string;
+}> = {
+  done: {
+    circle: 'bg-emerald-600 text-white ring-4 ring-emerald-100 dark:bg-emerald-500 dark:ring-emerald-950/70',
+    label: 'text-emerald-700 dark:text-emerald-300',
+    connector: 'bg-emerald-200 dark:bg-emerald-900/70',
+  },
+  current: {
+    circle: 'bg-blue-600 text-white ring-4 ring-blue-100 dark:bg-blue-500 dark:ring-blue-950/70',
+    label: 'text-blue-700 dark:text-blue-300',
+    connector: 'bg-blue-200 dark:bg-blue-900/70',
+  },
+  pending: {
+    circle: 'bg-blue-100 text-blue-300 ring-4 ring-blue-50 dark:bg-blue-950/60 dark:text-blue-700 dark:ring-blue-950/40',
+    label: 'text-slate-500 dark:text-slate-400',
+    connector: 'border-t-2 border-dashed border-blue-100 dark:border-blue-950',
+  },
+  skipped: {
+    circle: 'border border-dashed border-slate-300 bg-white text-slate-400 ring-4 ring-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:ring-slate-800',
+    label: 'text-slate-400 dark:text-slate-500',
+    connector: 'border-t-2 border-dashed border-slate-200 dark:border-slate-700',
+  },
+  closed: {
+    circle: 'bg-slate-200 text-slate-500 ring-4 ring-slate-100 dark:bg-slate-700 dark:text-slate-400 dark:ring-slate-800',
+    label: 'text-slate-400 line-through decoration-slate-300 dark:text-slate-500 dark:decoration-slate-700',
+    connector: 'border-t-2 border-dashed border-slate-200 dark:border-slate-700',
+  },
+};
+
+const SUB_STAGE_CLASSES: Record<MainStageState, string> = {
+  done: 'bg-emerald-500 text-white dark:bg-emerald-400 dark:text-slate-950',
+  current: 'bg-blue-600 text-white ring-4 ring-blue-100 dark:bg-blue-500 dark:ring-blue-950/70',
+  pending: 'bg-blue-100 text-blue-300 dark:bg-blue-950/70 dark:text-blue-700',
+  skipped: 'border border-dashed border-slate-300 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500',
+  closed: 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
+};
+
+const ProgressTimeline: React.FC<ProgressTimelineProps> = ({ status, skippedStatuses = [], t }) => {
+  const plan = useMemo(
+    () => buildApplicationPipelinePlan(status, skippedStatuses),
+    [status, skippedStatuses],
+  );
 
   return (
-    <div className="mt-4 overflow-x-auto pb-2" aria-label={t('applications_timeline_label')}>
-      <div className="flex min-w-max items-start gap-0 pr-2">
-      {APPLICATION_PIPELINE_STAGES.map((step, i) => {
-        const isDone = !isRejected && (i < current || (i === current && isComplete));
-        const isCurrent = !isRejected && i === current && !isComplete;
-        const isPending = i > current;
+    <div className="mt-5 overflow-x-auto pb-2" aria-label={t('applications_timeline_label')}>
+      <div className="min-w-0 rounded-lg bg-slate-50 px-4 py-5 dark:bg-slate-900/70 sm:min-w-[820px]">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-0">
+          {plan.groups.map((groupPlan) => {
+            const { group, index: groupIndex, state: groupState, stages: groupStages, connectorDone } = groupPlan;
+            const hasSubStages = group.statuses.length > 1;
+            const groupClasses = MAIN_STAGE_CLASSES[groupState];
 
-        // Color logic
-        let circleClass = '';
-        if (isComplete && i === current) {
-          circleClass =
-            'bg-green-600 border-green-600 text-white dark:bg-green-500 dark:border-green-500';
-        } else if (isDone) {
-          circleClass =
-            'bg-blue-600 border-blue-600 text-white dark:bg-blue-500 dark:border-blue-500';
-        } else if (isCurrent) {
-          circleClass =
-            'border-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-white dark:bg-slate-800';
-        } else {
-          circleClass =
-            'border-2 border-gray-300 text-gray-400 dark:border-slate-600 dark:text-slate-500 bg-white dark:bg-slate-800';
-        }
+            return (
+              <React.Fragment key={group.id}>
+                <div className="w-full shrink-0 sm:w-44">
+                  <p className={`text-center text-sm font-semibold leading-5 ${groupClasses.label}`}>
+                    {t(group.labelKey)}
+                  </p>
+                  <div className="mt-2 flex justify-center">
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${groupClasses.circle}`}>
+                      {groupState === 'done'
+                        ? <CheckCircle2 className="h-4 w-4" />
+                        : groupState === 'skipped'
+                          ? <span className="h-0.5 w-3 rounded-full bg-current" />
+                          : groupIndex + 1}
+                    </span>
+                  </div>
 
-        let labelClass = '';
-        if (isComplete && i === current) {
-          labelClass = 'text-green-600 dark:text-green-400 font-semibold';
-        } else if (isRejected) {
-          labelClass = 'text-gray-400 dark:text-slate-500 line-through decoration-slate-300 dark:decoration-slate-600';
-        } else if (isCurrent) {
-          labelClass = 'text-blue-600 dark:text-blue-400 font-semibold';
-        } else if (isPending) {
-          labelClass = 'text-gray-400 dark:text-slate-500';
-        } else {
-          labelClass = 'text-gray-600 dark:text-gray-300';
-        }
+                  {hasSubStages && (
+                    <div className="mx-auto mt-4 w-full max-w-[220px] sm:max-w-[150px]">
+                      <div className="relative space-y-3">
+                        <span
+                          aria-hidden="true"
+                          className={`absolute left-[7px] top-2 h-[calc(100%-1rem)] w-px ${
+                            groupState === 'done' || groupState === 'current'
+                              ? 'bg-blue-100 dark:bg-blue-950'
+                              : 'bg-slate-200 dark:bg-slate-800'
+                          }`}
+                        />
+                        {groupStages.map(({ stage, state: stageState }) => {
+                          const stageStatus = stage.status;
 
-        return (
-          <React.Fragment key={step.status}>
-            <div className="flex w-20 shrink-0 flex-col items-center gap-1">
-              <div
-                className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors ${circleClass}`}
-              >
-                {isDone && !isPending ? (
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                ) : isCurrent ? (
-                  <span>{i + 1}</span>
-                ) : (
-                  <Circle className="h-3.5 w-3.5 opacity-40" />
+                          return (
+                            <div key={stageStatus} className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-2">
+                              <span className={`mt-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full ${SUB_STAGE_CLASSES[stageState]}`}>
+                                {stageState === 'done' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                {stageState === 'skipped' && <span className="h-0.5 w-2 rounded-full bg-current" />}
+                              </span>
+                              <span
+                                className={`text-xs leading-5 ${
+                                  stageState === 'current'
+                                    ? 'font-semibold text-blue-700 dark:text-blue-300'
+                                    : stageState === 'done'
+                                      ? 'font-medium text-slate-600 dark:text-slate-300'
+                                      : stageState === 'skipped'
+                                        ? 'font-medium text-slate-400 dark:text-slate-500'
+                                      : 'text-slate-400 dark:text-slate-500'
+                                }`}
+                              >
+                                {t(stage.labelKey)}
+                                {'optional' in stage && stage.optional && (
+                                  <span className="ml-1 text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                    {t('applications_stage_optional')}
+                                  </span>
+                                )}
+                                {stageState === 'skipped' && (
+                                  <span className="ml-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                                    {t('applicant_funnel_history_action_skip')}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {'noteKey' in group && group.noteKey && (
+                        <p className="mt-3 rounded-md border border-blue-100 bg-white px-3 py-2 text-[11px] leading-5 text-slate-500 dark:border-blue-950 dark:bg-slate-950 dark:text-slate-400">
+                          {t(group.noteKey)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {groupIndex < plan.groups.length - 1 && (
+                  <div
+                    aria-hidden="true"
+                    className={`mt-[42px] hidden h-0.5 w-12 shrink-0 rounded-full sm:block ${
+                      connectorDone
+                        ? MAIN_STAGE_CLASSES.done.connector
+                        : MAIN_STAGE_CLASSES.pending.connector
+                    }`}
+                  />
                 )}
-              </div>
-              <span className={`w-full text-center text-[10px] leading-tight sm:text-[11px] ${labelClass}`}>
-                {t(step.labelKey)}
-                {'optional' in step && step.optional && (
-                  <span className="mt-0.5 block text-[9px] font-medium text-slate-400 dark:text-slate-500">
-                    {t('applications_stage_optional')}
-                  </span>
-                )}
-              </span>
-            </div>
-
-            {/* Connector line between steps */}
-            {i < APPLICATION_PIPELINE_STAGES.length - 1 && (
-              <div
-                className={`flex-1 h-0.5 mb-4 mx-1 rounded-full transition-colors ${
-                  i < current
-                    ? 'bg-blue-400 dark:bg-blue-600'
-                    : 'bg-gray-200 dark:bg-slate-700'
-                }`}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
+    </div>
+  );
+};
+
+// ─── Compact Progress (default, collapsed) ──────────────────────────────────────
+
+interface CompactProgressProps {
+  status: ApplicationPipelineStatus;
+  skippedStatuses?: ApplicationPipelineStageStatus[];
+  t: (k: string) => string;
+}
+
+const CompactProgress: React.FC<CompactProgressProps> = ({ status, skippedStatuses = [], t }) => {
+  const plan = useMemo(
+    () => buildApplicationPipelinePlan(status, skippedStatuses),
+    [status, skippedStatuses],
+  );
+  const { isRejected, isComplete, progressPercent: percent, currentGroup } = plan;
+  const phaseLabel = t(currentGroup.labelKey);
+
+  const barTrack = isRejected
+    ? 'bg-slate-200 dark:bg-slate-700'
+    : 'bg-slate-100 dark:bg-slate-800';
+  const barFill = isRejected
+    ? 'bg-slate-300 dark:bg-slate-600'
+    : isComplete
+      ? 'bg-emerald-500 dark:bg-emerald-400'
+      : 'bg-blue-500 dark:bg-blue-400';
+  const captionClass = isRejected
+    ? 'text-slate-400 dark:text-slate-500'
+    : isComplete
+      ? 'text-emerald-700 dark:text-emerald-300'
+      : 'text-slate-600 dark:text-slate-300';
+
+  // The status chip above the bar already names the precise stage, so the caption
+  // carries the macro phase (one of 4) instead — no misleading "of 12" denominator.
+  const caption = isRejected
+    ? t('applications_process_ended')
+    : isComplete
+      ? t('applications_pipeline_complete')
+      : formatTranslation(t('applications_pipeline_phase'), { phase: phaseLabel });
+
+  return (
+    <div className="mt-5">
+      <div
+        className={`h-1.5 w-full overflow-hidden rounded-full ${barTrack}`}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        aria-label={t('applications_timeline_label')}
+      >
+        <div
+          className={`h-full rounded-full transition-all ${barFill}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className={`mt-2 text-xs font-medium ${captionClass}`}>{caption}</p>
+    </div>
+  );
+};
+
+// ─── Interview Row (candidate view) ─────────────────────────────────────────────
+
+const INTERVIEW_STATUS_CLASSES: Record<string, string> = {
+  scheduled: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  rescheduled: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  completed: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  cancelled: 'bg-gray-100 text-gray-600 dark:bg-slate-700/50 dark:text-slate-300',
+};
+
+interface InterviewRowProps {
+  interview: ApplicationInterview;
+  t: (k: string) => string;
+  onInterviewChange: () => void;
+}
+
+const InterviewRow: React.FC<InterviewRowProps> = ({ interview, t, onInterviewChange }) => {
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState(false);
+  const mountedRef = useRef(true);
+  const isCancelled = interview.interview_status === 'cancelled';
+  const FormatIcon = INTERVIEW_FORMAT_ICONS[interview.format] ?? CalendarClock;
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
+
+  const handleConfirm = async () => {
+    setConfirming(true);
+    setConfirmError(false);
+    try {
+      await confirmInterview(interview.id);
+      if (!mountedRef.current) return;
+      onInterviewChange();
+    } catch {
+      if (mountedRef.current) {
+        setConfirmError(true);
+        setConfirming(false);
+      }
+    }
+  };
+
+  return (
+    <div
+      className={`rounded-xl border px-4 py-3 ${
+        isCancelled
+          ? 'border-slate-200 bg-slate-50 opacity-60 dark:border-slate-700 dark:bg-slate-900/40'
+          : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60'
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <FormatIcon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            {interview.stage && (
+              <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {interview.stage}
+              </p>
+            )}
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {t('interview_format_' + interview.format)}
+            </p>
+          </div>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-semibold ${INTERVIEW_STATUS_CLASSES[interview.interview_status] ?? INTERVIEW_STATUS_CLASSES.scheduled}`}
+        >
+          {t('interview_status_' + interview.interview_status)}
+        </span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+        <span className="inline-flex items-center gap-1">
+          <CalendarClock className="h-3.5 w-3.5 text-slate-400" />
+          {formatInterviewDateTime(interview.scheduled_at)}
+          {interview.timezone ? ` (${interview.timezone})` : ''}
+        </span>
+        {interview.interviewer && (
+          <span>
+            {formatTranslation(t('interview_with'), { interviewer: interview.interviewer })}
+          </span>
+        )}
+      </div>
+
+      {interview.location_or_link && (
+        <p className="mt-1 text-xs">
+          {isHttpLink(interview.location_or_link) ? (
+            <a
+              href={interview.location_or_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline dark:text-blue-400"
+            >
+              <Video className="h-3.5 w-3.5" />
+              {interview.location_or_link}
+            </a>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300">
+              <MapPin className="h-3.5 w-3.5 text-slate-400" />
+              {interview.location_or_link}
+            </span>
+          )}
+        </p>
+      )}
+
+      {interview.notes && (
+        <p className="mt-2 whitespace-pre-line text-xs leading-5 text-slate-500 dark:text-slate-400">
+          {interview.notes}
+        </p>
+      )}
+
+      {!isCancelled && (
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+          {interview.candidate_confirmed ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {t('interview_confirmed_label')}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={confirming}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-600"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {t('interview_confirm_btn')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {confirmError && (
+        <p className="mt-2 text-right text-xs font-semibold text-red-500 dark:text-red-400">
+          {t('interview_confirm_error')}
+        </p>
+      )}
     </div>
   );
 };
@@ -246,69 +562,134 @@ interface CardProps {
   app: ApplicationRow;
   t: (k: string) => string;
   onFindSimilar: () => void;
+  interviews: ApplicationInterview[];
+  onInterviewChange: () => void;
 }
 
-const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
+const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interviews, onInterviewChange }) => {
   const statusGroup = getApplicationStatusGroup(app.status);
   const isRejected = isApplicationRejectedStatus(app.status);
-  const isHired = isApplicationHiredStatus(app.status);
+  const canReview = isApplicationReviewEligible(app.status);
   const guidance = STATUS_GUIDANCE[statusGroup];
   const GuidanceIcon = guidance.icon;
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const currentStatusLabel = t(getApplicationStatusLabelKey(app.status));
 
   return (
     <div
-      className={`relative rounded-2xl border p-4 shadow-sm transition-all animate-fade-in ${
+      className={`relative rounded-2xl border p-5 shadow-sm transition-all animate-fade-in sm:p-6 ${
         isRejected
           ? 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60'
           : 'border-gray-100 bg-white hover:border-blue-100 hover:shadow-md dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-800/50'
       }`}
     >
-      {/* Top row: title + status chip */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate leading-snug">
-            {app.job_title || t('applications_unknown_role')}
-          </p>
-          <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
-            {formatDate(app)}
-          </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:flex-1">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {t('applications_meta_applied_on')}
+            </p>
+            <p className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
+              {formatDate(app)}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {t('applications_meta_role')}
+            </p>
+            <p className="mt-1 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+              {app.job_title || t('applications_unknown_role')}
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          {/* Status chip */}
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_CHIP_CLASSES[statusGroup]}`}
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CHIP_CLASSES[statusGroup]}`}
           >
-            {t(getApplicationStatusLabelKey(app.status))}
+            {currentStatusLabel}
           </span>
-
-          {/* Match % badge */}
+          {/* compatibility_score is a lexical keyword-overlap heuristic, not the AI match —
+              labelled "keyword overlap" so the number isn't read as a precise AI score. */}
           {app.compatibility_score != null && (
-            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-              {t('applications_match')} {app.compatibility_score}%
+            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">
+              {t('applications_keyword_overlap')} {app.compatibility_score}%
             </span>
           )}
         </div>
       </div>
 
-      {/* 3-step stepper */}
-      <Stepper status={app.status} t={t} />
-
-      <div className={`mt-3 rounded-xl border px-3 py-2.5 text-xs leading-relaxed ${guidance.className}`}>
-        <div className="flex items-start gap-2">
-          <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${guidance.iconClassName}`}>
-            <GuidanceIcon className="h-3.5 w-3.5" />
+      {/* Next-step guidance only — the status itself is already shown by the chip
+          above, so the old "Current status: {status}" heading was a third echo. */}
+      <div className={`mt-5 rounded-lg border px-4 py-3 text-sm leading-relaxed ${guidance.className}`}>
+        <div className="flex items-start justify-between gap-4">
+          <p className="min-w-0 max-w-3xl font-medium opacity-90">{t(guidance.descKey)}</p>
+          <span className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl sm:flex ${guidance.iconClassName}`}>
+            <GuidanceIcon className="h-5 w-5" />
           </span>
-          <div className="min-w-0">
-            <p className="font-semibold">{t(guidance.titleKey)}</p>
-            <p className="mt-0.5 opacity-90">{t(guidance.descKey)}</p>
-          </div>
         </div>
       </div>
 
-      {/* Hired: review company CTA */}
-      {isHired && app.employer_id && (
+      {app.employer_viewed_at && (
+        <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          {formatTranslation(t('applications_reviewed_on'), { date: formatTimestamp(app.employer_viewed_at) })}
+        </div>
+      )}
+
+      {app.last_status_note && (
+        <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/20">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-800 dark:text-blue-200">
+            <MessageSquare className="h-3.5 w-3.5" />
+            {t('applications_employer_note_label')}
+          </p>
+          <p className="mt-1.5 whitespace-pre-line text-sm leading-6 text-blue-900/90 dark:text-blue-100/90">{app.last_status_note}</p>
+        </div>
+      )}
+
+      {/* Scheduled interviews (candidate view) — confirm attendance inline. */}
+      {interviews.length > 0 && (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+            <CalendarClock className="h-3.5 w-3.5" />
+            {t('interview_my_title')}
+          </p>
+          <div className="mt-3 space-y-3">
+            {interviews.map((interview) => (
+              <InterviewRow
+                key={interview.id}
+                interview={interview}
+                t={t}
+                onInterviewChange={onInterviewChange}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Compact progress by default; full timeline behind a per-card disclosure. */}
+      <CompactProgress status={app.status} skippedStatuses={app.skipped_statuses} t={t} />
+
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setPipelineOpen((open) => !open)}
+          aria-expanded={pipelineOpen}
+          aria-label={pipelineOpen ? t('applications_pipeline_hide') : t('applications_pipeline_show')}
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700/60 dark:hover:text-slate-200"
+        >
+          {pipelineOpen ? t('applications_pipeline_hide') : t('applications_pipeline_show')}
+          {pipelineOpen
+            ? <ChevronUp className="h-3.5 w-3.5" />
+            : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+
+      {pipelineOpen && <ProgressTimeline status={app.status} skippedStatuses={app.skipped_statuses} t={t} />}
+
+      {canReview && app.employer_id && (
         <div className="mt-3 flex items-center justify-end">
           <button
             type="button"
@@ -325,7 +706,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
       {/* Rejected: process-ended label + find-similar CTA */}
       {isRejected && (
         <div className="mt-3 flex items-center justify-between gap-2">
-          <span className="text-[10px] text-gray-400 dark:text-slate-500 italic">
+          <span className="text-[10px] text-gray-500 dark:text-slate-400 italic">
             {t('applications_process_ended')}
           </span>
           <button
@@ -350,6 +731,25 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar }) => {
           onSubmitted={() => setReviewOpen(false)}
         />
       )}
+
+      {/* Direct messages with the recruiter — disclosed so only the opened thread
+          opens a live listener (a candidate may have many application cards). */}
+      <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
+        <button
+          type="button"
+          onClick={() => setMessagesOpen((open) => !open)}
+          aria-expanded={messagesOpen}
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700/60 dark:hover:text-slate-200"
+        >
+          {t('msg_thread_title')}
+          {messagesOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+        {messagesOpen && (
+          <div className="mt-2">
+            <ApplicationMessageThread applicationId={app.id} viewerRole="candidate" t={t} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -381,6 +781,46 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
     const unsub = subscribeNotifications(uid, setNotifications);
     return () => unsub();
   }, [uid]);
+
+  // ── Interviews state ──────────────────────────────────────────────────────
+  // Live subscription so the timeline stays fresh across tabs and when the employer
+  // reschedules/cancels — no manual reload needed.
+  const [interviews, setInterviews] = useState<ApplicationInterview[]>([]);
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
+
+  const reloadInterviews = useCallback(() => {
+    if (!uid) return;
+    listInterviewsForCandidate(uid)
+      .then((rows) => {
+        if (mountedRef.current) setInterviews(rows);
+      })
+      .catch(() => {/* best-effort: interviews are supplementary */});
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = subscribeInterviewsForCandidate(
+      uid,
+      setInterviews,
+      () => {/* best-effort: interviews are supplementary */},
+    );
+    return () => unsub();
+  }, [uid]);
+
+  // Group interviews by application id so each card gets only its own.
+  const interviewsByApp = useMemo(() => {
+    const map = new Map<string, ApplicationInterview[]>();
+    for (const interview of interviews) {
+      const list = map.get(interview.application_id);
+      if (list) list.push(interview);
+      else map.set(interview.application_id, [interview]);
+    }
+    return map;
+  }, [interviews]);
 
   // ── Counts, search, sort ──────────────────────────────────────────────────
   const counts: Record<FilterStatus, number> = useMemo(() => ({
@@ -472,6 +912,9 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
             status: normalizeApplicationStatus(data.status),
             application_date: data.application_date as ApplicationRow['application_date'],
             compatibility_score: typeof data.compatibility_score === 'number' ? data.compatibility_score : null,
+            last_status_note: typeof data.last_status_note === 'string' ? data.last_status_note : null,
+            skipped_statuses: normalizeSkippedApplicationStatuses(data.skipped_statuses),
+            employer_viewed_at: (data.employer_viewed_at ?? null) as ApplicationRow['employer_viewed_at'],
           } satisfies ApplicationRow;
         });
         rows.sort(
@@ -589,7 +1032,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
               {/* Notification list */}
               <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/60">
                 {notifications.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-xs text-gray-400 dark:text-slate-500">
+                  <p className="px-4 py-6 text-center text-xs text-gray-500 dark:text-slate-400">
                     {t('notifications_empty')}
                   </p>
                 ) : (
@@ -609,6 +1052,11 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
                         <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
                           {t('notifications_status_changed').replace('{status}', t(getApplicationStatusLabelKey(n.status)))}
                         </p>
+                        {n.candidate_note && (
+                          <p className="mt-1 rounded-md bg-blue-100/60 px-2 py-1 text-[11px] leading-5 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
+                            “{n.candidate_note}”
+                          </p>
+                        )}
                       </div>
                       {!n.read && (
                         <button
@@ -692,7 +1140,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
                     className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${
                       isActive
                         ? 'bg-white/20 text-white'
-                        : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400'
+                        : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'
                     }`}
                   >
                     {counts[s]}
@@ -761,9 +1209,16 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
         </div>
       ) : (
         /* ── Application cards ── */
-        <div className="grid gap-3 sm:grid-cols-1 md:grid-cols-2">
+        <div className="grid gap-4">
           {visible.map((app) => (
-            <ApplicationCard key={app.id} app={app} t={t} onFindSimilar={onFindSimilar} />
+            <ApplicationCard
+              key={app.id}
+              app={app}
+              t={t}
+              onFindSimilar={onFindSimilar}
+              interviews={interviewsByApp.get(app.id) ?? []}
+              onInterviewChange={reloadInterviews}
+            />
           ))}
         </div>
       )}

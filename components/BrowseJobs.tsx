@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ApplyReviewModal, { type ApplyReviewJob } from './ApplyReviewModal';
 import {
   Briefcase,
-  CheckCircle2,
+  Building2,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   Clock3,
   MapPin,
-  MessageSquare,
   Search,
   SlidersHorizontal,
   RotateCcw,
@@ -15,7 +15,7 @@ import {
   Target,
   X,
 } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from '../lib/firebaseClient';
 import { listAllActiveJobPostings } from '../lib/recruitingData';
@@ -25,6 +25,7 @@ import { useToast } from './Toast';
 import {
   listCompanyReviews,
   aggregateRating,
+  getEmployerRating,
   type CompanyReview,
 } from '../lib/companyReviewsData';
 import {
@@ -32,10 +33,31 @@ import {
   useJobPreferences,
   type JobPreferences,
 } from '../hooks/useJobPreferences';
+import {
+  workModeLabelKey,
+  employmentTypeLabelKey,
+  experienceLevelLabelKey,
+} from '../constants/jobPostingFields';
+
+function reviewTierBadge(
+  tier: 'hired' | 'offer' | 'interviewed',
+  t: (k: string) => string
+): { label: string; className: string } {
+  switch (tier) {
+    case 'hired':
+      return { label: t('review_tier_hired'), className: 'text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800/50' };
+    case 'offer':
+      return { label: t('review_tier_offer'), className: 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50' };
+    default:
+      return { label: t('review_tier_interviewed'), className: 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-600' };
+  }
+}
 
 interface BrowseJobsProps {
   session: Session | null;
   t: (key: string) => string;
+  /** Jump to the Talent Profile editor (from the pre-submit review step). */
+  onEditProfile?: () => void;
 }
 
 const QUICK_SEARCHES = [
@@ -166,8 +188,23 @@ const postedLabel = (iso: string, t: (k: string) => string): string => {
   return new Date(iso).toLocaleDateString();
 };
 
+// ── helper: employer responsiveness badge (anti-ghosting, coarse + honest) ────
+// Returns { text, recent } or null when there isn't enough signal to claim anything.
+const responsivenessBadge = (
+  resp: { avgDays: number | null; lastActionMs: number | null } | null | undefined,
+  t: (k: string) => string,
+): { text: string; recent: boolean } | null => {
+  if (!resp) return null;
+  const recent = resp.lastActionMs !== null && Date.now() - resp.lastActionMs < 14 * 86_400_000;
+  if (resp.avgDays !== null) {
+    return { text: t('browse_jobs_responds_in').replace('{n}', String(Math.max(1, Math.round(resp.avgDays)))), recent };
+  }
+  if (recent) return { text: t('browse_jobs_active_recently'), recent: true };
+  return null;
+};
+
 // ── main component ─────────────────────────────────────────────────────────────
-const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
+const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) => {
   const { addToast } = useToast();
   const { prefs } = useJobPreferences();
 
@@ -195,6 +232,20 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   const [reviewsExpanded, setReviewsExpanded] = useState<Record<string, boolean>>({});
   // Track which employer ids are already being fetched to avoid duplicate requests.
   const fetchingReviews = useRef<Set<string>>(new Set());
+
+  // Employer responsiveness badge (anti-ghosting): coarse, backward-looking
+  // aggregate derived server-side. Keyed by employer_id, loaded eagerly for the
+  // visible jobs so the badge shows on the collapsed card.
+  type RespEntry = { avgDays: number | null; lastActionMs: number | null };
+  const [respCache, setRespCache] = useState<Record<string, RespEntry>>({});
+  const respCacheRef = useRef<Record<string, RespEntry>>({});
+  const fetchingResp = useRef<Set<string>>(new Set());
+
+  // Eager rating aggregate per employer, for the always-visible card chip.
+  type RatingEntry = { avg: number; count: number };
+  const [ratingCache, setRatingCache] = useState<Record<string, RatingEntry>>({});
+  const ratingCacheRef = useRef<Record<string, RatingEntry>>({});
+  const fetchingRatings = useRef<Set<string>>(new Set());
 
   // ── debounce keyword ──────────────────────────────────────────────────────
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -269,15 +320,18 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
     if (!eid) return;
     if (reviewCacheRef.current[eid] !== undefined) return;  // already loaded
     if (fetchingReviews.current.has(eid)) return;           // already in-flight
+    let cancelled = false;
     fetchingReviews.current.add(eid);
     (async () => {
       try {
         const reviews = await listCompanyReviews(eid);
+        if (cancelled) return;
         const agg = aggregateRating(reviews);
         const entry = { ...agg, reviews };
         reviewCacheRef.current = { ...reviewCacheRef.current, [eid]: entry };
         setReviewCache((prev) => ({ ...prev, [eid]: entry }));
       } catch {
+        if (cancelled) return;
         // non-fatal — silently skip; card just won't show a rating chip
         const entry = { avg: 0, count: 0, reviews: [] };
         reviewCacheRef.current = { ...reviewCacheRef.current, [eid]: entry };
@@ -286,7 +340,71 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
         fetchingReviews.current.delete(eid);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [expandedId, jobs]);
+
+  // ── eager-load employer responsiveness for the visible jobs ─────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)));
+    eids.forEach((eid) => {
+      if (respCacheRef.current[eid] !== undefined || fetchingResp.current.has(eid)) return;
+      fetchingResp.current.add(eid);
+      (async () => {
+        try {
+          const snap = await getDoc(doc(firestoreDb, 'employer_responsiveness', eid));
+          const d = snap.exists() ? snap.data() : undefined;
+          const count = typeof d?.count === 'number' ? d.count : 0;
+          const sum = typeof d?.sum_days === 'number' ? d.sum_days : 0;
+          const lastMs = d?.last_action_at?.toMillis?.() ?? null;
+          if (cancelled) return;
+          const entry: RespEntry = { avgDays: count >= 3 ? sum / count : null, lastActionMs: lastMs };
+          respCacheRef.current = { ...respCacheRef.current, [eid]: entry };
+          setRespCache((prev) => ({ ...prev, [eid]: entry }));
+        } catch {
+          if (cancelled) return;
+          const entry: RespEntry = { avgDays: null, lastActionMs: null };
+          respCacheRef.current = { ...respCacheRef.current, [eid]: entry };
+          setRespCache((prev) => ({ ...prev, [eid]: entry }));
+        } finally {
+          fetchingResp.current.delete(eid);
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobs]);
+
+  // ── eager-load company rating aggregate for the visible jobs ────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)));
+    eids.forEach((eid) => {
+      if (ratingCacheRef.current[eid] !== undefined || fetchingRatings.current.has(eid)) return;
+      fetchingRatings.current.add(eid);
+      (async () => {
+        try {
+          const entry = await getEmployerRating(eid);
+          if (cancelled) return;
+          ratingCacheRef.current = { ...ratingCacheRef.current, [eid]: entry };
+          setRatingCache((prev) => ({ ...prev, [eid]: entry }));
+        } catch {
+          if (cancelled) return;
+          const entry = { avg: 0, count: 0 };
+          ratingCacheRef.current = { ...ratingCacheRef.current, [eid]: entry };
+          setRatingCache((prev) => ({ ...prev, [eid]: entry }));
+        } finally {
+          fetchingRatings.current.delete(eid);
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobs]);
 
   // ── distinct locations ────────────────────────────────────────────────────
   const locations = useMemo(() => {
@@ -446,26 +564,65 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
   // Ref guard catches double-clicks that land before React re-renders with the
   // disabled state (state updates are async; the ref flips synchronously).
   const applyInFlight = useRef<string | null>(null);
-  const handleApply = useCallback(async (jobId: string) => {
+  const [reviewJob, setReviewJob] = useState<ApplyReviewJob | null>(null);
+
+  // Step 1 — open the pre-submit review. The candidate confirms exactly what the
+  // employer will receive (name, resume, Talent Profile) before anything is sent.
+  const openApplyReview = useCallback((job: JobPosting) => {
     if (!session?.user) {
       addToast(t('browse_jobs_sign_in_to_apply'), 'error');
       return;
     }
+    if (appliedJobs.has(job.id)) return;
+    setReviewJob({
+      id: job.id,
+      title: job.title,
+      company: job.company_name ?? undefined,
+      requiredSkills: job.required_skills,
+      experienceLevel: job.experience_level,
+      workMode: job.work_mode,
+      screenerQuestions: job.screener_questions,
+    });
+  }, [session, appliedJobs, addToast, t]);
+
+  // Step 2 — actually submit, only after the candidate confirms in the modal.
+  // The server re-enforces the ready-Talent-Profile precondition (bypass-safe).
+  const confirmApply = useCallback(async (answers: { questionId: string; answer: string }[]) => {
+    if (!session?.user || !reviewJob) return;
+    const jobId = reviewJob.id;
     if (appliedJobs.has(jobId) || applyInFlight.current === jobId) return;
     applyInFlight.current = jobId;
     setApplyingId(jobId);
     try {
       const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
-      await createJobApplication({ jobId, compatibilityScore: null });
+      await createJobApplication({ jobId, compatibilityScore: null, screenerAnswers: answers });
       setAppliedJobs((prev) => new Set(prev).add(jobId));
       addToast(t('browse_jobs_apply_success'), 'success');
-    } catch {
-      addToast(t('browse_jobs_apply_error'), 'error');
+      setReviewJob(null);
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? '';
+      if (code === 'functions/already-exists') {
+        setAppliedJobs((prev) => new Set(prev).add(jobId));
+        addToast(t('browse_jobs_application_recorded'), 'info');
+        setReviewJob(null);
+      } else if (code === 'functions/failed-precondition') {
+        // The modal pre-gates profile + resume, so the reachable precondition
+        // here is the job having closed. Distinguish by the server message.
+        const msg = (err as { message?: string })?.message ?? '';
+        if (/profile|resume/i.test(msg)) {
+          addToast(t('apply_complete_profile_first'), 'info'); // keep modal open to fix
+        } else {
+          addToast(t('apply_job_closed'), 'info');
+          setReviewJob(null); // job closed — nothing to retry
+        }
+      } else {
+        addToast(t('browse_jobs_apply_error'), 'error'); // keep modal open to retry
+      }
     } finally {
       applyInFlight.current = null;
       setApplyingId(null);
     }
-  }, [session, appliedJobs, addToast, t]);
+  }, [session, reviewJob, appliedJobs, addToast, t]);
 
   // ── render ────────────────────────────────────────────────────────────────
   return (
@@ -799,13 +956,9 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             const eid = job.employer_id;
             const reviewsId = eid ? `job-reviews-${job.id}` : undefined;
             const employerReviews = eid ? (reviewCache[eid] ?? null) : null;
-            const showRatingChip = employerReviews && employerReviews.count > 0;
+            const employerRating = eid ? (ratingCache[eid] ?? null) : null;
+            const respBadge = responsivenessBadge(eid ? respCache[eid] : null, t);
             const reviewsOpen = eid ? (reviewsExpanded[eid] ?? false) : false;
-            const applicationStages = [
-              { label: t('browse_jobs_status_viewed'), active: true, icon: Clock3 },
-              { label: t('browse_jobs_status_applied'), active: isApplied, icon: CheckCircle2 },
-              { label: t('browse_jobs_status_interview'), active: false, icon: MessageSquare },
-            ];
 
             return (
               <article
@@ -833,11 +986,32 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                             {job.company_name}
                           </span>
                         )}
-                        {/* Rating chip — shown when employer has reviews */}
-                        {showRatingChip && (
-                          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-full px-2 py-0.5 whitespace-nowrap">
-                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            {employerReviews!.avg.toFixed(1)}&nbsp;({employerReviews!.count})
+                        {/* Rating chip — always shown once the aggregate loads */}
+                        {employerRating && (
+                          employerRating.count > 0 ? (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-full px-2 py-0.5 whitespace-nowrap">
+                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                              {employerRating.avg.toFixed(1)}&nbsp;({employerRating.count})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                              <Star className="h-3 w-3" />
+                              {t('browse_jobs_no_reviews')}
+                            </span>
+                          )
+                        )}
+                        {/* Responsiveness badge — coarse, honest, anti-ghosting */}
+                        {respBadge && (
+                          <span
+                            title={t('browse_jobs_responsiveness_hint')}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${
+                              respBadge.recent
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-900/20 dark:text-emerald-300'
+                                : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                            }`}
+                          >
+                            <Clock3 className="h-3 w-3" />
+                            {respBadge.text}
                           </span>
                         )}
                         {isApplied && (
@@ -864,6 +1038,20 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                           {t('browse_jobs_status_active')}
                         </span>
                       </div>
+                      {/* Company context — snapshot from the employer profile, shown
+                          only for the fields the employer actually filled in. */}
+                      {(job.industry || job.company_size || job.founded_year) && (
+                        <div className="mt-1.5 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <Building2 className="h-3 w-3 shrink-0" />
+                          <span className="min-w-0 truncate">
+                            {[
+                              job.industry,
+                              job.company_size && t('browse_jobs_company_size').replace('{size}', job.company_size),
+                              job.founded_year && t('browse_jobs_founded').replace('{year}', job.founded_year),
+                            ].filter(Boolean).join(' · ')}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     {/* Salary sits top-right next to the chevron — the first thing a
                         candidate scans for on a job card. */}
@@ -897,38 +1085,157 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                 {/* expanded content */}
                 {isExpanded && (
                   <div id={detailsId} className="animate-panel-expand border-t border-slate-100 dark:border-slate-700 px-5 pb-5 pt-4">
-                    <div className="mb-4 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/50 sm:grid-cols-3">
-                      {applicationStages.map((stage, index) => {
-                        const Icon = stage.icon;
-                        return (
-                          <div
-                            key={stage.label}
-                            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold ${
-                              stage.active
-                                ? 'text-blue-800 dark:text-blue-200'
-                                : 'text-slate-500 dark:text-slate-500'
-                            }`}
-                          >
-                            <span className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                              stage.active
-                                ? 'bg-blue-700 text-white dark:bg-blue-500'
-                                : 'bg-white text-slate-400 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700'
-                            }`}>
-                              <Icon className="h-3.5 w-3.5" />
-                            </span>
-                            <span>{stage.label}</span>
-                            {index < applicationStages.length - 1 && (
-                              <ChevronRight className="ml-auto hidden h-3.5 w-3.5 text-slate-300 dark:text-slate-600 sm:block" />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
                     {job.description && (
                       <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line">
                         {job.description}
                       </p>
                     )}
+
+                    {/* ── Structured posting fields ── rendered only when the
+                        employer filled them in (legacy postings skip every row). */}
+                    {(() => {
+                      const pills: React.ReactNode[] = [];
+                      if (job.work_mode) {
+                        pills.push(
+                          <span key="work_mode" className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            {t(workModeLabelKey(job.work_mode))}
+                          </span>,
+                        );
+                      }
+                      if (job.employment_type) {
+                        pills.push(
+                          <span key="employment_type" className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            {t(employmentTypeLabelKey(job.employment_type))}
+                          </span>,
+                        );
+                      }
+                      if (job.experience_level) {
+                        pills.push(
+                          <span key="experience_level" className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            {t(experienceLevelLabelKey(job.experience_level))}
+                          </span>,
+                        );
+                      }
+                      if (job.campus_new_grad) {
+                        pills.push(
+                          <span key="campus_new_grad" className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 dark:border-indigo-800/50 dark:bg-indigo-900/20 dark:text-indigo-300">
+                            {t('job_field_campus_new_grad')}
+                          </span>,
+                        );
+                      }
+
+                      const facts: Array<{ key: string; label: string; value: string }> = [];
+                      if (job.department) {
+                        facts.push({ key: 'department', label: t('job_field_department'), value: job.department });
+                      }
+                      if (job.application_deadline) {
+                        facts.push({ key: 'application_deadline', label: t('job_field_application_deadline'), value: job.application_deadline });
+                      }
+                      if (typeof job.headcount === 'number') {
+                        facts.push({ key: 'headcount', label: t('job_field_headcount'), value: String(job.headcount) });
+                      }
+                      if (job.language_requirement) {
+                        facts.push({ key: 'language_requirement', label: t('job_field_language_requirement'), value: job.language_requirement });
+                      }
+
+                      const blocks: Array<{ key: string; label: string; value: string }> = [];
+                      if (job.responsibilities) {
+                        blocks.push({ key: 'responsibilities', label: t('job_field_responsibilities'), value: job.responsibilities });
+                      }
+                      if (job.required_qualifications) {
+                        blocks.push({ key: 'required_qualifications', label: t('job_field_required_qualifications'), value: job.required_qualifications });
+                      }
+                      if (job.nice_to_have_qualifications) {
+                        blocks.push({ key: 'nice_to_have', label: t('job_field_nice_to_have'), value: job.nice_to_have_qualifications });
+                      }
+                      if (job.interview_process) {
+                        blocks.push({ key: 'interview_process', label: t('job_field_interview_process'), value: job.interview_process });
+                      }
+
+                      const skillRows: Array<{ key: string; label: string; skills: string[] }> = [];
+                      if (job.required_skills && job.required_skills.length > 0) {
+                        skillRows.push({ key: 'required_skills', label: t('job_field_required_skills'), skills: job.required_skills });
+                      }
+                      if (job.preferred_skills && job.preferred_skills.length > 0) {
+                        skillRows.push({ key: 'preferred_skills', label: t('job_field_preferred_skills'), skills: job.preferred_skills });
+                      }
+
+                      const notePills: React.ReactNode[] = [];
+                      if (job.visa_sponsorship) {
+                        notePills.push(
+                          <span key="visa_sponsorship" className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-300">
+                            {t('job_field_visa_sponsorship')}
+                          </span>,
+                        );
+                      }
+                      if (job.relocation) {
+                        notePills.push(
+                          <span key="relocation" className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-300">
+                            {t('job_field_relocation')}
+                          </span>,
+                        );
+                      }
+
+                      const hasAnything =
+                        pills.length > 0 ||
+                        facts.length > 0 ||
+                        blocks.length > 0 ||
+                        skillRows.length > 0 ||
+                        notePills.length > 0;
+                      if (!hasAnything) return null;
+
+                      return (
+                        <div className="mt-4 space-y-4">
+                          {(pills.length > 0 || notePills.length > 0) && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {pills}
+                              {notePills}
+                            </div>
+                          )}
+
+                          {facts.length > 0 && (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {facts.map((fact) => (
+                                <div key={fact.key} className="text-xs">
+                                  <span className="font-semibold text-slate-500 dark:text-slate-400">{fact.label}: </span>
+                                  <span className="text-slate-700 dark:text-slate-300">{fact.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {skillRows.map((row) => (
+                            <div key={row.key}>
+                              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {row.label}
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {row.skills.map((skill, idx) => (
+                                  <span
+                                    key={`${row.key}-${idx}`}
+                                    className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+                                  >
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+
+                          {blocks.map((block) => (
+                            <div key={block.key}>
+                              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {block.label}
+                              </p>
+                              <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line">
+                                {block.value}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
                     <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/70 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -941,7 +1248,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                       <button
                         type="button"
                         disabled={isApplied || isApplying}
-                        onClick={() => handleApply(job.id)}
+                        onClick={() => openApplyReview(job)}
                         aria-busy={isApplying}
                         aria-label={
                           isApplied
@@ -1020,11 +1327,14 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
                                       }`}
                                     />
                                   ))}
-                                  {rv.verified && (
-                                    <span className="ml-2 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-full px-2 py-0.5">
-                                      {t('review_verified_badge')}
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    const badge = reviewTierBadge(rv.verificationTier, t);
+                                    return (
+                                      <span className={`ml-2 text-[10px] font-semibold border rounded-full px-2 py-0.5 ${badge.className}`}>
+                                        {badge.label}
+                                      </span>
+                                    );
+                                  })()}
                                   {rv.created_at && (
                                     <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500">
                                       {new Date(rv.created_at).toLocaleDateString()}
@@ -1046,6 +1356,18 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t }) => {
             );
           })}
         </div>
+      )}
+
+      {session?.user && (
+        <ApplyReviewModal
+          open={Boolean(reviewJob)}
+          job={reviewJob}
+          uid={session.user.id}
+          t={t}
+          onConfirm={confirmApply}
+          onClose={() => setReviewJob(null)}
+          onEditProfile={onEditProfile}
+        />
       )}
     </section>
   );

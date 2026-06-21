@@ -24,7 +24,6 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { isAdminUid } from "../middleware/auth";
 import { requireRole, getAdminRole, invalidateAccessCache, AdminEntry, AdminRole } from "../admin/roles";
 import {
   CREDIT_LEDGER_COLLECTION,
@@ -928,7 +927,10 @@ export const adminListAdminsFunction = onCall({ invoker: "public" }, async (requ
 export const adminCheckAccessFunction = onCall({ invoker: "public" }, async (request) => {
   if (!request.auth) return { admin: false };
   const uid = request.auth.uid;
-  const ok = await isAdminUid(uid, request.auth.token as Record<string, unknown> | undefined);
+  // Use the SAME authority the privileged callables enforce (getAdminRole over the
+  // RBAC store + env/legacy resolution), so the UI gate can never disagree with
+  // what the functions actually allow — and a disabled entry resolves to null → denied.
+  const ok = (await getAdminRole(uid)) !== null;
   return { admin: ok, uid };
 });
 

@@ -5,6 +5,7 @@ import { JobseekerHomePage } from './pages/JobseekerHomePage';
 import { EmployerLandingPage } from './pages/EmployerLandingPage';
 import { SampleReportPage } from './pages/SampleReportPage';
 import { PricingPage } from './pages/PricingPage';
+import SimulatedCheckoutPage from './pages/SimulatedCheckoutPage';
 
 const MvpApp = React.lazy(() => import('../CareerApp'));
 const AdminPortal = React.lazy(() => import('../components/admin/AdminPortal'));
@@ -67,6 +68,7 @@ export const SiteRouter: React.FC = () => (
     <Route path={SITE_ROUTES.employers} element={<EmployerLandingPage />} />
     <Route path={SITE_ROUTES.sampleReport} element={<SampleReportPage />} />
     <Route path={SITE_ROUTES.pricing} element={<PricingPage />} />
+    <Route path="/billing/checkout" element={<SimulatedCheckoutPage />} />
     <Route
       path={SITE_ROUTES.admin}
       element={

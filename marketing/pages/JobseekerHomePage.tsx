@@ -9,12 +9,11 @@ import { UserVoices } from '../components/UserVoices';
 import { SiteFaq } from '../components/SiteFaq';
 import { WorkflowSteps } from '../components/WorkflowSteps';
 import { FeatureShowcase } from '../components/FeatureShowcase';
-import { ToolLibrary } from '../components/ToolLibrary';
-import { SiteVerifiedTalent } from '../components/SiteVerifiedTalent';
 import { Navigate, useLocation } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { useSiteSession } from '../hooks/useSiteSession';
+import { signedInHomeRedirectPath } from '../../lib/access/navigationDecisions';
 
 export const JobseekerHomePage: React.FC = () => {
   const { t } = useMarketingI18n();
@@ -26,8 +25,14 @@ export const JobseekerHomePage: React.FC = () => {
   // workspace "home" button passes ?home=1 to explicitly VIEW the public homepage,
   // so that path must not redirect (otherwise "return to homepage" bounces back).
   const forceHomeView = new URLSearchParams(search).get('home') === '1';
-  if (ready && session && !forceHomeView) {
-    return <Navigate to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace} replace />;
+  const redirectPath = signedInHomeRedirectPath({
+    ready,
+    hasSession: Boolean(session),
+    forceHomeView,
+    isBusiness,
+  });
+  if (redirectPath) {
+    return <Navigate to={redirectPath} replace />;
   }
   const proofPoints = [
     t('site_tool_resume_report'),
@@ -55,7 +60,7 @@ export const JobseekerHomePage: React.FC = () => {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[minmax(0,0.95fr)_minmax(480px,1.05fr)] gap-10 lg:gap-16 items-center">
           <div className="min-w-0">
             <p className="inline-flex rounded-full border border-white/70 bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--site-text-muted)] shadow-sm backdrop-blur">
-              Career tools with real output
+              {t('site_js_hero_eyebrow')}
             </p>
             <h1 className="mt-5 max-w-2xl text-[clamp(2.25rem,3.9vw,3.35rem)] font-bold leading-[1.07] tracking-normal text-[var(--site-text)]">
               {t('site_js_hero_title')}
@@ -92,7 +97,7 @@ export const JobseekerHomePage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8 grid gap-3 lg:grid-cols-[0.7fr_1fr] lg:items-end">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--site-action)]">
-              Product flow
+              {t('site_workflow_eyebrow')}
             </p>
             <h2 className="text-2xl sm:text-4xl font-bold tracking-[-0.035em] text-[var(--site-text)]">
               {t('site_workflow_title')}
@@ -124,10 +129,6 @@ export const JobseekerHomePage: React.FC = () => {
       <CaseSnapshots t={t} />
 
       <UserVoices t={t} />
-
-      <ToolLibrary t={t} />
-
-      <SiteVerifiedTalent t={t} />
 
       <SiteFaq t={t} />
 

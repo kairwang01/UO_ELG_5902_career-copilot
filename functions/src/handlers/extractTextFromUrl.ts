@@ -64,16 +64,56 @@ export const extractTextFromUrlFunction = onCall({ invoker: "public" }, async (r
   }
   const safe = assertSafeUrl(url);
 
+  // LinkedIn (and most social profiles) hard-block server-side fetches: an
+  // unauthenticated request gets a 999 anti-bot status, and even a browser-like
+  // request just 301s to a login wall. There is no scrape path, so give a clear,
+  // actionable message instead of a generic failure.
+  const host = safe.hostname.toLowerCase();
+  if (host === "linkedin.com" || host.endsWith(".linkedin.com")) {
+    throw new HttpsError(
+      "failed-precondition",
+      "LinkedIn blocks automated profile import. Open your profile on LinkedIn, choose “More → Save to PDF”, then upload that PDF here — or paste your resume text below.",
+    );
+  }
+
   let html: string;
   try {
-    const resp = await fetch(safe.toString(), {
-      redirect: "follow",
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!resp.ok) throw new Error(`status ${resp.status}`);
+    let target = safe;
+    let resp: Awaited<ReturnType<typeof fetch>> | undefined;
+    // Follow redirects MANUALLY, re-validating each hop with assertSafeUrl — a
+    // submitted-safe URL must not be able to 3xx-redirect us to an internal host
+    // (e.g. the cloud metadata endpoint) that the initial guard never saw.
+    for (let hop = 0; hop < 5; hop++) {
+      resp = await fetch(target.toString(), {
+        redirect: "manual",
+        // A real browser User-Agent — many sites (incl. some résumé hosts) return
+        // 403/999 to header-less requests but serve content to browser-like ones.
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (resp.status >= 300 && resp.status < 400) {
+        const loc = resp.headers.get("location");
+        if (!loc) break;
+        target = assertSafeUrl(new URL(loc, target).toString()); // throws if the hop host is blocked
+        continue;
+      }
+      break;
+    }
+    if (!resp || !resp.ok) throw new Error(`status ${resp?.status ?? "none"}`);
     html = (await resp.text()).slice(0, 200_000); // cap to keep token cost bounded
-  } catch {
-    throw new HttpsError("unavailable", "Could not retrieve content from the provided URL.");
+  } catch (err) {
+    if (err instanceof HttpsError) throw err; // surface host-not-allowed / LinkedIn guidance
+    // A single bad URL (anti-bot block, login wall, timeout, DNS) is NOT a platform
+    // outage — use failed-precondition so the global API-status banner stays green.
+    throw new HttpsError(
+      "failed-precondition",
+      "Couldn't read that page — the site may block automated import or require a login. Try a public page, or paste your resume text below.",
+    );
   }
 
   const provider = await resolveProvider(uid, model);

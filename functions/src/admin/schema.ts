@@ -78,6 +78,7 @@ export interface ModelsDoc {
 }
 
 export const USAGE_EVENTS_COLLECTION = "usage_events";
+export const USAGE_COUNTERS_COLLECTION = "usage_counters";
 export const CREDIT_LEDGER_COLLECTION = "credit_ledger";
 
 /** Append-only audit trail for every admin mutation (credits, tier, admin grant, config). */
@@ -145,6 +146,19 @@ export interface UsageEventDoc {
   uid: string;
   tool: string;
   credit_cost: number;
-  status: "deducted" | "refunded";
+  // "free" = a $0 helper run, metered for the daily run cap but never charged.
+  status: "deducted" | "refunded" | "free";
+  day_key?: string;
+  request_id?: string | null;
+  balance_after?: number | null;
   created_at: unknown;
+}
+
+export interface UsageCounterDoc {
+  day_key: string;
+  scope: "global" | "user";
+  uid?: string;
+  runs: number;
+  credits: number;
+  updated_at: unknown;
 }

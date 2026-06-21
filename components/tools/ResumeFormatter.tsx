@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Info } from 'lucide-react';
 import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, renderFormattedText } from './ToolUtils';
+import { DownloadButtons, renderFormattedText, SavedResultBar } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
 
 const MARKET_HINT_KEY: Record<string, string> = {
@@ -37,9 +38,13 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FormattedResume | null>(null);
+  const { canSave, saved, persist } = useToolResults<FormattedResume>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [coverLetterForFormatting, setCoverLetterForFormatting] = useState('');
   const [targetMarket, setTargetMarket] = useState<string>(market);
+
+  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTool = async (options: { coverLetter?: string } = {}) => {
     if (!resumeText?.trim()) {
@@ -53,6 +58,8 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
       const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter);
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -159,6 +166,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     const { formattedText } = result;
     return (
       <div className="space-y-4 animate-fade-in">
+        <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
         {/* (d) DownloadButtons already present; "format for another market" button already present — preserved */}
         <div className="flex justify-between items-center">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} {t('tool_resume_formatter_results_for').replace('{market}', targetMarket)}</h4>

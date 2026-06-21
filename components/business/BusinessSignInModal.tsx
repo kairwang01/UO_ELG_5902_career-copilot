@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { data } from '@/lib/data';
 import {
   Dialog,
@@ -30,17 +30,28 @@ export default function BusinessSignInModal({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Ref latch (state lags a render → a double Enter could fire two sign-in calls).
+  const submittingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     setError(null);
-    const { error: authError } = await data.auth.signInWithPassword(email, password);
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
+    try {
+      const { error: authError } = await data.auth.signInWithPassword(email, password);
+      if (!mountedRef.current) return;
+      if (authError) {
+        setError(authError.message);
+        setLoading(false);
+      }
+      // On success the auth state change in App.tsx closes the modal naturally
+    } finally {
+      submittingRef.current = false;
     }
-    // On success the auth state change in App.tsx closes the modal naturally
   };
 
   return (

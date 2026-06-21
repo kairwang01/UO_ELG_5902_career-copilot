@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Compass } from 'lucide-react';
 import { generateCareerPath, generateSkillBridgeProject } from '../../services/aiClient';
 import type { CareerPathResult, SkillBridgeProject } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 import type { AppSession as Session } from '../../lib/data';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 
@@ -31,28 +32,43 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CareerPathResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<CareerPathResult>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [desiredRole, setDesiredRole] = useState('');
 
   const [generatingProjectForSkill, setGeneratingProjectForSkill] = useState<string | null>(null);
   const [generatedProject, setGeneratedProject] = useState<SkillBridgeProject | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
   const [lastProjectSkill, setLastProjectSkill] = useState<string | null>(null);
+  const projectRunRef = useRef(0);
+
+  useEffect(() => () => {
+    projectRunRef.current += 1;
+  }, []);
 
   // SmartSuggest: derive role chips from resume (pure, no AI)
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
 
+  // Hydrate from a previously-saved result (paid users) for free on reopen.
+  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleGenerateProject = async (skill: string) => {
+    const runId = projectRunRef.current + 1;
+    projectRunRef.current = runId;
     setLastProjectSkill(skill);
     setGeneratingProjectForSkill(skill);
     setGeneratedProject(null);
     setProjectError(null);
     try {
         const project = await generateSkillBridgeProject(resumeText, desiredRole, skill);
+        if (projectRunRef.current !== runId) return;
         setGeneratedProject(project);
     } catch (err) {
-        setProjectError(err instanceof Error ? err.message : t('tool_career_path_project_failed'));
+        if (projectRunRef.current === runId) {
+          setProjectError(err instanceof Error ? err.message : t('tool_career_path_project_failed'));
+        }
     } finally {
-        setGeneratingProjectForSkill(null);
+        if (projectRunRef.current === runId) setGeneratingProjectForSkill(null);
     }
   };
 
@@ -72,6 +88,8 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
       const apiResult = await generateCareerPath(resumeText, input, market, session);
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -91,8 +109,6 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
         <p className="font-medium text-slate-700 dark:text-slate-300">{t('tool_career_path_intro_line1')}</p>
         <p className="mt-0.5">{t('tool_career_path_intro_line2')}</p>
       </div>
-
-      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_career_path_setup_desc')}</p>
 
       {/* (b) SAMPLE-FILL */}
       <div className="flex items-center gap-2">
@@ -204,6 +220,13 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
     return (
       <div className="space-y-8 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+        />
         <div className="flex justify-between items-center">
           <h4 className="text-xl font-bold">{t('tool_career_path_results_title')}</h4>
           {/* (d) RESULT ACTIONS: Download + start-over */}

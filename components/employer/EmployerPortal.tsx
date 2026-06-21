@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { data } from '../../lib/data';
-import { setUserSubscription } from '../../services/subscriptionClient';
+import { createSubscriptionCheckout, setUserSubscription } from '../../services/subscriptionClient';
 import AgencyHub from '../AgencyHub';
 import ApplicantFunnel from '../ApplicantFunnel';
 import { PortalSidebar, type PortalPage } from './PortalSidebar';
@@ -76,10 +76,18 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const [talentPoolInitialJobId, setTalentPoolInitialJobId] = useState<string | null>(null);
   const { addToast } = useToast();
   const mainRef = useRef<HTMLElement | null>(null);
+  const mountedRef = useRef(true);
+  // Ref latch: the planSaving state lags a render, so a synchronous double-click could
+  // create two checkout sessions / two pending writes.
+  const planSavingRef = useRef(false);
   // For applicant funnel
   const [jobForFunnel, setJobForFunnel] = useState<JobPosting | null>(null);
   // Previous page before entering post-job/funnel views
   const [prevPage, setPrevPage] = useState<PortalPage>('dashboard');
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   // Keep page in sync when initialPage changes (deep-link from homepage)
   useEffect(() => {
@@ -91,6 +99,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     setError(null);
     try {
       const jobsWithCounts = await listEmployerJobsWithCounts(session.user.id);
+      if (!mountedRef.current) return;
 
       if (jobsWithCounts.length === 0) {
         setJobPostings([]);
@@ -106,6 +115,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
       try {
         const jobIds = jobsWithCounts.map((j) => j.id);
         const allApps = await listApplicationsForJobs(jobIds, session.user.id);
+        if (!mountedRef.current) return;
 
         const activeJobs = jobsWithCounts.filter((j) => j.is_active).length;
         const totalApplicants = allApps.length || 0;
@@ -121,15 +131,16 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
         setKpiData({ activeJobs, totalApplicants, newApplicants, avgMatchScore });
       } catch {
+        if (!mountedRef.current) return;
         // KPI fetch failed — derive from job list
         const activeJobs = jobsWithCounts.filter((j) => j.is_active).length;
         const totalApplicants = formatted.reduce((s, j) => s + j.applicant_count, 0);
         setKpiData({ activeJobs, totalApplicants, newApplicants: 0, avgMatchScore: 0 });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data.');
+      if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to load data.');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [session.user.id]);
 
@@ -192,16 +203,24 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   };
 
   const handleSelectPlan = async (planKey: string) => {
-    if (planSaving) return;
+    if (planSaving || planSavingRef.current) return;
+    planSavingRef.current = true;
     setPlanSaving(true);
     try {
-      await setUserSubscription(`pending_biz_${planKey}`);
+      const pendingPlanKey = `pending_biz_${planKey}`;
+      const result = await setUserSubscription(pendingPlanKey);
+      if (result.status === 'pending_payment') {
+        const checkout = await createSubscriptionCheckout(pendingPlanKey);
+        window.location.assign(checkout.url);
+        return;
+      }
       await refreshProfile();
       addToast(t('portal_toast_plan_updated'), 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       addToast(t('portal_toast_plan_update_failed').replace('{error}', message), 'error');
     } finally {
+      planSavingRef.current = false;
       setPlanSaving(false);
     }
   };

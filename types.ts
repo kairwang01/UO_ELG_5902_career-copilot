@@ -67,6 +67,7 @@ export interface UserProfile {
   id: string;
   updated_at: string;
   full_name: string | null;
+  birth_date?: string | null;
   avatar_url: string | null;
   subscription_status: string;
   role: 'employer' | 'candidate' | 'agency';
@@ -242,6 +243,13 @@ export interface PortfolioExperience {
   description: string;
 }
 
+export interface PortfolioProjectContent {
+  title: string;
+  description: string;
+  url: string;
+  category: string;
+}
+
 export interface PortfolioContent {
   fullName: string;
   firstName: string;
@@ -256,6 +264,7 @@ export interface PortfolioContent {
   };
   skills: PortfolioSkill[];
   experience: PortfolioExperience[];
+  projects: PortfolioProjectContent[];
 }
 
 export interface PortfolioWebsiteResult {

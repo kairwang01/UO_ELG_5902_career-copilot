@@ -1,6 +1,58 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, ChevronDown, Copy, Download, FileText, Loader2, Printer } from 'lucide-react';
+import { AlertTriangle, Bookmark, Check, ChevronDown, Copy, Download, FileText, Loader2, Lock, Printer, RefreshCw } from 'lucide-react';
 import { Packer, Document, Paragraph, TextRun, HeadingLevel } from 'docx';
+
+/**
+ * Toolbar shown above a tool's result. For PAID users it confirms the result is
+ * saved (so it'll be here free next time) and offers "Try next" to re-run (uses
+ * credits). For FREE users it shows an upgrade nudge instead of a save badge.
+ */
+export const SavedResultBar: React.FC<{
+  t: (key: string) => string;
+  onTryNext: () => void;
+  canSave: boolean;
+  /** True when the result on screen is the cloud-cached one (vs. a fresh run). */
+  isSaved: boolean;
+  savedAt?: number | null;
+  onUpgrade?: () => void;
+}> = ({ t, onTryNext, canSave, isSaved, savedAt, onUpgrade }) => {
+  const dateStr = savedAt ? new Date(savedAt).toLocaleDateString() : '';
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800/50">
+      <div className="flex items-center gap-2 text-sm">
+        {canSave ? (
+          <>
+            <Bookmark className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <span className="font-medium text-slate-700 dark:text-slate-200">
+              {isSaved
+                ? (dateStr ? t('tool_saved_on').replace('{date}', dateStr) : t('tool_saved_label'))
+                : t('tool_saved_just_now')}
+            </span>
+          </>
+        ) : (
+          <>
+            <Lock className="h-4 w-4 shrink-0 text-slate-400" />
+            <button
+              type="button"
+              onClick={onUpgrade}
+              className={`font-medium text-blue-600 dark:text-blue-400 ${onUpgrade ? 'hover:underline' : 'cursor-default'}`}
+            >
+              {t('tool_saved_upgrade_hint')}
+            </button>
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onTryNext}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+      >
+        <RefreshCw className="h-3.5 w-3.5" />
+        {t('tool_try_next')}
+      </button>
+    </div>
+  );
+};
 
 /** Shared error box so every tool surfaces failures with the same look. */
 export const ToolError: React.FC<{ message: string; onRetry?: () => void; retryLabel?: string }> = ({ message, onRetry, retryLabel = 'Try again' }) => (
@@ -26,12 +78,18 @@ export const CopyButton: React.FC<{ text: string; label?: string; copiedLabel?: 
   className = '',
 }) => {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+  }, []);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard unavailable (permissions/insecure context) — leave the label as-is.
     }
@@ -125,7 +183,14 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
   const [isDocxExporting, setIsDocxExporting] = useState(false);
   const [status, setStatus] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const printTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const safeBaseFilename = sanitizeFilename(baseFilename);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (printTimerRef.current) clearTimeout(printTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -253,15 +318,16 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
     `);
     printWindow.document.close();
 
-    setTimeout(() => {
+    if (printTimerRef.current) clearTimeout(printTimerRef.current);
+    printTimerRef.current = setTimeout(() => {
         try {
             printWindow.focus();
             printWindow.print();
             printWindow.close();
-            setStatus({ tone: 'success', message: 'PDF print dialog opened.' });
+            if (mountedRef.current) setStatus({ tone: 'success', message: 'PDF print dialog opened.' });
         } catch (e) {
             console.error("Printing failed:", e);
-            setStatus({ tone: 'error', message: 'PDF export failed. Please try again.' });
+            if (mountedRef.current) setStatus({ tone: 'error', message: 'PDF export failed. Please try again.' });
             printWindow.close();
         }
     }, 250);
@@ -314,6 +380,7 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
       });
 
       const blob = await Packer.toBlob(doc);
+      if (!mountedRef.current) return;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -324,9 +391,9 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
       window.URL.revokeObjectURL(url);
       setStatus({ tone: 'success', message: 'DOCX export started.' });
     } catch {
-      setStatus({ tone: 'error', message: 'DOCX export failed. Please try again.' });
+      if (mountedRef.current) setStatus({ tone: 'error', message: 'DOCX export failed. Please try again.' });
     } finally {
-      setIsDocxExporting(false);
+      if (mountedRef.current) setIsDocxExporting(false);
     }
   };
 

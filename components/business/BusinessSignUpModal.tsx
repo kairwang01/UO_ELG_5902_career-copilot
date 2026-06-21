@@ -1,9 +1,9 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { sendEmailVerification } from 'firebase/auth';
 import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
-import { setUserSubscription } from '@/services/subscriptionClient';
+import { createSubscriptionCheckout, setUserSubscription } from '@/services/subscriptionClient';
 import {
   Dialog,
   DialogContent,
@@ -35,6 +35,11 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Ref latch (state lags a render → a double Enter could fire two signUp /
+  // setUserSubscription calls). mountedRef drops tail setState if the modal unmounts.
+  const submittingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
     if (isOpen) setSelectedPlan(initialPlan);
@@ -52,12 +57,15 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
       setError(t('auth_error_password_mismatch'));
       return;
     }
+    if (submittingRef.current) return; // block synchronous double-submit
+    submittingRef.current = true;
     setLoading(true);
     setError(null);
     setMessage(null);
 
     try {
       const { data: authData, error: authError } = await data.auth.signUp(email, password);
+      if (!mountedRef.current) return;
 
       if (authError) {
         if (authError.message.includes('email-already-in-use') || authError.message.includes('already registered')) {
@@ -72,7 +80,8 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
       if (authData) {
         // Write the contact name + organization server-side at doc creation
         // (race-free). The client upsert below is a fallback once the doc exists.
-        await setUserSubscription(`pending_biz_${selectedPlan}`, {
+        const pendingPlanKey = `pending_biz_${selectedPlan}`;
+        const subscriptionResult = await setUserSubscription(pendingPlanKey, {
           fullName: trimmedContactName,
           companyName: trimmedOrgName,
         });
@@ -81,13 +90,19 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
           id: authData.id,
           full_name: trimmedContactName,
           company_name: trimmedOrgName || null,
-          role: 'employer',
+          ...(subscriptionResult.status === 'active' ? { role: 'employer' as const } : {}),
           updated_at: new Date().toISOString(),
         });
+        if (!mountedRef.current) return;
 
         if (profileError) {
           setError(`${t('auth_profile_setup_failed')} ${profileError.message}`);
         } else {
+          if (subscriptionResult.status === 'pending_payment') {
+            const checkout = await createSubscriptionCheckout(pendingPlanKey);
+            window.location.assign(checkout.url);
+            return;
+          }
           // Send a verification email (non-blocking, production-readiness step).
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
@@ -104,14 +119,15 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
           } catch {
             // intentionally ignored — account creation succeeded
           }
-          setMessage(t('auth_business_account_created'));
+          if (mountedRef.current) setMessage(t('auth_business_account_created'));
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('auth_unexpected_error'));
+      if (mountedRef.current) setError(err instanceof Error ? err.message : t('auth_unexpected_error'));
     } finally {
-      // Always release the loading state, even if an unexpected error is thrown.
-      setLoading(false);
+      // Always release the loading state + latch, even if an unexpected error is thrown.
+      submittingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   };
 

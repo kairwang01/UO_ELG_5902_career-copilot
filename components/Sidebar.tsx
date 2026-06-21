@@ -4,13 +4,13 @@ import {
   LayoutDashboard,
   Wrench,
   FileText,
+  IdCard,
   Globe,
   CreditCard,
   CalendarCheck,
   ChevronRight,
   User as UserIcon,
   MessageSquare,
-  Zap,
   ChevronDown,
   ShieldCheck,
   Briefcase,
@@ -24,8 +24,9 @@ import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import LanguageSwitcher from './LanguageSwitcher';
 import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
+import BrandLogo from './BrandLogo';
 
-type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
+type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'talent_profile' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
 
 interface SidebarProps {
   activeView: SidebarView;
@@ -72,6 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const allWorkspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: t('ws_nav_dashboard'), icon: LayoutDashboard },
     { id: 'resume', label: t('ws_nav_resume'), icon: FileText },
+    { id: 'talent_profile', label: t('ws_nav_talent_profile'), icon: IdCard },
     { id: 'jobs', label: t('ws_nav_jobs'), icon: Briefcase },
     { id: 'applications', label: t('ws_nav_applications'), icon: ClipboardList },
     { id: 'interview', label: t('ws_nav_interview'), icon: MessageSquare },
@@ -107,17 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className="flex items-center gap-3 w-full text-left group"
           aria-label={t('ws_nav_home')}
         >
-          <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-500/20">
-              <Zap className="h-6 w-6" />
-          </div>
-          <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                  Career CoPilot
-              </h1>
-              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 font-bold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  Career Studio
-              </p>
-          </div>
+          <BrandLogo size="lg" surface={theme === 'dark' ? 'dark' : 'light'} subtitle="Career Studio" />
         </button>
       </div>
 

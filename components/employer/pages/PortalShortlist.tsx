@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BookmarkCheck,
@@ -39,7 +39,13 @@ type TranslationFn = (key: string) => string;
 // ---- helpers ----------------------------------------------------------------
 
 function escapeCSVField(value: string): string {
-  const s = String(value ?? "");
+  let s = String(value ?? "");
+  // Neutralize spreadsheet formula injection: a candidate-controlled value
+  // starting with = + - @ (or a leading tab/CR) is executed as a formula by
+  // Excel/Sheets/LibreOffice. Prefix an apostrophe so the cell is treated as
+  // text. Runs BEFORE quoting so a value with both a formula char and a comma
+  // gets both protections.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (s.includes('"') || s.includes(",") || s.includes("\n")) {
     return `"${s.replace(/"/g, '""')}"`;
   }
@@ -511,19 +517,25 @@ export function PortalShortlist({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const { addToast } = useSharedToast();
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await listShortlist(employerUid);
+      if (!mountedRef.current) return;
       setEntries(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("shortlist_load_error"));
+      if (mountedRef.current) setError(err instanceof Error ? err.message : t("shortlist_load_error"));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [employerUid, t]);
 
@@ -536,12 +548,13 @@ export function PortalShortlist({
     setBusyEntryId(id);
     try {
       await removeFromShortlist(employerUid, id);
+      if (!mountedRef.current) return;
       setEntries((prev) => prev.filter((e) => e.id !== id));
       addToast(t("shortlist_removed"), "success");
     } catch {
-      addToast(t("shortlist_action_error"), "error");
+      if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
     } finally {
-      setBusyEntryId(null);
+      if (mountedRef.current) setBusyEntryId(null);
     }
   };
 
@@ -552,6 +565,7 @@ export function PortalShortlist({
       await updateShortlistEntry(employerUid, entry.id, {
         status: "contacted",
       });
+      if (!mountedRef.current) return;
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entry.id ? { ...e, status: "contacted" } : e,
@@ -559,9 +573,9 @@ export function PortalShortlist({
       );
       addToast(t("shortlist_marked_contacted"), "success");
     } catch {
-      addToast(t("shortlist_action_error"), "error");
+      if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
     } finally {
-      setBusyEntryId(null);
+      if (mountedRef.current) setBusyEntryId(null);
     }
   };
 
@@ -583,16 +597,19 @@ export function PortalShortlist({
     setBusyEntryId(id);
     try {
       await updateShortlistEntry(employerUid, id, { notes: editNotes });
+      if (!mountedRef.current) return;
       setEntries((prev) =>
         prev.map((e) => (e.id === id ? { ...e, notes: editNotes } : e)),
       );
       addToast(t("shortlist_notes_saved"), "success");
-    } catch {
-      addToast(t("shortlist_action_error"), "error");
-    } finally {
+      // Only close the editor on success — on failure keep the typed draft open so the
+      // user doesn't silently lose what they wrote.
       setEditingId(null);
       setEditNotes("");
-      setBusyEntryId(null);
+    } catch {
+      if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
+    } finally {
+      if (mountedRef.current) setBusyEntryId(null);
     }
   };
 

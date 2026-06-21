@@ -12,6 +12,10 @@
  *    {{improvementsBlock}}   — mapped list of "- area: suggestion" lines
  *    {{resumeText}}          — resume plain text
  *
+ *  extractTalentProfile:
+ *    {{resumeText}}          — resume plain text
+ *    {{targetLanguage}}      — output language for generated free-text fields
+ *
  *  convertResumeFormat:
  *    {{marketName}}          — target job market name
  *    {{coverLetterBlock}}    — conditional cover-letter section (empty when not provided)
@@ -208,6 +212,33 @@ import { getPromptOverride } from "../admin/platformConfig";
 // ---------------------------------------------------------------------------
 
 export const PROMPT_TEMPLATES: Record<string, string> = {
+  extractTalentProfile: `You are an expert resume parser. Read the resume below and extract the candidate's information into the structured JSON schema.
+
+STRICT RULES:
+- Use ONLY facts that appear in the resume. NEVER invent names, employers, schools, dates, GPAs, links, tools, or metrics. If something is not in the resume, omit the field or leave it empty.
+- LANGUAGE: write generated free-text fields (summaries, responsibilities, project background/result, strengths) in {{targetLanguage}}. Preserve proper nouns, employers, schools, product names, URLs, emails, phone numbers, technical skill/tool names, and dates exactly as appropriate. If {{targetLanguage}} is "the same language as the resume", keep the resume's source language.
+- DATES: output every date as YYYY-MM-DD. If only month+year are known, use the 1st of that month (e.g. "Sept 2023" -> "2023-09-01"). If only a year is known, use "YYYY-01-01". For ongoing / "Present" / "Current" / unknown end dates, leave the field empty.
+- basic: full name, email, phone, country, and current city if shown.
+- intention.targetRole: infer the single most likely target role from the candidate's most recent / most senior position or any stated objective/summary (e.g. "Product Manager", "Software Engineer"). intention.roleCategory: the closest broad category. These are a best-guess STARTING POINT the candidate will confirm — base them only on resume evidence, never invent an unrelated role.
+- education: one entry per school/degree. Set "degree" to EXACTLY one of: "High School", "Associate", "Bachelor's", "Master's", "PhD", "Other".
+- experience: one entry per internship or job. workContent = a concise summary of what they did; put outcomes in "outcome" and quantified results in "metrics" (array of short strings like "+30% conversion"); "tools" = an array of tools/technologies used in that role.
+- projects: one entry per project (background = the problem/users; result = what shipped; metrics = quantified figures; link = any URL).
+- skills: classify each skill into EXACTLY ONE group:
+  * projectManagement — Agile, Scrum, sprint planning, roadmapping, stakeholder/risk management, delivery.
+  * product — user research, PRD writing, prioritization, competitive/UX analysis, data-driven iteration.
+  * tools — software/platforms (Jira, Confluence, Figma, GitHub, Notion, Slack, analytics, ...).
+  * technical — programming/CS (Python, JavaScript, SQL, APIs, data viz, cloud).
+  * ai — LLM / prompt / AI-assisted work.
+  * languages — spoken/written human languages (e.g. "English (Native)", "French").
+  Each group is an array of short skill names; do not duplicate a skill across groups.
+- awards: name, type (e.g. Scholarship, Competition), date (year), organization.
+- portfolio: any links the resume lists (GitHub, personal site, portfolio) — each with a short title and the url.
+- additional.overallStrengths: a neutral 1-2 sentence summary of the candidate's strengths, grounded only in the resume.
+
+RESUME:
+{{resumeText}}
+
+Return JSON matching the required schema. Omit any field you cannot fill from the resume; do not fabricate.`,
   applyResumeImprovements: "You are a senior resume writer and certified career coach who has rewritten thousands of resumes that cleared modern Applicant Tracking Systems (ATS) and won recruiter callbacks. Your job: produce a single, polished, ready-to-submit rewrite of the candidate's resume that faithfully applies the requested improvements below, raising it from average to interview-grade.\n\nREQUESTED IMPROVEMENTS (each line is \"- area: suggestion\" — treat as the authoritative change list):\n{{improvementsBlock}}\n\nORIGINAL RESUME:\n{{resumeText}}\n\nHOW TO APPLY THE IMPROVEMENTS:\n1. Address every improvement above. Map each suggestion to the matching resume section and implement it concretely; do not merely acknowledge it. If two suggestions conflict, prefer the one that better serves recruiter readability and ATS parsing.\n2. Preserve all factual ground truth from the original: names, employers, titles, dates, locations, degrees, and real numbers. NEVER invent achievements, metrics, tools, employers, certifications, or URLs. If a suggestion implies a metric the resume does not contain, rephrase to foreground scope and impact using only information already present — do not fabricate a number.\n\nQUALITY BAR FOR THE REWRITE (updatedResumeText) — calibrate every bullet against this scale:\n- ~90 (target): Every experience bullet opens with a strong past-tense action verb and follows an impact-first pattern — accomplishment + how + quantified or scoped result (%, $, time saved, volume, headcount, or clear magnitude). Wording mirrors the vocabulary and hard/soft skills implied by the improvements and the candidate's target role so the ATS surfaces exact-match keywords. Behavioural or project content reads with implicit STAR structure (situation/task → action → result). Tight, scannable, consistent tense and formatting, no first-person pronouns, no filler.\n- ~60 (not acceptable — push past it): Action verbs present but bullets describe duties (\"Responsible for...\") instead of outcomes, results are vague (\"improved performance\"), and few role-relevant keywords appear.\n- ~30 (reject): Passive voice, paragraph blobs, buzzword filler (\"hardworking team player\"), missing keywords, inconsistent formatting.\n\nADDITIONAL STANDARDS:\n- ATS-safe structure: standard section headers (e.g. Summary, Skills, Experience, Education), reverse-chronological order, plain text, no tables/columns/graphics, and a Skills section that reflects the keywords a recruiter for this candidate's target role would screen for.\n- Quantify wherever the source supports it; where it does not, lead with concrete scope (team size, users, budget, frequency, tech stack) rather than empty adjectives.\n- Honour any region, currency, language, or locale cues already present in the resume (spelling conventions, date format, currency symbols, photo/personal-data norms). Do not relocate the candidate or change the target market.\n- Keep the candidate's authentic voice and seniority; tighten, don't inflate. Output the complete resume, not a diff or a list of edits.\n\nReturn JSON matching the required schema: put the full rewritten resume as plain text in updatedResumeText.",
 
   convertResumeFormat: `

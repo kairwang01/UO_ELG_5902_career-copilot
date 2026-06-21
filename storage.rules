@@ -52,6 +52,13 @@ service firebase.storage {
                    );
     }
 
+    // application_resumes/{applicationId}/… — frozen copy of the resume file taken
+    // at apply time (the file HR reviews). Written by createJobApplication and
+    // served via getApplicantResumeFile, both Admin SDK. Clients never touch it.
+    match /application_resumes/{applicationId}/{fileName} {
+      allow read, write: if false;
+    }
+
     // Everything else denied by default.
     match /{allPaths=**} {
       allow read, write: if false;

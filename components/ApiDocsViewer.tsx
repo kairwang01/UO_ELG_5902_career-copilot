@@ -39,23 +39,31 @@ const ApiDocsViewer: React.FC<ApiDocsViewerProps> = ({ onClose }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        let active = true;
+        const controller = new AbortController();
         const fetchDocs = async () => {
             try {
-                const response = await fetch('/docs/api.md');
+                const response = await fetch('/docs/api.md', { signal: controller.signal });
                 if (!response.ok) {
                     throw new Error('Failed to load documentation file.');
                 }
                 const markdown = await response.text();
                 const html = convertMarkdownToHtml(markdown);
-                setDocContent(html);
+                if (active) setDocContent(html);
             } catch (error) {
-                setDocContent('<p class="text-red-500">Error loading documentation. Please try again later.</p>');
+                if (active && !(error instanceof DOMException && error.name === 'AbortError')) {
+                    setDocContent('<p class="text-red-500">Error loading documentation. Please try again later.</p>');
+                }
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         };
 
         fetchDocs();
+        return () => {
+            active = false;
+            controller.abort();
+        };
     }, []);
 
     return (

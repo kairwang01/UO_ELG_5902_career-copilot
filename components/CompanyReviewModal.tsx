@@ -12,10 +12,10 @@
  * other errors fall back to a generic toast.
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Star, X } from "lucide-react";
 import { useToast } from "./Toast";
-import { useModalBehavior } from "../hooks/useModalBehavior";
+import { ViewportAwareDialog } from "./ViewportAwareDialog";
 import { submitCompanyReview } from "../lib/companyReviewsData";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -87,7 +87,11 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [verifyError, setVerifyError] = useState(false);
-  useModalBehavior(onClose);
+  // Ref latch: the `submitting` state lags a render, so a fast double-submit could post
+  // two reviews. mountedRef drops the tail setState if the parent closes the modal mid-submit.
+  const submittingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const charCount = text.trim().length;
   const canSubmit = rating >= 1 && charCount >= 20 && charCount <= 2000 && !submitting;
@@ -95,6 +99,8 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+    if (submittingRef.current) return; // already posting — block synchronous double-submit
+    submittingRef.current = true;
 
     setSubmitting(true);
     setVerifyError(false);
@@ -105,6 +111,7 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
       onSubmitted();
       onClose();
     } catch (err: unknown) {
+      if (!mountedRef.current) return; // modal closed mid-submit — nothing to show
       // Firebase callable errors carry a `code` field on the inner error.
       const code =
         (err as { code?: string })?.code ??
@@ -115,21 +122,21 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
         addToast(t("review_submit_error"), "error");
       }
     } finally {
-      setSubmitting(false);
+      submittingRef.current = false;
+      if (mountedRef.current) setSubmitting(false);
     }
   };
 
   return (
-    /* Backdrop */
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("review_modal_title")}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <ViewportAwareDialog
+      open
+      onClose={onClose}
+      closeOnBackdrop
+      ariaLabel={t("review_modal_title")}
+      maxWidth={448}
+      zIndex={50}
     >
-      {/* Panel */}
-      <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-gray-100 dark:border-slate-700 flex flex-col">
+      <div className="relative flex flex-col rounded-2xl border border-gray-100 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 dark:border-slate-700">
           <h2 className="font-bold text-base text-gray-900 dark:text-gray-100 leading-snug">
@@ -221,7 +228,7 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 

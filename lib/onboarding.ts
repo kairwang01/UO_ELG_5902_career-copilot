@@ -9,9 +9,8 @@
  *                 edits continue to auto-save from CareerApp
  *  - interest   → JobPreferences (localStorage) — feeds the AI job search and
  *                 the Browse-jobs goal banner that already exist
- *  - birthday + completion flag → per-uid localStorage. Birthday is optional
- *    personalization data; move it into the profile once the team adds a
- *    `birth_date` field to the rules allowlist.
+ *  - birthday  → users/{uid}.birth_date (YYYY-MM-DD, optional)
+ *  - completion flag → per-uid localStorage
  */
 
 const PENDING_KEY = 'onboarding_pending';
@@ -52,7 +51,11 @@ export const markOnboardingDone = (uid: string): void => {
 
 export const saveBirthdayLocal = (uid: string, isoDate: string): void => {
   if (isoDate) safeSet(birthdayKey(uid), isoDate);
+  else safeRemove(birthdayKey(uid));
 };
+
+/** Backward-compatible read for users who completed onboarding before birth_date existed. */
+export const loadBirthdayLocal = (uid: string): string => safeGet(birthdayKey(uid))?.trim() ?? '';
 
 export const isTourDone = (uid: string): boolean => safeGet(tourDoneKey(uid)) === '1';
 export const markTourDone = (uid: string): void => safeSet(tourDoneKey(uid), '1');

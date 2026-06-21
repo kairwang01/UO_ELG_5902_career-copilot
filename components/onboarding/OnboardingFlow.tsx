@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, FileText, Sparkles, Upload, Zap } from 'lucide-react';
+import { CalendarDays, FileText, Sparkles, Upload } from 'lucide-react';
 import { data } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { parseFile } from '../../services/fileHelpers';
 import { uploadResumeFile, deleteResumeFile, type ResumeFileMeta } from '../../services/resumeStorage';
+import { BrandMark } from '../BrandLogo';
 import { loadJobPreferences, saveJobPreferences } from '../../hooks/useJobPreferences';
 import {
   CAREER_FIELDS,
+  loadBirthdayLocal,
   loadPendingOnboardingName,
   markOnboardingDone,
   saveBirthdayLocal,
@@ -19,14 +21,16 @@ import {
  * Collects name (required), birthday (optional), resume (optional) and target
  * career fields (optional), then asks for privacy consent BEFORE anything is
  * persisted — until the final step every answer lives only in component state.
- * Persistence stays inside existing channels: profile.full_name, the
- * user-reviewed resume_text and JobPreferences.
+ * Persistence stays inside existing channels: profile.full_name/birth_date,
+ * the user-reviewed resume_text and JobPreferences.
  */
 
 interface OnboardingFlowProps {
   uid: string;
   profile: UserProfile;
   t: (key: string) => string;
+  /** Drives the brand mark's surface tint so it matches the themed onboarding chrome. */
+  theme: 'light' | 'dark';
   /** skipped=true → nothing was persisted. resumeText flows into the workspace. */
   onComplete: (result: { skipped: boolean; resumeText?: string }) => void;
 }
@@ -76,14 +80,14 @@ const TransitionScreen: React.FC<{ line: string }> = ({ line }) => (
   </div>
 );
 
-const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComplete }) => {
+const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme, onComplete }) => {
   const [phase, setPhase] = useState<Phase>('intro');
 
   // ── collected answers (in memory until consent) ───────────────────────────
   const initialName = splitFullName(onboardingNameSource(profile));
   const [firstName, setFirstName] = useState(initialName.firstName);
   const [lastName, setLastName] = useState(initialName.lastName);
-  const [birthday, setBirthday] = useState('');
+  const [birthday, setBirthday] = useState(profile.birth_date || loadBirthdayLocal(uid));
   const [resumeDraft, setResumeDraft] = useState('');
   const [resumeSource, setResumeSource] = useState<string | null>(null); // filename or 'paste'
   const [resumeFileMeta, setResumeFileMeta] = useState<ResumeFileMeta | null>(null);
@@ -123,6 +127,10 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
   const suggested = useMemo(() => suggestCareerFields(resumeDraft), [resumeDraft]);
   const suggestedRef = useRef(suggested);
   suggestedRef.current = suggested;
+  // False once unmounted — guards setState if the user clicks "Skip all" (or leaves)
+  // while a resume parse/upload is still in flight.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   useEffect(() => {
     if (phase === 'interest') {
       setSelectedFields((prev) => (prev.length === 0 ? suggestedRef.current : prev));
@@ -140,6 +148,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
     setParseError(false);
     try {
       const parsed = await parseFile(file);
+      if (!mountedRef.current) return;
       if (parsed.text.trim()) {
         setResumeDraft(parsed.text);
         setResumeSource(file.name);
@@ -147,18 +156,19 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
         // Keep a downloadable copy of the original file (best-effort; the
         // reviewed text is the source of truth and is saved in finish()).
         try {
-          setResumeFileMeta(await uploadResumeFile(uid, file));
+          const meta = await uploadResumeFile(uid, file);
+          if (mountedRef.current) setResumeFileMeta(meta);
         } catch (err) {
           console.warn('Could not save original resume file during onboarding:', err);
-          setResumeFileMeta(null);
+          if (mountedRef.current) setResumeFileMeta(null);
         }
       } else {
         setParseError(true);
       }
     } catch {
-      setParseError(true);
+      if (mountedRef.current) setParseError(true);
     } finally {
-      setParsing(false);
+      if (mountedRef.current) setParsing(false);
     }
   };
 
@@ -168,26 +178,21 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
     setPhase('finishing');
     setSaveError(false);
     try {
-      // 1) Name → profile (allowlisted field).
+      // Name + reviewed resume → profile in ONE write. Splitting it risked a partial
+      // save (name persisted, resume lost) if the second call failed; a single update
+      // keeps it atomic. The resume text must be saved before leaving onboarding —
+      // relying on the workspace debounce lets getProfile() reload an empty
+      // resume_text and wipe the just-imported draft from local state.
+      const resumeTextToSave = resumeSource ? reviewedResumeText(resumeDraft) : '';
       const { error } = await data.profiles.update(uid, {
         full_name: fullName,
+        birth_date: birthday || null,
+        ...(resumeTextToSave
+          ? { resume_text: resumeTextToSave, ...(resumeFileMeta ?? {}) } // file refs when the upload succeeded
+          : {}),
         updated_at: new Date().toISOString(),
       });
       if (error) throw new Error(error.message);
-
-      // 1b) Reviewed resume text → profile. This must be saved before leaving
-      // onboarding; relying on the workspace debounce lets getProfile() reload an
-      // empty resume_text and wipe the just-imported draft from local state.
-      const resumeTextToSave = resumeSource ? reviewedResumeText(resumeDraft) : '';
-      if (resumeTextToSave) {
-        const { error: resumeError } = await data.profiles.update(uid, {
-          resume_text: resumeTextToSave,
-          // Persist the original-file references too, when the upload succeeded.
-          ...(resumeFileMeta ?? {}),
-          updated_at: new Date().toISOString(),
-        });
-        if (resumeError) throw new Error(resumeError.message);
-      }
 
       // 2) Career fields → existing JobPreferences (drives AI search + job goals).
       const roleTexts = selectedFields
@@ -204,8 +209,8 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
         });
       }
 
-      // 3) Optional birthday → local until the profile schema gains a field.
-      if (birthday) saveBirthdayLocal(uid, birthday);
+      // 3) Optional birthday → also mirror locally for old-client compatibility.
+      saveBirthdayLocal(uid, birthday);
 
       setPhase('done');
     } catch {
@@ -237,9 +242,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, onComp
       {/* Top bar: brand + progress + skip */}
       <header className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur px-4 pt-4 pb-3 sm:px-8">
         <div className="mx-auto flex w-full max-w-lg items-center gap-3">
-          <div className="rounded-xl bg-blue-600 p-1.5 text-white" aria-hidden="true">
-            <Zap className="h-4 w-4" />
-          </div>
+          <BrandMark surface={theme === 'dark' ? 'dark' : 'light'} className="h-8 w-8 shrink-0" />
           <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
             <div
               className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out"

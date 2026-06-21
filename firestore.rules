@@ -86,8 +86,25 @@ service cloud.firestore {
         data[field] is bool;
     }
 
+    function optionalDateString(data, field) {
+      return !hasField(data, field) ||
+        data[field] == null ||
+        (data[field] is string && data[field].matches("^\\d{4}-\\d{2}-\\d{2}$"));
+    }
+
     function unchanged(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // A candidate may not add/change employer identity (company_*) fields — only
+    // employer/agency accounts own a company profile. (Used on the user update
+    // rule; relies on `role` being pinned so it can't be flipped in the same write.)
+    function candidateCompanyFieldsUnchanged() {
+      return request.resource.data.role != "candidate" ||
+        unchanged([
+          "company_name", "company_description", "company_logo_url",
+          "company_website", "company_size", "industry", "founded_year"
+        ]);
     }
 
     // dev supports candidate | employer | agency (firebase-migration dropped agency).
@@ -120,6 +137,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           "role",
           "full_name",
+          "birth_date",
           "email",
           "preferred_language",
           "avatar_url",
@@ -155,9 +173,14 @@ service cloud.firestore {
         data.credits is number &&
         data.credits >= 0 &&
         data.credits <= 1000000 &&
-        data.created_at is timestamp &&
+        // created_at is server-set (onUserCreated/setSubscriptionStatus serverTimestamp)
+        // and immutable from the client (pinned by unchanged() on update). Some legacy
+        // docs persisted it as an ISO string; accept both so those owners aren't locked
+        // out of editing non-legacy profile fields (e.g. the org-profile form).
+        (data.created_at is timestamp || data.created_at is string) &&
         optionalTimestamp(data, "updated_at") &&
         optionalString(data, "full_name", 120) &&
+        optionalDateString(data, "birth_date") &&
         optionalString(data, "email", 320) &&
         optionalString(data, "preferred_language", 20) &&
         optionalUrl(data, "avatar_url", 2048) &&
@@ -194,10 +217,12 @@ service cloud.firestore {
     function validLegacyUserProfileUpdate(data) {
       return data.diff(resource.data).affectedKeys().hasOnly([
           "full_name",
+          "birth_date",
           "avatar_url",
           "updated_at"
         ]) &&
         optionalString(data, "full_name", 120) &&
+        optionalDateString(data, "birth_date") &&
         optionalUrl(data, "avatar_url", 2048) &&
         optionalTimestamp(data, "updated_at");
     }
@@ -369,6 +394,9 @@ service cloud.firestore {
           "employer_id",
           "title",
           "company_name",
+          "company_size",
+          "industry",
+          "founded_year",
           "description",
           "location",
           "salary_range",
@@ -387,71 +415,37 @@ service cloud.firestore {
         data.created_at is timestamp &&
         data.updated_at is timestamp &&
         optionalString(data, "company_name", 160) &&
+        optionalString(data, "company_size", 20) &&
+        optionalString(data, "industry", 80) &&
+        optionalString(data, "founded_year", 8) &&
         optionalString(data, "description", 20000) &&
         optionalString(data, "location", 180) &&
         optionalString(data, "salary_range", 120);
     }
 
-    function validApplicationStatus(status) {
-      return status in [
-        "Applied",
-        "Interviewing",
-        "Group Interview",
-        "First Interview",
-        "Second Interview",
-        "Decision Maker Interview",
-        "HR Interview",
-        "Offer",
-        "Hiring Evaluation",
-        "Intent Letter",
-        "Offer Confirmed",
-        "Tripartite Agreement",
-        "Signed",
-        "Rejected",
-        "Hired"
-      ];
+    function validPortfolioDraft(data) {
+      return data.keys().hasOnly([
+          "version",
+          "resume_fingerprint",
+          "details",
+          "projects",
+          "content",
+          "updated_at"
+        ]) &&
+        data.keys().hasAll(["version", "resume_fingerprint", "details", "projects", "updated_at"]) &&
+        data.version == 1 &&
+        optionalString(data, "resume_fingerprint", 80) &&
+        data.details is map &&
+        data.projects is list &&
+        data.projects.size() <= 12 &&
+        (!hasField(data, "content") || data.content == null || data.content is map) &&
+        optionalString(data, "updated_at", 40);
     }
 
-    function validJobApplication(data) {
-      return data.keys().hasOnly([
-          "job_id",
-          "candidate_id",
-          "employer_id",
-          "job_title",
-          "candidate_name",
-          "status",
-          "compatibility_score",
-          "notes",
-          "application_date"
-        ]) &&
-        data.keys().hasAll([
-          "job_id",
-          "candidate_id",
-          "employer_id",
-          "job_title",
-          "candidate_name",
-          "status",
-          "application_date"
-        ]) &&
-        data.job_id is string &&
-        data.job_id.size() > 0 &&
-        data.job_id.size() <= 128 &&
-        data.candidate_id is string &&
-        data.candidate_id.size() > 0 &&
-        data.candidate_id.size() <= 128 &&
-        data.employer_id is string &&
-        data.employer_id.size() > 0 &&
-        data.employer_id.size() <= 128 &&
-        data.job_title is string &&
-        data.job_title.size() > 0 &&
-        data.job_title.size() <= 180 &&
-        data.candidate_name is string &&
-        data.candidate_name.size() <= 120 &&
-        validApplicationStatus(data.status) &&
-        data.application_date is timestamp &&
-        optionalNumber(data, "compatibility_score", 0, 100) &&
-        optionalString(data, "notes", 5000);
-    }
+    // (validApplicationStatus / validJobApplication removed — job_applications
+    // creates and updates are now server-only via Cloud Functions, so the
+    // client-write validators are dead. Status values are validated in
+    // updateApplicationStatus.ts.)
 
     // ---- users/{userId} ---------------------------------------------------
     match /users/{userId} {
@@ -471,14 +465,20 @@ service cloud.firestore {
         && request.resource.data.credits <= 100
         && createSubscriptionAllowed(request.resource.data);
 
-      // Update: owner may change profile fields, but credits, subscription_status
-      // and created_at are server-only / immutable from the client.
+      // Update: owner may change profile fields, but credits, subscription_status,
+      // role and created_at are server-only / immutable from the client. Pinning
+      // `role` is the launch-critical trust fix: without it any candidate could
+      // update their own doc with role:"employer" and self-escalate into
+      // employer-only features (posting jobs, talent discovery). Role is set only
+      // by onUserCreated / setSubscriptionStatus (Admin SDK). Candidates also may
+      // not write employer identity (company_*) fields — anti-impersonation.
       allow update: if isOwner(userId)
-        && unchanged(["credits", "subscription_status", "created_at", "custom_provider"])
+        && unchanged(["credits", "subscription_status", "created_at", "custom_provider", "role"])
         && (
           validUser(request.resource.data) ||
           validLegacyUserProfileUpdate(request.resource.data)
-        );
+        )
+        && candidateCompanyFieldsUnchanged();
 
       allow delete: if false;
 
@@ -528,7 +528,7 @@ service cloud.firestore {
         // Only the `read` field may be changed by the owner (mark-read).
         // All identity fields must remain unchanged.
         allow update: if isOwner(userId)
-          && unchanged(["type", "application_id", "job_title", "status", "created_at"]);
+          && unchanged(["type", "application_id", "job_title", "status", "candidate_note", "created_at"]);
 
         // Server-only creates/deletes — trigger writes via Admin SDK.
         allow create, delete: if false;
@@ -551,33 +551,62 @@ service cloud.firestore {
 
         allow delete: if isOwner(userId);
       }
+
+      // hidden_candidates/{candidateId} — per-employer "do not surface this candidate
+      // in Talent Discovery again" signal. Owner-only; the doc is a lightweight marker.
+      match /hidden_candidates/{candidateId} {
+        allow read: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId);
+      }
+
+      // tool_results/{toolKey} — the candidate's latest saved AI-tool output,
+      // so a PAID user can revisit it for free next time instead of re-spending
+      // credits ("Try next" re-runs the tool). Owner-read; writes are gated to
+      // candidate paid plans — free users don't get saves. subscription_status
+      // is server-only/immutable from the client (pinned on the user update
+      // rule above), so this tier check can't be forged from the browser.
+      match /tool_results/{toolKey} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && get(/databases/$(database)/documents/users/$(userId)).data.subscription_status in ["essentials", "accelerator", "executive"]
+          && request.resource.data.tool_key is string
+          && request.resource.data.tool_key.size() <= 80;
+        allow delete: if isOwner(userId);
+      }
     }
 
     // ---- job_postings/{jobId} ---------------------------------------------
     // Any signed-in user may browse active postings; the owning employer may
     // also see their own inactive ones and is the only writer.
+    // job_postings — SERVER-ONLY writes. Create / update / close+reopen go through
+    // the createJobPosting / updateJobPosting / setJobPostingActive callables
+    // (Admin SDK), which enforce: employer/agency role, per-plan ACTIVE-job limits
+    // (rules can't count, which is why this must be a callable), server-read
+    // company identity (a client can't forge the company), and an audit trail in
+    // job_posting_events. Clients may read active postings (+ their own) and
+    // delete their own. A direct client create/update is rejected.
     match /job_postings/{jobId} {
       allow read: if isSignedIn() &&
         (resource.data.is_active == true || resource.data.employer_id == request.auth.uid);
 
-      allow create: if isSignedIn() &&
-        validJobPosting(request.resource.data) &&
-        request.resource.data.employer_id == request.auth.uid;
-
-      allow update: if isSignedIn() &&
-        resource.data.employer_id == request.auth.uid &&
-        validJobPosting(request.resource.data) &&
-        unchanged(["employer_id", "created_at"]);
+      allow create, update: if false;
 
       allow delete: if isSignedIn() &&
         resource.data.employer_id == request.auth.uid;
     }
 
+    // job_posting_events/{eventId} — append-only audit log of posting lifecycle
+    // actions (created/updated/closed/reopened + optional reason). Written by the
+    // job-posting callables via the Admin SDK; clients never read or write it.
+    match /job_posting_events/{eventId} {
+      allow read, write: if false;
+    }
+
     // ---- job_applications/{applicationId} ---------------------------------
-    // Both the candidate and the owning employer may read. Status changes are
-    // employer-controlled: only the employer may update, and identity/title
-    // fields are pinned. Either party may delete (candidate withdraw / employer
-    // cleanup).
+    // Both the candidate and the owning employer may read. Creates and status
+    // updates are server-only so every application mutation is validated and
+    // auditable through Cloud Functions. Either party may delete (candidate
+    // withdraw / employer cleanup).
     //
     // CREATE is client-forbidden: all writes go through the createJobApplication
     // Cloud Function (Admin SDK), which reads employer_id/job_title from the
@@ -588,14 +617,12 @@ service cloud.firestore {
         (resource.data.candidate_id == request.auth.uid ||
          resource.data.employer_id == request.auth.uid);
 
-      // Server-only — the createJobApplication Cloud Function (Admin SDK)
-      // bypasses these rules. Direct client creates are rejected.
+      // Server-only — createJobApplication and updateApplicationStatus use the
+      // Admin SDK and bypass these rules. Direct client creates/updates are
+      // rejected so status changes cannot skip the audit log.
       allow create: if false;
 
-      allow update: if isSignedIn() &&
-        resource.data.employer_id == request.auth.uid &&
-        validJobApplication(request.resource.data) &&
-        unchanged(["job_id", "candidate_id", "employer_id", "job_title", "candidate_name", "application_date"]);
+      allow update: if false;
 
       allow delete: if isSignedIn() &&
         (resource.data.candidate_id == request.auth.uid ||
@@ -603,11 +630,110 @@ service cloud.firestore {
     }
 
     // ---- company_reviews/{id} --------------------------------------------
-    // id format: `${employerId}_${candidateUid}`.
-    // Writes are server-only (Admin SDK via createCompanyReview callable).
-    // Any signed-in user may read (no PII — author_uid is never shown in UI).
+    // id format: `${employerId}_${candidateUid}`. The doc carries author_uid AND
+    // an identity-encoding id, so DIRECT client reads are denied — they would
+    // de-anonymize reviewers. Reads go through the listCompanyReviews callable
+    // (Admin SDK), which projects out author_uid and the raw id. Writes are
+    // server-only (createCompanyReview callable).
     match /company_reviews/{id} {
+      allow read, write: if false;
+    }
+
+    // talent_profiles/{uid} — the candidate's reusable structured profile. PII
+    // (name/email/phone + history). Owner-only client access; employers see it
+    // only via the server-side Discover Talent / applicant flow (Admin SDK).
+    match /talent_profiles/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // portfolio_drafts/{uid} — the candidate's user-reviewed Showcase Builder
+    // text draft. Owner-only; images are intentionally not stored here.
+    match /portfolio_drafts/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && validPortfolioDraft(request.resource.data);
+      allow delete: if isOwner(userId);
+    }
+
+    // mail/{id} — outbound email queue for the "Trigger Email" extension. Holds
+    // candidate email addresses; only the Admin SDK (notifications trigger) and
+    // the extension touch it. Clients can NEVER enqueue or read mail.
+    match /mail/{id} {
+      allow read, write: if false;
+    }
+
+    // billing/{uid} — server-only paid-entitlement gate for recurring credit
+    // grants. Written ONLY by a real payment (Stripe webhook) / admin, never the
+    // client (which could otherwise self-grant unlimited monthly credits).
+    match /billing/{uid} {
+      allow read, write: if false;
+    }
+
+    // application_snapshots/{applicationId} — the frozen resume/Talent-Profile
+    // snapshot taken at apply time (the version HR reviews). Holds candidate PII;
+    // written by createJobApplication and read by the employer-resume callables,
+    // all Admin SDK. Clients NEVER read or write it directly.
+    match /application_snapshots/{applicationId} {
+      allow read, write: if false;
+    }
+
+    // application_status_events/{eventId} — immutable audit log for application
+    // status changes. Contains employer-only rationale and optional candidate
+    // notes; clients use callables/UI projections, never direct reads or writes.
+    match /application_status_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    // application_interviews/{interviewId} — scheduled interviews for an
+    // application. BOTH parties may READ their own (the candidate sees the time/
+    // format/link to confirm; the owning employer manages them). All WRITES are
+    // server-only: the scheduleInterview / updateInterview / confirmInterview
+    // callables (Admin SDK) enforce that only the job-owning employer schedules/
+    // edits and only the candidate confirms. No employer-secret fields live here
+    // (scorecards are a separate, employer-only surface).
+    match /application_interviews/{interviewId} {
+      allow read: if isSignedIn() &&
+        (resource.data.candidate_id == request.auth.uid ||
+         resource.data.employer_id == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // application_scorecards/{scorecardId} — employer-only structured interview
+    // evaluations. Candidates cannot read these because they contain internal
+    // hiring judgement, evidence notes, and risks. Writes are server-only through
+    // upsertScorecard, which verifies the employer owns the interview/job.
+    match /application_scorecards/{scorecardId} {
+      allow read: if isSignedIn() &&
+        resource.data.employer_id == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    // application_messages/{messageId} — in-application direct messages between the
+    // job-owning employer and the candidate (BOSS-style direct comms). BOTH parties
+    // READ the whole thread for their application — messages are shared, not
+    // employer-secret like scorecards. All WRITES are server-only via the
+    // sendApplicationMessage callable, which proves the sender is a participant and
+    // stamps an immutable, attributable, timestamped record (the audit trail itself).
+    match /application_messages/{messageId} {
+      allow read: if isSignedIn() &&
+        (resource.data.candidate_id == request.auth.uid ||
+         resource.data.employer_id == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // employer_responsiveness/{employerId} — coarse, backward-looking aggregate
+    // (avg days-to-first-action, last action) derived server-side from the audit
+    // log. Employer-level, NO candidate PII — any signed-in user may read it to
+    // see the job-card responsiveness badge. Server-only writes (trigger).
+    match /employer_responsiveness/{employerId} {
       allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // employer_rating/{employerId} — coarse company-rating aggregate { avg, count }
+    // derived server-side from company_reviews (no PII). Any signed-in user may read
+    // it for the job-card rating chip. Server-only writes (trigger).
+    match /employer_rating/{employerId} {
+      allow read: if request.auth != null;
       allow write: if false;
     }
 

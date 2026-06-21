@@ -358,10 +358,10 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
         try {
             const { topics } = await generateSpeakingTopics(targetIeltsBand);
             setSpeakingTopics(topics);
-            setCurrentTopic(topics[0] || 'Tell me about your most recent project.');
+            setCurrentTopic(topics[0] || t('tool_english_pro_default_speaking_topic'));
         } catch (e) {
             setError(t('tool_english_pro_topic_fetch_error'));
-            setCurrentTopic('Tell me about your most recent project.');
+            setCurrentTopic(t('tool_english_pro_default_speaking_topic'));
         } finally {
             setIsFetchingTopic(false);
         }
@@ -539,7 +539,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                     <button onClick={() => setWrittenResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300">{t('tool_english_pro_practice_again_button')}</button>
                 </div>
             )}
-            <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; Back to English Pro Hub</button>
+            <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
         </div>
     );
     
@@ -554,7 +554,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         {currentTopic ? (
                             <p className="text-gray-700 dark:text-gray-300 text-sm italic">"{currentTopic}"</p>
                         ) : (
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">Press the button below to get an IELTS-style speaking topic.</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">{t('tool_english_pro_speaking_get_topic_hint')}</p>
                         )}
                         <button
                             onClick={fetchNewSpeakingTopic}
@@ -916,7 +916,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         onClick={() => { setReadingSubMode('select'); setReadingComprehensionResult(null); setReadingEvaluation(null); setUserAnswers([]); setReadingUserInput(''); setFlashcards([]); }}
                         className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                     >
-                        ← Back to Reading Options
+                        {t('tool_english_pro_back_to_reading')}
                     </button>
                 )}
                 <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>

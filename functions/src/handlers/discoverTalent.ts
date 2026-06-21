@@ -26,6 +26,7 @@ import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
+import { buildCandidateMatchContext, normalizeTalentProfile, talentProfileToMatchText } from "../utils/talentProfile";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -37,7 +38,7 @@ const MAX_JD_CHARS = 20_000;
 const MATCH_CANDIDATE_CAP = 8;
 const VERIFIED_LIST_CAP = 10;
 const CANDIDATE_SCAN_LIMIT = 60;
-const MIN_RESUME_CHARS = 80;
+const MIN_CONTEXT_CHARS = 80;
 
 interface SafeCandidateMatch {
   id: string;
@@ -51,7 +52,7 @@ interface SafeCandidateMatch {
 
 interface CandidateRow {
   id: string;
-  resume_text: string;
+  candidate_text: string;
   nft_staked: boolean;
 }
 
@@ -115,24 +116,37 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
     .limit(CANDIDATE_SCAN_LIMIT)
     .get();
 
-  const withResume: CandidateRow[] = snap.docs
-    .map((d) => {
+  // Batch the per-candidate talent_profile reads into a single getAll instead of
+  // one point-read RPC per scanned candidate. The profile feeds the eligibility
+  // gate below (a profile-only candidate can cross MIN_CONTEXT_CHARS), so it is
+  // read in both modes; getAll preserves ref order → profileSnaps[i] ↔ docs[i].
+  const docs = snap.docs;
+  const profileSnaps = docs.length
+    ? await db.getAll(...docs.map((d) => db.collection("talent_profiles").doc(d.id)))
+    : [];
+  const withContext: CandidateRow[] = docs
+    .map((d, i) => {
       const data = d.data();
+      const resumeText = typeof data.resume_text === "string" ? data.resume_text.trim() : "";
+      const profileSnap = profileSnaps[i];
+      const profileText = talentProfileToMatchText(
+        normalizeTalentProfile(profileSnap && profileSnap.exists ? profileSnap.data() : undefined),
+      );
       return {
         id: d.id,
-        resume_text: typeof data.resume_text === "string" ? data.resume_text : "",
+        candidate_text: buildCandidateMatchContext(resumeText, profileText),
         nft_staked: data.nft_staked === true,
       };
     })
-    .filter((c) => c.resume_text.trim().length >= MIN_RESUME_CHARS);
+    .filter((c) => c.candidate_text.trim().length >= MIN_CONTEXT_CHARS);
 
   // Verified-rail listing: no AI, no resume content leaves the server.
   if (!jobDescription) {
-    const verified = withResume
+    const verified = withContext
       .filter((c) => c.nft_staked)
       .slice(0, VERIFIED_LIST_CAP)
       .map((c) => toSafe(c, {}));
-    return { candidates: verified, eligible: withResume.length };
+    return { candidates: verified, eligible: withContext.length };
   }
 
   // Match mode — one LLM call per candidate, hard-capped.
@@ -143,10 +157,10 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
   }
   const provider = await resolveProvider(uid, undefined);
 
-  const pool = withResume.slice(0, MATCH_CANDIDATE_CAP);
+  const pool = withContext.slice(0, MATCH_CANDIDATE_CAP);
   const settled = await Promise.allSettled(
     pool.map(async (c) => {
-      const llmRequest = spec.build({ resumeText: c.resume_text, jobDescription });
+      const llmRequest = spec.build({ resumeText: c.candidate_text, jobDescription });
       const result = await provider.generate(llmRequest);
       const parsed = (result.raw !== undefined ? result.raw : tryParseJson(result.text)) as
         | Record<string, unknown>
@@ -168,5 +182,5 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
     console.warn(`discoverTalent: ${failures}/${settled.length} candidate matches failed`);
   }
 
-  return { candidates, scanned: pool.length, eligible: withResume.length };
+  return { candidates, scanned: pool.length, eligible: withContext.length };
 });

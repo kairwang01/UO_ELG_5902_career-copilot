@@ -17,6 +17,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requireAuth } from "../middleware/auth";
+import { assertEmployerOwnsApplication } from "./applicantAccess";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -52,40 +53,40 @@ export const getApplicantResumeFileFunction = onCall(
       throw new HttpsError("invalid-argument", "applicationId is required.");
     }
 
-    // 1. Load the application → candidate + job it targets.
-    const appSnap = await db.collection("job_applications").doc(applicationId).get();
-    if (!appSnap.exists) {
-      throw new HttpsError("not-found", "Application not found.");
-    }
-    const appData = appSnap.data()!;
-    const candidateId = typeof appData.candidate_id === "string" ? appData.candidate_id : "";
-    const jobId = typeof appData.job_id === "string" ? appData.job_id : "";
-    if (!candidateId || !jobId) {
-      throw new HttpsError("failed-precondition", "Application is missing a candidate or job reference.");
+    // 1. Authorize: caller must own the job this candidate applied to (shared
+    //    single-sourced check with getApplicantResumeText).
+    const { candidateId } = await assertEmployerOwnsApplication(db, uid, applicationId);
+
+    // 2. Resolve the file path. Prefer the FROZEN submission snapshot copied at
+    //    apply time (application_resumes/{applicationId}/…) so HR gets the file
+    //    AS SUBMITTED even after the candidate replaces/deletes their resume.
+    //    Fall back to the candidate's live file only for legacy applications.
+    const snapDoc = await db.collection("application_snapshots").doc(applicationId).get();
+    const snapData = snapDoc.exists ? snapDoc.data()! : undefined;
+    const snapPath = typeof snapData?.resume_file_snapshot_path === "string" ? snapData.resume_file_snapshot_path : "";
+    const snapName = typeof snapData?.resume_file_snapshot_name === "string" ? snapData.resume_file_snapshot_name : "";
+    let path = "";
+    let storedName = "";
+    if (snapPath.startsWith(`application_resumes/${applicationId}/`)) {
+      path = snapPath;
+      storedName = snapName;
+    } else {
+      // Legacy fallback: read the candidate's live resume-file reference.
+      const userSnap = await db.collection("users").doc(candidateId).get();
+      const userData = userSnap.exists ? userSnap.data()! : undefined;
+      const livePath = typeof userData?.resume_file_path === "string" ? userData.resume_file_path : "";
+      // Defense-in-depth: only serve a file inside THIS candidate's own namespace.
+      if (livePath.startsWith(`resumes/${candidateId}/`)) {
+        path = livePath;
+        storedName = typeof userData?.resume_file_name === "string" ? userData.resume_file_name : "";
+      }
     }
 
-    // 2. Authorize: the caller must own the job this candidate applied to. The
-    //    employer_id is read from the authoritative job_postings doc, never trusted
-    //    from input (mirrors listJobApplicants.ts).
-    const jobSnap = await db.collection("job_postings").doc(jobId).get();
-    if (!jobSnap.exists || jobSnap.data()!.employer_id !== uid) {
-      throw new HttpsError("permission-denied", "You do not own the job for this application.");
-    }
-
-    // 3. Read the candidate's stored resume-file reference (Admin SDK; owner-only
-    //    Firestore rules are bypassed server-side).
-    const userSnap = await db.collection("users").doc(candidateId).get();
-    const userData = userSnap.exists ? userSnap.data()! : undefined;
-    const path = typeof userData?.resume_file_path === "string" ? userData.resume_file_path : "";
-    const storedName = typeof userData?.resume_file_name === "string" ? userData.resume_file_name : "";
-
-    // Defense-in-depth: only ever serve a file inside THIS candidate's own
-    // namespace, regardless of what the doc claims (the field is client-written).
-    if (!path || !path.startsWith(`resumes/${candidateId}/`)) {
+    if (!path) {
       return { available: false };
     }
 
-    // 4. Return the file. Prefer a short-lived signed URL (no response-size ceiling,
+    // 3. Return the file. Prefer a short-lived signed URL (no response-size ceiling,
     //    works for any allowed file size). If URL signing isn't available on the
     //    runtime service account (no Token Creator IAM role), fall back to inline
     //    base64 — bounded so it can never exceed the callable response limit.

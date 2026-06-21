@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { generatePerformanceReviewPrep } from '../../services/aiClient';
 import type { PerformanceReviewResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 
 interface PerformanceReviewPrepProps {
@@ -22,11 +23,15 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PerformanceReviewResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<PerformanceReviewResult>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [accomplishments, setAccomplishments] = useState('');
   const [jobTitle, setJobTitle] = useState('');
 
   // SmartSuggest: derive role chips from resume (pure, no AI)
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
+
+  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTool = async () => {
     if (!accomplishments.trim() || !jobTitle.trim()) {
@@ -39,6 +44,8 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
       const apiResult = await generatePerformanceReviewPrep(resumeText, accomplishments, jobTitle);
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -67,8 +74,6 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
         <p className="font-medium text-slate-700 dark:text-slate-300">{t('tool_perf_review_intro_line1')}</p>
         <p className="mt-0.5">{t('tool_perf_review_intro_line2')}</p>
       </div>
-
-      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_perf_review_setup_desc')}</p>
 
       {/* (b) SAMPLE-FILL */}
       <button
@@ -147,6 +152,13 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
     if (!result) return null;
     return (
       <div className="space-y-6 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+        />
         {/* (d) RESULT ACTIONS */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_perf_review_results_title')}</h4>

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link2 } from 'lucide-react';
 import { optimizeLinkedInProfile, optimizeLinkedInProfileFromText } from '../../services/aiClient';
 import type { LinkedInOptimization } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 
 // (b) sample constant — profile-text tab only (never touches resumeText)
 const SAMPLE_PROFILE_TEXT =
@@ -21,6 +22,8 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LinkedInOptimization | null>(null);
+  const { canSave, saved, persist } = useToolResults<LinkedInOptimization>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [linkedinTab, setLinkedinTab] = useState<'resume' | 'profile'>('resume');
   const [linkedinProfileText, setLinkedinProfileText] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
@@ -28,6 +31,8 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
 
   // Track which mode was used so the error retry can call the right path
   const [lastMode, setLastMode] = useState<'resume' | 'profile'>('resume');
+
+  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTool = async (options: {
     mode?: 'resume' | 'profile';
@@ -57,6 +62,8 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
       }
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -198,6 +205,13 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
 
     return (
       <div className="space-y-6 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+        />
         {/* (d) RESULT ACTIONS — download + start-over */}
         <div className="flex flex-wrap justify-between items-center gap-3">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_linkedin_optimizer_results_title')}</h4>

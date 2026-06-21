@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Info, Search } from 'lucide-react';
 import { findOpportunities, calculateCompatibility, generateProfessionalEmail } from '../../services/aiClient';
+import ApplyReviewModal, { type ApplyReviewJob } from '../ApplyReviewModal';
 import type { OpportunityResult, Opportunity } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
@@ -19,6 +20,7 @@ import { httpsCallable } from 'firebase/functions';
 import { app as firebaseApp, firebaseFunctions } from '../../lib/firebaseClient';
 import { CopyButton, renderFormattedText, ToolError } from './ToolUtils';
 import { loadJobPreferences, preferencesToPromptBlock, prefsSummaryLine } from '../../hooks/useJobPreferences';
+import type { ScreenerQuestion } from '../../lib/recruitingData';
 
 interface OpportunityFinderProps {
   resumeText: string;
@@ -59,7 +61,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
 
   // ---- salary chip: Map<internalJobId, { salary_range?: string, location?: string }> ----
-  const [internalJobData, setInternalJobData] = useState<Map<string, { salary_range?: string; location?: string }>>(new Map());
+  type InternalJobMeta = { salary_range?: string; location?: string; screener_questions?: ScreenerQuestion[] };
+  const [internalJobData, setInternalJobData] = useState<Map<string, InternalJobMeta>>(new Map());
 
   // ---- per-card AI action state ----
   type WhyFitResult = { compatibilityScore: number; summary: string };
@@ -69,24 +72,78 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const [introCache, setIntroCache] = useState<Record<string, IntroResult>>({});
   const [introLoading, setIntroLoading] = useState<Record<string, boolean>>({});
 
-  const applyToInternalJob = async (jobId: string, compatibilityScore: number | undefined) => {
+  const applyInFlightRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const platformRunRef = useRef(0);
+  const whyFitRunRef = useRef<Record<string, number>>({});
+  const introRunRef = useRef<Record<string, number>>({});
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    platformRunRef.current += 1;
+    whyFitRunRef.current = {};
+    introRunRef.current = {};
+  }, []);
+
+  // Pre-submit review: the candidate confirms what the employer will receive
+  // before the application is actually created.
+  const [pendingApply, setPendingApply] = useState<{ job: ApplyReviewJob; score: number | undefined } | null>(null);
+
+  const openApplyReview = (jobId: string, title: string, company: string | undefined, compatibilityScore: number | undefined) => {
     if (!session?.user) {
         addToast(t('tool_opportunity_finder_signin_required'), 'error');
         return;
     }
+    if (appliedJobs.has(jobId)) return;
+    const meta = internalJobData.get(jobId);
+    setPendingApply({
+      job: {
+        id: jobId,
+        title,
+        company,
+        screenerQuestions: meta?.screener_questions ?? [],
+      },
+      score: compatibilityScore,
+    });
+  };
 
+  const confirmApply = async (answers: { questionId: string; answer: string }[]) => {
+    if (!session?.user || !pendingApply) return;
+    const { job, score } = pendingApply;
+    if (appliedJobs.has(job.id) || applyInFlightRef.current === job.id) return;
+    applyInFlightRef.current = job.id;
     try {
         // Write goes through a Cloud Function: employer_id / job_title are read
         // server-side from the authoritative job_postings doc (not forgeable from
-        // the client), duplicates are rejected atomically, and Firestore rules
-        // forbid client-side creates on job_applications.
+        // the client), duplicates are rejected atomically, Firestore rules forbid
+        // client-side creates, and the ready-Talent-Profile precondition is
+        // re-enforced server-side.
         const createJobApplication = httpsCallable(firebaseFunctions, 'createJobApplication');
-        await createJobApplication({ jobId, compatibilityScore: compatibilityScore ?? null });
-
-        setAppliedJobs(prev => new Set(prev).add(jobId));
+        await createJobApplication({ jobId: job.id, compatibilityScore: score ?? null, screenerAnswers: answers });
+        setAppliedJobs(prev => new Set(prev).add(job.id));
+        addToast(t('tool_opportunity_finder_apply_success'), 'success');
+        setPendingApply(null);
     } catch (err) {
-        console.error('Error applying to job:', err);
-        addToast(t('tool_opportunity_finder_apply_error'), 'error');
+        const code = (err as { code?: string })?.code ?? '';
+        if (code === 'functions/already-exists') {
+            setAppliedJobs(prev => new Set(prev).add(job.id));
+            addToast(t('browse_jobs_application_recorded'), 'info');
+            setPendingApply(null);
+        } else if (code === 'functions/failed-precondition') {
+            // Modal pre-gates profile + resume, so this is usually a closed job.
+            const msg = (err as { message?: string })?.message ?? '';
+            if (/profile|resume/i.test(msg)) {
+                addToast(t('apply_complete_profile_first'), 'info'); // keep modal open to fix
+            } else {
+                addToast(t('apply_job_closed'), 'info');
+                setPendingApply(null); // job closed — nothing to retry
+            }
+        } else {
+            console.error('Error applying to job:', err);
+            addToast(t('tool_opportunity_finder_apply_error'), 'error'); // keep modal open to retry
+        }
+    } finally {
+        applyInFlightRef.current = null;
     }
   };
 
@@ -119,9 +176,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // the AI's external suggestions. Additive and free; never blocks external search.
   const fetchInternalJobs = useCallback(async (): Promise<{
     opps: Opportunity[];
-    meta: Map<string, { salary_range?: string; location?: string }>;
+    meta: Map<string, InternalJobMeta>;
   }> => {
-    const empty = { opps: [] as Opportunity[], meta: new Map<string, { salary_range?: string; location?: string }>() };
+    const empty = { opps: [] as Opportunity[], meta: new Map<string, InternalJobMeta>() };
     if (!sessionUserId) return empty;
     try {
       const db = getFirestore(firebaseApp);
@@ -129,7 +186,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         query(collection(db, 'job_postings'), where('is_active', '==', true), limit(25)),
       );
       const opps: Opportunity[] = [];
-      const meta = new Map<string, { salary_range?: string; location?: string }>();
+      const meta = new Map<string, InternalJobMeta>();
       snap.docs.forEach((docSnap) => {
         const d = docSnap.data() as Record<string, unknown>;
         const id = docSnap.id;
@@ -147,6 +204,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         meta.set(id, {
           salary_range: d.salary_range as string | undefined,
           location: d.location as string | undefined,
+          screener_questions: Array.isArray(d.screener_questions) ? (d.screener_questions as ScreenerQuestion[]) : [],
         });
       });
       return { opps, meta };
@@ -208,11 +266,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // Free platform-posting load only. The external AI search is credit-charging, so
   // it must be started by an explicit click instead of auto-running on page entry.
   const loadPlatformJobs = useCallback(async () => {
+    const runId = platformRunRef.current + 1;
+    platformRunRef.current = runId;
     setPlatformLoading(true);
     setError(null);
     try {
       await fetchAppliedJobs();
       const internal = await fetchInternalJobs();
+      if (!mountedRef.current || runId !== platformRunRef.current) return;
       setInternalJobData(internal.meta);
       setResult(internal.opps.length > 0
         ? {
@@ -223,9 +284,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
           }
         : null);
     } catch {
-      setResult(null);
+      if (mountedRef.current && runId === platformRunRef.current) setResult(null);
     } finally {
-      setPlatformLoading(false);
+      if (mountedRef.current && runId === platformRunRef.current) setPlatformLoading(false);
     }
   }, [fetchAppliedJobs, fetchInternalJobs, t]);
 
@@ -240,21 +301,30 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // 4c: Why am I a fit?
   const handleWhyFit = useCallback(async (job: Opportunity) => {
     if (whyFitLoading[job.url] || whyFitCache[job.url]) return;
+    const runId = (whyFitRunRef.current[job.url] ?? 0) + 1;
+    whyFitRunRef.current[job.url] = runId;
     setWhyFitLoading((prev) => ({ ...prev, [job.url]: true }));
     try {
       const jobDesc = `${job.jobTitle} at ${job.company} (${job.location})\n\n${job.summary}`;
       const res = await calculateCompatibility(resumeText, jobDesc);
+      if (!mountedRef.current || whyFitRunRef.current[job.url] !== runId) return;
       setWhyFitCache((prev) => ({ ...prev, [job.url]: res }));
     } catch (err) {
-      addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
+      if (mountedRef.current && whyFitRunRef.current[job.url] === runId) {
+        addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
+      }
     } finally {
-      setWhyFitLoading((prev) => ({ ...prev, [job.url]: false }));
+      if (mountedRef.current && whyFitRunRef.current[job.url] === runId) {
+        setWhyFitLoading((prev) => ({ ...prev, [job.url]: false }));
+      }
     }
   }, [resumeText, whyFitCache, whyFitLoading, addToast, t]);
 
   // 4c: Intro message
   const handleIntroMessage = useCallback(async (job: Opportunity) => {
     if (introLoading[job.url] || introCache[job.url]) return;
+    const runId = (introRunRef.current[job.url] ?? 0) + 1;
+    introRunRef.current[job.url] = runId;
     setIntroLoading((prev) => ({ ...prev, [job.url]: true }));
     try {
       const details: Record<string, string> = {
@@ -271,11 +341,16 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         2,   // style: conversational
         3,   // confidence: neutral
       );
+      if (!mountedRef.current || introRunRef.current[job.url] !== runId) return;
       setIntroCache((prev) => ({ ...prev, [job.url]: res }));
     } catch (err) {
-      addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
+      if (mountedRef.current && introRunRef.current[job.url] === runId) {
+        addToast(err instanceof Error ? err.message : t('tool_opportunity_finder_action_error'), 'error');
+      }
     } finally {
-      setIntroLoading((prev) => ({ ...prev, [job.url]: false }));
+      if (mountedRef.current && introRunRef.current[job.url] === runId) {
+        setIntroLoading((prev) => ({ ...prev, [job.url]: false }));
+      }
     }
   }, [resumeText, market, introCache, introLoading, addToast, t]);
 
@@ -451,9 +526,11 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                                  {internalJobData.get(jobId)!.salary_range}
                                </span>
                              )}
+                             {/* quickMatchScore = lexical keyword overlap (this is the value persisted
+                                 as the application's compatibility_score), not the AI match — keep the label honest. */}
                              {job.isInternal && job.compatibilityScore && (
                                 <div className="text-right">
-                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('tool_opportunity_finder_match_label')}</p>
+                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('applications_keyword_overlap')}</p>
                                     <p className="text-lg font-bold text-green-600">{job.compatibilityScore}%</p>
                                 </div>
                             )}
@@ -483,7 +560,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
 
                         <div className="mt-4 flex flex-wrap gap-2 justify-end">
                              {job.isInternal ? (
-                                <button onClick={() => applyToInternalJob(jobId, job.compatibilityScore)} disabled={hasApplied} className={`text-sm text-white px-3 py-1.5 rounded-md transition-colors ${hasApplied ? 'bg-green-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                <button onClick={() => openApplyReview(jobId, job.jobTitle, job.company, job.compatibilityScore)} disabled={hasApplied} className={`text-sm text-white px-3 py-1.5 rounded-md transition-colors ${hasApplied ? 'bg-green-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
                                     {hasApplied ? t('tool_opportunity_finder_applied_button') : t('tool_opportunity_finder_apply_button')}
                                 </button>
                              ) : (
@@ -535,6 +612,17 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
             ))}
           </ul>
         </div>
+      )}
+
+      {session?.user && (
+        <ApplyReviewModal
+          open={Boolean(pendingApply)}
+          job={pendingApply?.job ?? null}
+          uid={session.user.id}
+          t={t}
+          onConfirm={confirmApply}
+          onClose={() => setPendingApply(null)}
+        />
       )}
     </div>
   );

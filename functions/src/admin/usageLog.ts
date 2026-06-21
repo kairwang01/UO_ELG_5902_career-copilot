@@ -6,6 +6,7 @@ import * as admin from "firebase-admin";
 import {
   ADMIN_AUDIT_LOG_COLLECTION,
   CREDIT_LEDGER_COLLECTION,
+  USAGE_COUNTERS_COLLECTION,
   USAGE_EVENTS_COLLECTION,
   UsageEventDoc,
 } from "./schema";
@@ -27,12 +28,30 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-function utcDayStart(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+function utcDayStart(date = new Date()): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-export async function getTodayUsageTotals(): Promise<{ runs: number; credits: number }> {
+export function utcDayKey(date = new Date()): string {
+  return utcDayStart(date).toISOString().slice(0, 10);
+}
+
+function globalUsageCounterId(dayKey: string): string {
+  return `global_${dayKey}`;
+}
+
+function userUsageCounterId(uid: string, dayKey: string): string {
+  return `user_${Buffer.from(uid).toString("base64url")}_${dayKey}`;
+}
+
+function counterTotals(data: admin.firestore.DocumentData | undefined): { runs: number; credits: number } {
+  return {
+    runs: Number(data?.runs ?? 0),
+    credits: Number(data?.credits ?? 0),
+  };
+}
+
+async function scanTodayUsageTotals(): Promise<{ runs: number; credits: number }> {
   const dayStartTs = admin.firestore.Timestamp.fromDate(utcDayStart());
   const snap = await db
     .collection(USAGE_EVENTS_COLLECTION)
@@ -48,7 +67,7 @@ export async function getTodayUsageTotals(): Promise<{ runs: number; credits: nu
   return { runs, credits };
 }
 
-export async function getUserTodayCredits(uid: string): Promise<number> {
+async function scanUserTodayUsage(uid: string): Promise<{ runs: number; credits: number }> {
   const dayStartTs = admin.firestore.Timestamp.fromDate(utcDayStart());
   const snap = await db
     .collection(USAGE_EVENTS_COLLECTION)
@@ -58,19 +77,63 @@ export async function getUserTodayCredits(uid: string): Promise<number> {
     .get();
   let credits = 0;
   snap.forEach((doc) => { credits += doc.data().credit_cost ?? 0; });
-  return credits;
+  return { runs: snap.size, credits };
+}
+
+export async function getTodayUsageTotals(): Promise<{ runs: number; credits: number }> {
+  const dayKey = utcDayKey();
+  const doc = await db.collection(USAGE_COUNTERS_COLLECTION).doc(globalUsageCounterId(dayKey)).get();
+  if (doc.exists) return counterTotals(doc.data());
+  return scanTodayUsageTotals();
+}
+
+export async function getUserTodayUsage(uid: string): Promise<{ runs: number; credits: number }> {
+  const dayKey = utcDayKey();
+  const doc = await db.collection(USAGE_COUNTERS_COLLECTION).doc(userUsageCounterId(uid, dayKey)).get();
+  if (doc.exists) return counterTotals(doc.data());
+  return scanUserTodayUsage(uid);
+}
+
+export async function getUserTodayCredits(uid: string): Promise<number> {
+  return (await getUserTodayUsage(uid)).credits;
 }
 
 /** Returns the number of successful tool runs the user has made today (UTC). */
 export async function getUserTodayRuns(uid: string): Promise<number> {
-  const dayStartTs = admin.firestore.Timestamp.fromDate(utcDayStart());
-  const snap = await db
-    .collection(USAGE_EVENTS_COLLECTION)
-    .where("uid", "==", uid)
-    .where("created_at", ">=", dayStartTs)
-    .where("status", "==", "deducted")
-    .get();
-  return snap.size;
+  return (await getUserTodayUsage(uid)).runs;
+}
+
+export function writeUsageCounters(
+  tx: admin.firestore.Transaction,
+  uid: string,
+  creditCost: number,
+  dayKey = utcDayKey()
+): void {
+  const updatedAt = admin.firestore.FieldValue.serverTimestamp();
+  const delta = {
+    runs: admin.firestore.FieldValue.increment(1),
+    credits: admin.firestore.FieldValue.increment(creditCost),
+    updated_at: updatedAt,
+  };
+  tx.set(
+    db.collection(USAGE_COUNTERS_COLLECTION).doc(globalUsageCounterId(dayKey)),
+    {
+      day_key: dayKey,
+      scope: "global",
+      ...delta,
+    },
+    { merge: true }
+  );
+  tx.set(
+    db.collection(USAGE_COUNTERS_COLLECTION).doc(userUsageCounterId(uid, dayKey)),
+    {
+      day_key: dayKey,
+      scope: "user",
+      uid,
+      ...delta,
+    },
+    { merge: true }
+  );
 }
 
 export async function logUsageEvent(
@@ -84,6 +147,8 @@ export async function logUsageEvent(
     tool,
     credit_cost: creditCost,
     status,
+    day_key: utcDayKey(),
+    request_id: null,
     created_at: admin.firestore.FieldValue.serverTimestamp(),
   };
   await db.collection(USAGE_EVENTS_COLLECTION).add(payload);
@@ -129,10 +194,9 @@ export async function checkQuotasOrThrow(uid: string, cost: number, tool: string
   if (quotas.enabled === false) return;
 
   // Run these reads in parallel for performance.
-  const [totals, userCredits, userRuns, userSnap] = await Promise.all([
+  const [totals, userUsage, userSnap] = await Promise.all([
     getTodayUsageTotals(),
-    getUserTodayCredits(uid),
-    getUserTodayRuns(uid),
+    getUserTodayUsage(uid),
     admin.firestore().collection(USERS_COLLECTION).doc(uid).get(),
   ]);
 
@@ -147,7 +211,7 @@ export async function checkQuotasOrThrow(uid: string, cost: number, tool: string
   if (creditLimit > 0 && totals.credits + cost > creditLimit) {
     throw new HttpsError("resource-exhausted", "Platform daily credit spend limit reached.");
   }
-  if (userLimit > 0 && userCredits + cost > userLimit) {
+  if (userLimit > 0 && userUsage.credits + cost > userLimit) {
     throw new HttpsError("resource-exhausted", "Your daily usage limit has been reached.");
   }
 
@@ -160,7 +224,7 @@ export async function checkQuotasOrThrow(uid: string, cost: number, tool: string
   const business = isBusinessUser(role, subscriptionStatus);
 
   if (tier === "free" && !business) {
-    if (userRuns >= FREE_TIER_DAILY_RUN_LIMIT) {
+    if (userUsage.runs >= FREE_TIER_DAILY_RUN_LIMIT) {
       throw new HttpsError(
         "resource-exhausted",
         `You have reached your daily limit of ${FREE_TIER_DAILY_RUN_LIMIT} free tool runs. ` +

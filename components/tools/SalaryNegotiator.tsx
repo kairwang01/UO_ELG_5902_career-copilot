@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wallet } from 'lucide-react';
 import { generateSalaryNegotiationStrategy } from '../../services/aiClient';
 import type { SalaryNegotiationResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
+
+type SalaryResult = SalaryNegotiationResult & { groundingChunks: any[] | undefined };
 
 const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'SGD', 'AED'];
 
@@ -22,12 +25,22 @@ interface SalaryNegotiatorProps {
 
 const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
+  const { canSave, saved, persist } = useToolResults<SalaryResult>();
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<(SalaryNegotiationResult & { groundingChunks: any[] | undefined; }) | null>(null);
+  const [result, setResult] = useState<SalaryResult | null>(null);
+  const [fromSaved, setFromSaved] = useState(false);
   const [jobTitle, setJobTitle] = useState('');
   const [company, setCompany] = useState('');
   const [offer, setOffer] = useState('');
   const [currency, setCurrency] = useState(CURRENCIES[1]); // Default to CAD
+
+  // Hydrate the last saved result (paid tiers) so it shows for free on reopen.
+  useEffect(() => {
+    if (saved && !result) {
+      setResult(saved.result);
+      setFromSaved(true);
+    }
+  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTool = async (input: { jobTitle: string, company: string, offer: string, currency: string }) => {
     const { jobTitle, company, offer, currency: offerCurrency } = input;
@@ -42,6 +55,8 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       const apiResult = await generateSalaryNegotiationStrategy(resumeText, jobTitle, company, market, offer, offerCurrency);
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult); // paid tiers: revisit free next time
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -70,8 +85,6 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_salary_negotiator_setup_desc')}</p>
-
         {/* (b) SAMPLE FILL */}
         <div className="text-right">
           <button
@@ -145,6 +158,13 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
 
     return (
       <div className="space-y-6 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+        />
         {/* (d) RESULT ACTIONS — download + start-over */}
         <div className="flex flex-wrap justify-between items-center gap-3">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_salary_negotiator_results_title')}</h4>

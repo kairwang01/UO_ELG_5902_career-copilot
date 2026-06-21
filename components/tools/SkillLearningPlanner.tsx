@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { GraduationCap } from 'lucide-react';
 import { generateLearningPlan } from '../../services/aiClient';
 import type { LearningPlanResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 
 interface SkillLearningPlannerProps {
   resumeText: string;
@@ -19,10 +20,14 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LearningPlanResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<LearningPlanResult>();
+  const [fromSaved, setFromSaved] = useState(false);
   const [skill, setSkill] = useState('');
 
   // SmartSuggest: derive skill chips from resume (pure, no AI)
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
+
+  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTool = async () => {
     if (!skill.trim()) {
@@ -35,6 +40,8 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
       const apiResult = await generateLearningPlan(resumeText, skill, market);
       if (!alive()) return;
       setResult(apiResult);
+      setFromSaved(false);
+      persist(apiResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -64,8 +71,6 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
         <p className="font-medium text-slate-700 dark:text-slate-300">{t('tool_skill_planner_intro_line1')}</p>
         <p className="mt-0.5">{t('tool_skill_planner_intro_line2')}</p>
       </div>
-
-      <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_skill_planner_setup_desc')}</p>
 
       {/* (b) SAMPLE-FILL */}
       <button
@@ -129,6 +134,7 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
     if (!result) return null;
     return (
       <div className="space-y-6 animate-fade-in">
+        <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
         {/* (d) RESULT ACTIONS */}
         <div className="flex items-center justify-between">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_skill_planner_results_title').replace('{skill}', result.skill)}</h4>

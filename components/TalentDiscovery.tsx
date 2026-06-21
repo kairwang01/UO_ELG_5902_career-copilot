@@ -5,7 +5,7 @@ import type { UserProfile } from '../types';
 import EngageCandidateModal from './EngageCandidateModal';
 import UnlockTalentModal from './UnlockTalentModal';
 import { listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
-import { saveToShortlist } from '../lib/shortlistData';
+import { saveToShortlist, hideCandidate, listHiddenCandidateIds } from '../lib/shortlistData';
 import {
     ArrowRight,
     BookmarkCheck,
@@ -17,10 +17,12 @@ import {
     FileText,
     Loader2,
     MapPin,
+    EyeOff,
     PlusCircle,
     RefreshCw,
     RotateCcw,
     Search,
+    Sparkles,
     Users,
     XCircle,
 } from 'lucide-react';
@@ -252,6 +254,7 @@ interface CandidateMatchCardProps {
     saved: boolean;
     saving: boolean;
     onSave: (candidate: MatchedCandidate) => void;
+    onHide?: (candidate: MatchedCandidate) => void;
     onUnlock?: (candidate: MatchedCandidate, index: number) => void;
 }
 
@@ -263,6 +266,7 @@ function CandidateMatchCard({
     saved,
     saving,
     onSave,
+    onHide,
     onUnlock,
 }: CandidateMatchCardProps) {
     const verified = variant === 'verified';
@@ -288,6 +292,9 @@ function CandidateMatchCard({
                             </span>
                         )}
                     </div>
+                    <p className={`mt-3 text-[11px] font-semibold uppercase tracking-wide ${verified ? 'text-blue-100' : 'text-blue-700 dark:text-blue-300'}`}>
+                        {t('talent_why_match_title')}
+                    </p>
                     <p className={`mt-1 text-sm leading-6 ${bodyClass}`}>{candidate.summary}</p>
 
                     {candidate.strengths.length > 0 && (
@@ -365,6 +372,21 @@ function CandidateMatchCard({
                                         : <BookmarkPlus className="h-4 w-4" />}
                             </button>
                         )}
+                        {onHide && candidate.compatibilityScore > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => onHide(candidate)}
+                                title={t('talent_hide_button')}
+                                aria-label={t('talent_hide_button')}
+                                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                                    verified
+                                        ? 'bg-white/20 text-white hover:bg-white/30'
+                                        : 'border border-gray-300 text-gray-600 hover:border-red-400 hover:text-red-600 dark:border-gray-600 dark:text-gray-300'
+                                }`}
+                            >
+                                <EyeOff className="h-4 w-4" />
+                            </button>
+                        )}
                         {verified && onUnlock && (
                             <button
                                 type="button"
@@ -429,10 +451,18 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
     // Candidates whose shortlist write is in flight — blocks double-clicks.
     const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+    // Candidates this employer has hidden from Talent Discovery (loaded on mount,
+    // persisted in users/{uid}/hidden_candidates so they stay hidden across searches).
+    const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
     const verifiedRequestIdRef = useRef(0);
     const appliedInitialJobIdRef = useRef<string | null>(null);
     const searchFormRef = useRef<HTMLFormElement>(null);
     const roleBriefRef = useRef<HTMLTextAreaElement>(null);
+    const mountedRef = useRef(true);
+
+    useEffect(() => () => {
+        mountedRef.current = false;
+    }, []);
 
     const { addToast } = useSharedToast();
     const usesExternalJobs = Array.isArray(postedJobsProp);
@@ -484,12 +514,14 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         setInternalJobsError(null);
         try {
             const jobs = await listActiveEmployerJobs(profile.id);
+            if (!mountedRef.current) return;
             setInternalPostedJobs(jobs);
         } catch {
+            if (!mountedRef.current) return;
             setInternalPostedJobs([]);
             setInternalJobsError(t('talent_posted_jobs_error'));
         } finally {
-            setInternalJobsLoaded(true);
+            if (mountedRef.current) setInternalJobsLoaded(true);
         }
     }, [onRetryPostedJobs, profile.id, t, usesExternalJobs]);
 
@@ -561,6 +593,11 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
             roleBriefRef.current?.focus();
             return;
         }
+        // Share the verified-fetch request token so a search and a verified-section
+        // retry (both write verifiedResults) can't clobber each other — and an unmount
+        // (cleanup bumps the ref) drops a late resolve.
+        const requestId = verifiedRequestIdRef.current + 1;
+        verifiedRequestIdRef.current = requestId;
         setSearchLoading(true);
         setSearchError(null);
         setRegularResults(null);
@@ -568,13 +605,15 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
             // One server call: candidates are read and matched server-side; only
             // safe, scored fields come back (sorted by score desc).
             const { candidates } = await discoverTalent(jobDescription);
+            if (requestId !== verifiedRequestIdRef.current) return;
             const allMatched = candidates.map((c) => toMatchedCandidate(c));
             setVerifiedResults(allMatched.filter(c => c.nft_staked));
             setRegularResults(allMatched.filter(c => !c.nft_staked));
         } catch (err) {
+            if (requestId !== verifiedRequestIdRef.current) return;
             setSearchError(err instanceof Error ? err.message : t('talent_search_error'));
         } finally {
-            setSearchLoading(false);
+            if (requestId === verifiedRequestIdRef.current) setSearchLoading(false);
         }
     };
 
@@ -622,6 +661,31 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         }
     };
 
+    // Load this employer's hidden-candidate set once so prior hides persist across searches.
+    useEffect(() => {
+        if (!profile?.id) return;
+        let active = true;
+        listHiddenCandidateIds(profile.id)
+            .then((ids) => {
+                if (active) setHiddenIds(ids);
+            })
+            .catch(() => { /* non-fatal */ });
+        return () => {
+            active = false;
+        };
+    }, [profile?.id]);
+
+    const handleHideCandidate = async (candidate: MatchedCandidate) => {
+        setHiddenIds(prev => new Set(prev).add(candidate.id));
+        try {
+            await hideCandidate(profile.id, candidate.id);
+            addToast(t('talent_hide_toast'), 'info');
+        } catch (err) {
+            setHiddenIds(prev => { const next = new Set(prev); next.delete(candidate.id); return next; });
+            addToast(err instanceof Error ? err.message : t('talent_hide_error'), 'error');
+        }
+    };
+
     const paidBusinessStatuses = new Set(['single_post', 'job_pack', 'starter', 'growth', 'pro']);
     const canUnlock = paidBusinessStatuses.has(profile.subscription_status ?? '');
     const handleCommandPrimaryAction = () => {
@@ -649,6 +713,14 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                         <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{description}</p>
                     </div>
                 ))}
+            </div>
+
+            {/* AI-hiring disclosure: candidate match scores here are advisory
+                decision-support, not automated screening (EEOC/FTC/Ontario).
+                Mirrors the ApplicantFunnel banner; shared i18n key. */}
+            <div className="mb-6 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-2.5 text-xs leading-5 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-300" />
+                <span>{t('applicant_funnel_ai_disclosure')}</span>
             </div>
 
             <TalentCommandCenter
@@ -699,7 +771,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                  )}
                  {!verifiedLoading && !verifiedError && (
                  <div className="space-y-3">
-                    {verifiedResults.map((candidate, index) => (
+                    {verifiedResults.filter((c) => !hiddenIds.has(c.id)).map((candidate, index) => (
                         <CandidateMatchCard
                             key={candidate.id}
                             candidate={candidate}
@@ -709,6 +781,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                             saved={savedIds.has(candidate.id)}
                             saving={savingIds.has(candidate.id)}
                             onSave={handleSaveToShortlist}
+                            onHide={handleHideCandidate}
                             onUnlock={(nextCandidate, nextIndex) => setCandidateToUnlock({ ...nextCandidate, index: nextIndex })}
                         />
                     ))}
@@ -985,7 +1058,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {regularResults.map((candidate, index) => (
+                            {regularResults.filter((c) => !hiddenIds.has(c.id)).map((candidate, index) => (
                                 <CandidateMatchCard
                                     key={candidate.id}
                                     candidate={candidate}
@@ -995,6 +1068,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                                     saved={savedIds.has(candidate.id)}
                                     saving={savingIds.has(candidate.id)}
                                     onSave={handleSaveToShortlist}
+                                    onHide={handleHideCandidate}
                                 />
                             ))}
                         </div>
@@ -1019,6 +1093,9 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
 
             {candidateToEngage && (
                 <EngageCandidateModal
+                    // Remount on candidate change so the nested outreach draft/open-state
+                    // can't carry over from a previously engaged candidate.
+                    key={candidateToEngage.index}
                     candidate={candidateToEngage}
                     jobDescription={jobDescription}
                     employerProfile={profile}

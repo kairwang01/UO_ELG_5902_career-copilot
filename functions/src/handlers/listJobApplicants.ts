@@ -29,6 +29,12 @@ import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
+import {
+  buildCandidateMatchContext,
+  normalizeTalentProfile,
+  talentProfileToMatchText,
+  type TalentProfileSnapshot,
+} from "../utils/talentProfile";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -37,6 +43,12 @@ const db = admin.firestore();
 
 /** Hard per-request cap — each analyzed applicant is one LLM call. */
 const MATCH_CANDIDATE_CAP = 25;
+
+interface ScreenerAnswer {
+  question_id: string;
+  prompt: string;
+  answer: string;
+}
 
 interface SafeApplicant {
   id: string;
@@ -48,6 +60,9 @@ interface SafeApplicant {
   strengths: string[];
   potentialGaps: string[];
   suggestedQuestions: string[];
+  talent_profile: TalentProfileSnapshot | null;
+  status_history: StatusHistoryEvent[];
+  screener_answers: ScreenerAnswer[];
 }
 
 interface ApplicationRow {
@@ -56,6 +71,18 @@ interface ApplicationRow {
   candidate_name: string;
   application_date: string | null;
   status: string;
+  screener_answers: ScreenerAnswer[];
+}
+
+interface StatusHistoryEvent {
+  id: string;
+  action: string | null;
+  from_status: string;
+  to_status: string;
+  reason: string | null;
+  candidate_note: string | null;
+  skipped_statuses: string[];
+  created_at: string | null;
 }
 
 /** Mirrors aiProxy/discoverTalent lenient JSON parsing (markdown fences, trailing commas). */
@@ -81,7 +108,11 @@ function isoFromTimestamp(value: unknown): string | null {
   return null;
 }
 
-function emptyApplicant(a: ApplicationRow): SafeApplicant {
+function emptyApplicant(
+  a: ApplicationRow,
+  talentProfile: TalentProfileSnapshot | null,
+  statusHistory: StatusHistoryEvent[],
+): SafeApplicant {
   return {
     id: a.application_id,
     candidate_name: a.candidate_name,
@@ -92,6 +123,9 @@ function emptyApplicant(a: ApplicationRow): SafeApplicant {
     strengths: [],
     potentialGaps: [],
     suggestedQuestions: [],
+    talent_profile: talentProfile,
+    status_history: statusHistory,
+    screener_answers: a.screener_answers,
   };
 }
 
@@ -137,38 +171,119 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
         candidate_name: typeof data.candidate_name === "string" ? data.candidate_name : "Candidate",
         application_date: isoFromTimestamp(data.application_date),
         status: typeof data.status === "string" ? data.status : "Applied",
+        screener_answers: Array.isArray(data.screener_answers) ? (data.screener_answers as ScreenerAnswer[]) : [],
       };
     })
     .filter((a) => a.candidate_id);
 
-  // 3. Fetch candidate docs (Admin SDK) — resume_text never leaves the server.
+  // First application per candidate for this job (one expected).
+  const appByCandidate = new Map<string, ApplicationRow>();
+  for (const a of applications) if (!appByCandidate.has(a.candidate_id)) appByCandidate.set(a.candidate_id, a);
+  const appIds = applications.map((a) => a.application_id);
+  const appIdSet = new Set(appIds);
+
+  // Immutable status audit history for the employer packet. Read by job_id only
+  // to avoid requiring a composite Firestore index, then filter defensively.
+  const statusHistoryByAppId = new Map<string, StatusHistoryEvent[]>();
+  const eventsSnap = await db.collection("application_status_events").where("job_id", "==", jobId).get();
+  eventsSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    const applicationId = typeof data.application_id === "string" ? data.application_id : "";
+    if (!appIdSet.has(applicationId) || data.employer_id !== uid) return;
+    const item: StatusHistoryEvent = {
+      id: doc.id,
+      action: typeof data.action === "string" ? data.action : null,
+      from_status: typeof data.from_status === "string" ? data.from_status : "",
+      to_status: typeof data.to_status === "string" ? data.to_status : "",
+      reason: typeof data.reason === "string" ? data.reason : null,
+      candidate_note: typeof data.candidate_note === "string" ? data.candidate_note : null,
+      skipped_statuses: Array.isArray(data.skipped_statuses)
+        ? data.skipped_statuses.filter((x): x is string => typeof x === "string")
+        : [],
+      created_at: isoFromTimestamp(data.created_at),
+    };
+    const list = statusHistoryByAppId.get(applicationId) ?? [];
+    list.push(item);
+    statusHistoryByAppId.set(applicationId, list);
+  });
+  statusHistoryByAppId.forEach((list) => {
+    list.sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tb - ta;
+    });
+  });
+
+  // Frozen submission snapshots (resume/profile AS APPLIED) from the server-only
+  // application_snapshots collection, keyed by application id. Batched getAll.
+  const snapshotByAppId = new Map<string, admin.firestore.DocumentData>();
+  if (appIds.length) {
+    const snapDocs = await db.getAll(...appIds.map((id) => db.collection("application_snapshots").doc(id)));
+    snapDocs.forEach((s) => { if (s.exists) snapshotByAppId.set(s.id, s.data()!); });
+  }
+
+  // 3. Fetch candidate docs + Talent Profiles (Admin SDK). Resume text never
+  //    leaves the server; structured Talent Profiles are returned only for this
+  //    job-owning employer and are also used as match context.
+  //
   //    We also read the live name here: candidate_name on the application is a
   //    snapshot frozen at apply time, and a write race during user provisioning
   //    can leave it empty (→ "Unnamed Candidate" in the UI). Reading full_name
   //    live recovers the name for both existing and future applications.
-  const resumeById = new Map<string, string>();
   const liveNameById = new Map<string, string>();
-  await Promise.all(
-    Array.from(new Set(applications.map((a) => a.candidate_id))).map(async (cid) => {
-      const snap = await db.collection("users").doc(cid).get();
-      const data = snap.exists ? snap.data() : undefined;
-      const text = data?.resume_text;
-      resumeById.set(cid, typeof text === "string" ? text : "");
-      const fullName = typeof data?.full_name === "string" ? data.full_name.trim() : "";
-      const email = typeof data?.email === "string" ? data.email.trim() : "";
-      liveNameById.set(cid, fullName || email);
-    }),
-  );
+  const talentProfileById = new Map<string, TalentProfileSnapshot | null>();
+  const candidateContextById = new Map<string, string>();
+  const candidateIds = Array.from(new Set(applications.map((a) => a.candidate_id)));
+  // Batch the by-id reads into two getAll calls (users, talent_profiles) instead
+  // of 2N individual point reads. getAll preserves ref order → snaps[i] ↔ ids[i].
+  // Guard the empty case: getAll throws on a zero-length spread.
+  const [userSnaps, profileSnaps] = candidateIds.length
+    ? await Promise.all([
+        db.getAll(...candidateIds.map((cid) => db.collection("users").doc(cid))),
+        db.getAll(...candidateIds.map((cid) => db.collection("talent_profiles").doc(cid))),
+      ])
+    : [[], []];
+  candidateIds.forEach((cid, i) => {
+    const snap = userSnaps[i];
+    const talentSnap = profileSnaps[i];
+    const data = snap && snap.exists ? snap.data() : undefined;
+    const app = appByCandidate.get(cid);
+    const snapshot = app ? snapshotByAppId.get(app.application_id) : undefined;
+    // Prefer the frozen submission snapshot (resume/profile AS APPLIED); fall
+    // back to the live docs only for legacy applications without a snapshot.
+    const snapText = typeof snapshot?.resume_text_snapshot === "string" ? snapshot.resume_text_snapshot : "";
+    const liveText = typeof data?.resume_text === "string" ? data.resume_text : "";
+    // A present snapshot wins even when its text is empty (file-only applicant);
+    // only legacy (no-snapshot) applications fall back to live text.
+    const resumeText = snapshot ? snapText : liveText;
+    const profileSource =
+      snapshot && snapshot.talent_profile_snapshot
+        ? (snapshot.talent_profile_snapshot as admin.firestore.DocumentData)
+        : (talentSnap && talentSnap.exists ? talentSnap.data() : undefined);
+    const talentProfile = normalizeTalentProfile(profileSource);
+    talentProfileById.set(cid, talentProfile);
+    const profileText = talentProfileToMatchText(talentProfile);
+    candidateContextById.set(cid, buildCandidateMatchContext(resumeText, profileText));
+    // The Talent Profile name is the candidate's own typed name (apply gate
+    // guarantees it) — prefer it over users.full_name, which can be null for
+    // OAuth sign-ins. (users has no email field, so that fallback is inert.)
+    const tpName = typeof talentProfile?.basic?.name === "string" ? (talentProfile.basic.name as string).trim() : "";
+    const fullName = typeof data?.full_name === "string" ? data.full_name.trim() : "";
+    const email = typeof data?.email === "string" ? data.email.trim() : "";
+    liveNameById.set(cid, tpName || fullName || email);
+  });
 
-  // Backfill empty/whitespace snapshot names from the live profile name (or email).
+  // Backfill snapshot names that are empty OR email-shaped (older applications
+  // froze the login email before the name fix) from the live profile name.
   for (const a of applications) {
-    if (!a.candidate_name.trim()) {
-      a.candidate_name = liveNameById.get(a.candidate_id) || a.candidate_name;
-    }
+    const live = liveNameById.get(a.candidate_id);
+    const stale = !a.candidate_name.trim() || a.candidate_name.includes("@");
+    if (stale && live) a.candidate_name = live;
   }
 
   // 4. Run analyzeCandidateMatch per applicant ON THE SERVER. Applicants without
-  //    a resume (or beyond the cap) are returned unanalyzed rather than dropped.
+  //    resume/profile context (or beyond the cap) are returned unanalyzed rather
+  //    than dropped.
   await ensurePlatformCaches();
   const spec = TOOL_REGISTRY["analyzeCandidateMatch"];
   if (!spec) {
@@ -181,7 +296,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
 
   const analyzable =
     jobDescription.length > 0
-      ? applications.filter((a) => (resumeById.get(a.candidate_id) ?? "").trim().length > 0)
+      ? applications.filter((a) => (candidateContextById.get(a.candidate_id) ?? "").trim().length > 0)
       : [];
   const pool = analyzable.slice(0, MATCH_CANDIDATE_CAP);
   const poolIds = new Set(pool.map((a) => a.application_id));
@@ -189,13 +304,13 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
   const analyzed = await Promise.all(
     pool.map(async (a): Promise<SafeApplicant> => {
       try {
-        const llmRequest = spec.build({ resumeText: resumeById.get(a.candidate_id)!, jobDescription });
+        const llmRequest = spec.build({ resumeText: candidateContextById.get(a.candidate_id)!, jobDescription });
         const result = await provider.generate(llmRequest);
         const parsed = (result.raw !== undefined ? result.raw : tryParseJson(result.text)) as
           | Record<string, unknown>
           | undefined;
         if (!parsed || typeof parsed.score !== "number") {
-          return emptyApplicant(a);
+          return emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null, statusHistoryByAppId.get(a.application_id) ?? []);
         }
         return {
           id: a.application_id,
@@ -207,15 +322,20 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
           strengths: strArr(parsed.strengths),
           potentialGaps: strArr(parsed.potentialGaps),
           suggestedQuestions: strArr(parsed.suggestedQuestions),
+          talent_profile: talentProfileById.get(a.candidate_id) ?? null,
+          status_history: statusHistoryByAppId.get(a.application_id) ?? [],
+          screener_answers: a.screener_answers,
         };
       } catch (e) {
         console.error(`listJobApplicants: match failed for candidate ${a.candidate_id}:`, e);
-        return emptyApplicant(a);
+        return emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null, statusHistoryByAppId.get(a.application_id) ?? []);
       }
     }),
   );
 
-  const unanalyzed = applications.filter((a) => !poolIds.has(a.application_id)).map(emptyApplicant);
+  const unanalyzed = applications
+    .filter((a) => !poolIds.has(a.application_id))
+    .map((a) => emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null, statusHistoryByAppId.get(a.application_id) ?? []));
 
   const applicants = [...analyzed, ...unanalyzed].sort(
     (x, y) => y.compatibility_score - x.compatibility_score,

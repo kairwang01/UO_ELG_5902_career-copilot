@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Briefcase, ChevronRight, Hash, Paperclip, Send, Sparkles, X } from 'lucide-react';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import { careerCoach } from '../services/aiClient';
@@ -13,7 +14,28 @@ interface CareerCoachBotProps {
     profile: UserProfile | null;
     resumeText: string;
     t: (key: string) => string;
+    /** Route the candidate to a workspace section (intent chips → the right tool). */
+    onLaunchTool?: (target: 'jobs' | 'resume' | 'interview' | 'plan') => void;
 }
+
+type CoachTopic = 'jobs' | 'process';
+
+const COACH_TOPICS: {
+    id: CoachTopic;
+    labelKey: string;
+    questions: string[];
+}[] = [
+    {
+        id: 'jobs',
+        labelKey: 'coach_topic_jobs',
+        questions: ['coach_prompt_job_fit', 'coach_prompt_product_role', 'coach_prompt_apply_count'],
+    },
+    {
+        id: 'process',
+        labelKey: 'coach_topic_process',
+        questions: ['coach_prompt_hiring_process', 'coach_prompt_assessment', 'coach_prompt_next_stage'],
+    },
+];
 
 interface Message {
     role: 'user' | 'model';
@@ -110,29 +132,38 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [activeTopic, setActiveTopic] = useState<CoachTopic>('jobs');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    // Drop a late reply if the assistant unmounted (e.g. the user signed out) while it
+    // was in flight — otherwise a reply built from the pre-sign-out profile lands in state.
+    const mountedRef = useRef(true);
+    useEffect(() => () => { mountedRef.current = false; }, []);
 
     useEffect(() => {
         if (isOpen) {
-            setMessages([{ role: 'model', content: t('coach_greeting') }]);
+            setMessages([]);
+            setUserInput('');
+            setActiveTopic('jobs');
         }
-    }, [isOpen, t]);
+    }, [isOpen]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (messages.length > 0 || isLoading) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
     }, [messages, isLoading]);
 
-    const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (e.target === e.currentTarget) {
-            onClose();
+    const sendMessage = async (text: string) => {
+        const cleanText = text.trim();
+        if (!cleanText || isLoading) return;
+
+        const userMessage: Message = { role: 'user', content: cleanText };
+        if (!session) {
+            setMessages([...messages, userMessage, { role: 'model', content: t('coach_login_required') }]);
+            setUserInput('');
+            return;
         }
-    };
 
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!userInput.trim() || isLoading) return;
-
-        const userMessage: Message = { role: 'user', content: userInput };
         const history = [...messages, userMessage];
         setMessages(history);
         setUserInput('');
@@ -147,92 +178,180 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                 companyWebsite: profile?.company_website,
                 companyDescription: profile?.company_description,
             });
+            if (!mountedRef.current) return;
             setMessages(prev => [...prev, { role: 'model', content: reply }]);
         } catch {
+            if (!mountedRef.current) return;
             setMessages(prev => [...prev, { role: 'model', content: t('coach_error') }]);
         } finally {
-            setIsLoading(false);
+            if (mountedRef.current) setIsLoading(false);
         }
+    };
+
+    const handleSendMessage = (e: React.FormEvent) => {
+        e.preventDefault();
+        void sendMessage(userInput);
     };
 
     if (!isOpen) return null;
 
+    const activeTopicConfig = COACH_TOPICS.find((topic) => topic.id === activeTopic) ?? COACH_TOPICS[0];
+    const showWelcomePanel = messages.length === 0 && !isLoading;
+
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end justify-center z-50 p-0 sm:p-4" onClick={handleOverlayClick}>
-            <div className={`bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] sm:max-h-[700px] animate-slide-in-up`} onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
-                <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
-                     <div className="flex items-center gap-3">
-                        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white w-10 h-10 rounded-full flex items-center justify-center">
-                             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                <path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                <path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
+        <div className="fixed inset-0 z-[90] flex h-[100dvh] justify-center p-0 sm:left-auto sm:right-6 sm:bottom-6 sm:top-auto sm:block sm:h-auto">
+            <section
+                className="flex h-full w-full flex-col overflow-hidden border border-white/80 bg-gradient-to-b from-sky-50 via-cyan-50 to-blue-50 shadow-2xl shadow-blue-950/20 ring-1 ring-blue-100/70 dark:border-slate-700 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 sm:h-[calc(100dvh-3rem)] sm:max-h-[760px] sm:w-[440px] sm:rounded-[28px]"
+                role="dialog"
+                aria-modal="false"
+                aria-label={t('coach_title')}
+            >
+                <div className="relative flex shrink-0 items-center justify-between px-5 pb-4 pt-5">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-blue-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-800 dark:text-blue-300 dark:ring-slate-700">
+                            <Sparkles className="h-5 w-5" aria-hidden="true" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{t('coach_title')}</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{t('coach_subtitle')}</p>
-                        </div>
+                        <h3 className="truncate text-xl font-bold text-slate-950 dark:text-slate-50">{t('coach_title')}</h3>
                     </div>
-                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={t('tool_mock_interview_close_button')}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <button
+                        onClick={onClose}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-blue-700 transition hover:bg-white/80 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-blue-300 dark:hover:bg-slate-800"
+                        aria-label={t('coach_close_label')}
+                    >
+                        <X className="h-6 w-6" aria-hidden="true" />
                     </button>
                 </div>
 
-                {/* Chat Body */}
-                <div className="flex-grow overflow-y-auto p-4 bg-gray-50/50 dark:bg-slate-900/50">
-                    {messages.map((msg, index) => (
-                        <div key={index} className={`flex items-end gap-3 my-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            {msg.role === 'model' && (
-                                <div className="flex-shrink-0 bg-gray-200 dark:bg-slate-700 w-8 h-8 rounded-full flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                {showWelcomePanel && (
+                    <div className="relative shrink-0 px-5">
+                        <div className="pointer-events-none absolute right-7 top-2 hidden h-20 w-28 -rotate-6 rounded-[22px] border border-blue-100 bg-white/80 p-3 opacity-80 shadow-lg shadow-blue-200/40 dark:border-slate-700 dark:bg-slate-800/80 md:block">
+                            <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white">
+                                    <Briefcase className="h-4 w-4" aria-hidden="true" />
                                 </div>
-                            )}
-                            <div className={`px-4 py-3 rounded-2xl max-w-sm sm:max-w-md text-sm shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-bl-none border border-gray-200 dark:border-slate-600'}`}>
-                                {msg.role === 'model' ? renderFormattedMessage(msg.content) : msg.content}
+                                <div className="space-y-1">
+                                    <div className="h-2 w-14 rounded-full bg-slate-900/80 dark:bg-slate-100/80" />
+                                    <div className="h-2 w-10 rounded-full bg-blue-200 dark:bg-blue-900" />
+                                </div>
                             </div>
-                             {msg.role === 'user' && (
-                                 <div className="flex-shrink-0 w-8 h-8 rounded-full">
-                                    <Avatar url={profile?.avatar_url} size={32} />
-                                 </div>
-                            )}
+                            <div className="mt-3 h-2 w-full rounded-full bg-cyan-100 dark:bg-slate-700" />
+                            <div className="mt-2 h-2 w-20 rounded-full bg-cyan-100 dark:bg-slate-700" />
                         </div>
-                    ))}
+
+                        <div className="mt-6 rounded-[28px] border border-white/90 bg-white/55 p-5 shadow-sm ring-1 ring-white/60 backdrop-blur dark:border-slate-700 dark:bg-slate-900/70 dark:ring-slate-800 sm:mt-8">
+                            <h4 className="max-w-[270px] whitespace-pre-line text-[26px] font-bold leading-tight tracking-normal text-slate-950 dark:text-slate-50 sm:text-[28px]">
+                                {t('coach_panel_hero')}
+                            </h4>
+
+                            <div className="mt-6 flex flex-wrap gap-3">
+                                {COACH_TOPICS.map((topic) => (
+                                    <button
+                                        key={topic.id}
+                                        type="button"
+                                        onClick={() => setActiveTopic(topic.id)}
+                                        className={`rounded-full px-5 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                            activeTopic === topic.id
+                                                ? 'border border-blue-600 bg-white text-blue-700 shadow-sm dark:border-blue-400 dark:bg-slate-950 dark:text-blue-300'
+                                                : 'border border-transparent bg-white/80 text-slate-800 hover:bg-white dark:bg-slate-800 dark:text-slate-200'
+                                        }`}
+                                    >
+                                        {t(topic.labelKey)}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="mt-5 space-y-3">
+                                {activeTopicConfig.questions.map((questionKey) => (
+                                    <button
+                                        key={questionKey}
+                                        type="button"
+                                        onClick={() => void sendMessage(t(questionKey))}
+                                        className="group flex w-full items-center gap-3 rounded-full bg-white px-4 py-4 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
+                                    >
+                                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-700 text-white">
+                                            <Hash className="h-4 w-4" aria-hidden="true" />
+                                        </span>
+                                        <span className="min-w-0 flex-1">{t(questionKey)}</span>
+                                        <ChevronRight className="h-5 w-5 shrink-0 text-slate-200 transition group-hover:text-blue-400 dark:text-slate-600" aria-hidden="true" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className={`min-h-0 flex-1 overflow-y-auto px-5 ${showWelcomePanel ? 'py-4' : 'py-5'}`}>
+                    {!showWelcomePanel && (
+                        <div className="space-y-4">
+                            {messages.map((msg, index) => (
+                                <div key={index} className={`flex items-end gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    {msg.role === 'model' && (
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-blue-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-800 dark:text-blue-300 dark:ring-slate-700">
+                                            <Sparkles className="h-4 w-4" aria-hidden="true" />
+                                        </div>
+                                    )}
+                                    <div className={`max-w-[82%] break-words rounded-[22px] px-4 py-3 text-sm leading-6 shadow-sm ${
+                                        msg.role === 'user'
+                                            ? 'rounded-br-md bg-blue-600 text-white'
+                                            : 'rounded-bl-md border border-white/80 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
+                                    }`}>
+                                        {msg.role === 'model' ? renderFormattedMessage(msg.content) : msg.content}
+                                    </div>
+                                    {msg.role === 'user' && (
+                                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
+                                            <Avatar url={profile?.avatar_url} size={32} />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     {isLoading && messages[messages.length - 1]?.role !== 'model' && (
-                         <div className="flex items-end gap-3 my-4 justify-start">
-                             <div className="flex-shrink-0 bg-gray-200 dark:bg-slate-700 w-8 h-8 rounded-full flex items-center justify-center">
-                                 <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                             </div>
-                             <div className="px-4 py-3 rounded-2xl bg-white dark:bg-slate-700 rounded-bl-none border border-gray-200 dark:border-slate-600">
-                                 <div className="flex items-center justify-center space-x-1">
-                                     <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
-                                     <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
-                                     <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse"></div>
-                                 </div>
-                             </div>
-                         </div>
+                        <div className="mt-4 flex items-end gap-3 justify-start">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-blue-700 shadow-sm ring-1 ring-blue-100 dark:bg-slate-800 dark:text-blue-300 dark:ring-slate-700">
+                                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                            </div>
+                            <div className="rounded-[22px] rounded-bl-md border border-white/80 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                                <div className="flex items-center justify-center space-x-1">
+                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:-0.3s]"></div>
+                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:-0.15s]"></div>
+                                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400"></div>
+                                </div>
+                            </div>
+                        </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input */}
-                <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-                    <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+                <footer className="shrink-0 px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2">
+                    <button
+                        type="button"
+                        onClick={() => void sendMessage(t('coach_feedback_prompt'))}
+                        className="mb-3 inline-flex items-center rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300"
+                    >
+                        {t('coach_feedback_chip')}
+                    </button>
+                    <form onSubmit={handleSendMessage} className="flex min-h-16 items-center gap-3 rounded-[24px] bg-white px-4 py-3 shadow-lg shadow-blue-200/30 ring-1 ring-blue-100/80 dark:bg-slate-900 dark:shadow-none dark:ring-slate-700">
+                        <Paperclip className="h-6 w-6 shrink-0 text-slate-400" aria-hidden="true" />
                         <input
                             type="text"
                             value={userInput}
                             onChange={(e) => setUserInput(e.target.value)}
                             placeholder={t('coach_input_placeholder')}
-                            className="flex-grow w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed dark:text-slate-100 dark:placeholder:text-slate-500"
                             disabled={isLoading}
                         />
-                        <button type="submit" disabled={isLoading || !userInput.trim()} className="p-2 bg-blue-700 text-white rounded-full hover:bg-blue-800 disabled:bg-blue-400 disabled:cursor-not-allowed" aria-label={t('coach_send_label')}>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
+                        <button
+                            type="submit"
+                            disabled={isLoading || !userInput.trim()}
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-blue-200 disabled:text-white dark:disabled:bg-blue-950"
+                            aria-label={t('coach_send_label')}
+                        >
+                            <Send className="h-5 w-5" aria-hidden="true" />
                         </button>
                     </form>
-                </div>
-            </div>
+                </footer>
+            </section>
         </div>
     );
 };

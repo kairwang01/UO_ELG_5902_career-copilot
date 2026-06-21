@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import type { UserProfile } from '../types';
 import { ethers } from 'ethers';
-import { useModalBehavior } from '../hooks/useModalBehavior';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 interface MatchedCandidate extends UserProfile {
   compatibilityScore: number;
@@ -44,12 +44,17 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
   const hasWallet =
     typeof window !== 'undefined' &&
     typeof (window as any).ethereum !== 'undefined';
-  useModalBehavior(onClose);
+  const mountedRef = useRef(true);
+
+  React.useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   React.useEffect(() => {
+    let active = true;
     const fetchUnlockFee = async () => {
       if (!hasWallet) {
-        setUnlockFee(t('unlock_modal_fee_unavailable'));
+        if (active) setUnlockFee(t('unlock_modal_fee_unavailable'));
         return;
       }
       try {
@@ -60,19 +65,16 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
           provider,
         );
         const feeInWei = await contract.getUnlockFee();
-        setUnlockFee(ethers.formatEther(feeInWei));
+        if (active) setUnlockFee(ethers.formatEther(feeInWei));
       } catch {
-        setUnlockFee(t('unlock_modal_fee_error'));
+        if (active) setUnlockFee(t('unlock_modal_fee_error'));
       }
     };
     fetchUnlockFee();
+    return () => {
+      active = false;
+    };
   }, [hasWallet, t]);
-
-  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
 
   const handleUnlock = async () => {
     if (!canUnlock) {
@@ -106,8 +108,9 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
       });
       await tx.wait();
 
-      onUnlocked(candidate);
+      if (mountedRef.current) onUnlocked(candidate);
     } catch (err) {
+      if (!mountedRef.current) return;
       const code =
         typeof err === 'object' && err !== null && 'code' in err
           ? String((err as { code?: unknown }).code)
@@ -118,22 +121,13 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
         setError(t('unlock_error_failed'));
       }
     } finally {
-      setIsPaying(false);
+      if (mountedRef.current) setIsPaying(false);
     }
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in"
-      onClick={handleOverlayClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="unlock-modal-title"
-    >
-      <div
-        className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md animate-fade-scale"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="unlock-modal-title" maxWidth={448} zIndex={70}>
+      <div className="rounded-xl bg-white shadow-2xl dark:bg-slate-800">
         <div className="p-6 text-center">
           <div className="w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-950 rounded-full flex items-center justify-center mb-4 border-4 border-white dark:border-slate-800 shadow-md">
             <svg
@@ -233,7 +227,7 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </ViewportAwareDialog>
   );
 };
 

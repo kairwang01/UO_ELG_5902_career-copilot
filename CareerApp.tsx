@@ -4,13 +4,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
-import { analyzeResume, setApiStatusUpdater, setAiModel } from './services/aiClient';
-import { ALL_PLANS, BUSINESS_PLANS, DEFAULT_MARKET } from './config';
+import { analyzeResume, setApiStatusUpdater, setAiModel, setErrorTranslator } from './services/aiClient';
+import { DEFAULT_MARKET } from './config';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from './lib/firebaseClient';
-import { data, type AppSession as Session } from './lib/data';
+import { data } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
-import { setUserSubscription } from './services/subscriptionClient';
+import { createSubscriptionCheckout, setUserSubscription } from './services/subscriptionClient';
 import { useLocalization } from './hooks/useLocalization';
 import { ToastProvider, useToast } from './components/Toast';
 import { useCredits } from './contexts/CreditsContext';
@@ -39,6 +39,7 @@ import {
 } from './components/dashboard/CandidateWorkspacePages';
 import Sidebar from './components/Sidebar';
 import MyApplications from './components/MyApplications';
+import TalentProfileForm from './components/TalentProfileForm';
 import type { PortalPage } from './components/employer/EmployerPortal';
 import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';
@@ -47,7 +48,11 @@ import { SiteLayout } from './marketing/components/SiteLayout';
 import { isWeb3Enabled, onWeb3FlagChange } from './config/featureFlags';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import WorkspaceTour from './components/onboarding/WorkspaceTour';
-import { isOnboardingDue, isTourDone, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
+import { isOnboardingDue, isTourDone, loadBirthdayLocal, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
+import { hasBusinessPortalAccess, normalizeBusinessSubscriptionStatus } from './lib/access/businessAccess';
+import { decideWorkspaceShell } from './lib/access/navigationDecisions';
+import { decideSessionTransition } from './lib/access/sessionTransitions';
+import { useSession } from './contexts/SessionContext';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -63,7 +68,7 @@ interface AppContentProps {
 }
 
 type DashboardView =
-  | 'dashboard' | 'toolkit' | 'resume' | 'jobs' | 'applications'
+  | 'dashboard' | 'toolkit' | 'resume' | 'talent_profile' | 'jobs' | 'applications'
   | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
 type CandidatePlanKey = 'free' | 'essentials' | 'accelerator' | 'executive';
 
@@ -72,6 +77,7 @@ const DASHBOARD_VIEW_LABEL_KEYS: Record<DashboardView, string> = {
   dashboard: 'ws_nav_dashboard',
   toolkit: 'ws_nav_toolkit',
   resume: 'ws_nav_resume',
+  talent_profile: 'ws_nav_talent_profile',
   jobs: 'ws_nav_jobs',
   applications: 'ws_nav_applications',
   interview: 'ws_nav_interview',
@@ -80,6 +86,41 @@ const DASHBOARD_VIEW_LABEL_KEYS: Record<DashboardView, string> = {
   billing: 'ws_nav_billing',
   account: 'ws_nav_account',
   credentials: 'ws_nav_credentials',
+};
+
+const DASHBOARD_VIEW_PATHS: Record<DashboardView, string> = {
+  dashboard: '',
+  toolkit: 'tools',
+  resume: 'resume',
+  talent_profile: 'talent-profile',
+  jobs: 'jobs',
+  applications: 'applications',
+  interview: 'interview',
+  plan: 'career-plan',
+  portfolio: 'portfolio',
+  billing: 'billing',
+  account: 'account',
+  credentials: 'credentials',
+};
+
+const DASHBOARD_PATH_TO_VIEW = Object.entries(DASHBOARD_VIEW_PATHS).reduce<Record<string, DashboardView>>(
+  (acc, [view, path]) => {
+    acc[path] = view as DashboardView;
+    return acc;
+  },
+  {},
+);
+
+const dashboardViewFromPath = (pathname: string): DashboardView | null => {
+  if (!pathname.startsWith('/workspace')) return null;
+  const rest = pathname.replace(/^\/workspace\/?/, '');
+  const segment = rest.split('/')[0] ?? '';
+  return DASHBOARD_PATH_TO_VIEW[segment] ?? null;
+};
+
+const dashboardPathForView = (view: DashboardView): string => {
+  const segment = DASHBOARD_VIEW_PATHS[view];
+  return segment ? `/workspace/${segment}` : '/workspace';
 };
 
 const FIRESTORE_RESUME_TEXT_LIMIT = 200_000;
@@ -92,6 +133,7 @@ const buildLocalProfile = (
   id: userId,
   updated_at: new Date().toISOString(),
   full_name: null,
+  birth_date: null,
   avatar_url: null,
   subscription_status: 'free',
   role: 'candidate',
@@ -115,7 +157,10 @@ const buildLocalProfile = (
 const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState<Session | null>(null);
+  // Session now comes from the shared SessionProvider (single auth subscription for
+  // the whole app) — `authHydrated` is the provider's settled flag, `sessionResolved`
+  // fires earlier (first session value known) and gates sign-in/out detection below.
+  const { session, ready: authHydrated, sessionResolved } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs'>('home');
   const [initialAuthView, setInitialAuthView] = useState<'sign_in' | 'sign_up' | 'forgot_password'>('sign_in');
@@ -156,11 +201,24 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const { t, isLoaded: isLangLoaded, currentLang, changeLanguage } = useLocalization();
   const { setApiStatus, setLastError } = useApiStatus();
   const isPortalEntry = entry === 'portal';
+  const profileRole = profile?.role as string | undefined;
+  const normalizedSubscriptionStatus = normalizeBusinessSubscriptionStatus(profile?.subscription_status);
   const isCandidate = profile?.role === 'candidate';
-  const isEmployer = profile?.role === 'employer';
-  const isKnownWorkspaceRole = isCandidate || isEmployer || profile?.role === 'agency';
+  const isEmployer = hasBusinessPortalAccess(profile?.role, profile?.subscription_status);
+  // Admin authority is handled by the dedicated /admin route. It must not
+  // override the user's product role here: admin-candidates still need the
+  // candidate workspace, and admin-employers still need the hiring portal.
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
   useModalBehavior(closeMobileNav, isMobileNavOpen);
+
+  const setWorkspaceView = useCallback((nextView: DashboardView, options: { replace?: boolean } = {}) => {
+    setDashboardView(nextView);
+    if (entry !== 'workspace') return;
+    const nextPath = dashboardPathForView(nextView);
+    if (location.pathname !== nextPath) {
+      navigate(nextPath, { replace: options.replace ?? false });
+    }
+  }, [entry, location.pathname, navigate]);
 
   // Keep the Web3 flag in sync and bounce off the credentials view if the
   // module is switched off while the user is on it.
@@ -174,8 +232,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     }
   }, [session, isProfileLoaded, isCandidate]);
   useEffect(() => {
-    if (!web3Enabled && dashboardView === 'credentials') setDashboardView('dashboard');
-  }, [web3Enabled, dashboardView]);
+    if (!web3Enabled && dashboardView === 'credentials') setWorkspaceView('dashboard', { replace: true });
+  }, [web3Enabled, dashboardView, setWorkspaceView]);
 
   useEffect(() => {
     setApiStatusUpdater((status, errorMsg) => {
@@ -186,12 +244,26 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     });
   }, [setApiStatus, setLastError]);
 
+  // Localize callable-error copy: resolve the key, but fall back to the baked-in
+  // English when a locale is missing the key (t returns the key itself on a miss).
+  useEffect(() => {
+    latestTRef.current = t;
+    setErrorTranslator((key, fallback) => {
+      const resolved = t(key);
+      return resolved && resolved !== key ? resolved : fallback;
+    });
+  }, [t]);
+
 
   const uploadSectionRef = useRef<HTMLDivElement>(null);
-  // True after Firebase fires its first onAuthStateChanged (persisted session known).
-  const [authHydrated, setAuthHydrated] = useState(false);
   // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
   const currentUserIdRef = useRef<string | null>(null);
+  // Guards the provider's first resolved session as a no-side-effect baseline (a
+  // returning user's restore must not be treated as a fresh sign-in).
+  const sessionBaselineSetRef = useRef(false);
+  // Latest t() for use inside the auth listener (whose deps stay minimal so it
+  // doesn't re-subscribe on every locale change).
+  const latestTRef = useRef(t);
   
   // Initialize theme from localStorage or system preference
   useEffect(() => {
@@ -234,6 +306,38 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     // doesn't reopen the modal; this re-runs the effect, which then no-ops (no param).
     navigate(location.pathname, { replace: true });
   }, [entry, session, authHydrated, location.search, location.pathname, navigate]);
+
+  // Email "view application" deep-link: the status-change email links to
+  // /workspace?app=<id>. A signed-in candidate arriving with it should land on
+  // My Applications (it was previously ignored → dropped them on the dashboard).
+  useEffect(() => {
+    if (entry !== 'workspace' || !session || !isProfileLoaded) return;
+    const appParam = new URLSearchParams(location.search).get('app');
+    if (!appParam) return;
+    setWorkspaceView('applications', { replace: true });
+  }, [entry, session, isProfileLoaded, location.search, setWorkspaceView]);
+
+  // URL-backed candidate workspace: refresh/back/forward must preserve the
+  // active section instead of falling back to the dashboard-only state.
+  useEffect(() => {
+    if (entry !== 'workspace') return;
+    const pathView = dashboardViewFromPath(location.pathname);
+    if (pathView) {
+      if (pathView !== dashboardView) {
+        setDashboardView(pathView);
+        if (pathView !== 'toolkit') setActiveTool(null);
+        setAnalysisResult(null);
+        if (pathView !== 'resume') setIsUpdatingResume(false);
+      }
+      if (pathView === 'toolkit') {
+        setActiveTool(new URLSearchParams(location.search).get('tool'));
+      }
+      return;
+    }
+    if (location.pathname.startsWith('/workspace/')) {
+      navigate('/workspace', { replace: true });
+    }
+  }, [entry, location.pathname, location.search, dashboardView, navigate]);
 
   // Close the auth modal as soon as a session exists (login success or async restore).
   useEffect(() => {
@@ -296,10 +400,20 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
       const applyProfile = async (p: UserProfile | null) => {
         if (!p) return;
-        setProfile(p);
-        setResumeText(p.role === 'candidate' ? p.resume_text || '' : '');
+        let resolvedProfile = p;
+        const legacyBirthDate = p.role === 'candidate' && !p.birth_date ? loadBirthdayLocal(user.id) : '';
+        if (legacyBirthDate) {
+          resolvedProfile = { ...p, birth_date: legacyBirthDate };
+          data.profiles
+            .update(user.id, { birth_date: legacyBirthDate, updated_at: new Date().toISOString() })
+            .catch(() => {
+              // Non-fatal: the Account page will still show the local fallback in this browser.
+            });
+        }
+        setProfile(resolvedProfile);
+        setResumeText(resolvedProfile.role === 'candidate' ? resolvedProfile.resume_text || '' : '');
 
-        const userCredits = p.credits || 0;
+        const userCredits = resolvedProfile.credits || 0;
         setCredits(userCredits);
 
         const pendingPlan = sessionStorage.getItem('pending_plan');
@@ -319,12 +433,17 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               : pendingPlan === 'free' ? 'free' : `pending_${pendingPlan}`;
             // Carry the OAuth display name so it persists even if the doc is
             // created by this call rather than the onUserCreated trigger.
-            await setUserSubscription(planKey, {
+            const subscriptionResult = await setUserSubscription(planKey, {
               fullName: user.user_metadata?.full_name || loadPendingOnboardingName(),
             });
+            if (subscriptionResult.status === 'pending_payment') {
+              const checkout = await createSubscriptionCheckout(planKey);
+              window.location.assign(checkout.url);
+              return;
+            }
           }
 
-          if (p.role !== role) {
+          if (resolvedProfile.role !== role) {
             await data.profiles.update(user.id, { role });
           }
 
@@ -334,7 +453,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             setCredits(refreshed.credits || userCredits);
           }
         } catch (planErr) {
-          addToast(`Could not apply your selected plan yet: ${(planErr as Error).message}`, 'error');
+          const message = planErr instanceof Error ? planErr.message : String(planErr);
+          addToast(latestTRef.current('selected_plan_apply_failed').replace('{error}', message), 'error');
         }
       };
 
@@ -389,7 +509,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         }
       }
     } catch {
-      setError("Could not load your profile. Please try again later.");
+      setError(latestTRef.current('profile_load_error'));
     } finally {
         setIsProfileLoaded(true);
     }
@@ -475,45 +595,16 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     setIsRedirecting(true);
 
     try {
-        let targetPlanKey = planKey;
-        let plan;
-        const isBiz = planKey.startsWith('pending_biz_');
-
-        if (isBiz) {
-            targetPlanKey = planKey.replace('pending_biz_', '');
-            plan = BUSINESS_PLANS[targetPlanKey as keyof typeof BUSINESS_PLANS];
-        } else if (planKey.startsWith('pending_')) {
-            targetPlanKey = planKey.replace('pending_', '');
-            plan = ALL_PLANS[targetPlanKey];
-        } else {
+        const isPendingPlan = planKey.startsWith('pending_biz_') || planKey.startsWith('pending_');
+        if (!isPendingPlan) {
             throw new Error(`Invalid pending plan key format: ${planKey}`);
         }
 
-        const stripeReady = plan?.stripeLink && !plan.stripeLink.includes('/test_');
-
-        if (stripeReady) {
-            const stripeUrl = new URL(plan.stripeLink!);
-            stripeUrl.searchParams.append('client_reference_id', session.user.id);
-            if (session.user.email) {
-                stripeUrl.searchParams.append('prefilled_email', session.user.email);
-            }
-
-            setTimeout(() => {
-                window.open(stripeUrl.toString(), '_blank');
-                setIsRedirecting(false);
-            }, 1500);
-        } else {
-            await setUserSubscription(planKey);
-
-            if (isBiz) {
-                await data.profiles.update(session.user.id, { role: 'employer' });
-            }
-
-            await getProfile();
-            setIsRedirecting(false);
-        }
+        const checkout = await createSubscriptionCheckout(planKey);
+        window.location.assign(checkout.url);
     } catch (error) {
-        setError(`Error preparing for checkout: ${(error as Error).message}`);
+        const message = error instanceof Error ? error.message : String(error);
+        setError(latestTRef.current('checkout_prepare_error').replace('{error}', message));
         setIsRedirecting(false);
     }
   }, [session, getProfile]);
@@ -521,10 +612,17 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const handleBusinessPlanSelection = async (planKey: string) => {
     if (!session) return;
     try {
-      await setUserSubscription(`pending_biz_${planKey}`);
+      const pendingPlanKey = `pending_biz_${planKey}`;
+      const result = await setUserSubscription(pendingPlanKey);
+      if (result.status === 'pending_payment') {
+        const checkout = await createSubscriptionCheckout(pendingPlanKey);
+        window.location.assign(checkout.url);
+        return;
+      }
       await getProfile();
     } catch (error) {
-      addToast(`Failed to set plan: ${(error as Error).message}`, 'error');
+      const message = error instanceof Error ? error.message : String(error);
+      addToast(t('business_plan_set_failed').replace('{error}', message), 'error');
     }
   };
 
@@ -532,7 +630,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (!session || candidatePlanSaving) return;
     setCandidatePlanSaving(planKey);
     try {
-      await setUserSubscription(planKey === 'free' ? 'free' : `pending_${planKey}`);
+      const pendingPlanKey = planKey === 'free' ? 'free' : `pending_${planKey}`;
+      const result = await setUserSubscription(pendingPlanKey);
+      if (result.status === 'pending_payment') {
+        const checkout = await createSubscriptionCheckout(pendingPlanKey);
+        window.location.assign(checkout.url);
+        return;
+      }
       await getProfile();
       addToast(t('portal_toast_plan_updated'), 'success');
     } catch (error) {
@@ -542,55 +646,52 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     }
   };
 
+  // React to the SHARED session (SessionProvider) instead of owning a private auth
+  // subscription. The provider emits session VALUES, not SIGNED_IN/SIGNED_OUT events,
+  // so intent is reconstructed via decideSessionTransition. The provider's first
+  // resolved session is a BASELINE — a returning user's restore — and fires no sign-in
+  // reset; only genuine transitions after the baseline do. Token refresh / tab refocus
+  // re-emit the same user id → 'none', so the user stays on their current page.
   useEffect(() => {
-    data.auth.getSession().then((session) => {
-      currentUserIdRef.current = session?.user?.id ?? null;
-      setSession(session);
-    });
+    if (!sessionResolved) return; // wait for the provider's first session value
+    const nextUserId = session?.user?.id ?? null;
 
-    const { unsubscribe } = data.auth.onAuthStateChange((_event, session) => {
-      setAuthHydrated(true);
+    if (!sessionBaselineSetRef.current) {
+      sessionBaselineSetRef.current = true;
+      currentUserIdRef.current = nextUserId;
+      return; // baseline established — no side-effects on the initial restore
+    }
 
-      const newUserId = session?.user?.id ?? null;
-      const userChanged = newUserId !== currentUserIdRef.current;
-      currentUserIdRef.current = newUserId;
+    const transition = decideSessionTransition(currentUserIdRef.current, nextUserId);
+    currentUserIdRef.current = nextUserId;
 
-      setSession(session);
-
-      if (_event === 'SIGNED_OUT') {
-        setView('home');
-        setProfile(null);
-        setAnalysisResult(null);
-        setResumeText('');
-        setOnboardingActive(false);
-        setShowTour(false);
-        setCredits(0);
-        sessionStorage.clear();
-        try {
-          localStorage.removeItem('preferred_ai_model');
-        } catch { /* storage unavailable */ }
-        setAiModel(undefined);
-        return;
+    if (transition === 'signed_out') {
+      setView('home');
+      setProfile(null);
+      setAnalysisResult(null);
+      setResumeText('');
+      setOnboardingActive(false);
+      setShowTour(false);
+      setCredits(0);
+      sessionStorage.clear();
+      try {
+        localStorage.removeItem('preferred_ai_model');
+      } catch { /* storage unavailable */ }
+      setAiModel(undefined);
+    } else if (transition === 'signed_in') {
+      setIsProfileLoaded(false);
+      // Checkout success/cancel is handled in the mount effect below (runs on every
+      // load), since the full-page redirect back from checkout is a RESTORE, not a
+      // sign-in transition — handling it here would never fire after that reload.
+      if (session?.user && session.user.emailVerified === false) {
+        // Surface the "verify your email" reminder the signup modal can't show
+        // (the auth listener navigates away before it renders). Fires only on a
+        // genuine sign-in transition, never on reload or token refresh.
+        addToast(latestTRef.current('auth_signup_success_verify'), 'info');
       }
-
-      // Only reset the view and reload on a genuine new sign-in. Token refreshes
-      // and tab refocus fire SIGNED_IN with the same user, so we skip those to keep
-      // the user on their current page.
-      if (userChanged) {
-        setIsProfileLoaded(false);
-        if (_event === 'SIGNED_IN') {
-          const urlParams = new URLSearchParams(window.location.search);
-          if (urlParams.get('payment_success') === 'true') {
-            addToast('Payment successful — your plan has been upgraded.', 'success');
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
-          setView('home');
-        }
-      }
-    });
-
-    return () => unsubscribe();
-  }, [setCredits]);
+      setView('home');
+    }
+  }, [sessionResolved, session, setCredits, addToast]);
 
   // Live profile sync: credits deducted server-side, tier changes from the admin
   // portal, and payment upgrades appear without a re-login.
@@ -602,11 +703,14 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       (snap) => {
         if (!snap.exists()) return;
         const p = { id: uid, ...snap.data() } as UserProfile;
-        setProfile(p);
+        // Preserve the locally-migrated birth_date when the server doc still
+        // predates the field — the fire-and-forget migration write in
+        // applyProfile may not have committed before this snapshot fires.
+        setProfile((prev) => ({ ...p, birth_date: p.birth_date ?? prev?.birth_date ?? null }));
         if (typeof p.credits === 'number') setCredits(p.credits);
       },
       () => {
-        addToast('Profile updates are temporarily unavailable. Refresh if account details look stale.', 'info');
+        addToast(latestTRef.current('profile_updates_unavailable'), 'info');
       }
     );
     return () => unsub();
@@ -619,11 +723,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   }, [session, isProfileLoaded, isCandidate]);
 
   useEffect(() => {
-    const roleKey = `${session?.user?.id ?? 'signed-out'}:${profile?.role ?? 'no-role'}`;
+    const roleKey = `${session?.user?.id ?? 'signed-out'}:${profile?.role ?? 'no-role'}:${normalizedSubscriptionStatus}`;
     if (roleStateKeyRef.current === roleKey) return;
     roleStateKeyRef.current = roleKey;
 
-    setDashboardView('dashboard');
+    setDashboardView(dashboardViewFromPath(location.pathname) ?? 'dashboard');
     setActiveTool(null);
     setAnalysisResult(null);
     setResumeImages(null);
@@ -632,19 +736,28 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (profile?.role === 'candidate') {
       setPortalInitialPage('dashboard');
     }
-  }, [session?.user?.id, profile?.role]);
+  }, [session?.user?.id, profile?.role, normalizedSubscriptionStatus, location.pathname]);
 
 
   useEffect(() => {
-    const handleStripeRedirect = () => {
+    // Runs on EVERY load (not only the sign-in transition), so the full-page redirect
+    // back from checkout still surfaces feedback AND refreshes the plan/credits via
+    // getProfile() — covers both /workspace?checkout=success and /portal?checkout=success.
+    const handleCheckoutReturn = () => {
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('payment_cancelled') === 'true') {
-            addToast('Payment cancelled. You can try again anytime from the pricing page.', 'info');
+        const checkout = urlParams.get('checkout');
+        const paid = urlParams.get('payment_success') === 'true' || checkout === 'success';
+        const cancelled = urlParams.get('payment_cancelled') === 'true' || checkout === 'cancel';
+        if (paid) {
+            addToast(latestTRef.current('payment_success_plan_upgraded'), 'success');
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (cancelled) {
+            addToast(latestTRef.current('payment_cancelled_try_again'), 'info');
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     };
     if (session) { getProfile(); }
-    handleStripeRedirect();
+    handleCheckoutReturn();
   }, [session, getProfile]);
   
   useEffect(() => {
@@ -681,7 +794,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       return;
     }
     if (view !== 'home') { setShowHomePageOverride(false); }
-    else { setDashboardView('dashboard'); setShowHomePageOverride(false); }
+    else { setWorkspaceView('dashboard', { replace: true }); setShowHomePageOverride(false); }
     if (view === 'auth') { setInitialAuthView(authView); setAuthMode(mode); }
     setView(view);
   };
@@ -691,9 +804,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const performAnalysis = async () => {
     if (!resumeText.trim() && (!resumeImages || resumeImages.length === 0)) {
-      setError('Please provide your resume before analyzing.');
+      setError(t('resume_analysis_required'));
       return;
     }
+    const uidAtStart = session?.user?.id ?? null;
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
@@ -701,11 +815,15 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     try {
       const success = await deductCredits(analysisCost, session);
       if (!success) {
-          throw new Error("Credit deduction failed. Please check your balance.");
+          throw new Error(t('credit_deduction_failed'));
       }
-      
+
       const result = await analyzeResume(resumeText, resumeImages, market);
-      
+
+      // If the user signed out or switched accounts mid-call, don't render results
+      // into — or write the profile of — a session that's no longer current.
+      if (currentUserIdRef.current !== uidAtStart) return;
+
       if (session?.user) {
         try {
             const eventId = await logToolUsage(session.user.id, 'resume-analysis', { market });
@@ -718,7 +836,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               keywords: result.keywords,
             });
         } catch {
-            addToast('Analysis finished, but the activity history could not be updated.', 'info');
+            addToast(t('analysis_history_update_failed'), 'info');
         }
       }
       
@@ -743,7 +861,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('An unknown error occurred.');
+        setError(t('unexpected_error'));
       }
     } finally {
       setIsLoading(false);
@@ -764,7 +882,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     setError(null);
     setResumeImages(null);
     setShowHomePageOverride(false);
-    setDashboardView('dashboard');
+    setWorkspaceView('dashboard', { replace: true });
   };
 
   const handleApplyImprovements = (newText: string) => {
@@ -854,11 +972,16 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const openWorkspaceTool = (tool: string) => {
     setActiveTool(tool);
     setDashboardView('toolkit');
+    setAnalysisResult(null);
+    setIsUpdatingResume(false);
+    if (entry === 'workspace') {
+      navigate(`${dashboardPathForView('toolkit')}?tool=${encodeURIComponent(tool)}`);
+    }
   };
 
   const openResumeUpload = () => {
     setActiveTool(null);
-    setDashboardView('resume');
+    setWorkspaceView('resume');
     setIsUpdatingResume(true);
   };
 
@@ -874,7 +997,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 hasResume={!!resumeText.trim()}
                 onNavigate={(nextView) => {
-                  setDashboardView(nextView);
+                  setWorkspaceView(nextView);
                   if (nextView === 'resume' && !resumeText.trim()) setIsUpdatingResume(true);
                 }}
               />
@@ -887,7 +1010,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                     <EmptyState
                         title={t('ws_toolkit_empty_title')}
                         description={t('ws_toolkit_empty_desc')}
-                        action={{ label: t('ws_upload_resume'), onClick: () => { setActiveTool(null); setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                        action={{ label: t('ws_upload_resume'), onClick: () => { setActiveTool(null); setWorkspaceView('resume'); setIsUpdatingResume(true); } }}
                     />
                 ) : (
                     <AnalysisDisplay
@@ -917,7 +1040,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
-                onViewChange={setDashboardView}
+                onViewChange={setWorkspaceView}
+                session={session}
               />
             </div>
         )}
@@ -930,10 +1054,20 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
-                onViewChange={setDashboardView}
+                onViewChange={setWorkspaceView}
                 session={session}
               />
             </div>
+        )}
+
+        {dashboardView === 'talent_profile' && session?.user && (
+          <div id="talent-profile-panel">
+            <TalentProfileForm
+              uid={session.user.id}
+              seed={{ name: profile?.full_name ?? undefined, email: session.user.email ?? undefined }}
+              resumeText={resumeText}
+            />
+          </div>
         )}
 
         {dashboardView === 'applications' && (
@@ -943,7 +1077,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               t={t}
               onFindSimilar={() => {
                 setActiveTool('opportunity-finder');
-                setDashboardView('toolkit');
+                setWorkspaceView('toolkit');
               }}
             />
           </div>
@@ -957,7 +1091,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
-                onViewChange={setDashboardView}
+                onViewChange={setWorkspaceView}
+                session={session}
               />
             </div>
         )}
@@ -970,7 +1105,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 t={t}
                 onUploadResume={openResumeUpload}
                 onOpenTool={openWorkspaceTool}
-                onViewChange={setDashboardView}
+                onViewChange={setWorkspaceView}
+                session={session}
               />
             </div>
         )}
@@ -981,7 +1117,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                     <EmptyState
                         title={t('ws_portfolio_empty_title')}
                         description={t('ws_portfolio_empty_desc')}
-                        action={{ label: t('ws_upload_resume'), onClick: () => { setDashboardView('resume'); setIsUpdatingResume(true); } }}
+                        action={{ label: t('ws_upload_resume'), onClick: () => { setWorkspaceView('resume'); setIsUpdatingResume(true); } }}
                     />
                  ) : (
                     <AnalysisDisplay
@@ -997,7 +1133,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                         refreshProfile={getProfile}
                         onApplyImprovements={handleApplyImprovements}
                         activeTool="website-builder"
-                        setActiveTool={(tool) => setActiveTool(tool)}
+                        // This view hardcodes the portfolio tool, so the tool's "back"
+                        // (setActiveTool(null)) must LEAVE the portfolio view — otherwise
+                        // the hardcoded prop keeps rendering it and the button does nothing.
+                        setActiveTool={(tool) => { if (tool) { setActiveTool(tool); } else { setWorkspaceView('dashboard'); } }}
                     />
                  )}
             </div>
@@ -1093,6 +1232,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
           uid={session.user.id}
           profile={profile}
           t={t}
+          theme={theme}
           onComplete={({ skipped, resumeText: importedResume }) => {
             if (importedResume) {
               // The workspace's debounced auto-save persists this to the profile.
@@ -1110,7 +1250,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     const sidebarProps = {
       activeView: dashboardView,
       onViewChange: (v: DashboardView) => {
-        setDashboardView(v);
+        setWorkspaceView(v);
         setIsUpdatingResume(false);
         setIsMobileNavOpen(false);
         // Sidebar navigation must take over the main panel immediately. A lingering
@@ -1124,7 +1264,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       onToggleTheme: toggleTheme,
       activeTool,
       onToolSelect: (tool: string | null) => {
-        setActiveTool(tool);
+        // Route through openWorkspaceTool so the ?tool= query is written — otherwise the
+        // URL-sync effect re-reads an empty query and immediately clears activeTool.
+        if (tool) {
+          openWorkspaceTool(tool);
+        } else {
+          setActiveTool(null);
+        }
         setIsMobileNavOpen(false);
       },
       onLogout: () => data.auth.signOut(),
@@ -1180,7 +1326,28 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                     <p className="text-gray-600 dark:text-gray-400">{resumeText ? t('dashboard_update_prompt') : t('dashboard_new_user_prompt')}</p>
                   </div>
                   <div id="upload-section" ref={uploadSectionRef} className="scroll-mt-20">
-                    <UploadSection t={t} resumeText={resumeText} setResumeText={setResumeText} resumeImages={resumeImages} setResumeImages={setResumeImages} onInitiateAnalysis={handleInitiateAnalysis} isLoading={isLoading} error={error} setError={setError} market={market} setMarket={setMarket} variant={uploadVariant} />
+                    <UploadSection
+                      t={t}
+                      resumeText={resumeText}
+                      setResumeText={setResumeText}
+                      resumeImages={resumeImages}
+                      setResumeImages={setResumeImages}
+                      onInitiateAnalysis={handleInitiateAnalysis}
+                      isLoading={isLoading}
+                      error={error}
+                      setError={setError}
+                      market={market}
+                      setMarket={setMarket}
+                      variant={uploadVariant}
+                      onResumeFileSelected={handleResumeFileSelected}
+                      storedResumeFile={profile?.resume_file_url ? {
+                        name: profile.resume_file_name ?? null,
+                        url: profile.resume_file_url,
+                        uploadedAt: profile.resume_file_uploaded_at ?? null,
+                      } : null}
+                      onRemoveResumeFile={handleRemoveResumeFile}
+                      isSavingResumeFile={isSavingResumeFile}
+                    />
                   </div>
                   {resumeText && (<div className="text-center mt-6"><button onClick={() => setIsUpdatingResume(false)} className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 font-semibold bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 px-6 py-2 rounded-lg transition-colors">{t('dashboard_cancel_update')}</button></div>)}
                 </div>
@@ -1237,7 +1404,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         />
       );
     }
-    if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} onContinueToToolkit={() => { setAnalysisResult(null); setActiveTool(null); setDashboardView('toolkit'); }} />; }
+    if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} onContinueToToolkit={() => { setAnalysisResult(null); setActiveTool(null); setWorkspaceView('toolkit'); }} />; }
     if (session && !showHomePageOverride) {
         if (!isProfileLoaded || !isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600 dark:text-gray-400">{t('dashboard_loading')}</p></div>; }
         if (profile?.role === 'agency') {
@@ -1254,16 +1421,26 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     return renderAppEntry();
   };
 
-  const isWorkspaceSessionLoading = Boolean(session && (!isProfileLoaded || !isLangLoaded));
-  const canShowWorkspaceShell = Boolean(session && !showHomePageOverride && view !== 'business' && isProfileLoaded && isLangLoaded);
-  const showCandidateShell = canShowWorkspaceShell && isCandidate && !isPortalEntry;
-  const showEmployerShell = canShowWorkspaceShell && isEmployer;
-  const showUnsupportedRole = canShowWorkspaceShell && !isKnownWorkspaceRole;
+  const workspaceShell = decideWorkspaceShell({
+    entry,
+    hasSession: Boolean(session),
+    profileLoaded: isProfileLoaded,
+    languageLoaded: isLangLoaded,
+    showHomePageOverride,
+    currentView: view,
+    role: profileRole,
+    subscriptionStatus: profile?.subscription_status,
+  });
+  const isWorkspaceSessionLoading = workspaceShell === 'loading';
+  const showCandidateShell = workspaceShell === 'candidate';
+  const showEmployerShell = workspaceShell === 'employer';
+  const showUnsupportedRole = workspaceShell === 'unsupported';
+  const canUseCareerCoach = Boolean(session && isLangLoaded && !isWorkspaceSessionLoading);
 
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
   return (
-      <div className={rootClass}>
+      <div className={rootClass} data-qa-shell={workspaceShell} data-qa-auth={session ? 'signed-in' : 'signed-out'}>
         {isRedirecting && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4 animate-fade-in"><div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-8 text-center flex flex-col items-center"><h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Finalizing Your Upgrade!</h3><p className="mt-2 text-gray-600 dark:text-gray-300">To activate your new plan, we're opening our secure payment page.</p><div className="mt-6 w-12 h-12 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div></div></div>}
         <CreditModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} onConfirm={() => { setIsCreditModalOpen(false); performAnalysis(); }} onNavigateToPricing={navigateToPricing} cost={analysisCost} currentCredits={credits} />
         
@@ -1285,7 +1462,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
         <CookieConsent t={t} />
 
-        {!isChatOpen && (
+        {canUseCareerCoach && !isChatOpen && (
           <button
             onClick={() => setIsChatOpen(true)}
             className="fixed right-4 top-[calc(4.75rem+env(safe-area-inset-top))] bottom-auto z-40 flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl sm:top-auto sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
@@ -1295,7 +1472,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             <svg className="h-6 w-6 sm:h-8 sm:w-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
         )}
-        {isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} />}
+        {canUseCareerCoach && isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} onLaunchTool={(target) => { setWorkspaceView(target); setIsChatOpen(false); }} />}
       </div>
   );
 };

@@ -4,6 +4,7 @@ import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 import { useSiteSession } from '../hooks/useSiteSession';
 import { SiteLanguageSwitcher } from './SiteLanguageSwitcher';
+import { businessPortalNavPath } from '../../lib/access/navigationDecisions';
 
 export const SiteMobileNav: React.FC = () => {
   const [open, setOpen] = useState(false);
@@ -11,7 +12,9 @@ export const SiteMobileNav: React.FC = () => {
   const isEmployerSurface = pathname.startsWith(SITE_ROUTES.employers) || pathname.startsWith(SITE_ROUTES.portal);
   const { t } = useMarketingI18n();
   const { session, isAdmin, isBusiness } = useSiteSession();
-  const workspaceHref = isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.workspace;
+  const workspaceHref = SITE_ROUTES.workspace;
+  const workspaceLabel = t('site_nav_workspace');
+  const businessHref = businessPortalNavPath(isBusiness);
   const workflowHref = isEmployerSurface ? `${SITE_ROUTES.employers}#workflow` : `${SITE_ROUTES.home}#workflow`;
   const signInHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signin` : `${SITE_ROUTES.workspace}?auth=signin`;
   const primaryCtaHref = isEmployerSurface ? `${SITE_ROUTES.portal}?auth=signup` : `${SITE_ROUTES.workspace}?auth=signup`;
@@ -80,24 +83,28 @@ export const SiteMobileNav: React.FC = () => {
           )}
           {session ? (
             <>
-              {isAdmin && (
-                <Link to={SITE_ROUTES.admin} className={`${linkClass} text-indigo-600 font-medium`} onClick={() => setOpen(false)}>
-                  Admin Portal
-                </Link>
-              )}
               <Link
-                to={isBusiness ? SITE_ROUTES.portal : SITE_ROUTES.employers}
+                to={businessHref}
                 className={linkClass}
                 onClick={() => setOpen(false)}
               >
                 {isBusiness ? t('site_nav_business_portal') : t('site_nav_join_business')}
               </Link>
+              {isAdmin && (
+                <Link
+                  to={SITE_ROUTES.admin}
+                  className={linkClass}
+                  onClick={() => setOpen(false)}
+                >
+                  {t('site_nav_admin_portal')}
+                </Link>
+              )}
               <Link
                 to={workspaceHref}
                 className="block rounded-[var(--site-radius)] bg-[var(--site-action)] px-3 py-3 text-center text-sm font-semibold text-white mt-3"
                 onClick={() => setOpen(false)}
               >
-                {t('site_nav_workspace')}
+                {workspaceLabel}
               </Link>
             </>
           ) : (

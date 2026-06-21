@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { data } from '@/lib/data';
 import { firestoreDb } from '@/lib/firebaseClient';
@@ -10,10 +10,14 @@ import {
   PLAN_HIERARCHY,
 } from '../config';
 import { ethers } from 'ethers';
-import ApiKeyManager from './ApiKeyManager';
-import { BusinessCustomApi } from './BusinessCustomApi';
+// TEMP HIDDEN: user-facing API keys + BYOA custom endpoint are hidden from the
+// settings page. Model/endpoint config is superadmin-only via the Admin Console.
+// To restore, re-enable these imports and the two JSX blocks below.
+// import ApiKeyManager from './ApiKeyManager';
+// import { BusinessCustomApi } from './BusinessCustomApi';
 import { listModels } from '../services/aiClient';
 import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
+import { loadBirthdayLocal, saveBirthdayLocal } from '../lib/onboarding';
 
 // A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
 const TALENT_NFT_CONTRACT_ADDRESS =
@@ -52,9 +56,17 @@ const ModelRoutingManagedNote: React.FC<{ t: (key: string) => string }> = ({
   const [isBusiness, setIsBusiness] = useState<boolean | null>(null);
 
   useEffect(() => {
+    let active = true;
     listModels()
-      .then(({ isBusiness: biz }) => setIsBusiness(!!biz))
-      .catch(() => setIsBusiness(false));
+      .then(({ isBusiness: biz }) => {
+        if (active) setIsBusiness(!!biz);
+      })
+      .catch(() => {
+        if (active) setIsBusiness(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Hide while loading or if business (BusinessCustomApi handles that case)
@@ -87,9 +99,14 @@ const Account: React.FC<AccountProps> = ({
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  // False once unmounted — Account loads/saves async and is remounted on session change,
+  // so a late resolve must not setState. passwordSavingRef latches a synchronous double-Enter.
+  const mountedRef = useRef(true);
+  const passwordSavingRef = useRef(false);
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
   const [web3Busy, setWeb3Busy] = useState(false);
   const [fullName, setFullName] = useState<string>('');
+  const [birthDate, setBirthDate] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('free');
   const [password, setPassword] = useState('');
@@ -119,6 +136,8 @@ const Account: React.FC<AccountProps> = ({
     getProfile();
   }, [session]);
 
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
   const syncWithBlockchain = useCallback(async () => {
     if (!walletAddress) return;
 
@@ -135,9 +154,11 @@ const Account: React.FC<AccountProps> = ({
 
       // Ensure wallet is unlocked and connected by requesting accounts. This prevents errors on subsequent calls.
       await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+      if (!mountedRef.current) return;
 
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const network = await provider.getNetwork();
+      if (!mountedRef.current) return;
 
       if (network.chainId !== BigInt(TARGET_CHAIN_ID)) {
         setIsWrongNetwork(true);
@@ -156,11 +177,13 @@ const Account: React.FC<AccountProps> = ({
         provider,
       );
       const balance = await contract.balanceOf(walletAddress);
+      if (!mountedRef.current) return;
 
       if (balance > 0) {
         const userTokenId = await contract.getTokenIdOfOwner(walletAddress);
         const staked = await contract.isStaked(userTokenId);
         const rewards = await contract.getRewards(walletAddress);
+        if (!mountedRef.current) return;
 
         const newValues = {
           nft_minted: true,
@@ -190,12 +213,15 @@ const Account: React.FC<AccountProps> = ({
 
         await data.profiles.update(session.user.id, newValues);
       }
+      if (!mountedRef.current) return;
       setMessage(null); // Clear info message on successful sync
     } catch (err) {
       console.error('Error syncing with blockchain:', err);
-      setMessage({ type: 'error', text: t('account_web3_sync_failed') });
+      if (mountedRef.current) {
+        setMessage({ type: 'error', text: t('account_web3_sync_failed') });
+      }
     } finally {
-      setIsSyncing(false);
+      if (mountedRef.current) setIsSyncing(false);
     }
   }, [walletAddress, session.user.id, t]);
 
@@ -206,6 +232,7 @@ const Account: React.FC<AccountProps> = ({
   }, [walletAddress, syncWithBlockchain]);
 
   useEffect(() => {
+    let active = true;
     const checkEligibility = async () => {
       if (walletAddress && resumeText) {
         const analysesQuery = query(
@@ -214,6 +241,7 @@ const Account: React.FC<AccountProps> = ({
           limit(1),
         );
         const analysesSnapshot = await getDocs(analysesQuery);
+        if (!active) return;
         const latestScore = analysesSnapshot.empty
           ? 0
           : Number(analysesSnapshot.docs[0].data().score ?? 0);
@@ -223,6 +251,9 @@ const Account: React.FC<AccountProps> = ({
       }
     };
     checkEligibility();
+    return () => {
+      active = false;
+    };
   }, [walletAddress, resumeText, session.user.id]);
 
   const getProfile = async () => {
@@ -231,6 +262,7 @@ const Account: React.FC<AccountProps> = ({
       const { user } = session;
 
       const { data: profileData, error } = await data.profiles.get(user.id);
+      if (!mountedRef.current) return; // navigated away / remounted mid-load
 
       if (error && !error.message.includes('not found')) {
         throw new Error(error.message);
@@ -238,8 +270,18 @@ const Account: React.FC<AccountProps> = ({
 
       if (profileData) {
         setFullName(profileData.full_name || '');
+        const resolvedBirthDate = profileData.birth_date || loadBirthdayLocal(user.id);
+        setBirthDate(resolvedBirthDate);
+        if (resolvedBirthDate && !profileData.birth_date) {
+          data.profiles.update(user.id, {
+            birth_date: resolvedBirthDate,
+            updated_at: new Date().toISOString(),
+          }).catch(() => { /* best-effort migration; the local fallback still displays */ });
+        }
         setAvatarUrl(profileData.avatar_url || '');
-        setSubscriptionStatus(profileData.subscription_status);
+        // Legacy/partial docs can lack subscription_status — default to 'free' so the
+        // plan hierarchy / manage-subscription routing never branches on undefined.
+        setSubscriptionStatus(profileData.subscription_status || 'free');
         setWalletAddress(profileData.wallet_address || null);
         setNftMinted(profileData.nft_minted || false);
         setNftStaked(profileData.nft_staked || false);
@@ -249,19 +291,21 @@ const Account: React.FC<AccountProps> = ({
       }
     } catch (error: any) {
       console.error('Error getting profile:', error);
-      setMessage({
-        type: 'error',
-        text: t('account_profile_load_error'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: t('account_profile_load_error'),
+        });
+      }
     } finally {
-      setProfileLoading(false);
+      if (mountedRef.current) setProfileLoading(false);
     }
   };
 
   const updateProfile = async (
     event: React.FormEvent | null,
-    { fullName, avatarUrl }: { fullName: string; avatarUrl: string },
-  ) => {
+    { fullName, avatarUrl, birthDate }: { fullName: string; avatarUrl: string; birthDate: string },
+  ): Promise<boolean> => {
     if (event) {
       event.preventDefault();
     }
@@ -272,24 +316,32 @@ const Account: React.FC<AccountProps> = ({
       const updates = {
         id: user.id,
         full_name: fullName,
+        birth_date: birthDate || null,
         avatar_url: avatarUrl,
         updated_at: new Date().toISOString(),
       };
 
       const { error } = await data.profiles.upsert(updates);
       if (error) throw new Error(error.message);
-      setMessage({
-        type: 'success',
-        text: t('account_profile_updated_success'),
-      });
+      saveBirthdayLocal(user.id, birthDate);
+      if (mountedRef.current) {
+        setMessage({
+          type: 'success',
+          text: t('account_profile_updated_success'),
+        });
+      }
+      return true;
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      setMessage({
-        type: 'error',
-        text: t('account_profile_updated_error'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: t('account_profile_updated_error'),
+        });
+      }
+      return false;
     } finally {
-      setProfileSaving(false);
+      if (mountedRef.current) setProfileSaving(false);
     }
   };
 
@@ -304,19 +356,26 @@ const Account: React.FC<AccountProps> = ({
       return;
     }
 
+    if (passwordSavingRef.current) return; // block synchronous double-submit (a double Enter)
+    passwordSavingRef.current = true;
     setPasswordSaving(true);
-    const { error } = await data.auth.updatePassword(password);
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
-      setMessage({
-        type: 'success',
-        text: t('account_password_updated_success'),
-      });
-      setPassword('');
-      setConfirmPassword('');
+    try {
+      const { error } = await data.auth.updatePassword(password);
+      if (!mountedRef.current) return;
+      if (error) {
+        setMessage({ type: 'error', text: error.message });
+      } else {
+        setMessage({
+          type: 'success',
+          text: t('account_password_updated_success'),
+        });
+        setPassword('');
+        setConfirmPassword('');
+      }
+    } finally {
+      passwordSavingRef.current = false;
+      if (mountedRef.current) setPasswordSaving(false);
     }
-    setPasswordSaving(false);
   };
 
   const handleManageSubscription = async () => {
@@ -354,6 +413,7 @@ const Account: React.FC<AccountProps> = ({
         throw error;
       }
 
+      if (!mountedRef.current) return;
       setWalletAddress(address);
       setMessage({
         type: 'success',
@@ -365,12 +425,14 @@ const Account: React.FC<AccountProps> = ({
       });
     } catch (error: any) {
       console.error('Error updating wallet:', error);
-      setMessage({
-        type: 'error',
-        text: t('account_web3_wallet_update_failed'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: t('account_web3_wallet_update_failed'),
+        });
+      }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -381,11 +443,13 @@ const Account: React.FC<AccountProps> = ({
         const provider = new ethers.BrowserProvider((window as any).ethereum);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
+        if (!mountedRef.current) return;
 
         if (address) {
           await updateWallet(address);
         }
       } catch (error) {
+        if (!mountedRef.current) return;
         if ((error as any).code === 4001) {
           setMessage({
             type: 'error',
@@ -396,7 +460,7 @@ const Account: React.FC<AccountProps> = ({
           console.error(error);
         }
       } finally {
-        setWeb3Busy(false);
+        if (mountedRef.current) setWeb3Busy(false);
       }
     } else {
       setMessage({ type: 'error', text: t('account_web3_no_wallet') });
@@ -415,8 +479,10 @@ const Account: React.FC<AccountProps> = ({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: TARGET_CHAIN_ID_HEX }],
       });
+      if (!mountedRef.current) return;
       syncWithBlockchain();
     } catch (switchError: any) {
+      if (!mountedRef.current) return;
       if (switchError.code === 4902) {
         try {
           await (window as any).ethereum.request({
@@ -436,6 +502,7 @@ const Account: React.FC<AccountProps> = ({
             ],
           });
         } catch (addError) {
+          if (!mountedRef.current) return;
           setMessage({
             type: 'error',
             text: t('account_web3_add_network_failed'),
@@ -445,7 +512,7 @@ const Account: React.FC<AccountProps> = ({
         setMessage({ type: 'error', text: t('account_web3_switch_failed') });
       }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -466,8 +533,10 @@ const Account: React.FC<AccountProps> = ({
       );
 
       const tx = await contract.mint(walletAddress);
+      if (!mountedRef.current) return;
       setMessage({ type: 'info', text: t('account_web3_minting_wait') });
       const receipt = await tx.wait();
+      if (!mountedRef.current) return;
 
       const mintEvent = receipt.logs.find((log: any) => {
         try {
@@ -487,6 +556,7 @@ const Account: React.FC<AccountProps> = ({
           nft_minted: true,
           nft_token_id: newTokenId,
         });
+        if (!mountedRef.current) return;
         setMessage({
           type: 'success',
           text: t('account_web3_mint_success').replace(
@@ -498,12 +568,14 @@ const Account: React.FC<AccountProps> = ({
         throw new Error(t('account_web3_mint_missing_event'));
       }
     } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text: error.message || t('account_web3_mint_failed'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: error.message || t('account_web3_mint_failed'),
+        });
+      }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -528,6 +600,7 @@ const Account: React.FC<AccountProps> = ({
         signer,
       );
       const tx = await contract[action](tokenId);
+      if (!mountedRef.current) return;
       setMessage({
         type: 'info',
         text: t(
@@ -535,12 +608,14 @@ const Account: React.FC<AccountProps> = ({
         ),
       });
       await tx.wait();
+      if (!mountedRef.current) return;
 
       const newStakedStatus = !nftStaked;
       setNftStaked(newStakedStatus);
       await data.profiles.update(session.user.id, {
         nft_staked: newStakedStatus,
       });
+      if (!mountedRef.current) return;
       setMessage({
         type: 'success',
         text: t(
@@ -550,18 +625,20 @@ const Account: React.FC<AccountProps> = ({
         ),
       });
     } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text:
-          error.message ||
-          t(
-            nftStaked
-              ? 'account_web3_unstake_failed'
-              : 'account_web3_stake_failed',
-          ),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text:
+            error.message ||
+            t(
+              nftStaked
+                ? 'account_web3_unstake_failed'
+                : 'account_web3_stake_failed',
+            ),
+        });
+      }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -579,24 +656,30 @@ const Account: React.FC<AccountProps> = ({
       );
 
       const tx = await contract.claimRewards();
+      if (!mountedRef.current) return;
       setMessage({ type: 'info', text: t('account_web3_claim_wait') });
       await tx.wait();
+      if (!mountedRef.current) return;
 
       const rewards = await contract.getRewards(walletAddress);
       const newEarnings = parseFloat(ethers.formatEther(rewards));
+      if (!mountedRef.current) return;
       setNftEarnings(newEarnings);
 
       await data.profiles.update(session.user.id, {
         nft_earnings: newEarnings,
       });
+      if (!mountedRef.current) return;
       setMessage({ type: 'success', text: t('account_web3_claim_success') });
     } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text: error.message || t('account_web3_claim_failed'),
-      });
+      if (mountedRef.current) {
+        setMessage({
+          type: 'error',
+          text: error.message || t('account_web3_claim_failed'),
+        });
+      }
     } finally {
-      setWeb3Busy(false);
+      if (mountedRef.current) setWeb3Busy(false);
     }
   };
 
@@ -635,7 +718,7 @@ const Account: React.FC<AccountProps> = ({
 
       {/* Profile Details Form */}
       <form
-        onSubmit={(e) => updateProfile(e, { fullName, avatarUrl })}
+        onSubmit={(e) => updateProfile(e, { fullName, avatarUrl, birthDate })}
         className="space-y-6"
       >
         <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
@@ -644,9 +727,12 @@ const Account: React.FC<AccountProps> = ({
         <Avatar
           url={avatarUrl}
           size={150}
-          onUpload={(url) => {
+          onUpload={async (url) => {
+            const prev = avatarUrl;
             setAvatarUrl(url);
-            updateProfile(null, { fullName, avatarUrl: url });
+            const ok = await updateProfile(null, { fullName, avatarUrl: url, birthDate });
+            // Save failed — revert the preview so we don't show an image that didn't persist.
+            if (!ok && mountedRef.current) setAvatarUrl(prev);
           }}
           altText={t('ws_profile_avatar_alt')}
           uploadLabel={t('account_avatar_upload')}
@@ -687,6 +773,23 @@ const Account: React.FC<AccountProps> = ({
           />
         </div>
         <div>
+          <label
+            htmlFor="birthDate"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            {t('account_birth_date_label')}
+          </label>
+          <input
+            id="birthDate"
+            type="date"
+            value={birthDate}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setBirthDate(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-900"
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{t('account_birth_date_hint')}</p>
+        </div>
+        <div>
           <button
             type="submit"
             className="w-full sm:w-auto px-4 py-2 bg-blue-700 text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-blue-400"
@@ -699,7 +802,8 @@ const Account: React.FC<AccountProps> = ({
         </div>
       </form>
 
-      {/* API Access Section */}
+      {/* TEMP HIDDEN: API Access (user API keys) — config is superadmin-only
+          via the Admin Console. Restore by uncommenting this block + the import.
       <div className="space-y-6 mt-10">
         <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
           {t('account_api_access_title')}
@@ -709,10 +813,15 @@ const Account: React.FC<AccountProps> = ({
           onViewDocs={() => onSetView('api_docs')}
         />
       </div>
+      */}
+
+      {/* TEMP HIDDEN: BYOA custom endpoint — not part of our model right now.
+          Restore by uncommenting this line + the import.
+      <BusinessCustomApi className="mt-10 max-w-md" t={t} />
+      */}
 
       {/* Model routing is admin-controlled server-side.
-            Non-business users see a muted info line; business users keep their BYOA form. */}
-      <BusinessCustomApi className="mt-10 max-w-md" t={t} />
+            Non-business users see a muted info line. */}
       <ModelRoutingManagedNote t={t} />
 
       {/* Web3 Identity Section — experimental, feature-flagged */}

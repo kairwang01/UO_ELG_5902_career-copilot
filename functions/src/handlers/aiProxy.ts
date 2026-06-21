@@ -19,7 +19,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
-import { deductCredits, refundCredits } from "../credits/deductCredits";
+import { deductCredits, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
 
@@ -28,6 +28,8 @@ interface AiProxyRequest {
   payload?: Record<string, unknown>;
   /** Optional model id (tier-gated server-side; ignored for free users). */
   model?: string;
+  /** Optional client-generated idempotency key. */
+  requestId?: string;
 }
 
 // Reject oversized payloads before charging — bounds token cost and abuse.
@@ -78,7 +80,7 @@ function addNotice(data: unknown, notice: string | undefined): unknown {
 export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
   const uid = requireAuth(request);
 
-  const { tool, payload, model } = (request.data ?? {}) as AiProxyRequest;
+  const { tool, payload, model, requestId } = (request.data ?? {}) as AiProxyRequest;
 
   if (!tool || typeof tool !== "string") {
     throw new HttpsError("invalid-argument", "tool is required.");
@@ -93,10 +95,23 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
     throw new HttpsError("invalid-argument", "Request payload is too large.");
   }
 
-  // Charge BEFORE the model call (atomic, server-side). Free helpers skip this.
+  // Charge BEFORE the model call (atomic, server-side).
   const cost = spec.creditKey ? TOOL_CREDIT_COSTS[spec.creditKey] : 0;
+  let charged = false;
   if (spec.creditKey) {
-    await deductCredits(uid, cost, spec.creditKey);
+    const deduction = await deductCredits(uid, cost, spec.creditKey, { requestId });
+    if (deduction.duplicate) {
+      throw new HttpsError("already-exists", "This AI request was already submitted. Please wait for the current result.");
+    }
+    charged = deduction.charged;
+  } else {
+    // Free helper: no credit charge, but still enforce the free-tier daily run cap
+    // and record the run (credit_cost 0) so every AI call is metered — closes the
+    // unbounded free-LLM faucet where creditKey:null tools bypassed all quotas.
+    const run = await recordFreeToolRun(uid, tool, { requestId });
+    if (run.duplicate) {
+      throw new HttpsError("already-exists", "This AI request was already submitted. Please wait for the current result.");
+    }
   }
 
   try {
@@ -130,7 +145,7 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
     };
   } catch (err) {
     // The model call failed AFTER charging — refund so users aren't billed for nothing.
-    if (spec.creditKey) await refundCredits(uid, cost);
+    if (spec.creditKey && charged) await refundCredits(uid, cost);
     if (err instanceof HttpsError) throw err;
     // A plain Error thrown to the callable layer reaches the client as a blank
     // "INTERNAL" with no message (live audit: every tool failure looked identical

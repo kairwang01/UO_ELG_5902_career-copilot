@@ -4,7 +4,6 @@ import {
   BookmarkCheck,
   Briefcase,
   Building2,
-  CheckCircle2,
   ChevronRight,
   CreditCard,
   Plus,
@@ -76,73 +75,6 @@ function KpiCard({
   );
 }
 
-function PipelineStep({
-  label,
-  value,
-  description,
-  Icon,
-  state,
-  darkMode,
-  onClick,
-  actionLabel,
-}: {
-  label: string;
-  value: string;
-  description: string;
-  Icon: React.ElementType;
-  state: 'done' | 'active' | 'idle';
-  darkMode: boolean;
-  onClick: () => void;
-  actionLabel: string;
-}) {
-  const stateClass =
-    state === 'done'
-      ? darkMode
-        ? 'border-emerald-800 bg-emerald-900/20'
-        : 'border-emerald-200 bg-emerald-50'
-      : state === 'active'
-        ? darkMode
-          ? 'border-blue-800 bg-blue-900/20'
-          : 'border-blue-200 bg-blue-50'
-        : darkMode
-          ? 'border-gray-700 bg-gray-900/30'
-          : 'border-gray-200 bg-white';
-  const iconClass =
-    state === 'done'
-      ? 'text-emerald-600 dark:text-emerald-300'
-      : state === 'active'
-        ? 'text-[#1d4ed8]'
-        : darkMode
-          ? 'text-gray-400'
-          : 'text-gray-500';
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group flex min-h-[148px] flex-col rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${stateClass}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} ${iconClass}`}>
-          <Icon className="h-5 w-5" />
-        </span>
-        {state === 'done' && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
-      </div>
-      <div className="mt-4 min-w-0">
-        <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{label}</p>
-        <p className={`mt-1 text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{value}</p>
-        <p className={`mt-2 line-clamp-2 text-xs leading-5 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-          {description}
-        </p>
-      </div>
-      <span className="mt-auto inline-flex items-center gap-1 pt-4 text-xs font-semibold text-[#1d4ed8]">
-        {actionLabel}
-        <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-      </span>
-    </button>
-  );
-}
-
 export function PortalDashboard({
   jobPostings,
   kpiData,
@@ -155,52 +87,7 @@ export function PortalDashboard({
 }: PortalDashboardProps) {
   const dm = darkMode;
   const { activeJobs, totalApplicants, newApplicants, avgMatchScore } = kpiData;
-  const activePostings = jobPostings.filter((job) => job.is_active);
-  const jobsWithoutApplicants = activePostings.filter((job) => job.applicant_count === 0).length;
   const hasCompanyProfile = companyName.trim().length > 0;
-
-  const pipelineSteps = [
-    {
-      label: t('portal_pipeline_publish_label'),
-      value: formatTranslation(t('portal_pipeline_active_roles'), { count: activeJobs }),
-      description: t('portal_pipeline_publish_desc'),
-      Icon: Briefcase,
-      state: activeJobs > 0 ? 'done' : 'active',
-      page: 'post-job' as PortalPage,
-      actionLabel: activeJobs > 0 ? t('portal_action_manage_roles') : t('portal_action_start_posting'),
-    },
-    {
-      label: t('portal_pipeline_applicants_label'),
-      value: formatTranslation(t('portal_pipeline_applicant_count'), { count: totalApplicants }),
-      description: jobsWithoutApplicants > 0
-        ? formatTranslation(t('portal_pipeline_zero_applicants_desc'), { count: jobsWithoutApplicants })
-        : t('portal_pipeline_applicants_desc'),
-      Icon: Users,
-      state: totalApplicants > 0 ? 'done' : activeJobs > 0 ? 'active' : 'idle',
-      page: 'job-listings' as PortalPage,
-      actionLabel: t('portal_action_review_now'),
-    },
-    {
-      label: t('portal_pipeline_screen_label'),
-      value: avgMatchScore > 0
-        ? formatTranslation(t('portal_pipeline_match_score'), { score: avgMatchScore })
-        : t('portal_pipeline_match_waiting'),
-      description: t('portal_pipeline_screen_desc'),
-      Icon: BarChart2,
-      state: avgMatchScore > 0 ? 'done' : totalApplicants > 0 ? 'active' : 'idle',
-      page: 'job-listings' as PortalPage,
-      actionLabel: t('portal_action_review_now'),
-    },
-    {
-      label: t('portal_pipeline_engage_label'),
-      value: t('portal_pipeline_engage_value'),
-      description: t('portal_pipeline_engage_desc'),
-      Icon: BookmarkCheck,
-      state: totalApplicants > 0 ? 'active' : 'idle',
-      page: 'shortlist' as PortalPage,
-      actionLabel: t('portal_action_open_shortlist'),
-    },
-  ] as const;
 
   const priorityActions = [
     activeJobs === 0
@@ -249,42 +136,39 @@ export function PortalDashboard({
     Icon: React.ElementType;
   }[];
 
+  // Next up — the single highest-priority Action-Required item, shown large.
+  const nextUp = priorityActions[0];
+
   const quickActions = [
     {
       page: 'post-job' as PortalPage,
       title: t('portal_nav_post_job'),
-      description: t('portal_action_post_job_desc'),
       Icon: Plus,
       primary: true,
     },
     {
       page: 'job-listings' as PortalPage,
       title: t('portal_dashboard_view_applicants'),
-      description: t('portal_action_view_applicants_desc'),
       Icon: Users,
     },
     {
       page: 'talent-pool' as PortalPage,
       title: t('portal_nav_discover'),
-      description: t('portal_action_discover_desc'),
       Icon: Briefcase,
     },
     {
       page: 'shortlist' as PortalPage,
       title: t('portal_nav_shortlist'),
-      description: t('portal_action_shortlist_desc'),
       Icon: BookmarkCheck,
     },
     {
       page: 'agency-hub' as PortalPage,
       title: t('portal_nav_agency_hub'),
-      description: t('portal_action_agency_desc'),
       Icon: Building2,
     },
     {
       page: 'company-profile' as PortalPage,
       title: t('portal_nav_org_profile'),
-      description: t('portal_action_profile_desc'),
       Icon: User,
     },
   ];
@@ -329,47 +213,46 @@ export function PortalDashboard({
           </div>
         </div>
 
-        <div className={`mb-8 rounded-xl border p-4 sm:p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className={`text-base font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_pipeline_title')}</h2>
-              <p className={`mt-1 text-sm ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_pipeline_desc')}</p>
+        {/* Next up — single highest-priority Action-Required item, shown large */}
+        {nextUp && (
+          <div
+            className={`mb-8 flex flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 ${
+              dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            }`}
+          >
+            <div className="flex min-w-0 items-start gap-4">
+              <span className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${dm ? 'bg-gray-700 text-blue-300' : 'bg-blue-50 text-[#1d4ed8]'}`}>
+                <nextUp.Icon className="h-6 w-6" />
+              </span>
+              <div className="min-w-0">
+                <p className={`text-xs font-semibold uppercase tracking-wide ${dm ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {t('portal_dashboard_next_up')}
+                </p>
+                <p className={`mt-1 text-lg font-semibold leading-snug ${dm ? 'text-white' : 'text-gray-900'}`}>{nextUp.msg}</p>
+              </div>
             </div>
-            <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${
-              activeJobs > 0 && totalApplicants > 0
-                ? dm ? 'border-emerald-800 bg-emerald-900/20 text-emerald-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : dm ? 'border-amber-800 bg-amber-900/20 text-amber-300' : 'border-amber-200 bg-amber-50 text-amber-800'
-            }`}>
-              {activeJobs > 0 && totalApplicants > 0 ? t('portal_pipeline_ready') : t('portal_pipeline_needs_attention')}
-            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate(nextUp.page)}
+              className="inline-flex min-h-11 w-full flex-shrink-0 items-center justify-center gap-1 rounded-lg bg-[#1d4ed8] px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition-colors hover:bg-[#1a45c9] focus:outline-none focus:ring-2 focus:ring-blue-400/40 sm:w-auto"
+            >
+              {nextUp.action}
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {pipelineSteps.map((step) => (
-              <PipelineStep
-                key={step.label}
-                label={step.label}
-                value={step.value}
-                description={step.description}
-                Icon={step.Icon}
-                state={step.state}
-                darkMode={dm}
-                onClick={() => onNavigate(step.page)}
-                actionLabel={step.actionLabel}
-              />
-            ))}
-          </div>
-        </div>
+        )}
 
-        {/* Quick actions */}
+        {/* Quick actions — compact icon + label row */}
         <div className={`mb-8 rounded-xl border p-4 sm:p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <h2 className={`text-base font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_dashboard_quick_actions')}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {quickActions.map(({ page, title, description, Icon, primary }) => (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {quickActions.map(({ page, title, Icon, primary }) => (
               <button
                 key={page}
                 type="button"
                 onClick={() => onNavigate(page)}
-                className={`group flex min-h-[96px] items-start gap-3 rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                aria-label={title}
+                className={`group flex flex-col items-center justify-center gap-2 rounded-xl border p-3 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
                   primary
                     ? 'border-blue-600 bg-[#1d4ed8] text-white shadow-sm shadow-blue-600/20 hover:bg-[#1a45c9]'
                     : dm
@@ -378,28 +261,21 @@ export function PortalDashboard({
                 }`}
               >
                 <span
-                  className={`mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${
+                  className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${
                     primary ? 'bg-white/15' : dm ? 'bg-gray-700' : 'bg-blue-50'
                   }`}
                 >
                   <Icon className={`h-5 w-5 ${primary ? 'text-white' : 'text-[#1d4ed8]'}`} />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold">{title}</span>
-                  <span className={`mt-1 block text-xs leading-5 ${primary ? 'text-blue-50' : dm ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {description}
-                  </span>
-                </span>
-                <ChevronRight className={`mt-1 h-4 w-4 flex-shrink-0 transition-transform group-hover:translate-x-0.5 ${primary ? 'text-white' : 'text-[#1d4ed8]'}`} />
+                <span className="block text-xs font-semibold leading-snug">{title}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Job Overview + Action Required — lg:col-span-2 + 1 layout */}
-        <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
-          {/* Job Overview — derived from live jobPostings */}
-          <div className={`rounded-xl border p-4 sm:p-6 lg:col-span-2 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+        {/* Job Overview — derived from live jobPostings */}
+        <div className="mb-8">
+          <div className={`rounded-xl border p-4 sm:p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <h2 className={`text-lg font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_dashboard_job_overview')}</h2>
             {jobPostings.length === 0 ? (
               <p className={`text-sm ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_dashboard_no_postings')}</p>
@@ -441,36 +317,6 @@ export function PortalDashboard({
                 </div>
               );
             })()}
-          </div>
-
-          {/* Action Required — data-aware prompts wired to navigation */}
-          <div className={`rounded-xl border p-4 sm:p-6 ${dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-            <h2 className={`text-lg font-semibold mb-4 ${dm ? 'text-white' : 'text-gray-900'}`}>{t('portal_dashboard_action_required')}</h2>
-            <div className="space-y-3">
-              {priorityActions.map(({ msg, page, action, Icon }) => (
-                <div
-                  key={page}
-                  className={`flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${
-                    dm ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-white'
-                  }`}
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${dm ? 'bg-gray-800 text-blue-300' : 'bg-blue-50 text-[#1d4ed8]'}`}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <p className={`min-w-0 text-sm leading-6 ${dm ? 'text-gray-200' : 'text-gray-900'}`}>{msg}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(page)}
-                    className="inline-flex min-h-9 w-full flex-shrink-0 items-center justify-center gap-1 rounded-lg border border-blue-100 px-3 py-1.5 text-sm font-semibold text-[#1d4ed8] transition-colors hover:bg-blue-50 sm:w-auto dark:border-blue-900/50 dark:hover:bg-blue-950/30"
-                  >
-                    {action}
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 

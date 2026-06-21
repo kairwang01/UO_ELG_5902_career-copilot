@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { ApiStatusProvider } from '../contexts/ApiStatusContext';
 import { CreditsProvider } from '../contexts/CreditsContext';
+import { SessionProvider } from '../contexts/SessionContext';
 import { SiteRouter } from './SiteRouter';
 import { MarketingI18nProvider } from './contexts/MarketingI18nContext';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -28,7 +29,9 @@ const SiteApp: React.FC = () => (
       <CreditsProvider>
         <MarketingI18nProvider>
           <BrowserRouter>
-            <SiteRouter />
+            <SessionProvider>
+              <SiteRouter />
+            </SessionProvider>
           </BrowserRouter>
         </MarketingI18nProvider>
       </CreditsProvider>
