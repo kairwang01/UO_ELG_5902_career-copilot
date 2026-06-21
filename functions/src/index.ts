@@ -22,6 +22,24 @@ setGlobalOptions({
   maxInstances: 10,
 });
 
+// Error/performance monitoring (SCRUM-39). No-op unless SENTRY_DSN is set; @sentry/node
+// is required lazily so DSN-less cold starts pay no load cost. Set the DSN in the
+// functions env to activate — Sentry's global handlers then capture unhandled errors.
+if (process.env.SENTRY_DSN) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Sentry = require("@sentry/node");
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV ?? "production",
+      tracesSampleRate: Number(process.env.SENTRY_TRACES_RATE ?? 0.1),
+      sendDefaultPii: false,
+    });
+  } catch {
+    // Monitoring must never break function boot.
+  }
+}
+
 export { aiProxyFunction              as aiProxy               } from "./handlers/aiProxy";
 export { discoverTalentFunction       as discoverTalent        } from "./handlers/discoverTalent";
 export { onApplicationStatusChangeFunction as onApplicationStatusChange } from "./handlers/notifications";

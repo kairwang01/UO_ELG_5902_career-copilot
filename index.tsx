@@ -2,6 +2,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import { initObservability } from './lib/observability';
+
+// Fire-and-forget; no-op unless VITE_SENTRY_DSN is configured (SCRUM-39).
+void initObservability();
 
 const SiteApp = React.lazy(() => import('./marketing/SiteApp'));
 
