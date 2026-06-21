@@ -37,7 +37,10 @@ const AdminSignIn: React.FC = () => {
   // change swaps this form out for the console.
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

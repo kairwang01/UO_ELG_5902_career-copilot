@@ -222,6 +222,7 @@ const AdminPortal: React.FC = () => {
   const [defaultModelToast, setDefaultModelToast] = useState<{ ok?: string; err?: string } | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
     let active = true;
     data.auth.getSession().then((s) => {
       if (active) setSession(s);
@@ -404,11 +405,11 @@ const AdminPortal: React.FC = () => {
     if (tab === 'quotas') loadQuotas();
     if (tab === 'users') {
       loadUsers();
-      loadAdmins();
+      if (adminRole === 'super') loadAdmins();
     }
-    if (tab === 'admins') loadAdmins();
+    if (tab === 'admins' && adminRole === 'super') loadAdmins();
     if (tab === 'audit') loadAuditLog();
-  }, [isAdmin, tab, loadDashboard, loadLlm, loadModels, loadPrompts, loadQuotas, loadUsers, loadAdmins, loadAuditLog]);
+  }, [isAdmin, adminRole, tab, loadDashboard, loadLlm, loadModels, loadPrompts, loadQuotas, loadUsers, loadAdmins, loadAuditLog]);
 
   // ── mutators ──────────────────────────────────────────────────────────────
 
@@ -751,8 +752,11 @@ const AdminPortal: React.FC = () => {
     else if (tab === 'ai') { loadLlm(); loadModels(); }
     else if (tab === 'prompts') loadPrompts();
     else if (tab === 'quotas') loadQuotas();
-    else if (tab === 'users') loadUsers();
-    else if (tab === 'admins') loadAdmins();
+    else if (tab === 'users') {
+      loadUsers();
+      if (canManageAdmins) loadAdmins();
+    }
+    else if (tab === 'admins' && canManageAdmins) loadAdmins();
     else if (tab === 'audit') loadAuditLog();
   };
 
@@ -2656,19 +2660,21 @@ const AdminPortal: React.FC = () => {
                   );
                 })()}
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className={`grid ${canManageAdmins ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
                   <div className="bg-gray-50 rounded-lg px-3 py-3">
                     <p className="text-[10px] text-gray-500 uppercase tracking-wide">Runs (7d)</p>
                     <p className="text-lg font-bold mt-0.5 tabular-nums">
                       {String((userReport as { week_runs?: number }).week_runs ?? 0)}
                     </p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg px-3 py-3">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wide">Admin</p>
-                    <p className={`text-lg font-bold mt-0.5 ${selectedIsAdmin ? 'text-emerald-700' : 'text-gray-500'}`}>
-                      {selectedIsAdmin ? 'Yes' : 'No'}
-                    </p>
-                  </div>
+                  {canManageAdmins && (
+                    <div className="bg-gray-50 rounded-lg px-3 py-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wide">Admin</p>
+                      <p className={`text-lg font-bold mt-0.5 ${selectedIsAdmin ? 'text-emerald-700' : 'text-gray-500'}`}>
+                        {selectedIsAdmin ? 'Yes' : 'No'}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Credit adjustment */}
@@ -2741,20 +2747,22 @@ const AdminPortal: React.FC = () => {
                 </div>
 
                 {/* Admin toggle */}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                  <span className="text-sm text-gray-600">Admin access</span>
-                  <button
-                    type="button"
-                    onClick={toggleSelectedAdmin}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus:outline-none focus:ring-2 ${
-                      selectedIsAdmin
-                        ? 'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 focus:ring-red-500'
-                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 focus:ring-emerald-500'
-                    }`}
-                  >
-                    {selectedIsAdmin ? 'Revoke admin' : 'Grant admin'}
-                  </button>
-                </div>
+                {canManageAdmins && (
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                    <span className="text-sm text-gray-600">Admin access</span>
+                    <button
+                      type="button"
+                      onClick={toggleSelectedAdmin}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus:outline-none focus:ring-2 ${
+                        selectedIsAdmin
+                          ? 'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 focus:ring-red-500'
+                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 focus:ring-emerald-500'
+                      }`}
+                    >
+                      {selectedIsAdmin ? 'Revoke admin' : 'Grant admin'}
+                    </button>
+                  </div>
+                )}
 
                 {/* Week breakdown */}
                 <details className="group">

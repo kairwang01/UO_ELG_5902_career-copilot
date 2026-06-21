@@ -61,8 +61,11 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   const [busyKeyId, setBusyKeyId] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const load = useCallback(async () => {
