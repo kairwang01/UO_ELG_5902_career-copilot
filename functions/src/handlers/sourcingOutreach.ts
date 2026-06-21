@@ -13,6 +13,7 @@
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 
 if (!admin.apps.length) {
@@ -122,7 +123,7 @@ export async function createSourcingOutreachImpl(uid: string, data: Record<strin
   const job = await loadOwnedJob(uid, jobId);
 
   const ref = db.collection("sourcing_outreach").doc(outreachIdFor(uid, candidateId, jobId));
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   const existing = await ref.get();
   const status = existing.exists ? str(existing.data()?.status, 40) : "";
 
@@ -172,8 +173,8 @@ export async function respondSourcingOutreachImpl(uid: string, data: Record<stri
   await ref.update({
     status,
     candidate_response_note: str(data.note, MAX_NOTE),
-    responded_at: admin.firestore.FieldValue.serverTimestamp(),
-    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    responded_at: FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
   });
   return { outreachId, status };
 }
@@ -194,7 +195,7 @@ export async function cancelSourcingOutreachImpl(uid: string, data: Record<strin
   await ref.update({
     status: "cancelled",
     cancellation_note: str(data.note, MAX_NOTE),
-    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
   });
   return { outreachId, status: "cancelled" };
 }
