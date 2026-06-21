@@ -13,6 +13,7 @@
 
 import { httpsCallable } from 'firebase/functions';
 import { firebaseFunctions } from '../lib/firebaseClient';
+import { withInFlightDedupe } from '../lib/inFlightDedupe';
 import type { TalentProfile } from '../lib/talentProfile';
 import type {
   AnalysisResult, ResumeImage,
@@ -108,16 +109,29 @@ function reportStatusFromError(err: any): void {
   }
 }
 
-/** Surfaces callable failures to the status banner and rethrows for local UI error text. */
-async function callDedicated<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    const result = await fn();
-    updateApiStatus('online');
-    return result;
-  } catch (err) {
-    reportStatusFromError(err);
-    throw new Error(formatCallableError(err));
-  }
+const inFlightDedicatedCalls = new Map<string, Promise<unknown>>();
+
+/**
+ * Surfaces callable failures to the status banner and rethrows for local UI error text.
+ *
+ * When `dedupeKey` is supplied, concurrent identical calls share ONE in-flight network
+ * request (mirrors callAiProxy's inFlightAiProxyCalls). This is the real double-charge
+ * guard for the charged dedicated callables: useCancellableLoading.begin() only
+ * supersedes the UI result — it can NOT abort an in-flight Firebase callable — and a
+ * fresh-per-call requestId can't dedup two distinct invocations, so a double-click /
+ * rapid re-submit would otherwise bill twice server-side.
+ */
+function callDedicated<T>(fn: () => Promise<T>, dedupeKey?: string): Promise<T> {
+  return withInFlightDedupe(inFlightDedicatedCalls, dedupeKey, async () => {
+    try {
+      const result = await fn();
+      updateApiStatus('online');
+      return result;
+    } catch (err) {
+      reportStatusFromError(err);
+      throw new Error(formatCallableError(err));
+    }
+  });
 }
 
 type AiProxyPayload = {
@@ -186,7 +200,7 @@ export const generateInterviewQuestions = async (resumeText: string, jobDescript
       requestId: makeCallableRequestId('mock_interview'),
     });
     return res.data.questions;
-  });
+  }, `mockInterview:${currentModelId ?? ''}:${stableStringify({ resumeText, jobDescription, marketName })}`);
 
 export const evaluateInterviewAnswer = async (question: string, answer: string, jobDescription: string): Promise<InterviewEvaluation> =>
   callDedicated(async () => {
@@ -596,7 +610,7 @@ export const generateCoverLetter = async (resumeText: string, jobDescription: st
       requestId: makeCallableRequestId('cover_letter'),
     });
     return res.data;
-  });
+  }, `coverLetter:${currentModelId ?? ''}:${stableStringify({ resumeText, jobDescription, marketName })}`);
 
 export const generateCareerPath = async (resumeText: string, desiredRole: string, marketName: string, _session?: Session): Promise<CareerPathResult> =>
   callDedicated(async () => {
@@ -609,7 +623,7 @@ export const generateCareerPath = async (resumeText: string, desiredRole: string
       requestId: makeCallableRequestId('career_path'),
     });
     return res.data;
-  });
+  }, `careerPath:${currentModelId ?? ''}:${stableStringify({ resumeText, desiredRole, marketName })}`);
 
 // ---- Matching / opportunities ---------------------------------------------
 export const calculateCompatibility = (resumeText: string, jobDescription: string) =>
