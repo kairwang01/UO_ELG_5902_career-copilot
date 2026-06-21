@@ -136,11 +136,11 @@ function stableStringify(value: unknown): string {
   return `{${Object.keys(obj).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(obj[key])}`).join(',')}}`;
 }
 
-function makeAiProxyRequestId(): string {
+function makeCallableRequestId(prefix: string): string {
   const randomId = typeof globalThis.crypto?.randomUUID === 'function'
     ? globalThis.crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `ai_${randomId}`;
+  return `${prefix}_${randomId}`;
 }
 
 async function callAiProxy<TResponse, TResult>(
@@ -155,7 +155,7 @@ async function callAiProxy<TResponse, TResult>(
 
   const promise = (async () => {
     const fn = httpsCallable<AiProxyPayload, TResponse>(firebaseFunctions, 'aiProxy', { timeout: 190_000 });
-    const res = await fn({ tool, payload, model: currentModelId, requestId: makeAiProxyRequestId() });
+    const res = await fn({ tool, payload, model: currentModelId, requestId: makeCallableRequestId('ai') });
     updateApiStatus('online');
     return mapResult(res.data);
   })();
@@ -177,7 +177,14 @@ export interface InterviewEvaluation { score: number; strengths: string[]; impro
 export const generateInterviewQuestions = async (resumeText: string, jobDescription: string, marketName: string): Promise<InterviewQuestion[]> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, { questions: InterviewQuestion[] }>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
-    const res = await fn({ mode: 'generate', resumeText, jobDescription, marketName, model: currentModelId });
+    const res = await fn({
+      mode: 'generate',
+      resumeText,
+      jobDescription,
+      marketName,
+      model: currentModelId,
+      requestId: makeCallableRequestId('mock_interview'),
+    });
     return res.data.questions;
   });
 
@@ -253,7 +260,13 @@ export const analyzeResume = async (
 ): Promise<AnalysisResult & { extractedText?: string }> => {
   return callDedicated(async () => {
     const fn = httpsCallable<any, AnalysisResult & { extractedText?: string }>(firebaseFunctions, 'analyzeResume', { timeout: 190_000 });
-    const res = await fn({ resumeText, resumeImages: resumeImages ?? undefined, marketName, model: currentModelId });
+    const res = await fn({
+      resumeText,
+      resumeImages: resumeImages ?? undefined,
+      marketName,
+      model: currentModelId,
+      requestId: makeCallableRequestId('resume_analysis'),
+    });
     return res.data;
   });
 };
@@ -575,14 +588,26 @@ export const convertResumeFormat = (resumeText: string, marketName: string, cove
 export const generateCoverLetter = async (resumeText: string, jobDescription: string, marketName: string): Promise<CoverLetter> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, CoverLetter>(firebaseFunctions, 'generateCoverLetter', { timeout: 190_000 });
-    const res = await fn({ resumeText, jobDescription, marketName, model: currentModelId });
+    const res = await fn({
+      resumeText,
+      jobDescription,
+      marketName,
+      model: currentModelId,
+      requestId: makeCallableRequestId('cover_letter'),
+    });
     return res.data;
   });
 
 export const generateCareerPath = async (resumeText: string, desiredRole: string, marketName: string, _session?: Session): Promise<CareerPathResult> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, CareerPathResult>(firebaseFunctions, 'generateCareerPath', { timeout: 190_000 });
-    const res = await fn({ resumeText, desiredRole, marketName, model: currentModelId });
+    const res = await fn({
+      resumeText,
+      desiredRole,
+      marketName,
+      model: currentModelId,
+      requestId: makeCallableRequestId('career_path'),
+    });
     return res.data;
   });
 

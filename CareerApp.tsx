@@ -193,7 +193,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const roleStateKeyRef = useRef<string | null>(null);
   const resumeSaveWarningShownRef = useRef(false);
 
-  const { credits, setCredits, deductCredits } = useCredits();
+  const { credits, setCredits } = useCredits();
   const { addToast } = useToast();
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const analysisCost = TOOL_CREDIT_COSTS['resume-analysis'];
@@ -825,11 +825,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     setAnalysisResult(null);
 
     try {
-      const success = await deductCredits(analysisCost, session);
-      if (!success) {
-          throw new Error(t('credit_deduction_failed'));
-      }
-
       const result = await analyzeResume(resumeText, resumeImages, market);
 
       // If the user signed out or switched accounts mid-call, don't render results

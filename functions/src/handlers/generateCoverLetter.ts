@@ -22,6 +22,7 @@ interface GenerateCoverLetterRequest {
   resumeText: string;
   jobDescription: string;
   marketName: string;
+  requestId?: string;
 }
 
 interface CoverLetter {
@@ -51,7 +52,9 @@ export const generateCoverLetterFunction = onCall({ invoker: "public", timeoutSe
     throw new HttpsError("invalid-argument", "marketName is required.");
   }
 
-  const metered = await meterToolRun(uid, "cover-letter", TOOL_CREDIT_COSTS["cover-letter"]);
+  const metered = await meterToolRun(uid, "cover-letter", TOOL_CREDIT_COSTS["cover-letter"], {
+    requestId: data.requestId,
+  });
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();

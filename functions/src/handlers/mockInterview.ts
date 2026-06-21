@@ -67,6 +67,8 @@ interface MockInterviewRequest {
   qa?: Array<{ question: string; answer: string }>;
   // unlock_report mode
   reportId?: string;
+  /** Client-generated idempotency key for charged generate calls. */
+  requestId?: string;
 }
 
 interface InterviewQuestion {
@@ -219,7 +221,9 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
   if (data.mode === "generate") {
     // Charge ONCE per interview session — at question generation, not per answer
     // evaluation (evaluate turns within the same session are free).
-    const metered = await meterToolRun(uid, "mock-interview", TOOL_CREDIT_COSTS["mock-interview"]);
+    const metered = await meterToolRun(uid, "mock-interview", TOOL_CREDIT_COSTS["mock-interview"], {
+      requestId: data.requestId,
+    });
 
     const prompt = buildPrompt("handler_mock_interview_generate", {
       marketName: data.marketName ?? "Canadian",

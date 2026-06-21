@@ -26,6 +26,7 @@ interface GenerateCareerPathRequest {
   resumeText: string;
   desiredRole: string;
   marketName: string;
+  requestId?: string;
 }
 
 interface SkillGap {
@@ -137,7 +138,9 @@ export const generateCareerPathFunction = onCall({ invoker: "public", timeoutSec
     throw new HttpsError("invalid-argument", "marketName is required.");
   }
 
-  const metered = await meterToolRun(uid, "career-path", TOOL_CREDIT_COSTS["career-path"]);
+  const metered = await meterToolRun(uid, "career-path", TOOL_CREDIT_COSTS["career-path"], {
+    requestId: data.requestId,
+  });
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();
