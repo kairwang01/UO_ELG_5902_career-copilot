@@ -68,6 +68,9 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     }
   };
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) setCurrentQuestionIndex(currentQuestionIndex - 1);
+  };
   const handleSubmitTest = () => setTestStage('results');
   const handleRetakeTest = () => runTool(selectedAgileRole, selectedCertification);
 
@@ -129,7 +132,15 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
             </button>
           ))}
         </div>
-        <div className="mt-6 flex justify-between items-center">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handlePreviousQuestion}
+            disabled={currentQuestionIndex === 0}
+            className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {t('tool_agile_coach_previous_button')}
+          </button>
           <span className="text-sm text-gray-600 dark:text-gray-400">{t('tool_agile_coach_answered').replace('{answered}', String(userAnswers.filter(a => a !== null).length)).replace('{total}', String(result.practiceQuestions.length))}</span>
           {currentQuestionIndex < result.practiceQuestions.length - 1 ? (
             <button onClick={handleNextQuestion} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">{t('tool_agile_coach_next_button')}</button>

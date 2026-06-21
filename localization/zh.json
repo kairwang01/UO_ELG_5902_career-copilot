@@ -603,6 +603,7 @@
   "tool_agile_coach_question_of": "问题 {current} 共 {total}",
   "tool_agile_coach_answered": "{answered} / {total} 已回答",
   "tool_agile_coach_next_button": "下一步",
+  "tool_agile_coach_previous_button": "上一步",
   "tool_agile_coach_submit_button": "提交测试",
   "tool_agile_coach_results_title": "测试结果",
   "tool_agile_coach_score": "您得分 {score}%（{correct}/{total}）",

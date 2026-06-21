@@ -361,6 +361,7 @@
   "tool_agile_coach_question_of": "Question {current} sur {total}",
   "tool_agile_coach_answered": "{answered} / {total} répondues",
   "tool_agile_coach_next_button": "Suivant",
+  "tool_agile_coach_previous_button": "Précédent",
   "tool_agile_coach_submit_button": "Soumettre le test",
   "tool_agile_coach_results_title": "Résultats du test",
   "tool_agile_coach_score": "Vous avez obtenu {score}% ({correct}/{total})",

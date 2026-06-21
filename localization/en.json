@@ -603,6 +603,7 @@
   "tool_agile_coach_question_of": "Question {current} of {total}",
   "tool_agile_coach_answered": "{answered} / {total} answered",
   "tool_agile_coach_next_button": "Next",
+  "tool_agile_coach_previous_button": "Previous",
   "tool_agile_coach_submit_button": "Submit Test",
   "tool_agile_coach_results_title": "Test Results",
   "tool_agile_coach_score": "You scored {score}% ({correct}/{total})",

@@ -361,6 +361,7 @@
   "tool_agile_coach_question_of": "Câu hỏi {current} trên {total}",
   "tool_agile_coach_answered": "đã trả lời {answered} / {total}",
   "tool_agile_coach_next_button": "Tiếp theo",
+  "tool_agile_coach_previous_button": "Trước",
   "tool_agile_coach_submit_button": "Nộp bài kiểm tra",
   "tool_agile_coach_results_title": "Kết quả bài kiểm tra",
   "tool_agile_coach_score": "Bạn đã đạt {score}% ({correct}/{total})",
