@@ -35,6 +35,7 @@ import {
   currentCreditPeriod,
   monthlyCreditsFor,
 } from "../credits/planCredits";
+import { ensurePlatformCaches } from "../config/env";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -132,6 +133,8 @@ export async function applySubscriptionSelection(
   rawKeyInput: unknown,
   opts: { fullName?: unknown; companyName?: unknown } = {},
 ): Promise<SubscriptionSelectionResult> {
+  await ensurePlatformCaches();
+
   const rawKey = typeof rawKeyInput === "string" ? rawKeyInput.trim() : "";
   if (!rawKey) {
     throw new HttpsError("invalid-argument", "planKey is required.");

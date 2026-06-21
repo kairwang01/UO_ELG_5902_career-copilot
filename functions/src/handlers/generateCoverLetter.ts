@@ -13,7 +13,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { deductCredits, refundCredits } from "../credits/deductCredits";
+import { meterToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
 import { ensurePlatformCaches } from "../config/env";
@@ -51,7 +51,7 @@ export const generateCoverLetterFunction = onCall({ invoker: "public", timeoutSe
     throw new HttpsError("invalid-argument", "marketName is required.");
   }
 
-  await deductCredits(uid, TOOL_CREDIT_COSTS["cover-letter"], "cover-letter");
+  const metered = await meterToolRun(uid, "cover-letter", TOOL_CREDIT_COSTS["cover-letter"]);
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();
@@ -71,7 +71,7 @@ export const generateCoverLetterFunction = onCall({ invoker: "public", timeoutSe
 
     return result.raw as CoverLetter;
   } catch (err) {
-    await refundCredits(uid, TOOL_CREDIT_COSTS["cover-letter"]);
+    await refundCredits(uid, metered.creditCost);
     // A plain Error reaches the client as a bare "INTERNAL" with no detail. Wrap
     // it so the failure message survives (preserve a meaningful HttpsError code).
     if (err instanceof HttpsError) throw err;

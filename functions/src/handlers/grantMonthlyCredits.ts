@@ -28,10 +28,11 @@ import * as admin from "firebase-admin";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 import {
   CREDIT_RENEWALS_COLLECTION,
-  PLAN_MONTHLY_CREDITS,
   currentCreditPeriod,
   monthlyCreditsFor,
 } from "../credits/planCredits";
+import { PLAN_KEYS } from "../admin/quotaDefaults";
+import { ensurePlatformCaches } from "../config/env";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -43,14 +44,10 @@ const db = admin.firestore();
  *  webhook) or an admin, never by the client. Gates recurring credit grants. */
 const BILLING_COLLECTION = "billing";
 
-/** Plan keys that carry a recurring (>0) monthly allotment. */
-const PAID_PLANS = Object.keys(PLAN_MONTHLY_CREDITS).filter(
-  (p) => PLAN_MONTHLY_CREDITS[p] > 0,
-);
-
 export const grantMonthlyCreditsFunction = onSchedule(
   { schedule: "10 0 1 * *", timeZone: "UTC", timeoutSeconds: 540, memory: "256MiB" },
   async () => {
+    await ensurePlatformCaches();
     const period = currentCreditPeriod();
     let granted = 0;
     let skipped = 0;
@@ -58,7 +55,7 @@ export const grantMonthlyCreditsFunction = onSchedule(
     // Firestore `in` accepts up to 30 values; PAID_PLANS is well under that.
     const snap = await db
       .collection(USERS_COLLECTION)
-      .where(USER_FIELDS.subscriptionStatus, "in", PAID_PLANS)
+      .where(USER_FIELDS.subscriptionStatus, "in", PLAN_KEYS)
       .get();
 
     for (const userDoc of snap.docs) {

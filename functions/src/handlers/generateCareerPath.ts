@@ -13,7 +13,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { deductCredits, refundCredits } from "../credits/deductCredits";
+import { meterToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
 import { ensurePlatformCaches } from "../config/env";
@@ -137,7 +137,7 @@ export const generateCareerPathFunction = onCall({ invoker: "public", timeoutSec
     throw new HttpsError("invalid-argument", "marketName is required.");
   }
 
-  await deductCredits(uid, TOOL_CREDIT_COSTS["career-path"], "career-path");
+  const metered = await meterToolRun(uid, "career-path", TOOL_CREDIT_COSTS["career-path"]);
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();
@@ -157,7 +157,7 @@ export const generateCareerPathFunction = onCall({ invoker: "public", timeoutSec
 
     return result.raw as CareerPathResult;
   } catch (err) {
-    await refundCredits(uid, TOOL_CREDIT_COSTS["career-path"]);
+    await refundCredits(uid, metered.creditCost);
     // A plain Error reaches the client as a bare "INTERNAL" with no detail. Wrap
     // it so the failure message survives (preserve a meaningful HttpsError code).
     if (err instanceof HttpsError) throw err;

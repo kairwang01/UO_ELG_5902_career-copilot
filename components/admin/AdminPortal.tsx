@@ -46,8 +46,11 @@ import {
   adminWhoAmI,
   SUBSCRIPTION_PLANS,
   type AdminDashboard,
+  type AdminPlanKey,
+  type AdminPlanQuota,
   type AdminQuotas,
   type AdminRow,
+  type AdminToolQuota,
   type AdminUserRow,
   type AuditLogEntry,
   type ModelEntry,
@@ -55,6 +58,7 @@ import {
   type PromptVersion,
   type TestModelResult,
 } from '../../services/adminClient';
+import { TOOL_CREDIT_COSTS } from '../../config/credits';
 import { hasAdminPermission, type AdminRole } from '../../lib/access/permissions';
 import { PermissionMatrix, ProductRoleOverview } from './AccessControlSections';
 import { KeyPoolHealthSection } from './KeyPoolHealthSection';
@@ -121,6 +125,59 @@ type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'api
 
 /** Per-key/model test result: key is a provider slug ('gemini'|'kairllm'|'deepseek') or a model id. */
 type TestStatus = { state: 'idle' } | { state: 'running' } | ({ state: 'done' } & TestModelResult);
+
+const PLAN_KEYS: AdminPlanKey[] = [
+  'free',
+  'essentials',
+  'accelerator',
+  'executive',
+  'starter',
+  'growth',
+  'pro',
+  'single_post',
+  'job_pack',
+];
+
+const PLAN_LABELS: Record<AdminPlanKey, string> = {
+  free: 'Free',
+  essentials: 'Essentials',
+  accelerator: 'Accelerator',
+  executive: 'Executive',
+  starter: 'Business Starter',
+  growth: 'Business Growth',
+  pro: 'Business Pro',
+  single_post: 'Single Post',
+  job_pack: 'Job Pack',
+};
+
+const DEFAULT_PLAN_QUOTAS: Record<AdminPlanKey, AdminPlanQuota> = {
+  free: { daily_run_limit: 25, daily_credit_limit: 0, monthly_credit_grant: 0, active_job_limit: 3 },
+  essentials: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 200, active_job_limit: 0 },
+  accelerator: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 750, active_job_limit: 0 },
+  executive: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 2000, active_job_limit: 0 },
+  starter: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 3000, active_job_limit: 8 },
+  growth: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 8000, active_job_limit: 20 },
+  pro: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 20000, active_job_limit: 100 },
+  single_post: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 0, active_job_limit: 1 },
+  job_pack: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 0, active_job_limit: 10 },
+};
+
+const TOOL_KEYS = Object.keys(TOOL_CREDIT_COSTS).sort();
+
+const effectivePlanQuota = (quotas: AdminQuotas, plan: AdminPlanKey): AdminPlanQuota => ({
+  ...DEFAULT_PLAN_QUOTAS[plan],
+  ...(quotas.plan_quotas?.[plan] ?? {}),
+});
+
+const effectiveToolQuota = (quotas: AdminQuotas, tool: string): AdminToolQuota => ({
+  enabled: quotas.tool_quotas?.[tool]?.enabled ?? true,
+  credit_cost: Number(
+    quotas.tool_quotas?.[tool]?.credit_cost ??
+      TOOL_CREDIT_COSTS[tool as keyof typeof TOOL_CREDIT_COSTS] ??
+      0,
+  ),
+  allowed_plans: (quotas.tool_quotas?.[tool]?.allowed_plans as AdminPlanKey[] | undefined) ?? [...PLAN_KEYS],
+});
 
 // ─── main component ────────────────────────────────────────────────────────
 
@@ -446,6 +503,12 @@ const AdminPortal: React.FC = () => {
         setError('Free-tier max output tokens must be an integer between 256 and 32768.');
         return;
       }
+      const plan_quotas = Object.fromEntries(
+        PLAN_KEYS.map((plan) => [plan, effectivePlanQuota(quotas, plan)]),
+      ) as Record<AdminPlanKey, AdminPlanQuota>;
+      const tool_quotas = Object.fromEntries(
+        TOOL_KEYS.map((tool) => [tool, effectiveToolQuota(quotas, tool)]),
+      ) as Record<string, AdminToolQuota>;
       const updated = await adminUpdateQuotas({
         daily_tool_run_limit: Number(quotas.daily_tool_run_limit ?? 0),
         daily_credit_spend_limit: Number(quotas.daily_credit_spend_limit ?? 0),
@@ -454,6 +517,8 @@ const AdminPortal: React.FC = () => {
         free_max_output_tokens: fmot,
         mi_min_tier: quotas.mi_min_tier === 'free' ? 'free' : 'paid',
         mi_report_unlock_credits: Number(quotas.mi_report_unlock_credits ?? 500),
+        plan_quotas,
+        tool_quotas,
       });
       setQuotas(updated);
     } catch (e) {
@@ -461,6 +526,58 @@ const AdminPortal: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const setPlanQuotaField = (
+    plan: AdminPlanKey,
+    field: keyof AdminPlanQuota,
+    value: number,
+  ) => {
+    setQuotas((q) => ({
+      ...q,
+      plan_quotas: {
+        ...(q.plan_quotas ?? {}),
+        [plan]: {
+          ...effectivePlanQuota(q, plan),
+          [field]: Math.max(0, Number.isFinite(value) ? Math.floor(value) : 0),
+        },
+      },
+    }));
+  };
+
+  const setToolQuotaField = (
+    tool: string,
+    patch: Partial<AdminToolQuota>,
+  ) => {
+    setQuotas((q) => ({
+      ...q,
+      tool_quotas: {
+        ...(q.tool_quotas ?? {}),
+        [tool]: {
+          ...effectiveToolQuota(q, tool),
+          ...patch,
+        },
+      },
+    }));
+  };
+
+  const toggleToolPlan = (tool: string, plan: AdminPlanKey) => {
+    setQuotas((q) => {
+      const current = effectiveToolQuota(q, tool);
+      const allowed = new Set(current.allowed_plans);
+      if (allowed.has(plan)) allowed.delete(plan);
+      else allowed.add(plan);
+      return {
+        ...q,
+        tool_quotas: {
+          ...(q.tool_quotas ?? {}),
+          [tool]: {
+            ...current,
+            allowed_plans: PLAN_KEYS.filter((p) => allowed.has(p)),
+          },
+        },
+      };
+    });
   };
 
   const openUser = async (uid: string) => {
@@ -2447,15 +2564,15 @@ const AdminPortal: React.FC = () => {
 
         {/* ── QUOTAS ────────────────────────────────────────────────────── */}
         {tab === 'quotas' && (
-          <div className="max-w-xl space-y-5">
+          <div className="space-y-5">
             <Card className="p-5 space-y-5">
               <div>
-                <SectionHeading>Platform quotas</SectionHeading>
+                <SectionHeading>Global quotas</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   UTC day rolling window. Set to 0 for no limit on that dimension.
                 </p>
               </div>
-              <div className="space-y-4">
+              <div className="grid md:grid-cols-3 gap-4">
                 {(
                   [
                     ['daily_tool_run_limit', 'Daily tool run limit (platform-wide)'],
@@ -2477,8 +2594,9 @@ const AdminPortal: React.FC = () => {
                     />
                   </div>
                 ))}
+              </div>
 
-                {/* Free-tier max output tokens */}
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <FieldLabel htmlFor="free_max_output_tokens">Free-tier max output tokens</FieldLabel>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-relaxed">
@@ -2500,17 +2618,159 @@ const AdminPortal: React.FC = () => {
                     Range: 256–32768. Default 8192 = no artificial truncation.
                   </p>
                 </div>
+                <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer select-none self-end pb-2">
+                  <input
+                    type="checkbox"
+                    checked={quotas.enabled !== false}
+                    onChange={(e) => setQuotas((q) => ({ ...q, enabled: e.target.checked }))}
+                    className="w-4 h-4 rounded accent-blue-600"
+                  />
+                  Enforce quota limits
+                </label>
+              </div>
+            </Card>
 
-                {/* Mock-interview gate (post-MVP tier decision lives here, not in code) */}
+            <Card className="p-5 space-y-4">
+              <div>
+                <SectionHeading>Plan quotas</SectionHeading>
+                <p className="mt-1 text-xs text-gray-500">
+                  Per-user limits by subscription status. 0 means unlimited for run/credit fields.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="text-xs text-gray-500 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left py-2 pr-3 font-medium">Plan</th>
+                      <th className="text-left py-2 px-3 font-medium">Daily runs</th>
+                      <th className="text-left py-2 px-3 font-medium">Daily credits</th>
+                      <th className="text-left py-2 px-3 font-medium">Monthly grant</th>
+                      <th className="text-left py-2 pl-3 font-medium">Active jobs</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {PLAN_KEYS.map((plan) => {
+                      const row = effectivePlanQuota(quotas, plan);
+                      return (
+                        <tr key={plan}>
+                          <td className="py-2 pr-3 whitespace-nowrap font-medium text-gray-800">
+                            {PLAN_LABELS[plan]}
+                          </td>
+                          {(['daily_run_limit', 'daily_credit_limit', 'monthly_credit_grant', 'active_job_limit'] as const).map((field) => (
+                            <td key={field} className="py-2 px-3 min-w-[130px]">
+                              <input
+                                type="number"
+                                min={0}
+                                value={row[field]}
+                                onChange={(e) => setPlanQuotaField(plan, field, Number(e.target.value))}
+                                className={textInput}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            <Card className="p-5 space-y-4">
+              <div>
+                <SectionHeading>AI tools</SectionHeading>
+                <p className="mt-1 text-xs text-gray-500">
+                  Disable tools, edit credit prices, and choose which plans can run them.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="text-xs text-gray-500 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left py-2 pr-3 font-medium">Tool</th>
+                      <th className="text-left py-2 px-3 font-medium">Enabled</th>
+                      <th className="text-left py-2 px-3 font-medium">Credits</th>
+                      <th className="text-left py-2 pl-3 font-medium">Allowed plans</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {TOOL_KEYS.map((tool) => {
+                      const row = effectiveToolQuota(quotas, tool);
+                      return (
+                        <tr key={tool} className="align-top">
+                          <td className="py-3 pr-3 font-medium text-gray-800 whitespace-nowrap">{tool}</td>
+                          <td className="py-3 px-3">
+                            <input
+                              type="checkbox"
+                              checked={row.enabled}
+                              onChange={(e) => setToolQuotaField(tool, { enabled: e.target.checked })}
+                              className="w-4 h-4 rounded accent-blue-600"
+                              aria-label={`${tool} enabled`}
+                            />
+                          </td>
+                          <td className="py-2 px-3 min-w-[120px]">
+                            <input
+                              type="number"
+                              min={0}
+                              value={row.credit_cost}
+                              onChange={(e) => setToolQuotaField(tool, { credit_cost: Math.max(0, Number(e.target.value)) })}
+                              className={textInput}
+                            />
+                          </td>
+                          <td className="py-2 pl-3">
+                            <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-2 min-w-[560px]">
+                              {PLAN_KEYS.map((plan) => (
+                                <label key={plan} className="flex items-center gap-2 text-xs text-gray-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={row.allowed_plans.includes(plan)}
+                                    onChange={() => toggleToolPlan(tool, plan)}
+                                    className="w-3.5 h-3.5 rounded accent-blue-600"
+                                  />
+                                  {PLAN_LABELS[plan]}
+                                </label>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            <Card className="p-5 space-y-4">
+              <div>
+                <SectionHeading>Employer posting</SectionHeading>
+                <p className="mt-1 text-xs text-gray-500">
+                  Active job caps are stored in the plan matrix above and enforced by job-posting callables.
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {(['free', 'starter', 'growth', 'pro', 'single_post', 'job_pack'] as AdminPlanKey[]).map((plan) => (
+                  <div key={plan} className="border border-gray-200 rounded-md p-3">
+                    <div className="text-xs text-gray-500">{PLAN_LABELS[plan]}</div>
+                    <div className="mt-1 text-lg font-semibold text-gray-900">
+                      {effectivePlanQuota(quotas, plan).active_job_limit}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-5 space-y-4">
+              <div>
+                <SectionHeading>Mock interview</SectionHeading>
+                <p className="mt-1 text-xs text-gray-500">
+                  Timed simulation access and locked-report unlock pricing.
+                </p>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <FieldLabel htmlFor="mi_min_tier">Mock interview — minimum tier</FieldLabel>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-relaxed">
-                    Who can run the timed simulation. Default: paid only. Flip to free to activate
-                    the locked-report upsell funnel (free users then pay the unlock price below).
-                  </p>
+                  <FieldLabel htmlFor="mi_min_tier">Minimum tier</FieldLabel>
                   <select
                     id="mi_min_tier"
-                    value={(quotas as { mi_min_tier?: string }).mi_min_tier === 'free' ? 'free' : 'paid'}
+                    value={quotas.mi_min_tier === 'free' ? 'free' : 'paid'}
                     onChange={(e) => setQuotas((q) => ({ ...q, mi_min_tier: e.target.value as 'free' | 'paid' }))}
                     className={textInput}
                   >
@@ -2519,18 +2779,14 @@ const AdminPortal: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <FieldLabel htmlFor="mi_report_unlock_credits">Mock interview — report unlock price (credits)</FieldLabel>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-relaxed">
-                    What a non-paid user pays to unlock a finished report. Keep it expensive — it is
-                    the anchor that makes upgrading look like the better deal. 0 = free unlock.
-                  </p>
+                  <FieldLabel htmlFor="mi_report_unlock_credits">Report unlock price (credits)</FieldLabel>
                   <input
                     id="mi_report_unlock_credits"
                     type="number"
                     min={0}
                     max={100000}
                     step={50}
-                    value={Number((quotas as { mi_report_unlock_credits?: number }).mi_report_unlock_credits ?? 500)}
+                    value={Number(quotas.mi_report_unlock_credits ?? 500)}
                     onChange={(e) =>
                       setQuotas((q) => ({ ...q, mi_report_unlock_credits: Number(e.target.value) }))
                     }
@@ -2538,15 +2794,9 @@ const AdminPortal: React.FC = () => {
                   />
                 </div>
               </div>
-              <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={quotas.enabled !== false}
-                  onChange={(e) => setQuotas((q) => ({ ...q, enabled: e.target.checked }))}
-                  className="w-4 h-4 rounded accent-blue-600"
-                />
-                Enforce quota limits
-              </label>
+            </Card>
+
+            <Card className="p-5">
               <SaveButton onClick={saveQuotas} loading={loading} label="Save quotas" />
             </Card>
           </div>

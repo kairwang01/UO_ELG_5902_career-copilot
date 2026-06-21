@@ -24,25 +24,17 @@
  * grant nothing here.
  */
 
-/** Recurring monthly AI-credit allotment per plan key (bare key, prefixes stripped). */
+import { getMonthlyCreditGrant } from "../config/env";
+import { DEFAULT_PLAN_QUOTAS, PLAN_KEYS } from "../admin/quotaDefaults";
+
+/** Default recurring monthly AI-credit allotment per plan key (bare key, prefixes stripped). */
 export const PLAN_MONTHLY_CREDITS: Record<string, number> = {
-  free: 0,
-  // candidate
-  essentials: 200,
-  accelerator: 750,
-  executive: 2000,
-  // business (employer)
-  starter: 3000,
-  growth: 8000,
-  pro: 20000,
-  // one-time add-ons grant no recurring AI credits
-  single_post: 0,
-  job_pack: 0,
+  ...Object.fromEntries(PLAN_KEYS.map((key) => [key, DEFAULT_PLAN_QUOTAS[key].monthly_credit_grant])),
 };
 
 /** Monthly allotment for a plan, 0 if the plan grants no recurring credits. */
 export function monthlyCreditsFor(plan: string): number {
-  return PLAN_MONTHLY_CREDITS[plan] ?? 0;
+  return getMonthlyCreditGrant(plan);
 }
 
 /** Current grant period as "YYYY-MM" (UTC). One grant per plan per period. */

@@ -20,7 +20,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
-import { deductCredits, refundCredits } from "../credits/deductCredits";
+import { meterToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
 import { ensurePlatformCaches } from "../config/env";
@@ -112,7 +112,7 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
 
   // Step 3: Deduct credits BEFORE the LLM call — atomic, server-side, un-bypassable.
   // If the user has insufficient credits, this throws and the LLM is never called.
-  await deductCredits(uid, TOOL_CREDIT_COSTS["resume-analysis"], "resume-analysis");
+  const metered = await meterToolRun(uid, "resume-analysis", TOOL_CREDIT_COSTS["resume-analysis"]);
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();
@@ -147,7 +147,7 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
     return result.raw as AnalysisResult;
   } catch (err) {
     // Model call failed after charging — refund so the user isn't billed for nothing.
-    await refundCredits(uid, TOOL_CREDIT_COSTS["resume-analysis"]);
+    await refundCredits(uid, metered.creditCost);
     const message = err instanceof Error ? err.message : "Resume analysis failed.";
     throw new HttpsError("internal", message);
   }

@@ -106,6 +106,37 @@ export interface LlmConfigDoc {
   updated_by?: string;
 }
 
+export type PlanKey =
+  | "free"
+  | "essentials"
+  | "accelerator"
+  | "executive"
+  | "starter"
+  | "growth"
+  | "pro"
+  | "single_post"
+  | "job_pack";
+
+export interface PlanQuota {
+  /** Per-plan cap on successful AI/tool runs per UTC day (0 = unlimited). */
+  daily_run_limit: number;
+  /** Per-plan cap on credits spent per user per UTC day (0 = unlimited). */
+  daily_credit_limit: number;
+  /** Monthly AI credit grant used by subscription selection/renewal. */
+  monthly_credit_grant: number;
+  /** Employer active job-post cap for this plan (0 = cannot post). */
+  active_job_limit: number;
+}
+
+export interface ToolQuota {
+  /** When false, server-side execution is blocked for user-visible paid tools. */
+  enabled: boolean;
+  /** Credit price charged for the tool. */
+  credit_cost: number;
+  /** Plan keys allowed to run the tool. Empty/missing means no plans allowed. */
+  allowed_plans: PlanKey[];
+}
+
 export interface QuotasDoc {
   /** Global cap on billable tool runs per UTC day (0 = unlimited). */
   daily_tool_run_limit?: number;
@@ -127,6 +158,10 @@ export interface QuotasDoc {
    */
   mi_min_tier?: "free" | "paid";
   mi_report_unlock_credits?: number;
+  /** Fixed plan-key quota matrix, merged with defaults when omitted. */
+  plan_quotas?: Partial<Record<PlanKey, Partial<PlanQuota>>>;
+  /** Fixed user-visible AI tool quota matrix, merged with defaults when omitted. */
+  tool_quotas?: Record<string, Partial<ToolQuota>>;
   enabled?: boolean;
   updated_at?: string;
   updated_by?: string;

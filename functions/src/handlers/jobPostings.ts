@@ -16,18 +16,13 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requireAuth, isAdminUid } from "../middleware/auth";
+import { ensurePlatformCaches, getActiveJobLimit } from "../config/env";
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
 
-// Active-job caps per subscription_status. Mirrors the pricing copy
-// (site_plan_emp_*_f1 / plan_*_feature_1). Employers default to the free cap.
-const JOB_POST_LIMITS: Record<string, number> = {
-  free: 3, starter: 8, growth: 20, pro: 100, single_post: 1, job_pack: 10,
-};
-const DEFAULT_LIMIT = 3;
 const POSTER_ROLES = new Set(["employer", "agency"]);
 
 interface Poster {
@@ -119,7 +114,10 @@ function assertPoster(role: string): void {
   }
 }
 
-const limitFor = (sub: string): number => JOB_POST_LIMITS[sub] ?? DEFAULT_LIMIT;
+async function limitFor(sub: string): Promise<number> {
+  await ensurePlatformCaches();
+  return getActiveJobLimit(sub);
+}
 
 async function countActiveJobs(uid: string): Promise<number> {
   const snap = await db.collection("job_postings")
@@ -130,7 +128,7 @@ async function countActiveJobs(uid: string): Promise<number> {
 async function assertWithinLimit(uid: string, poster: Poster, token?: Record<string, unknown>): Promise<void> {
   if (await isAdminUid(uid, token)) return; // admin override
   const active = await countActiveJobs(uid);
-  const limit = limitFor(poster.subscription_status);
+  const limit = await limitFor(poster.subscription_status);
   if (active >= limit) {
     throw new HttpsError(
       "failed-precondition",

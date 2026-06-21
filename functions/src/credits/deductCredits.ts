@@ -20,7 +20,7 @@
 
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
-import { ensurePlatformCaches } from "../config/env";
+import { ensurePlatformCaches, getToolCreditCost } from "../config/env";
 import {
   checkQuotasOrThrow,
   logCreditLedger,
@@ -58,6 +58,10 @@ export interface DeductCreditsResult {
   duplicate: boolean;
   balanceAfter: number;
   usageEventId?: string;
+}
+
+export interface MeterToolRunResult extends DeductCreditsResult {
+  creditCost: number;
 }
 
 function normalizeRequestId(requestId: string | undefined): string | undefined {
@@ -227,6 +231,30 @@ export async function deductCredits(
     "resource-exhausted",
     "Too many concurrent requests. Please try again in a moment."
   );
+}
+
+/**
+ * Applies the admin-configured price for a user-visible tool. A configured cost
+ * of 0 is still metered as a free run so daily run caps and audit counters work.
+ */
+export async function meterToolRun(
+  uid: string,
+  tool: string,
+  defaultCost: number,
+  options: DeductCreditsOptions = {}
+): Promise<MeterToolRunResult> {
+  await ensurePlatformCaches();
+  const creditCost = getToolCreditCost(tool, defaultCost);
+  if (creditCost > 0) {
+    return { ...(await deductCredits(uid, creditCost, tool, options)), creditCost };
+  }
+  const run = await recordFreeToolRun(uid, tool, options);
+  return {
+    charged: false,
+    duplicate: run.duplicate,
+    balanceAfter: 0,
+    creditCost: 0,
+  };
 }
 
 export interface RecordFreeRunResult {

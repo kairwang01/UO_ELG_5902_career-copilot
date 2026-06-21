@@ -35,6 +35,14 @@ import {
   LlmConfigDoc,
 } from "../admin/schema";
 import {
+  DEFAULT_PLAN_QUOTAS,
+  PLAN_KEYS,
+  USER_VISIBLE_TOOL_KEYS,
+  defaultToolQuota,
+  effectivePlanQuotas,
+  effectiveToolQuotas,
+} from "../admin/quotaDefaults";
+import {
   ensurePlatformCaches,
   getLlmConfigMasked,
   getQuotasConfigForAdmin,
@@ -96,6 +104,14 @@ function startOfUtcDaysAgo(days: number): admin.firestore.Timestamp {
   d.setUTCDate(d.getUTCDate() - days);
   d.setUTCHours(0, 0, 0, 0);
   return admin.firestore.Timestamp.fromDate(d);
+}
+
+function assertNonNegativeInt(value: unknown, label: string, max = 1_000_000): number {
+  const v = Number(value ?? 0);
+  if (!Number.isInteger(v) || v < 0 || v > max) {
+    throw new HttpsError("invalid-argument", `${label} must be an integer between 0 and ${max}.`);
+  }
+  return v;
 }
 
 /** Returns today's UTC date string as YYYYMMDD, used for daily-total doc ids. */
@@ -294,10 +310,61 @@ export const adminUpdateQuotasFunction = onCall({ invoker: "public" }, async (re
   const { uid: adminUid } = await requireRole(request, "admin");
   const data = (request.data ?? {}) as QuotasDoc;
 
+  for (const key of Object.keys(data.plan_quotas ?? {})) {
+    if (!PLAN_KEYS.includes(key as (typeof PLAN_KEYS)[number])) {
+      throw new HttpsError("invalid-argument", `Unknown plan quota key: ${key}`);
+    }
+  }
+
+  const basePlanQuotas = effectivePlanQuotas(data);
+  const plan_quotas = {} as NonNullable<QuotasDoc["plan_quotas"]>;
+  for (const key of PLAN_KEYS) {
+    const row = basePlanQuotas[key] ?? DEFAULT_PLAN_QUOTAS[key];
+    plan_quotas[key] = {
+      daily_run_limit: assertNonNegativeInt(row.daily_run_limit, `plan_quotas.${key}.daily_run_limit`),
+      daily_credit_limit: assertNonNegativeInt(row.daily_credit_limit, `plan_quotas.${key}.daily_credit_limit`),
+      monthly_credit_grant: assertNonNegativeInt(row.monthly_credit_grant, `plan_quotas.${key}.monthly_credit_grant`),
+      active_job_limit: assertNonNegativeInt(row.active_job_limit, `plan_quotas.${key}.active_job_limit`),
+    };
+  }
+
+  const rawToolQuotas = data.tool_quotas ?? {};
+  const allowedToolKeys = new Set([...USER_VISIBLE_TOOL_KEYS, ...Object.keys(rawToolQuotas)]);
+  const effectiveTools = effectiveToolQuotas(data);
+  const tool_quotas: NonNullable<QuotasDoc["tool_quotas"]> = {};
+  for (const key of Array.from(allowedToolKeys).sort()) {
+    if (!defaultToolQuota(key)) {
+      throw new HttpsError("invalid-argument", `Unknown tool quota key: ${key}`);
+    }
+    const rawAllowed = rawToolQuotas[key]?.allowed_plans;
+    if (Array.isArray(rawAllowed)) {
+      for (const plan of rawAllowed) {
+        if (!PLAN_KEYS.includes(plan)) {
+          throw new HttpsError("invalid-argument", `Invalid allowed plan "${plan}" for tool ${key}.`);
+        }
+      }
+    }
+    const row = effectiveTools[key];
+    if (!row) continue;
+    const allowed = Array.isArray(row.allowed_plans) ? row.allowed_plans : [];
+    const seen = new Set<string>();
+    tool_quotas[key] = {
+      enabled: row.enabled !== false,
+      credit_cost: assertNonNegativeInt(row.credit_cost, `tool_quotas.${key}.credit_cost`, 100000),
+      allowed_plans: allowed.filter((plan) => {
+        if (!PLAN_KEYS.includes(plan) || seen.has(plan)) return false;
+        seen.add(plan);
+        return true;
+      }),
+    };
+  }
+
   const patch: QuotasDoc = {
-    daily_tool_run_limit: Number(data.daily_tool_run_limit ?? 0),
-    daily_credit_spend_limit: Number(data.daily_credit_spend_limit ?? 0),
-    per_user_daily_credit_limit: Number(data.per_user_daily_credit_limit ?? 0),
+    daily_tool_run_limit: assertNonNegativeInt(data.daily_tool_run_limit, "daily_tool_run_limit"),
+    daily_credit_spend_limit: assertNonNegativeInt(data.daily_credit_spend_limit, "daily_credit_spend_limit"),
+    per_user_daily_credit_limit: assertNonNegativeInt(data.per_user_daily_credit_limit, "per_user_daily_credit_limit"),
+    plan_quotas,
+    tool_quotas,
     enabled: data.enabled !== false,
     updated_at: new Date().toISOString(),
     updated_by: adminUid,

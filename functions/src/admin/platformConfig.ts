@@ -10,8 +10,15 @@ import {
   ModelsDoc,
   PLATFORM_CONFIG_COLLECTION,
   PLATFORM_DOCS,
+  PlanQuota,
   QuotasDoc,
+  ToolQuota,
 } from "./schema";
+import {
+  effectivePlanQuota,
+  effectiveQuotasDoc,
+  effectiveToolQuota,
+} from "./quotaDefaults";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -109,6 +116,31 @@ export function getDeepseekApiKey(): string {
 
 export function getQuotasConfig(): QuotasDoc {
   return quotasCache ?? {};
+}
+
+export function getEffectiveQuotasConfig(): QuotasDoc {
+  return effectiveQuotasDoc(quotasCache ?? {});
+}
+
+export function getPlanQuota(plan: string | undefined | null): PlanQuota {
+  return effectivePlanQuota(quotasCache ?? {}, plan);
+}
+
+export function getToolQuota(tool: string): ToolQuota | null {
+  return effectiveToolQuota(quotasCache ?? {}, tool);
+}
+
+export function getToolCreditCost(tool: string, fallback: number): number {
+  const quota = getToolQuota(tool);
+  return quota ? quota.credit_cost : fallback;
+}
+
+export function getMonthlyCreditGrant(plan: string): number {
+  return getPlanQuota(plan).monthly_credit_grant;
+}
+
+export function getActiveJobLimit(plan: string | undefined | null): number {
+  return getPlanQuota(plan).active_job_limit;
 }
 
 /**
@@ -223,7 +255,7 @@ export async function getLlmConfigMasked(): Promise<MaskedLlmConfig> {
 
 export async function getQuotasConfigForAdmin(): Promise<QuotasDoc> {
   await ensurePlatformCaches();
-  return { ...quotasCache, enabled: quotasCache?.enabled !== false };
+  return effectiveQuotasDoc(quotasCache ?? {});
 }
 
 /**

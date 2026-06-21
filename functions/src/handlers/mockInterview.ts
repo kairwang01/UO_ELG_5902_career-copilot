@@ -28,7 +28,7 @@ import { Type } from "@google/genai";
 import * as admin from "firebase-admin";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider, tierFromSubscription } from "../llm/models";
-import { deductCredits, refundCredits } from "../credits/deductCredits";
+import { deductCredits, meterToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
 import {
@@ -218,7 +218,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
   if (data.mode === "generate") {
     // Charge ONCE per interview session — at question generation, not per answer
     // evaluation (evaluate turns within the same session are free).
-    await deductCredits(uid, TOOL_CREDIT_COSTS["mock-interview"], "mock-interview");
+    const metered = await meterToolRun(uid, "mock-interview", TOOL_CREDIT_COSTS["mock-interview"]);
 
     const prompt = buildPrompt("handler_mock_interview_generate", {
       marketName: data.marketName ?? "Canadian",
@@ -235,7 +235,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
 
       return result.raw as GenerateResult;
     } catch (err) {
-      await refundCredits(uid, TOOL_CREDIT_COSTS["mock-interview"]);
+      await refundCredits(uid, metered.creditCost);
       // A plain Error reaches the client as a bare "INTERNAL" with no detail. Wrap
       // it so the failure message survives (preserve a meaningful HttpsError code).
       if (err instanceof HttpsError) throw err;

@@ -52,7 +52,43 @@ export const adminUpdateLlmConfig = (payload: {
   deepseek_base_url?: string;
 }) => call<typeof payload, Record<string, string>>('adminUpdateLlmConfig')(payload).then((r) => r.data);
 
-export type AdminQuotas = Record<string, number | boolean | string>;
+export type AdminPlanKey =
+  | 'free'
+  | 'essentials'
+  | 'accelerator'
+  | 'executive'
+  | 'starter'
+  | 'growth'
+  | 'pro'
+  | 'single_post'
+  | 'job_pack';
+
+export interface AdminPlanQuota {
+  daily_run_limit: number;
+  daily_credit_limit: number;
+  monthly_credit_grant: number;
+  active_job_limit: number;
+}
+
+export interface AdminToolQuota {
+  enabled: boolean;
+  credit_cost: number;
+  allowed_plans: AdminPlanKey[];
+}
+
+export interface AdminQuotas {
+  daily_tool_run_limit?: number;
+  daily_credit_spend_limit?: number;
+  per_user_daily_credit_limit?: number;
+  enabled?: boolean;
+  free_max_output_tokens?: number;
+  mi_min_tier?: 'free' | 'paid';
+  mi_report_unlock_credits?: number;
+  plan_quotas?: Partial<Record<AdminPlanKey, Partial<AdminPlanQuota>>>;
+  tool_quotas?: Record<string, Partial<AdminToolQuota>>;
+  updated_at?: string;
+  updated_by?: string;
+}
 
 export const adminGetQuotas = () =>
   call<Record<string, never>, AdminQuotas>('adminGetQuotas')({}).then((r) => r.data);
@@ -65,6 +101,8 @@ export const adminUpdateQuotas = (payload: {
   free_max_output_tokens?: number;
   mi_min_tier?: 'free' | 'paid';
   mi_report_unlock_credits?: number;
+  plan_quotas?: Partial<Record<AdminPlanKey, Partial<AdminPlanQuota>>>;
+  tool_quotas?: Record<string, Partial<AdminToolQuota>>;
 }) => call<typeof payload, AdminQuotas>('adminUpdateQuotas')(payload).then((r) => r.data);
 
 export const adminListUsers = (limit = 50, start_after_uid?: string) =>

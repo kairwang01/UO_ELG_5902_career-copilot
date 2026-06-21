@@ -11,9 +11,10 @@ import {
   UsageEventDoc,
 } from "./schema";
 import { HttpsError } from "firebase-functions/v2/https";
-import { ensurePlatformCaches, getQuotasConfig } from "./platformConfig";
+import { ensurePlatformCaches, getPlanQuota, getQuotasConfig, getToolQuota } from "./platformConfig";
 import { tierFromSubscription, isBusinessUser } from "../llm/models";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
+import { normalizePlanKey } from "./quotaDefaults";
 
 /**
  * Daily tool-run cap for free-tier users (次数限制).
@@ -191,7 +192,7 @@ export async function logAdminAction(entry: {
 export async function checkQuotasOrThrow(uid: string, cost: number, tool: string): Promise<void> {
   await ensurePlatformCaches();
   const quotas = getQuotasConfig();
-  if (quotas.enabled === false) return;
+  const enforceLimits = quotas.enabled !== false;
 
   // Run these reads in parallel for performance.
   const [totals, userUsage, userSnap] = await Promise.all([
@@ -205,31 +206,49 @@ export async function checkQuotasOrThrow(uid: string, cost: number, tool: string
   const creditLimit = quotas.daily_credit_spend_limit ?? 0;
   const userLimit = quotas.per_user_daily_credit_limit ?? 0;
 
-  if (runLimit > 0 && totals.runs >= runLimit) {
+  if (enforceLimits && runLimit > 0 && totals.runs >= runLimit) {
     throw new HttpsError("resource-exhausted", "Platform daily analysis limit reached. Try again tomorrow.");
   }
-  if (creditLimit > 0 && totals.credits + cost > creditLimit) {
+  if (enforceLimits && creditLimit > 0 && totals.credits + cost > creditLimit) {
     throw new HttpsError("resource-exhausted", "Platform daily credit spend limit reached.");
   }
-  if (userLimit > 0 && userUsage.credits + cost > userLimit) {
+  if (enforceLimits && userLimit > 0 && userUsage.credits + cost > userLimit) {
     throw new HttpsError("resource-exhausted", "Your daily usage limit has been reached.");
   }
 
-  // --- Free-tier daily run cap (次数限制) ---
-  // Applied to free users who are not business users. Business users (employer
-  // role / biz subscription) and paid subscribers are exempt.
+  // --- Per-plan/user-visible tool guards (admin-configurable) ---
   const subscriptionStatus = userSnap.get(USER_FIELDS.subscriptionStatus) as string | undefined;
   const role = userSnap.get(USER_FIELDS.role) as string | undefined;
   const tier = tierFromSubscription(subscriptionStatus);
   const business = isBusinessUser(role, subscriptionStatus);
+  const planKey = normalizePlanKey(subscriptionStatus);
 
-  if (tier === "free" && !business) {
-    if (userUsage.runs >= FREE_TIER_DAILY_RUN_LIMIT) {
+  const toolQuota = getToolQuota(tool);
+  if (toolQuota) {
+    if (!toolQuota.enabled) {
+      throw new HttpsError("failed-precondition", "This tool is temporarily unavailable.");
+    }
+    if (!toolQuota.allowed_plans.includes(planKey)) {
+      throw new HttpsError("permission-denied", "Your current plan does not include this tool.");
+    }
+  }
+
+  // Default-compatible behavior: the free candidate cap remains 25/day, while
+  // business users with role-based access keep their historical exemption unless
+  // they hold a business subscription plan with its own configured cap.
+  const planQuota = getPlanQuota(planKey);
+  const shouldApplyPlanRunLimit = planKey !== "free" || (tier === "free" && !business);
+  if (enforceLimits && shouldApplyPlanRunLimit && planQuota.daily_run_limit > 0) {
+    if (userUsage.runs >= planQuota.daily_run_limit) {
       throw new HttpsError(
         "resource-exhausted",
-        `You have reached your daily limit of ${FREE_TIER_DAILY_RUN_LIMIT} free tool runs. ` +
-          "Upgrade to a paid plan for unlimited access, or try again tomorrow."
+        `You have reached your daily limit of ${planQuota.daily_run_limit} tool runs. ` +
+          "Upgrade your plan for higher limits, or try again tomorrow."
       );
     }
+  }
+
+  if (enforceLimits && planQuota.daily_credit_limit > 0 && userUsage.credits + cost > planQuota.daily_credit_limit) {
+    throw new HttpsError("resource-exhausted", "Your plan's daily credit limit has been reached.");
   }
 }

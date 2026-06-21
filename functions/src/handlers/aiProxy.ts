@@ -19,7 +19,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
-import { deductCredits, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
+import { meterToolRun, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
 
@@ -96,13 +96,14 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
   }
 
   // Charge BEFORE the model call (atomic, server-side).
-  const cost = spec.creditKey ? TOOL_CREDIT_COSTS[spec.creditKey] : 0;
+  let cost = spec.creditKey ? TOOL_CREDIT_COSTS[spec.creditKey] : 0;
   let charged = false;
   if (spec.creditKey) {
-    const deduction = await deductCredits(uid, cost, spec.creditKey, { requestId });
+    const deduction = await meterToolRun(uid, spec.creditKey, cost, { requestId });
     if (deduction.duplicate) {
       throw new HttpsError("already-exists", "This AI request was already submitted. Please wait for the current result.");
     }
+    cost = deduction.creditCost;
     charged = deduction.charged;
   } else {
     // Free helper: no credit charge, but still enforce the free-tier daily run cap

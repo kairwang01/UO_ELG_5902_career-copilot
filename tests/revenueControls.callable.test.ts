@@ -12,8 +12,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as admin from '../functions/node_modules/firebase-admin';
 import { applySubscriptionSelection } from '../functions/src/handlers/setSubscriptionStatus';
-import { recordFreeToolRun } from '../functions/src/credits/deductCredits';
+import { meterToolRun, recordFreeToolRun } from '../functions/src/credits/deductCredits';
 import { FREE_TIER_DAILY_RUN_LIMIT, getUserTodayUsage } from '../functions/src/admin/usageLog';
+import { refreshPlatformCaches, getActiveJobLimit } from '../functions/src/admin/platformConfig';
 
 const PROJECT = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const db = admin.firestore();
@@ -21,6 +22,7 @@ const db = admin.firestore();
 async function clearFirestore() {
   const host = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
   await fetch(`http://${host}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`, { method: 'DELETE' });
+  await refreshPlatformCaches();
 }
 
 async function seedUser(uid: string, data: Record<string, unknown> = {}) {
@@ -156,5 +158,99 @@ describe('free AI tools count toward the free-tier daily run cap', () => {
     }
     const usage = await getUserTodayUsage('paid1');
     expect(usage.runs).toBe(total);
+  });
+});
+
+describe('admin-managed quota overrides', () => {
+  async function setQuotas(data: Record<string, unknown>) {
+    await db.collection('platform_config').doc('quotas').set(data, { merge: true });
+    await refreshPlatformCaches();
+  }
+
+  it('uses plan_quotas.free.daily_run_limit instead of the default free cap', async () => {
+    await seedUser('free_custom');
+    await setQuotas({
+      plan_quotas: {
+        free: { daily_run_limit: 3, daily_credit_limit: 0, monthly_credit_grant: 0, active_job_limit: 3 },
+      },
+    });
+
+    for (let i = 0; i < 3; i++) {
+      await recordFreeToolRun('free_custom', 'free-tool', { requestId: `req_custom_${i}` });
+    }
+    await expect(
+      recordFreeToolRun('free_custom', 'free-tool', { requestId: 'req_custom_over' }),
+    ).rejects.toThrow(/daily limit of 3/i);
+  });
+
+  it('can apply daily run caps to a paid plan', async () => {
+    await seedUser('paid_custom', { subscription_status: 'accelerator' });
+    await setQuotas({
+      plan_quotas: {
+        accelerator: { daily_run_limit: 2, daily_credit_limit: 0, monthly_credit_grant: 750, active_job_limit: 0 },
+      },
+    });
+
+    await recordFreeToolRun('paid_custom', 'free-tool', { requestId: 'req_paid_custom_1' });
+    await recordFreeToolRun('paid_custom', 'free-tool', { requestId: 'req_paid_custom_2' });
+    await expect(
+      recordFreeToolRun('paid_custom', 'free-tool', { requestId: 'req_paid_custom_3' }),
+    ).rejects.toThrow(/daily limit of 2/i);
+  });
+
+  it('uses dynamic tool credit_cost for deductions and usage events', async () => {
+    await seedUser('cost_custom');
+    await setQuotas({
+      tool_quotas: {
+        'email-crafter': { enabled: true, credit_cost: 7, allowed_plans: ['free', 'essentials', 'accelerator', 'executive', 'starter', 'growth', 'pro', 'single_post', 'job_pack'] },
+      },
+    });
+
+    const result = await meterToolRun('cost_custom', 'email-crafter', 5, { requestId: 'req_cost_custom' });
+    expect(result.creditCost).toBe(7);
+
+    const user = (await db.collection('users').doc('cost_custom').get()).data()!;
+    expect(user.credits).toBe(93);
+    const events = await db.collection('usage_events').where('uid', '==', 'cost_custom').get();
+    expect(events.docs[0].data()).toMatchObject({ tool: 'email-crafter', credit_cost: 7, status: 'deducted' });
+  });
+
+  it('blocks disabled tools and tools not allowed for the current plan', async () => {
+    await seedUser('blocked_tool');
+    await setQuotas({
+      tool_quotas: {
+        'email-crafter': { enabled: false, credit_cost: 5, allowed_plans: ['free'] },
+        'cover-letter': { enabled: true, credit_cost: 20, allowed_plans: ['executive'] },
+      },
+    });
+
+    await expect(meterToolRun('blocked_tool', 'email-crafter', 5)).rejects.toThrow(/temporarily unavailable/i);
+    await expect(meterToolRun('blocked_tool', 'cover-letter', 20)).rejects.toThrow(/does not include/i);
+  });
+
+  it('uses dynamic monthly_credit_grant for future subscription activation only', async () => {
+    await seedUser('grant_custom');
+    await db.collection('billing').doc('grant_custom').set({ active: true });
+    await setQuotas({
+      plan_quotas: {
+        accelerator: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 1234, active_job_limit: 0 },
+      },
+    });
+
+    const res = await applySubscriptionSelection('grant_custom', 'pending_accelerator');
+    expect(res.status).toBe('active');
+    expect(res.credits).toBe(100 + 1234);
+  });
+
+  it('uses dynamic active_job_limit defaults and overrides', async () => {
+    await setQuotas({});
+    expect(getActiveJobLimit('starter')).toBe(8);
+
+    await setQuotas({
+      plan_quotas: {
+        starter: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 3000, active_job_limit: 4 },
+      },
+    });
+    expect(getActiveJobLimit('starter')).toBe(4);
   });
 });
