@@ -56,7 +56,11 @@ const mapOutreach = (id: string, data: DocumentData): SourcingOutreach => ({
   job_title: String(data.job_title ?? ''),
   company_name: String(data.company_name ?? ''),
   message: String(data.message ?? ''),
-  status: (data.status as SourcingOutreachStatus) ?? 'requested',
+  // Whitelist-validate so an unexpected stored value can't drive the UI into an
+  // undefined status branch (defaults to 'requested').
+  status: (['requested', 'accepted', 'declined', 'cancelled'].includes(String(data.status))
+    ? (data.status as SourcingOutreachStatus)
+    : 'requested'),
   created_at: toIsoString(data.created_at),
   updated_at: toIsoString(data.updated_at),
   responded_at: toIsoString(data.responded_at),

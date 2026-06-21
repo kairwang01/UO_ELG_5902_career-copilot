@@ -263,7 +263,11 @@ export async function applySubscriptionSelection(
       };
     }
 
-    const baseCredits: number = snap.get(USER_FIELDS.credits) ?? INITIAL_CREDITS;
+    // Coerce defensively: a legacy doc storing `credits` as a string would make
+    // `base + delta` string-concatenate (e.g. "100" + 200 = "100200"), corrupting the
+    // balance. grantMonthlyCredits is already safe via FieldValue.increment.
+    const rawBase = snap.get(USER_FIELDS.credits);
+    const baseCredits: number = Number.isFinite(Number(rawBase)) ? Number(rawBase) : INITIAL_CREDITS;
     const newCredits = baseCredits + deltaGrant;
 
     const patch: Record<string, unknown> = {

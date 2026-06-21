@@ -333,7 +333,13 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     if (!stored.unlocked) {
       const price = getMiReportUnlockCredits();
       if (price > 0) {
-        await deductCredits(uid, price, "mock-interview-report-unlock");
+        // Deterministic idempotency key: concurrent double-clicks / client retries on
+        // Unlock dedupe to a SINGLE charge (deductCredits serializes on this event ref
+        // inside its transaction and returns duplicate:false-charge for the loser).
+        const unlockRequestId = `unlock_${data.reportId!.trim()}`
+          .replace(/[^A-Za-z0-9._:-]/g, "_")
+          .slice(0, 128);
+        await deductCredits(uid, price, "mock-interview-report-unlock", { requestId: unlockRequestId });
       }
       try {
         await reportRef.update({ unlocked: true, unlocked_at: FieldValue.serverTimestamp() });

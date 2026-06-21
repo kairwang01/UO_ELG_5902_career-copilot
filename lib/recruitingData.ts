@@ -1,6 +1,7 @@
 import {
   collection,
   getDocs,
+  limit,
   query,
   where,
   type DocumentData,
@@ -250,9 +251,13 @@ export const setJobPostingActive = async (jobId: string, isActive: boolean, reas
 };
 
 export const listAllActiveJobPostings = async (): Promise<JobPosting[]> => {
+  // Bound the marketplace scan so it scales with the page, not the whole platform.
+  // Equality + limit needs only the auto single-field index (no composite/deploy).
+  // Newest-first ordering + true pagination is the next step (server feed callable).
   const activeQuery = query(
     collection(firestoreDb, 'job_postings'),
     where('is_active', '==', true),
+    limit(200),
   );
   const snap = await getDocs(activeQuery);
   return sortByCreatedDesc(snap.docs.map((jobDoc) => mapJobPosting(jobDoc.id, jobDoc.data())));

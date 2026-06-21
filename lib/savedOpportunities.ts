@@ -7,7 +7,7 @@
  * search results on mount (that clobber bug got the earlier attempt reverted) — only an
  * explicit bookmark writes, and the saved list is a read-only subscription.
  */
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { firestoreDb } from './firebaseClient';
 
 export interface SavedOpportunity {
@@ -71,7 +71,7 @@ export function subscribeSavedOpportunities(
   onError?: (error: unknown) => void,
 ): () => void {
   return onSnapshot(
-    query(collection(firestoreDb, 'users', uid, 'job_opportunities'), orderBy('created_at', 'desc')),
+    query(collection(firestoreDb, 'users', uid, 'job_opportunities'), orderBy('created_at', 'desc'), limit(100)),
     (snap) => onChange(snap.docs.map((d) => {
       const x = d.data() as Record<string, unknown>;
       const ts = x.created_at as { toMillis?: () => number } | undefined;
