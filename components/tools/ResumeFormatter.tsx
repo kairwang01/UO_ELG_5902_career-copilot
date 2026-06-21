@@ -9,7 +9,7 @@ import { DownloadButtons, SavedResultBar } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
 import ResumePreview from '../ResumePreview';
-import { cleanResumeDisplay, getResumeMarketStyle } from '../../lib/resumePreview';
+import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle } from '../../lib/resumePreview';
 
 const MARKET_HINT_KEY: Record<string, string> = {
   'Canada':         'resume_market_hint_canada',
@@ -168,9 +168,36 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
 
     const formattedText = cleanResumeDisplay(result.formattedText);
     const marketStyle = getResumeMarketStyle(targetMarket);
+    const validation = assessFormattedResume(formattedText);
     return (
       <div className="space-y-4 animate-fade-in">
         <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
+
+        {/* Post-generation validator gate: don't present a garbled/blob output as final. */}
+        {validation.status === 'needs_regen' && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800/60 dark:bg-amber-950/30" role="alert">
+            <div className="flex items-start gap-3">
+              <Info className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">{t('tool_resume_formatter_regen_title')}</p>
+                <p className="mt-0.5 text-sm leading-6 text-amber-800 dark:text-amber-200">{t('tool_resume_formatter_regen_desc')}</p>
+                <button
+                  onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
+                  disabled={loading}
+                  className="mt-2 inline-flex min-h-9 items-center rounded-md bg-amber-600 px-3 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {t('tool_resume_formatter_regen_cta')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {validation.status === 'warn' && validation.issues.includes('sensitive_fields') && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/20 dark:text-amber-200" role="note">
+            {t('tool_resume_formatter_sensitive_note')}
+          </p>
+        )}
+
         {/* (d) DownloadButtons already present; "format for another market" button already present — preserved */}
         <div className="flex flex-wrap justify-between items-center gap-2">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} {t('tool_resume_formatter_results_for').replace('{market}', targetMarket)}</h4>

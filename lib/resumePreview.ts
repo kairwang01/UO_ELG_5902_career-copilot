@@ -158,7 +158,7 @@ export const cleanResumeDisplay = (text: string): string => {
     .replace(/\r/g, '\n')
     .replace(/^#{1,3}\s+/gm, '')
     .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/(?:^|\n)\s*(?:写真|Photo)\s*[:：]?\s*(?:\[.*?\]|（.*?）|\(.*?\)|ここに.*?(?:貼付|貼る)|証明写真.*?)/gi, '\n')
+    .replace(/(?:^|\n)\s*(?:写真|Photo|顔写真)\s*[:：]?\s*(?:[[［（(〔].*?[\]］）)〕]|ここに.*?(?:貼付|貼る)|証明写真.*?)/gi, '\n')
     .replace(/[|｜]{2,}/g, '\n')
     .replace(/\s*[|｜]\s*-{2,}\s*[|｜]?\s*/g, '\n')
     // Drop spaces sitting between two CJK / full-width characters (run twice
@@ -183,7 +183,7 @@ export const cleanResumeDisplay = (text: string): string => {
     );
   }
 
-  cleaned = cleaned.replace(/(?:^|\n)\s*(?:写真|Photo)\s*[:：]?\s*(?:\[.*?\]|（.*?）|\(.*?\)|ここに.*?(?:貼付|貼る)|証明写真.*?)/gi, '\n');
+  cleaned = cleaned.replace(/(?:^|\n)\s*(?:写真|Photo|顔写真)\s*[:：]?\s*(?:[[［（(〔].*?[\]］）)〕]|ここに.*?(?:貼付|貼る)|証明写真.*?)/gi, '\n');
 
   // OCR/PDF extraction often removes section line breaks, producing strings
   // like "教育背景渥太华大学..." Insert preview-only line breaks so the parser
@@ -255,4 +255,55 @@ export const parseResumeSections = (text: string): ResumeSection[] => {
   }
 
   return sections;
+};
+
+export type ResumeValidationStatus = 'ok' | 'warn' | 'needs_regen';
+
+export interface ResumeValidation {
+  status: ResumeValidationStatus;
+  issues: string[];
+}
+
+// Post-generation gate for the resume formatter. The prompt is a *request* not to emit
+// tables / photo placeholders / fabricated personal fields; this is the *enforcement*.
+// Run on the (already display-cleaned) output: if it is still a garbled blob — no
+// parseable sections, a surviving photo placeholder, or a multi-row pipe table — return
+// `needs_regen` so the UI offers a clean re-run instead of presenting broken output as
+// final. Source-plausible personal fields downgrade to a non-blocking `warn`.
+export const assessFormattedResume = (text: string): ResumeValidation => {
+  const cleaned = cleanResumeDisplay(text || '');
+  if (!cleaned.trim()) return { status: 'needs_regen', issues: ['empty'] };
+
+  const issues: string[] = [];
+  const lines = cleaned.split('\n');
+
+  // Photo / image placeholder survived cleaning.
+  if (/写真|証明写真|顔写真|\[\s*(?:photo|写真|画像|image)\s*\]/i.test(cleaned)) issues.push('photo_placeholder');
+
+  // A real (multi-row) pipe table survived. A single "React | Node | SQL" skills line
+  // is NOT a table (one row), and cleaning already splits ≥4-cell rows — so require
+  // 2+ consecutive rows that each carry ≥2 separators.
+  let consec = 0;
+  for (const line of lines) {
+    if ((line.match(/[|｜]/g) || []).length >= 2) { consec += 1; if (consec >= 2) { issues.push('pipe_table'); break; } }
+    else consec = 0;
+  }
+
+  // Structure: did it parse into real sections, or is it one undifferentiated blob?
+  const sections = parseResumeSections(cleaned);
+  const contentSections = sections.filter((s) => s.title !== 'Header' && s.title !== 'Resume Content');
+  const topBlock = sections.find((s) => s.title === 'Header' || s.title === 'Resume Content');
+  if (contentSections.length === 0 && cleaned.trim().length > 400) issues.push('no_sections');
+  else if ((topBlock?.content?.length ?? 0) > 900) issues.push('overlong_header');
+
+  // Protected / sensitive fields the formatter must not fabricate (soft — the source
+  // resume may legitimately carry them, so warn rather than block).
+  if (/(生年月日|date of birth|\bd\.?o\.?b\.?\b|国籍|nationality|婚姻|marital status|性別\s*[:：]|gender\s*[:：]|ビザ|visa status)/i.test(cleaned)) {
+    issues.push('sensitive_fields');
+  }
+
+  const blocking = issues.filter((i) => i !== 'sensitive_fields');
+  if (blocking.length > 0) return { status: 'needs_regen', issues };
+  if (issues.length > 0) return { status: 'warn', issues };
+  return { status: 'ok', issues: [] };
 };
