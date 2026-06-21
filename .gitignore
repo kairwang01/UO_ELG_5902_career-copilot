@@ -45,3 +45,5 @@ beta/qa-screenshots/*.png
 CLAUDE.mdfirestore-debug.log
 
 .agents/
+# Coverage reports (npm run test:coverage)
+coverage/
