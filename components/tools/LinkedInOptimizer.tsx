@@ -228,11 +228,11 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
         </div>
         <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
           <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_headline_label')}</h5>
-          <p className="mt-1 text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md dark:text-gray-300">{headline}</p>
+          <p className="mt-1 text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md break-words dark:text-gray-300">{headline}</p>
         </div>
         <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
           <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_summary_label')}</h5>
-          <p className="mt-1 text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md whitespace-pre-wrap dark:text-gray-300">{summary}</p>
+          <p className="mt-1 text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md whitespace-pre-wrap break-words dark:text-gray-300">{summary}</p>
         </div>
         <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
           <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_experience_label')}</h5>

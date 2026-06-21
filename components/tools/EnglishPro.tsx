@@ -1073,7 +1073,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     // Main component return
     return (
         <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-lg animate-fade-in">
-            {error && <div className="text-red-600 bg-red-100 p-3 rounded-md text-sm mb-4">{error}</div>}
+            {error && <div className="text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20 p-3 rounded-md text-sm mb-4">{error}</div>}
             {loading ? (
                 <StagedLoader
                     icon={<Languages />}

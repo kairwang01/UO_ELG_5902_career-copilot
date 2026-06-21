@@ -821,6 +821,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const { addToast } = useToast();
 
   const runTool = async () => {
+    if (loading) return; // guard re-entry: a paid generate must not double-fire
     if (!details.tagline || !details.bio) {
       setError(t('tool_portfolio_error_required'));
       return;
@@ -1148,7 +1149,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             return (
                 <div className="p-4 bg-white dark:bg-slate-800 rounded-md border dark:border-slate-700 text-center">
                     <p className="font-semibold mb-3 dark:text-gray-100">{t('tool_portfolio_choose_avatar_title')}</p>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         {generatedImages.map((img, i) => (
                             <button key={i} onClick={() => { setSelectedHeadshot(img); setHeadshotStep('final_selected'); }} className="border-2 border-transparent hover:border-blue-500 rounded-lg p-1 transition-all">
                                 <img src={`data:${img.mimeType};base64,${img.data}`} alt={`Generated avatar ${i + 1}`} className="w-full h-auto object-cover rounded-md" />

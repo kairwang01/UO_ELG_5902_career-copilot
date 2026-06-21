@@ -145,7 +145,8 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
           <p className="text-sm text-red-700 dark:text-red-400 flex-1">{error}</p>
           <button
             type="submit"
-            className="shrink-0 text-xs font-semibold text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded px-2 py-1 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+            disabled={loading}
+            className="shrink-0 text-xs font-semibold text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded px-2 py-1 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t('try_again')}
           </button>
@@ -225,16 +226,16 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
           canSave={canSave}
           isSaved={fromSaved}
           savedAt={saved?.savedAt ?? null}
-          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); setGeneratedProject(null); setProjectError(null); setLastProjectSkill(null); }}
         />
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap justify-between items-center gap-2">
           <h4 className="text-xl font-bold">{t('tool_career_path_results_title')}</h4>
           {/* (d) RESULT ACTIONS: Download + start-over */}
           <div className="flex items-center gap-2">
             <DownloadButtons textContent={formatForDownload(result)} baseFilename={`career_roadmap_for_${desiredRole.replace(/\s/g, '_')}`} />
             <button
               type="button"
-              onClick={() => { setResult(null); setError(null); }}
+              onClick={() => { setResult(null); setError(null); setGeneratedProject(null); setProjectError(null); setLastProjectSkill(null); }}
               className="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               {t('tool_start_over')}

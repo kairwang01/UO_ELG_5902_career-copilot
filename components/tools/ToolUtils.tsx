@@ -430,7 +430,7 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
       {status && (
         <div
           role={status.tone === 'error' ? 'alert' : 'status'}
-          className={`w-64 rounded-lg border px-3 py-2 text-left text-xs shadow-sm animate-fade-scale ${
+          className={`w-64 max-w-full rounded-lg border px-3 py-2 text-left text-xs shadow-sm animate-fade-scale ${
             status.tone === 'error'
               ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300'
               : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300'

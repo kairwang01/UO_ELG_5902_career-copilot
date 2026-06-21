@@ -6,7 +6,7 @@ import { generateProfessionalEmail } from '../../services/aiClient';
 import type { ProfessionalEmailResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { CopyButton, DownloadButtons, SavedResultBar } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
 import type { AppSession as Session } from '../../lib/data';
@@ -318,9 +318,12 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
           savedAt={saved?.savedAt ?? null}
           onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
         />
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap justify-between items-center gap-2">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_email_crafter_results_title')}</h4>
-          <DownloadButtons textContent={`Subject: ${subject}\n\n${editableResult}`} baseFilename="email_draft" />
+          <div className="flex items-center gap-2">
+            <CopyButton text={`Subject: ${subject}\n\n${editableResult}`} />
+            <DownloadButtons textContent={`Subject: ${subject}\n\n${editableResult}`} baseFilename="email_draft" />
+          </div>
         </div>
         <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
           <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_email_crafter_subject_label')}</h5>

@@ -159,17 +159,17 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
             )}
             {result.events.length === 0 && <p className="text-gray-600 dark:text-gray-400">{t('tool_event_scout_no_results')}</p>}
         </div>
-        {result.groundingChunks && result.groundingChunks.length > 0 && (
+        {result.groundingChunks?.some((chunk: any) => chunk.web) && (
             <div className="pt-2 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400">
             <p className="font-semibold mb-1">{t('tool_event_scout_sources_label')}:</p>
-            <ul className="list-disc list-inside">
+            <ul className="list-disc list-inside space-y-1">
                 {result.groundingChunks.filter((chunk: any) => chunk.web).map((chunk: any, i: number) => (
-                <li key={i}><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">{chunk.web.title}</a></li>
+                <li key={i} className="break-words"><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">{chunk.web.title}</a></li>
                 ))}
             </ul>
             </div>
         )}
-        <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300">&larr; {t('tool_event_scout_new_search_button')}</button>
+        <button onClick={() => { setResult(null); setError(null); }} className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300">&larr; {t('tool_event_scout_new_search_button')}</button>
       </div>
     );
   };

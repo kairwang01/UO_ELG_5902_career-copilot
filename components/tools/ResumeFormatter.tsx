@@ -168,7 +168,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
       <div className="space-y-4 animate-fade-in">
         <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
         {/* (d) DownloadButtons already present; "format for another market" button already present — preserved */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap justify-between items-center gap-2">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} {t('tool_resume_formatter_results_for').replace('{market}', targetMarket)}</h4>
           <DownloadButtons textContent={formattedText} baseFilename={`${targetMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
         </div>

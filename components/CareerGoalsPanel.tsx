@@ -167,10 +167,11 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
           <div className="grid gap-3 sm:grid-cols-2">
             {/* Target roles */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="cg-roles" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t('goals_label_roles')}
               </label>
               <input
+                id="cg-roles"
                 type="text"
                 list="cg-role-suggestions"
                 value={form.roles}
@@ -185,10 +186,11 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
 
             {/* Preferred locations */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="cg-locations" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t('goals_label_locations')}
               </label>
               <input
+                id="cg-locations"
                 type="text"
                 list="cg-location-suggestions"
                 value={form.locations}
@@ -203,10 +205,11 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
 
             {/* Minimum salary */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="cg-salary" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t('goals_label_salary')}
               </label>
               <input
+                id="cg-salary"
                 type="number"
                 min="0"
                 step="1000"
@@ -221,10 +224,11 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
 
             {/* Availability */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="cg-availability" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t('goals_label_availability')}
               </label>
               <input
+                id="cg-availability"
                 type="text"
                 value={form.availability}
                 onChange={(e) => setForm((f) => ({ ...f, availability: e.target.value }))}

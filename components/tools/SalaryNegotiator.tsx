@@ -145,12 +145,26 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
 
     if (!result) return null;
 
-    const { marketAnalysisSummary, recommendedRange, keyStrengths, negotiationStrategy, counterOfferEmailDraft, objectionHandlers, groundingChunks } = result;
+    // Defensive defaults: a partial AI response must not white-screen the panel.
+    const {
+      marketAnalysisSummary = '',
+      recommendedRange,
+      keyStrengths = [],
+      negotiationStrategy = [],
+      counterOfferEmailDraft = '',
+      objectionHandlers = [],
+      groundingChunks,
+    } = result;
+
+    const fmtMoney = (v: number) =>
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: recommendedRange?.currency || 'USD', minimumFractionDigits: 0 }).format(v);
 
     // Build a downloadable text blob of the key output
     const downloadText = [
       `${t('tool_salary_negotiator_market_analysis')}\n${marketAnalysisSummary}`,
-      `\n${t('tool_salary_negotiator_recommended_range')}\n${new Intl.NumberFormat('en-US', { style: 'currency', currency: recommendedRange.currency, minimumFractionDigits: 0 }).format(recommendedRange.baseMin)} - ${new Intl.NumberFormat('en-US', { style: 'currency', currency: recommendedRange.currency, minimumFractionDigits: 0 }).format(recommendedRange.baseMax)}\n${recommendedRange.explanation}`,
+      ...(recommendedRange
+        ? [`\n${t('tool_salary_negotiator_recommended_range')}\n${fmtMoney(recommendedRange.baseMin)} - ${fmtMoney(recommendedRange.baseMax)}\n${recommendedRange.explanation}`]
+        : []),
       `\n${t('tool_salary_negotiator_key_strengths')}\n${keyStrengths.map(s => `- ${s}`).join('\n')}`,
       `\n${t('tool_salary_negotiator_strategy')}\n${negotiationStrategy.map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
       `\n${t('tool_salary_negotiator_email_draft')}\n${counterOfferEmailDraft}`,
@@ -183,13 +197,15 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
           <h5 className="font-bold text-blue-900 dark:text-blue-300">{t('tool_salary_negotiator_market_analysis')}</h5>
           <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">{marketAnalysisSummary}</p>
         </div>
+        {recommendedRange && (
         <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 shadow-sm">
           <h5 className="font-bold text-green-800 dark:text-green-300">{t('tool_salary_negotiator_recommended_range')}</h5>
           <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: recommendedRange.currency, minimumFractionDigits: 0 }).format(recommendedRange.baseMin)} - {new Intl.NumberFormat('en-US', { style: 'currency', currency: recommendedRange.currency, minimumFractionDigits: 0 }).format(recommendedRange.baseMax)}
+            {fmtMoney(recommendedRange.baseMin)} - {fmtMoney(recommendedRange.baseMax)}
           </p>
           <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{recommendedRange.explanation}</p>
         </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
             <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_salary_negotiator_key_strengths')}</h5>
@@ -215,7 +231,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
             ))}
           </div>
         </div>
-        {groundingChunks && (
+        {groundingChunks?.some((c: any) => c.web) && (
           <div className="pt-2 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400">
             <p className="font-semibold mb-1">{t('tool_salary_negotiator_sources')}:</p>
             <ul className="list-disc list-inside">

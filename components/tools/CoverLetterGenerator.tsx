@@ -143,7 +143,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
             <p className="text-sm text-yellow-700 dark:text-amber-300 mt-1">{t('tool_cover_letter_ai_unavailable_desc')}</p>
         </div>
         <textarea
-          value={COVER_LETTER_TEMPLATE}
+          value={editableResult || COVER_LETTER_TEMPLATE}
           onChange={(e) => setEditableResult(e.target.value)}
           className="w-full h-96 p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-serif text-sm dark:text-gray-300"
         />

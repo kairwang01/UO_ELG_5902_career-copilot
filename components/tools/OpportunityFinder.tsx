@@ -468,12 +468,12 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         </div>
       )}
 
-      <div className="flex gap-4 items-center text-sm p-2 bg-gray-100 dark:bg-slate-800 rounded-md text-gray-800 dark:text-gray-200">
+      <div className="flex flex-wrap gap-2 sm:gap-4 items-center text-sm p-2 bg-gray-100 dark:bg-slate-800 rounded-md text-gray-800 dark:text-gray-200">
         <span>{t('tool_opportunity_finder_filter_label')}:</span>
-        <select value={opportunityFilters.company} onChange={e => setOpportunityFilters(p => ({...p, company: e.target.value}))} className="border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
+        <select value={opportunityFilters.company} onChange={e => setOpportunityFilters(p => ({...p, company: e.target.value}))} className="min-w-0 max-w-[45%] flex-1 sm:flex-none border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
           {companyOptions.map(c => <option key={c} value={c}>{c === 'all' ? t('tool_opportunity_finder_filter_all_companies') : c}</option>)}
         </select>
-        <select value={opportunityFilters.location} onChange={e => setOpportunityFilters(p => ({...p, location: e.target.value}))} className="border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
+        <select value={opportunityFilters.location} onChange={e => setOpportunityFilters(p => ({...p, location: e.target.value}))} className="min-w-0 max-w-[45%] flex-1 sm:flex-none border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
           {locationOptions.map(l => <option key={l} value={l}>{l === 'all' ? t('tool_opportunity_finder_filter_all_locations') : l}</option>)}
         </select>
       </div>

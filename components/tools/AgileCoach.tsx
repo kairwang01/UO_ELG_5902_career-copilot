@@ -42,12 +42,15 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
     try {
       const apiResult = await generateAgilePracticeTest(role, certification);
       if (!alive()) return;
-      setResult(apiResult);
-      if (apiResult?.practiceQuestions) {
-        setUserAnswers(new Array(apiResult.practiceQuestions.length).fill(null));
-        setCurrentQuestionIndex(0);
-        setTestStage('in_progress');
+      // An empty question set is truthy — guard it so we don't render question[0]
+      // (undefined) or divide by zero in the score. Route to the existing error path.
+      if (!apiResult?.practiceQuestions?.length) {
+        throw new Error('No practice questions were generated. Please try again.');
       }
+      setResult(apiResult);
+      setUserAnswers(new Array(apiResult.practiceQuestions.length).fill(null));
+      setCurrentQuestionIndex(0);
+      setTestStage('in_progress');
     } catch (err) {
       if (alive()) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -141,7 +144,8 @@ const AgileCoach: React.FC<AgileCoachProps> = ({ onClose, t }) => {
   const renderResults = () => {
     if (!result) return null;
     const correctAnswers = userAnswers.filter((answer, index) => answer === result.practiceQuestions[index].correctAnswerIndex).length;
-    const score = (correctAnswers / result.practiceQuestions.length) * 100;
+    const total = result.practiceQuestions.length;
+    const score = total > 0 ? (correctAnswers / total) * 100 : 0;
     return (
       <div className="animate-fade-in space-y-6">
         <div>
