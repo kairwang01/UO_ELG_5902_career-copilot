@@ -1,6 +1,12 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Info, Search } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Bookmark, BookmarkCheck, ExternalLink, Info, Search, X } from 'lucide-react';
+import {
+  type SavedOpportunity,
+  removeOpportunity,
+  saveOpportunity,
+  subscribeSavedOpportunities,
+} from '../../lib/savedOpportunities';
 import { findOpportunities, calculateCompatibility, generateProfessionalEmail } from '../../services/aiClient';
 import ApplyReviewModal, { type ApplyReviewJob } from '../ApplyReviewModal';
 import type { OpportunityResult, Opportunity } from '../../types';
@@ -59,6 +65,10 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [opportunityFilters, setOpportunityFilters] = useState<{ company: string, location: string }>({ company: 'all', location: 'all' });
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
+  // Saved opportunities — kept SEPARATE from `result` (a live subscription, never
+  // auto-persisting search results) so it can't clobber the found list on mount.
+  const [savedOpps, setSavedOpps] = useState<SavedOpportunity[]>([]);
+  const savingUrlsRef = useRef<Set<string>>(new Set());
 
   // ---- salary chip: Map<internalJobId, { salary_range?: string, location?: string }> ----
   type InternalJobMeta = { salary_range?: string; location?: string; screener_questions?: ScreenerQuestion[] };
@@ -169,6 +179,64 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         console.error("Could not fetch applied jobs:", err);
     }
   }, [sessionUserId]);
+
+  // Live saved-opportunities list. Read-only subscription — does not touch `result`.
+  useEffect(() => {
+    if (!sessionUserId) { setSavedOpps([]); return; }
+    const unsub = subscribeSavedOpportunities(sessionUserId, setSavedOpps, () => {/* non-fatal side-list */});
+    return () => unsub();
+  }, [sessionUserId]);
+
+  const savedUrls = useMemo(() => new Set(savedOpps.map((o) => o.url)), [savedOpps]);
+
+  const toggleSaveOpportunity = useCallback(async (job: Opportunity) => {
+    if (!sessionUserId || savingUrlsRef.current.has(job.url)) return;
+    savingUrlsRef.current.add(job.url);
+    try {
+      if (savedUrls.has(job.url)) {
+        await removeOpportunity(sessionUserId, job.url);
+      } else {
+        await saveOpportunity(sessionUserId, {
+          jobTitle: job.jobTitle, company: job.company, location: job.location,
+          url: job.url, summary: job.summary, compatibilityScore: job.compatibilityScore,
+        });
+      }
+    } catch {
+      addToast(t('tool_opportunity_finder_save_error'), 'error');
+    } finally {
+      savingUrlsRef.current.delete(job.url);
+    }
+  }, [sessionUserId, savedUrls, addToast, t]);
+
+  // Rendered in both the empty (revisit-on-open) and results views.
+  const savedPanel = savedOpps.length > 0 ? (
+    <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-900/50 dark:bg-blue-950/20">
+      <h5 className="flex items-center gap-2 text-sm font-bold text-blue-900 dark:text-blue-200">
+        <BookmarkCheck className="h-4 w-4" aria-hidden="true" />
+        {t('tool_opportunity_finder_saved_header').replace('{count}', String(savedOpps.length))}
+      </h5>
+      <ul className="mt-2 space-y-1.5">
+        {savedOpps.map((o) => (
+          <li key={o.id} className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">{o.job_title}</p>
+              <p className="truncate text-xs text-gray-500 dark:text-gray-400">{o.company}{o.location ? ` · ${o.location}` : ''}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {o.url && !o.url.startsWith('#internal') && (
+                <a href={o.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline dark:text-blue-300">
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />{t('tool_opportunity_finder_open_link')}
+                </a>
+              )}
+              <button type="button" onClick={() => { if (sessionUserId) void removeOpportunity(sessionUserId, o.url); }} aria-label={t('tool_opportunity_finder_remove_saved')} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30">
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : null;
 
   // Active platform postings (employer-posted jobs). Candidates may read active
   // job_postings per Firestore rules, so we surface them in the results with a
@@ -380,19 +448,22 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   );
 
   if (!result) return (
-    <div className="mx-auto my-20 flex max-w-xl flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-fuchsia-200 bg-fuchsia-50/60 p-8 text-center dark:border-fuchsia-900/60 dark:bg-fuchsia-950/20 animate-fade-in">
-      <Search className="h-9 w-9 text-fuchsia-600 dark:text-fuchsia-300" aria-hidden="true" />
-      <div>
-        <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_opportunity_finder_start_title')}</h4>
-        <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{t('tool_opportunity_finder_start_desc')}</p>
+    <div className="space-y-4 animate-fade-in">
+      {savedPanel}
+      <div className="mx-auto mt-12 flex max-w-xl flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-fuchsia-200 bg-fuchsia-50/60 p-8 text-center dark:border-fuchsia-900/60 dark:bg-fuchsia-950/20">
+        <Search className="h-9 w-9 text-fuchsia-600 dark:text-fuchsia-300" aria-hidden="true" />
+        <div>
+          <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_opportunity_finder_start_title')}</h4>
+          <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{t('tool_opportunity_finder_start_desc')}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => runTool()}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-700 hover:bg-blue-800 px-5 py-2.5 text-white font-semibold transition-colors"
+        >
+          {t('tool_opportunity_finder_start_button')}
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={() => runTool()}
-        className="inline-flex items-center gap-2 rounded-lg bg-blue-700 hover:bg-blue-800 px-5 py-2.5 text-white font-semibold transition-colors"
-      >
-        {t('tool_opportunity_finder_start_button')}
-      </button>
     </div>
   );
 
@@ -437,6 +508,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
           <p>{notice}</p>
         </div>
       )}
+
+      {savedPanel}
 
       {jobSearchStrategies.length === 0 && (
         <div className="flex flex-col gap-3 rounded-lg border border-fuchsia-100 bg-fuchsia-50 p-4 text-sm text-fuchsia-950 dark:border-fuchsia-900/60 dark:bg-fuchsia-950/20 dark:text-fuchsia-100 sm:flex-row sm:items-center sm:justify-between">
@@ -567,6 +640,19 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                                 <a href={job.url} target="_blank" rel="noopener noreferrer" className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700">{t('tool_opportunity_finder_view_apply_button')}</a>
                              )}
                              <button onClick={() => openTool('cover-letter', `Job Title: ${job.jobTitle}\nCompany: ${job.company}\n\n[Paste full job description here]`)} className="text-sm bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-md">{t('tool_opportunity_finder_generate_cover_letter_button')}</button>
+
+                             {/* Save / bookmark this opportunity (SCRUM-28) */}
+                             {sessionUserId && (
+                               <button
+                                 type="button"
+                                 onClick={() => toggleSaveOpportunity(job)}
+                                 aria-pressed={savedUrls.has(job.url)}
+                                 className={`text-sm px-3 py-1.5 rounded-md inline-flex items-center gap-1.5 transition-colors ${savedUrls.has(job.url) ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200' : 'bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200'}`}
+                               >
+                                 {savedUrls.has(job.url) ? <BookmarkCheck className="h-4 w-4" aria-hidden="true" /> : <Bookmark className="h-4 w-4" aria-hidden="true" />}
+                                 {savedUrls.has(job.url) ? t('tool_opportunity_finder_saved_button') : t('tool_opportunity_finder_save_button')}
+                               </button>
+                             )}
 
                              {/* 4c: Why am I a fit? button */}
                              <button
