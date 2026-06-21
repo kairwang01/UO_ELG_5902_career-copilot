@@ -23,13 +23,20 @@ interface KpiData {
   avgMatchScore: number;
 }
 
+interface ActionQueue {
+  newThisWeek: number;
+  topNewJobs: { id: string; title: string; newCount: number }[];
+}
+
 interface PortalDashboardProps {
   jobPostings: JobPostingWithCount[];
   kpiData: KpiData;
+  actionQueue?: ActionQueue;
   loading: boolean;
   error: string | null;
   darkMode: boolean;
   onNavigate: (page: PortalPage) => void;
+  onViewApplicants?: (job: JobPostingWithCount) => void;
   companyName: string;
   t: (key: string) => string;
 }
@@ -78,10 +85,12 @@ function KpiCard({
 export function PortalDashboard({
   jobPostings,
   kpiData,
+  actionQueue,
   loading,
   error,
   darkMode,
   onNavigate,
+  onViewApplicants,
   companyName,
   t,
 }: PortalDashboardProps) {
@@ -187,6 +196,64 @@ export function PortalDashboard({
             {t('portal_dashboard_subtitle')}
           </p>
         </div>
+
+        {/* Action queue — "what to handle today" so the recruiter doesn't hunt across
+            tools. Deep-links each hot job straight to its pipeline. */}
+        {!loading && !error && actionQueue && (
+          <div className="mb-8 rounded-xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/30">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <BookmarkCheck className="h-5 w-5 text-blue-600 dark:text-blue-300" aria-hidden="true" />
+                <h2 className={`text-sm font-semibold ${dm ? 'text-blue-100' : 'text-blue-900'}`}>
+                  {t('portal_action_queue_title')}
+                </h2>
+              </div>
+              {actionQueue.newThisWeek > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('job-listings')}
+                  className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  {t('portal_action_queue_review_cta')}
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            {actionQueue.newThisWeek > 0 ? (
+              <>
+                <p className={`mt-1 text-sm ${dm ? 'text-blue-200' : 'text-blue-900'}`}>
+                  {t('portal_action_queue_summary').replace('{count}', String(actionQueue.newThisWeek))}
+                </p>
+                {actionQueue.topNewJobs.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {actionQueue.topNewJobs.map((j) => {
+                      const job = jobPostings.find((p) => p.id === j.id);
+                      const clickable = !!job && !!onViewApplicants;
+                      return (
+                        <button
+                          key={j.id}
+                          type="button"
+                          disabled={!clickable}
+                          onClick={() => { if (job && onViewApplicants) onViewApplicants(job); }}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${dm ? 'border-blue-800 bg-blue-950 text-blue-200 hover:bg-blue-900' : 'border-blue-200 bg-white text-blue-800 hover:bg-blue-100'} disabled:cursor-default disabled:opacity-60`}
+                        >
+                          <span className="max-w-[180px] truncate">{j.title}</span>
+                          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${dm ? 'bg-blue-800 text-blue-100' : 'bg-blue-600 text-white'}`}>
+                            {t('portal_action_queue_new_badge').replace('{count}', String(j.newCount))}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className={`mt-1 text-sm ${dm ? 'text-blue-200' : 'text-blue-800'}`}>
+                {t('portal_action_queue_caught_up')}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* KPIs — real data from EmployerDashboard.fetchDashboardData */}
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">

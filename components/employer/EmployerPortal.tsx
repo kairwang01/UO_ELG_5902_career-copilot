@@ -66,6 +66,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
   const [jobPostings, setJobPostings] = useState<JobPostingWithCount[]>([]);
   const [kpiData, setKpiData] = useState<KpiData>({ activeJobs: 0, totalApplicants: 0, newApplicants: 0, avgMatchScore: 0 });
+  const [actionQueue, setActionQueue] = useState<{ newThisWeek: number; topNewJobs: { id: string; title: string; newCount: number }[] }>({ newThisWeek: 0, topNewJobs: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,6 +105,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
       if (jobsWithCounts.length === 0) {
         setJobPostings([]);
         setKpiData({ activeJobs: 0, totalApplicants: 0, newApplicants: 0, avgMatchScore: 0 });
+        setActionQueue({ newThisWeek: 0, topNewJobs: [] });
         setLoading(false);
         return;
       }
@@ -130,12 +132,27 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           : 0;
 
         setKpiData({ activeJobs, totalApplicants, newApplicants, avgMatchScore });
+
+        // Action queue: which jobs got new applicants this week, so the dashboard can
+        // point the recruiter straight at what to handle today (deep-links to that
+        // job's pipeline). Derived from already-fetched data — no extra round-trip.
+        const recentByJob = new Map<string, number>();
+        for (const a of allApps) {
+          if (new Date(a.application_date) >= cutoff) recentByJob.set(a.job_id, (recentByJob.get(a.job_id) ?? 0) + 1);
+        }
+        const topNewJobs = jobsWithCounts
+          .map((j) => ({ id: j.id, title: j.title, newCount: recentByJob.get(j.id) ?? 0 }))
+          .filter((j) => j.newCount > 0)
+          .sort((a, b) => b.newCount - a.newCount)
+          .slice(0, 4);
+        setActionQueue({ newThisWeek: newApplicants, topNewJobs });
       } catch {
         if (!mountedRef.current) return;
         // KPI fetch failed — derive from job list
         const activeJobs = jobsWithCounts.filter((j) => j.is_active).length;
         const totalApplicants = formatted.reduce((s, j) => s + j.applicant_count, 0);
         setKpiData({ activeJobs, totalApplicants, newApplicants: 0, avgMatchScore: 0 });
+        setActionQueue({ newThisWeek: 0, topNewJobs: [] });
       }
     } catch (err) {
       if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to load data.');
@@ -313,10 +330,12 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
             <PortalDashboard
               jobPostings={jobPostings}
               kpiData={kpiData}
+              actionQueue={actionQueue}
               loading={loading}
               error={error}
               darkMode={darkMode}
               onNavigate={navigate}
+              onViewApplicants={handleViewApplicants}
               companyName={profile.company_name || ''}
               t={t}
             />
