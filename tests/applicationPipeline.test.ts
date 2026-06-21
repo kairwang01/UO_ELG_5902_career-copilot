@@ -1,9 +1,81 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applicationMatchesFilter,
   buildApplicationPipelinePlan,
+  getApplicationProgressGroupIndex,
+  getApplicationStatusGroup,
+  getApplicationStatusIndex,
+  getApplicationStatusLabelKey,
   getApplicationTimelineStageState,
+  getLaterApplicationPipelineStatuses,
+  getNextApplicationPipelineStatus,
+  getSkippedApplicationStatuses,
+  isApplicationClosedStatus,
+  isApplicationHiredStatus,
+  isApplicationInterviewStatus,
+  isApplicationRejectedStatus,
+  isApplicationReviewEligible,
+  normalizeApplicationStatus,
   normalizeSkippedApplicationStatuses,
 } from '../lib/applicationPipeline';
+
+describe('application status helpers', () => {
+  it('normalizes statuses with a safe default', () => {
+    expect(normalizeApplicationStatus('Group Interview')).toBe('Group Interview');
+    expect(normalizeApplicationStatus('Rejected')).toBe('Rejected');
+    expect(normalizeApplicationStatus('')).toBe('Applied');
+    expect(normalizeApplicationStatus('not a real status')).toBe('Applied');
+  });
+
+  it('maps statuses to groups', () => {
+    expect(getApplicationStatusGroup('Applied')).toBe('applied');
+    expect(getApplicationStatusGroup('Group Interview')).toBe('interview');
+    expect(getApplicationStatusGroup('Offer')).toBe('offer');
+    expect(getApplicationStatusGroup('Signed')).toBe('hired');
+    expect(getApplicationStatusGroup('Rejected')).toBe('rejected');
+  });
+
+  it('computes stage + progress-group indices', () => {
+    expect(getApplicationStatusIndex('Applied')).toBe(0);
+    expect(getApplicationStatusIndex('Rejected')).toBe(-1);
+    expect(getApplicationProgressGroupIndex('Applied')).toBeGreaterThanOrEqual(0);
+    expect(getApplicationProgressGroupIndex('Rejected')).toBe(-1);
+  });
+
+  it('walks the pipeline forward', () => {
+    expect(getNextApplicationPipelineStatus('Applied')).toBe('Group Interview');
+    expect(getNextApplicationPipelineStatus('Signed')).toBeNull();
+    expect(getLaterApplicationPipelineStatuses('Applied', { includeNext: true })).toContain('Group Interview');
+    expect(getSkippedApplicationStatuses('Applied', 'Second Interview')).toEqual(['Group Interview', 'First Interview']);
+  });
+
+  it('resolves label keys', () => {
+    expect(getApplicationStatusLabelKey('Applied')).toBe('applications_status_applied');
+    expect(getApplicationStatusLabelKey('Rejected')).toBe('applications_status_rejected');
+  });
+
+  it('classifies terminal / interview / review-eligible states', () => {
+    expect(isApplicationRejectedStatus('Rejected')).toBe(true);
+    expect(isApplicationRejectedStatus('Applied')).toBe(false);
+    expect(isApplicationHiredStatus('Signed')).toBe(true);
+    expect(isApplicationHiredStatus('Applied')).toBe(false);
+    expect(isApplicationClosedStatus('Rejected')).toBe(true);
+    expect(isApplicationClosedStatus('Signed')).toBe(true);
+    expect(isApplicationClosedStatus('Applied')).toBe(false);
+    expect(isApplicationInterviewStatus('Group Interview')).toBe(true);
+    expect(isApplicationInterviewStatus('Applied')).toBe(false);
+    expect(isApplicationReviewEligible('Group Interview')).toBe(true);
+    expect(isApplicationReviewEligible('Offer')).toBe(true);
+    expect(isApplicationReviewEligible('Applied')).toBe(false);
+    expect(isApplicationReviewEligible('Rejected')).toBe(false);
+  });
+
+  it('matches filter groups', () => {
+    expect(applicationMatchesFilter('Applied', 'All')).toBe(true);
+    expect(applicationMatchesFilter('Group Interview', 'interview')).toBe(true);
+    expect(applicationMatchesFilter('Applied', 'interview')).toBe(false);
+  });
+});
 
 describe('application pipeline skipped stages', () => {
   it('normalizes skipped statuses in canonical pipeline order', () => {
