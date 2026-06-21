@@ -9,7 +9,7 @@ import { DownloadButtons, SavedResultBar } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
 import ResumePreview from '../ResumePreview';
-import { getResumeMarketStyle } from '../../lib/resumePreview';
+import { cleanResumeDisplay, getResumeMarketStyle } from '../../lib/resumePreview';
 
 const MARKET_HINT_KEY: Record<string, string> = {
   'Canada':         'resume_market_hint_canada',
@@ -59,9 +59,10 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     try {
       const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter);
       if (!alive()) return;
-      setResult(apiResult);
+      const normalizedResult = { ...apiResult, formattedText: cleanResumeDisplay(apiResult.formattedText) };
+      setResult(normalizedResult);
       setFromSaved(false);
-      persist(apiResult);
+      persist(normalizedResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -165,7 +166,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
 
     if (!result) return null;
 
-    const { formattedText } = result;
+    const formattedText = cleanResumeDisplay(result.formattedText);
     const marketStyle = getResumeMarketStyle(targetMarket);
     return (
       <div className="space-y-4 animate-fade-in">

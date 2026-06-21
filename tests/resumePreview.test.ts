@@ -28,4 +28,16 @@ describe('ResumePreview parsing', () => {
     expect(getResumeMarketStyle('Japan').region).toBe('japan');
     expect(getResumeMarketStyle('Singapore').region).toBe('apac');
   });
+
+  it('repairs Japanese inline resume output before preview parsing', () => {
+    const raw = '氏名：王铂凯（おうはくがい） 電話番号：130-2254-7015 メールアドレス：jackson@example.com 所在地：カナダ、オタワ ウェブサイト：https://kairwang.cloud 写真：[ここに証明写真を貼付] ■ 志望動機 プロジェクトマネジメント候補者として貢献したいです。 ■ 学歴 | 年月 | 学校名 | 専攻 | 成績 | 2025年09月〜2027年06月（予定） | オタワ大学 | 電気・コンピュータ工学 | GPA 4.0/4.0';
+    const cleaned = cleanResumeDisplay(raw);
+    const sections = parseResumeSections(cleaned);
+
+    expect(cleaned).not.toContain('写真');
+    expect(cleaned).not.toContain('ここに証明写真');
+    expect(cleaned).toContain('\n電話番号: 130-2254-7015');
+    expect(sections.map((section) => section.title)).toContain('志望動機');
+    expect(sections.map((section) => section.title)).toContain('学歴');
+  });
 });

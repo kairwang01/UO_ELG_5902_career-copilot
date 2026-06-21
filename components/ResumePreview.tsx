@@ -11,40 +11,80 @@ interface ResumePreviewProps {
 
 type ParsedHeader = { name: string; contacts: string[]; summary: string };
 
-const CONTACT_REGEX = /(?:电话|手机|Phone|Mobile|Tel)\s*[:：]?\s*[+\d][+\d\s().-]{6,}|(?:Email|邮箱|E-mail)\s*[:：]?\s*[\w.+-]+@[\w.-]+\.\w+|(?:个人网站|网站|Website|Portfolio|LinkedIn|GitHub)\s*[:：]?\s*(?:https?:\/\/)?[^\s•|，,]+/gi;
+const CONTACT_REGEX = /(?:电话|手机|Phone|Mobile|Tel|電話番号|電話)\s*[:：]?\s*[+\d][+\d\s().-]{6,}|(?:Email|邮箱|E-mail|メールアドレス|メール)\s*[:：]?\s*[\w.+-]+@[\w.-]+\.\w+|(?:个人网站|网站|Website|Portfolio|LinkedIn|GitHub|ウェブサイト|Webサイト)\s*[:：]?\s*(?:https?:\/\/)?[^\s•|，,]+/gi;
 
-const CONTACT_LABEL_REGEX = /^(?:电话|手机|Phone|Mobile|Tel|Email|邮箱|E-mail|个人网站|网站|Website|Portfolio|LinkedIn|GitHub)\s*[:：]?\s*/i;
+const CONTACT_LABEL_REGEX = /^(?:电话|手机|Phone|Mobile|Tel|電話番号|電話|Email|邮箱|E-mail|メールアドレス|メール|个人网站|网站|Website|Portfolio|LinkedIn|GitHub|ウェブサイト|Webサイト)\s*[:：]?\s*/i;
+const NAME_LABEL_REGEX = /^(?:氏名|名前|Name|Full Name|姓名)\s*[:：]\s*/i;
+const LOCATION_LABEL_REGEX = /^(?:所在地|住所|Location|Address)\s*[:：]\s*/i;
+const PHOTO_PLACEHOLDER_REGEX = /^(?:写真|Photo)\s*[:：]?\s*(?:\[.*?\]|（.*?）|\(.*?\)|ここに.*?(?:貼付|貼る)|証明写真.*?)/i;
 
 const parseHeader = (content: string): ParsedHeader => {
+    const lines = content.split('\n').map((line) => line.trim()).filter(Boolean);
     const compact = content.replace(/\s+/g, ' ').trim();
     if (!compact) return { name: '', contacts: [], summary: '' };
 
-    const contactMatches = Array.from(compact.matchAll(CONTACT_REGEX));
-    const firstContactIndex = contactMatches[0]?.index ?? -1;
-    const firstLine = content.split('\n').map((line) => line.trim()).filter(Boolean)[0] ?? '';
+    const contactSet = new Set<string>();
+    const consumedLines = new Set<number>();
+    lines.forEach((line, index) => {
+        if (PHOTO_PLACEHOLDER_REGEX.test(line)) {
+            consumedLines.add(index);
+            return;
+        }
+
+        CONTACT_REGEX.lastIndex = 0;
+        const matches = Array.from(line.matchAll(CONTACT_REGEX));
+        if (matches.length) {
+            matches
+                .map((match) => match[0].replace(CONTACT_LABEL_REGEX, '').replace(/\s+/g, ' ').replace(/[•|｜，,]+$/g, '').trim())
+                .filter(Boolean)
+                .forEach((match) => contactSet.add(match));
+            consumedLines.add(index);
+            return;
+        }
+
+        if (LOCATION_LABEL_REGEX.test(line)) {
+            const location = line.replace(LOCATION_LABEL_REGEX, '').replace(/\s+/g, ' ').trim();
+            if (location) contactSet.add(location);
+            consumedLines.add(index);
+        }
+    });
 
     let name = '';
-    if (firstContactIndex > 0) {
+    const labelledNameIndex = lines.findIndex((line) => NAME_LABEL_REGEX.test(line));
+    if (labelledNameIndex >= 0) {
+        name = lines[labelledNameIndex].replace(NAME_LABEL_REGEX, '').replace(/[•|｜，,]+$/g, '').trim();
+        consumedLines.add(labelledNameIndex);
+    }
+
+    const contactMatches = Array.from(compact.matchAll(CONTACT_REGEX));
+    const firstContactIndex = contactMatches[0]?.index ?? -1;
+    const firstLine = lines.find((line, index) => !consumedLines.has(index)) ?? '';
+
+    if (!name && firstContactIndex > 0) {
         name = compact.slice(0, firstContactIndex).replace(/[•|，,]+$/g, '').trim();
-    } else if (firstLine.length <= 42 && !CONTACT_REGEX.test(firstLine)) {
-        name = firstLine;
+    } else if (!name && firstLine.length <= 42) {
+        CONTACT_REGEX.lastIndex = 0;
+        if (!CONTACT_REGEX.test(firstLine) && !LOCATION_LABEL_REGEX.test(firstLine) && !PHOTO_PLACEHOLDER_REGEX.test(firstLine)) {
+            name = firstLine.replace(NAME_LABEL_REGEX, '').trim();
+            const firstLineIndex = lines.indexOf(firstLine);
+            if (firstLineIndex >= 0) consumedLines.add(firstLineIndex);
+        }
     }
     CONTACT_REGEX.lastIndex = 0;
 
-    const contacts = contactMatches
+    contactMatches
         .map((match) => match[0]
             .replace(CONTACT_LABEL_REGEX, '')
             .replace(/\s+/g, ' ')
-            .replace(/[•|，,]+$/g, '')
+            .replace(/[•|｜，,]+$/g, '')
             .trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .forEach((contact) => contactSet.add(contact));
 
-    let summary = compact;
-    if (name) summary = summary.replace(name, '').trim();
-    for (const contact of contacts) {
-        summary = summary.replace(contact, '').trim();
-    }
-    summary = summary
+    const contacts = Array.from(contactSet);
+    const summary = lines
+        .filter((line, index) => !consumedLines.has(index))
+        .join(' ')
         .replace(/^[•|，,\s]+|[•|，,\s]+$/g, '')
         .replace(/\s*•\s*/g, ' • ')
         .trim();

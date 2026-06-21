@@ -117,6 +117,19 @@ const CJK_SECTION_LABELS = [
   '项目经历', '项目经验',
   '专业技能', '技术能力', '核心技能', '技能特长',
   '证书', '资格证书', '荣誉奖项', '获奖经历', '语言能力',
+  '職務要約', '職務経歴', '職歴', '学歴', 'スキル', '技術スキル', '保有スキル',
+  '資格', '語学', '自己PR', '志望動機', 'プロジェクト経験',
+  'Profil', 'Expérience professionnelle', 'Formation', 'Compétences', 'Certifications', 'Langues',
+  'Profil professionnel', 'Berufserfahrung', 'Ausbildung', 'Studium', 'Kenntnisse', 'Fähigkeiten',
+  'Zertifikate', 'Sprachen',
+];
+
+const INLINE_FIELD_LABELS = [
+  '氏名', '名前', '電話番号', '電話', 'メールアドレス', 'メール', '所在地', '住所',
+  'ウェブサイト', 'Webサイト', '写真',
+  'Name', 'Full Name', 'Phone', 'Mobile', 'Tel', 'Email', 'E-mail', 'Location', 'Address',
+  'Website', 'Portfolio', 'LinkedIn', 'GitHub',
+  '姓名', '电话', '手机', '邮箱', '个人网站', '网站',
 ];
 
 const EN_SECTION_KEYWORDS = [
@@ -145,12 +158,32 @@ export const cleanResumeDisplay = (text: string): string => {
     .replace(/\r/g, '\n')
     .replace(/^#{1,3}\s+/gm, '')
     .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/(?:^|\n)\s*(?:写真|Photo)\s*[:：]?\s*(?:\[.*?\]|（.*?）|\(.*?\)|ここに.*?(?:貼付|貼る)|証明写真.*?)/gi, '\n')
+    .replace(/[|｜]{2,}/g, '\n')
+    .replace(/\s*[|｜]\s*-{2,}\s*[|｜]?\s*/g, '\n')
     // Drop spaces sitting between two CJK / full-width characters (run twice
     // to catch the fully space-separated "字 字 字" case).
     .replace(new RegExp(`([${CJKISH}])[ \\t]+(?=[${CJKISH}])`, 'g'), '$1')
     .replace(new RegExp(`([${CJKISH}])[ \\t]+(?=[${CJKISH}])`, 'g'), '$1')
     .replace(/[ \t]{2,}/g, ' ')
-    .replace(/[●▪◦]/g, '•');
+    .replace(/[●▪◦■◆◇]/g, '•');
+
+  const fieldLabelsByLength = [...INLINE_FIELD_LABELS].sort((a, b) => b.length - a.length);
+  for (const label of fieldLabelsByLength) {
+    cleaned = cleaned.replace(
+      new RegExp(`\\s+(${escapeRegex(label)})\\s*[:：]`, 'gi'),
+      '\n$1: ',
+    );
+  }
+
+  for (const label of fieldLabelsByLength) {
+    cleaned = cleaned.replace(
+      new RegExp(`([^\\n])(${escapeRegex(label)})\\s*[:：]`, 'gi'),
+      '$1\n$2: ',
+    );
+  }
+
+  cleaned = cleaned.replace(/(?:^|\n)\s*(?:写真|Photo)\s*[:：]?\s*(?:\[.*?\]|（.*?）|\(.*?\)|ここに.*?(?:貼付|貼る)|証明写真.*?)/gi, '\n');
 
   // OCR/PDF extraction often removes section line breaks, producing strings
   // like "教育背景渥太华大学..." Insert preview-only line breaks so the parser
@@ -162,7 +195,22 @@ export const cleanResumeDisplay = (text: string): string => {
     );
   }
 
+  cleaned = cleaned
+    .split('\n')
+    .flatMap((line) => {
+      const pipeParts = line.split(/\s*[|｜]\s*/).map((part) => part.trim()).filter(Boolean);
+      return pipeParts.length >= 4 ? pipeParts : [line];
+    })
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === '•') return false;
+      return !/^(年月|学校名|専攻|成績|期間|組織名|内容|Year|Date|School|Major|Grade)$/i.test(trimmed);
+    })
+    .join('\n');
+
   return cleaned
+    .replace(/:\s{2,}/g, ': ')
+    .replace(/\s+•\s*$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 };

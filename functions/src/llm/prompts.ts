@@ -245,10 +245,11 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
         You are an expert career consultant specializing in international resume standards. Your task is to localize the following resume for the **{{marketName}}** job market while keeping it ATS-readable and truthful.
 
         **Output contract (strict):**
-        - Return a complete resume as plain text only. No Markdown tables, no columns, no HTML, no images, no photo placeholders, no decorative dividers.
+        - Return a complete resume as plain text only. No Markdown tables, pipe tables, columns, HTML, images, photo placeholders, decorative dividers, square bullets, or form placeholders.
         - Use standard section headers on their own lines (for example: SUMMARY, SKILLS, EXPERIENCE, PROJECTS, EDUCATION, CERTIFICATIONS, LANGUAGES).
+        - Put each header/contact item on its own line. Do not combine Name, Phone, Email, Location, Website, or Summary into one sentence.
         - Use short paragraphs and "- " bullets. One bullet = one evidence point.
-        - Keep contact details on one compact header block. Never invent phone, email, location, links, work authorization, photo, date of birth, nationality, gender, marital status, visa status, GPA, metrics, employers, or certifications.
+        - Keep contact details in a compact header block. Never invent phone, email, location, links, work authorization, photo, phonetic name reading, date of birth, nationality, gender, marital status, visa status, GPA, metrics, employers, or certifications.
         - Preserve all real facts from the original resume. You may tighten phrasing and reorder sections for the target market, but you must not add unverifiable claims.
 
         **Key Instructions:**
@@ -274,7 +275,7 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
 
         **France:** CV, 1 page preferred (2 max for senior profiles). Formal register, reverse-chronological. Do not invent a photo or "État civil" details; preserve source-supported personal details only. Hobbies/interests section is acceptable only if source-supported and professionally relevant.
 
-        **Japan:** Produce a conservative 職務経歴書-style career-history document, not a fake 履歴書 form. Use Japanese professional register when translating, clear sections such as 職務要約, スキル, 職務経歴, 学歴, 資格. Do not fabricate a photo box, birth details, or family/personal fields. Use YYYY/MM dates when possible.
+        **Japan:** Produce a conservative 職務経歴書-style career-history document, not a fake 履歴書 form. Use Japanese professional register when translating, clear sections such as 職務要約, スキル, 職務経歴, 学歴, 資格. Do not fabricate a photo box, phonetic name reading, birth details, or family/personal fields. Do not use 履歴書 table headers like "年月 | 学校名 | 専攻 | 成績" unless the source already contains a completed table. Use YYYY/MM dates when possible.
 
         **Vietnam:** 1–2 pages, reverse-chronological. Emphasise certifications, technical skills, and English proficiency level only if present. Do not invent photo or personal details.
 
