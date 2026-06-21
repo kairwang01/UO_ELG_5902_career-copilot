@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import type { UserProfile } from '../../types';
 import Chart from './Chart';
+import SourcingConsentInbox from '../SourcingConsentInbox';
 import { firestoreDb } from '../../lib/firebaseClient';
 import type { AppSession as Session } from '../../lib/data';
 import { generateWeeklySummary } from '../../services/aiClient';
@@ -506,6 +507,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           );
         })}
       </div>
+
+      {session?.user?.id && (
+        <SourcingConsentInbox uid={session.user.id} t={t} />
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard

@@ -2,10 +2,17 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { discoverTalent, type DiscoveredCandidate } from '../services/aiClient';
 import type { UserProfile } from '../types';
-import EngageCandidateModal from './EngageCandidateModal';
-import UnlockTalentModal from './UnlockTalentModal';
 import { listActiveEmployerJobs, type JobPosting } from '../lib/recruitingData';
 import { saveToShortlist, hideCandidate, listHiddenCandidateIds } from '../lib/shortlistData';
+import {
+    createSourcingOutreach,
+    getSourcingCandidatePacket,
+    listSourcingOutreachForEmployer,
+    type ConsentedCandidatePacket,
+    type SourcingOutreach,
+} from '../lib/sourcingOutreachData';
+import ResumePreview from './ResumePreview';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 import {
     ArrowRight,
     BookmarkCheck,
@@ -18,13 +25,16 @@ import {
     Loader2,
     MapPin,
     EyeOff,
+    Inbox,
     PlusCircle,
     RefreshCw,
     RotateCcw,
     Search,
+    Send,
     Sparkles,
     Users,
     XCircle,
+    X,
 } from 'lucide-react';
 import { useToast as useSharedToast } from './Toast';
 
@@ -40,11 +50,11 @@ type TranslationFn = (key: string) => string;
 
 type CandidateCardVariant = 'verified' | 'regular';
 type TalentDiscoveryJob = JobPosting & { applicant_count?: number };
+type CandidateWithIndex = MatchedCandidate & { index: number };
 
 /**
- * The server returns only SAFE fields (no resume_text/email — privacy by design;
- * full profiles unlock via the paid flow). Modals expect a UserProfile shape, so
- * we wrap the safe payload in a null stub.
+ * The server returns only safe matching evidence here. Contact details and
+ * resume text are released later through consent-gated sourcing_outreach.
  */
 const toMatchedCandidate = (c: DiscoveredCandidate, fallbackSummary?: string): MatchedCandidate => ({
     id: c.id,
@@ -101,6 +111,31 @@ const formatPostedDate = (value: string | null | undefined): string => {
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
+
+const outreachStatusLabelKey = (status?: SourcingOutreach['status']) => {
+    switch (status) {
+        case 'accepted':
+            return 'sourcing_status_accepted';
+        case 'declined':
+            return 'sourcing_status_declined';
+        case 'cancelled':
+            return 'sourcing_status_cancelled';
+        case 'requested':
+        default:
+            return 'sourcing_status_requested';
+    }
+};
+
+const buildSourcingMessage = (
+    candidate: MatchedCandidate,
+    jobTitle: string,
+    companyName: string,
+    t: TranslationFn,
+) => formatTranslation(t('sourcing_default_message'), {
+    candidate: candidate.full_name || t('talent_candidate_fallback_name').replace('{id}', candidate.id.slice(0, 6)),
+    role: jobTitle,
+    company: companyName,
+});
 
 function VerifiedTalentSkeleton() {
     return (
@@ -246,6 +281,196 @@ function TalentCommandCenter({
     );
 }
 
+interface SourcingRequestModalProps {
+    candidate: CandidateWithIndex;
+    message: string;
+    selectedJobTitle: string;
+    sending: boolean;
+    t: TranslationFn;
+    onChangeMessage: (message: string) => void;
+    onClose: () => void;
+    onSubmit: () => void;
+}
+
+function SourcingRequestModal({
+    candidate,
+    message,
+    selectedJobTitle,
+    sending,
+    t,
+    onChangeMessage,
+    onClose,
+    onSubmit,
+}: SourcingRequestModalProps) {
+    const titleId = `sourcing-request-title-${candidate.id}`;
+    const descId = `sourcing-request-desc-${candidate.id}`;
+
+    return (
+        <ViewportAwareDialog
+            open
+            strategy="center"
+            maxWidth={620}
+            labelledBy={titleId}
+            describedBy={descId}
+            closeOnBackdrop
+            onClose={onClose}
+            className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+        >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+                <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                        {t('sourcing_request_kicker')}
+                    </p>
+                    <h2 id={titleId} className="mt-1 text-xl font-bold text-gray-950 dark:text-white">
+                        {t('sourcing_request_title')}
+                    </h2>
+                    <p id={descId} className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
+                        {formatTranslation(t('sourcing_request_desc'), { role: selectedJobTitle })}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                    aria-label={t('sourcing_close')}
+                >
+                    <X className="h-5 w-5" />
+                </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-100">
+                    <p className="font-semibold">{formatTranslation(t('talent_candidate_label'), { n: candidate.index + 1 })}</p>
+                    <p className="mt-1 text-blue-700 dark:text-blue-300">{candidate.summary}</p>
+                </div>
+
+                <div>
+                    <label htmlFor={`sourcing-message-${candidate.id}`} className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {t('sourcing_message_label')}
+                    </label>
+                    <textarea
+                        id={`sourcing-message-${candidate.id}`}
+                        value={message}
+                        onChange={(event) => onChangeMessage(event.target.value)}
+                        rows={7}
+                        className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm leading-6 text-gray-900 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                        placeholder={t('sourcing_message_placeholder')}
+                    />
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        {t('sourcing_privacy_note')}
+                    </p>
+                </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-100 bg-gray-50 px-5 py-4 dark:border-gray-800 dark:bg-gray-950 sm:flex-row sm:justify-end">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                    {t('sourcing_cancel')}
+                </button>
+                <button
+                    type="button"
+                    onClick={onSubmit}
+                    disabled={sending || message.trim().length < 20}
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400"
+                >
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    {sending ? t('sourcing_sending') : t('sourcing_send_request')}
+                </button>
+            </div>
+        </ViewportAwareDialog>
+    );
+}
+
+interface SourcingPacketModalProps {
+    candidate: CandidateWithIndex;
+    packet: ConsentedCandidatePacket;
+    t: TranslationFn;
+    onClose: () => void;
+}
+
+function SourcingPacketModal({ candidate, packet, t, onClose }: SourcingPacketModalProps) {
+    const titleId = `sourcing-packet-title-${candidate.id}`;
+    const contactRows = [
+        packet.email ? [t('sourcing_contact_email'), packet.email] : null,
+        packet.phone ? [t('sourcing_contact_phone'), packet.phone] : null,
+        packet.location ? [t('sourcing_contact_location'), packet.location] : null,
+        packet.linkedin ? [t('sourcing_contact_linkedin'), packet.linkedin] : null,
+        packet.github ? [t('sourcing_contact_github'), packet.github] : null,
+        packet.website ? [t('sourcing_contact_website'), packet.website] : null,
+    ].filter(Boolean) as string[][];
+
+    return (
+        <ViewportAwareDialog
+            open
+            strategy="center"
+            maxWidth={900}
+            labelledBy={titleId}
+            closeOnBackdrop
+            onClose={onClose}
+            className="max-h-[calc(100dvh-32px)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+        >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+                <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                        {t('sourcing_packet_kicker')}
+                    </p>
+                    <h2 id={titleId} className="mt-1 text-xl font-bold text-gray-950 dark:text-white">
+                        {packet.full_name || formatTranslation(t('talent_candidate_label'), { n: candidate.index + 1 })}
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
+                        {packet.headline || candidate.summary}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                    aria-label={t('sourcing_close')}
+                >
+                    <X className="h-5 w-5" />
+                </button>
+            </div>
+
+            <div className="grid max-h-[calc(100dvh-160px)] gap-4 overflow-y-auto px-5 py-5 lg:grid-cols-[0.8fr_1.2fr]">
+                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+                    <h3 className="text-sm font-bold text-gray-950 dark:text-gray-100">{t('sourcing_packet_contact')}</h3>
+                    <dl className="mt-3 space-y-3">
+                        {contactRows.length > 0 ? contactRows.map(([label, value]) => (
+                            <div key={`${label}-${value}`}>
+                                <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</dt>
+                                <dd className="mt-0.5 break-words text-sm font-medium text-gray-900 dark:text-gray-100">{value}</dd>
+                            </div>
+                        )) : (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{t('sourcing_packet_contact_empty')}</p>
+                        )}
+                    </dl>
+                </section>
+
+                <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+                    <h3 className="text-sm font-bold text-gray-950 dark:text-gray-100">{t('sourcing_packet_resume')}</h3>
+                    {packet.resume_text ? (
+                        <div className="mt-3 max-h-[58vh] overflow-y-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+                            <ResumePreview
+                                resumeText={packet.resume_text}
+                                market="North America"
+                                t={t}
+                                heightClassName="max-h-[56vh]"
+                            />
+                        </div>
+                    ) : (
+                        <p className="mt-3 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                            {t('sourcing_packet_no_resume')}
+                        </p>
+                    )}
+                </section>
+            </div>
+        </ViewportAwareDialog>
+    );
+}
+
 interface CandidateMatchCardProps {
     candidate: MatchedCandidate;
     index: number;
@@ -253,9 +478,13 @@ interface CandidateMatchCardProps {
     t: TranslationFn;
     saved: boolean;
     saving: boolean;
+    outreach?: SourcingOutreach;
+    requesting: boolean;
+    unlocking: boolean;
     onSave: (candidate: MatchedCandidate) => void;
     onHide?: (candidate: MatchedCandidate) => void;
-    onUnlock?: (candidate: MatchedCandidate, index: number) => void;
+    onRequestContact: (candidate: MatchedCandidate, index: number) => void;
+    onOpenPacket: (candidate: MatchedCandidate, index: number) => void;
 }
 
 function CandidateMatchCard({
@@ -265,9 +494,13 @@ function CandidateMatchCard({
     t,
     saved,
     saving,
+    outreach,
+    requesting,
+    unlocking,
     onSave,
     onHide,
-    onUnlock,
+    onRequestContact,
+    onOpenPacket,
 }: CandidateMatchCardProps) {
     const verified = variant === 'verified';
     const outerClass = verified
@@ -277,6 +510,14 @@ function CandidateMatchCard({
     const bodyClass = verified ? 'text-gray-300' : 'text-gray-600 dark:text-gray-400';
     const scoreClass = verified ? 'text-green-400' : 'text-green-600 dark:text-green-400';
     const gapClass = verified ? 'text-red-300' : 'text-red-600 dark:text-red-400';
+    const status = outreach?.status;
+    const canOpenPacket = status === 'accepted';
+    const waitingOnCandidate = status === 'requested';
+    const actionLabel = canOpenPacket
+        ? t('sourcing_open_packet')
+        : status === 'declined' || status === 'cancelled'
+            ? t('sourcing_request_again')
+            : t('sourcing_request_contact');
 
     return (
         <article className={outerClass}>
@@ -343,7 +584,7 @@ function CandidateMatchCard({
                             </p>
                         </div>
                     )}
-                    <div className={verified ? 'flex flex-col gap-2' : ''}>
+                    <div className="flex flex-col gap-2">
                         {candidate.compatibilityScore > 0 && (
                             <button
                                 type="button"
@@ -387,14 +628,36 @@ function CandidateMatchCard({
                                 <EyeOff className="h-4 w-4" />
                             </button>
                         )}
-                        {verified && onUnlock && (
+                        {candidate.compatibilityScore > 0 && (
                             <button
                                 type="button"
-                                onClick={() => onUnlock(candidate, index)}
-                                className="inline-flex min-h-10 items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white/50"
+                                onClick={() => (canOpenPacket ? onOpenPacket(candidate, index) : onRequestContact(candidate, index))}
+                                disabled={requesting || unlocking || waitingOnCandidate}
+                                className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                                    verified
+                                        ? canOpenPacket
+                                            ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
+                                            : waitingOnCandidate
+                                                ? 'cursor-not-allowed bg-white/10 text-white/70'
+                                                : 'bg-white text-gray-900 hover:bg-gray-200'
+                                        : canOpenPacket
+                                            ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300'
+                                            : waitingOnCandidate
+                                                ? 'cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                                                : 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300'
+                                }`}
                             >
-                                {t('discover_unlock_engage_button')}
+                                {(requesting || unlocking) && <Loader2 className="h-4 w-4 animate-spin" />}
+                                {!requesting && !unlocking && (canOpenPacket ? <Inbox className="h-4 w-4" /> : <Send className="h-4 w-4" />)}
+                                {waitingOnCandidate ? t('sourcing_requested') : actionLabel}
                             </button>
+                        )}
+                        {status && (
+                            <span className={`text-center text-[11px] font-semibold ${
+                                verified ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+                            }`}>
+                                {t(outreachStatusLabelKey(status))}
+                            </span>
                         )}
                     </div>
                 </div>
@@ -421,7 +684,6 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     profile,
     onPostJob,
     onOpenShortlist,
-    navigateToBusinessPricing,
     postedJobs: postedJobsProp,
     postedJobsLoading = false,
     postedJobsError = null,
@@ -435,9 +697,12 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     const [searchError, setSearchError] = useState<string | null>(null);
     const [verifiedResults, setVerifiedResults] = useState<MatchedCandidate[]>([]);
     const [regularResults, setRegularResults] = useState<MatchedCandidate[] | null>(null);
-
-    const [candidateToUnlock, setCandidateToUnlock] = useState<(MatchedCandidate & { index: number }) | null>(null);
-    const [candidateToEngage, setCandidateToEngage] = useState<(MatchedCandidate & { index: number }) | null>(null);
+    const [outreachByCandidateId, setOutreachByCandidateId] = useState<Map<string, SourcingOutreach>>(new Map());
+    const [candidateToRequest, setCandidateToRequest] = useState<CandidateWithIndex | null>(null);
+    const [requestMessage, setRequestMessage] = useState('');
+    const [requestingCandidateId, setRequestingCandidateId] = useState<string | null>(null);
+    const [packetCandidateId, setPacketCandidateId] = useState<string | null>(null);
+    const [packetModal, setPacketModal] = useState<{ candidate: CandidateWithIndex; packet: ConsentedCandidatePacket } | null>(null);
 
     // Posted-job selector state
     const [internalPostedJobs, setInternalPostedJobs] = useState<TalentDiscoveryJob[]>([]);
@@ -479,6 +744,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     const selectedPostedDate = selectedPostedJob ? formatPostedDate(selectedPostedJob.created_at) : '';
     const selectedBriefEdited = !!selectedPostedJob && jobDescription.trim() !== selectedPostedJobBrief.trim();
     const hasJobDescription = jobDescription.trim().length > 0;
+    const outreachJobTitle = selectedPostedJob?.title || t('talent_manual_role_label');
+    const outreachCompanyName = profile.company_name || t('sourcing_company_fallback');
     const regularResultsCount = regularResults ? regularResults.length : null;
     const visiblePostedJobs = postedJobs.slice(0, 4);
     const hiddenPostedJobsCount = Math.max(0, postedJobs.length - visiblePostedJobs.length);
@@ -686,8 +953,98 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         }
     };
 
-    const paidBusinessStatuses = new Set(['single_post', 'job_pack', 'starter', 'growth', 'pro']);
-    const canUnlock = paidBusinessStatuses.has(profile.subscription_status ?? '');
+    const refreshOutreach = useCallback(async () => {
+        if (!profile.id) {
+            setOutreachByCandidateId(new Map());
+            return;
+        }
+        try {
+            const rows = await listSourcingOutreachForEmployer(profile.id);
+            if (!mountedRef.current) return;
+            const next = new Map<string, SourcingOutreach>();
+            rows.forEach((row) => {
+                if (!next.has(row.candidate_id)) next.set(row.candidate_id, row);
+            });
+            setOutreachByCandidateId(next);
+        } catch {
+            if (mountedRef.current) setOutreachByCandidateId(new Map());
+        }
+    }, [profile.id]);
+
+    useEffect(() => {
+        refreshOutreach();
+    }, [refreshOutreach]);
+
+    const handleRequestContact = useCallback((candidate: MatchedCandidate, index: number) => {
+        setCandidateToRequest({ ...candidate, index });
+        setRequestMessage(buildSourcingMessage(candidate, outreachJobTitle, outreachCompanyName, t));
+    }, [outreachCompanyName, outreachJobTitle, t]);
+
+    const handleSubmitOutreachRequest = useCallback(async () => {
+        if (!candidateToRequest || requestingCandidateId) return;
+        const message = requestMessage.trim();
+        if (message.length < 20) return;
+        setRequestingCandidateId(candidateToRequest.id);
+        try {
+            const result = await createSourcingOutreach({
+                candidateId: candidateToRequest.id,
+                jobId: selectedJobId || undefined,
+                message,
+                requestSource: selectedJobId ? 'discover_talent_job' : 'discover_talent_manual',
+            });
+            setOutreachByCandidateId((current) => {
+                const next = new Map(current);
+                next.set(candidateToRequest.id, {
+                    id: result.outreachId,
+                    employer_id: profile.id,
+                    candidate_id: candidateToRequest.id,
+                    job_id: selectedJobId || '',
+                    job_title: outreachJobTitle,
+                    company_name: outreachCompanyName,
+                    message,
+                    status: result.status,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    responded_at: '',
+                });
+                return next;
+            });
+            addToast(result.duplicate ? t('sourcing_request_duplicate') : t('sourcing_request_success'), 'success');
+            setCandidateToRequest(null);
+            setRequestMessage('');
+            await refreshOutreach();
+        } catch (err) {
+            addToast(err instanceof Error ? err.message : t('sourcing_request_error'), 'error');
+        } finally {
+            if (mountedRef.current) setRequestingCandidateId(null);
+        }
+    }, [
+        addToast,
+        candidateToRequest,
+        outreachCompanyName,
+        outreachJobTitle,
+        profile.id,
+        refreshOutreach,
+        requestMessage,
+        requestingCandidateId,
+        selectedJobId,
+        t,
+    ]);
+
+    const handleOpenPacket = useCallback(async (candidate: MatchedCandidate, index: number) => {
+        const outreach = outreachByCandidateId.get(candidate.id);
+        if (!outreach || outreach.status !== 'accepted' || packetCandidateId) return;
+        setPacketCandidateId(candidate.id);
+        try {
+            const packet = await getSourcingCandidatePacket(outreach.id);
+            setPacketModal({ candidate: { ...candidate, index }, packet });
+        } catch (err) {
+            addToast(err instanceof Error ? err.message : t('sourcing_packet_error'), 'error');
+        } finally {
+            if (mountedRef.current) setPacketCandidateId(null);
+        }
+    }, [addToast, outreachByCandidateId, packetCandidateId, t]);
+
     const handleCommandPrimaryAction = () => {
         if (searchLoading) return;
         if (!hasJobDescription) {
@@ -780,9 +1137,13 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                             t={t}
                             saved={savedIds.has(candidate.id)}
                             saving={savingIds.has(candidate.id)}
+                            outreach={outreachByCandidateId.get(candidate.id)}
+                            requesting={requestingCandidateId === candidate.id}
+                            unlocking={packetCandidateId === candidate.id}
                             onSave={handleSaveToShortlist}
                             onHide={handleHideCandidate}
-                            onUnlock={(nextCandidate, nextIndex) => setCandidateToUnlock({ ...nextCandidate, index: nextIndex })}
+                            onRequestContact={handleRequestContact}
+                            onOpenPacket={handleOpenPacket}
                         />
                     ))}
                  </div>
@@ -1067,8 +1428,13 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                                     t={t}
                                     saved={savedIds.has(candidate.id)}
                                     saving={savingIds.has(candidate.id)}
+                                    outreach={outreachByCandidateId.get(candidate.id)}
+                                    requesting={requestingCandidateId === candidate.id}
+                                    unlocking={packetCandidateId === candidate.id}
                                     onSave={handleSaveToShortlist}
                                     onHide={handleHideCandidate}
+                                    onRequestContact={handleRequestContact}
+                                    onOpenPacket={handleOpenPacket}
                                 />
                             ))}
                         </div>
@@ -1076,31 +1442,28 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                 </div>
             )}
 
-            {candidateToUnlock && (
-                <UnlockTalentModal
-                    candidate={candidateToUnlock}
-                    canUnlock={canUnlock}
-                    onClose={() => setCandidateToUnlock(null)}
-                    onUnlocked={() => {
-                        const unlockedCandidate = candidateToUnlock;
-                        setCandidateToUnlock(null);
-                        if (unlockedCandidate) setCandidateToEngage(unlockedCandidate);
-                    }}
-                    navigateToBusinessPricing={navigateToBusinessPricing}
+            {candidateToRequest && (
+                <SourcingRequestModal
+                    candidate={candidateToRequest}
+                    message={requestMessage}
+                    selectedJobTitle={outreachJobTitle}
+                    sending={requestingCandidateId === candidateToRequest.id}
                     t={t}
+                    onChangeMessage={setRequestMessage}
+                    onClose={() => {
+                        setCandidateToRequest(null);
+                        setRequestMessage('');
+                    }}
+                    onSubmit={handleSubmitOutreachRequest}
                 />
             )}
 
-            {candidateToEngage && (
-                <EngageCandidateModal
-                    // Remount on candidate change so the nested outreach draft/open-state
-                    // can't carry over from a previously engaged candidate.
-                    key={candidateToEngage.index}
-                    candidate={candidateToEngage}
-                    jobDescription={jobDescription}
-                    employerProfile={profile}
-                    onClose={() => setCandidateToEngage(null)}
+            {packetModal && (
+                <SourcingPacketModal
+                    candidate={packetModal.candidate}
+                    packet={packetModal.packet}
                     t={t}
+                    onClose={() => setPacketModal(null)}
                 />
             )}
         </div>
