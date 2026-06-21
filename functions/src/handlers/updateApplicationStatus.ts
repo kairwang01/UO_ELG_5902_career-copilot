@@ -8,6 +8,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 
 if (!admin.apps.length) {
@@ -301,7 +302,7 @@ export async function updateApplicationStatusImpl(uid: string, rawData: unknown)
       last_status_note: candidateNote || null,
       last_status_action: action,
       skipped_statuses: cumulativeSkippedStatuses,
-      last_status_at: admin.firestore.FieldValue.serverTimestamp(),
+      last_status_at: FieldValue.serverTimestamp(),
     });
     tx.create(eventRef, {
       application_id: applicationId,
@@ -316,7 +317,7 @@ export async function updateApplicationStatusImpl(uid: string, rawData: unknown)
       actor_role: "employer",
       reason: reason || null,
       candidate_note: candidateNote || null,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      created_at: FieldValue.serverTimestamp(),
     });
 
     return {

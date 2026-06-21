@@ -24,6 +24,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import { requireRole, getAdminRole, invalidateAccessCache, AdminEntry, AdminRole } from "../admin/roles";
 import {
   CREDIT_LEDGER_COLLECTION,
@@ -99,11 +100,11 @@ function assertReason(reason: unknown): string {
   return trimmed;
 }
 
-function startOfUtcDaysAgo(days: number): admin.firestore.Timestamp {
+function startOfUtcDaysAgo(days: number): Timestamp {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
   d.setUTCHours(0, 0, 0, 0);
-  return admin.firestore.Timestamp.fromDate(d);
+  return Timestamp.fromDate(d);
 }
 
 function assertNonNegativeInt(value: unknown, label: string, max = 1_000_000): number {

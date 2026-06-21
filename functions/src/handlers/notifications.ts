@@ -16,6 +16,7 @@
 
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { classifyTransition, renderInterviewProgressEmail } from "../email/interviewProgress";
 
 if (!admin.apps.length) {
@@ -77,7 +78,7 @@ export const onApplicationStatusChangeFunction = onDocumentUpdated(
           status,
           candidate_note: candidateNote,
           read: false,
-          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          created_at: FieldValue.serverTimestamp(),
         })
         .catch(async (err) => {
           // Stage already reached: refresh the candidate-facing note (the employer
@@ -85,7 +86,7 @@ export const onApplicationStatusChangeFunction = onDocumentUpdated(
           // bypasses the owner-only update rule.
           if ((err as { code?: number | string })?.code === 6 || (err as { code?: string })?.code === "already-exists") {
             await notifRef
-              .set({ candidate_note: candidateNote, read: false, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+              .set({ candidate_note: candidateNote, read: false, updated_at: FieldValue.serverTimestamp() }, { merge: true })
               .catch((e) => console.error("notifications: note refresh failed", e));
             return;
           }
@@ -140,7 +141,7 @@ export const onApplicationStatusChangeFunction = onDocumentUpdated(
                 application_id: appId,
                 candidate_id: candidateId,
                 status,
-                created_at: admin.firestore.FieldValue.serverTimestamp(),
+                created_at: FieldValue.serverTimestamp(),
               },
             })
             .catch(swallowAlreadyExists);

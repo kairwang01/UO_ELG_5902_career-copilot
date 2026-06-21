@@ -10,6 +10,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onRequest } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { requireAuth } from "../middleware/auth";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
@@ -106,7 +107,7 @@ function assertEntitlementInput(input: StripeEntitlementInput): CheckoutPlan {
 
 export async function activateStripeEntitlement(input: StripeEntitlementInput) {
   const plan = assertEntitlementInput(input);
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   await db.collection(BILLING_COLLECTION).doc(input.uid).set(
     {
       active: true,
@@ -118,8 +119,8 @@ export async function activateStripeEntitlement(input: StripeEntitlementInput) {
       stripe_subscription_id: input.stripeSubscriptionId ?? null,
       checkout_session_id: input.checkoutSessionId ?? null,
       status: "active",
-      pending_plan: admin.firestore.FieldValue.delete(),
-      pending_audience: admin.firestore.FieldValue.delete(),
+      pending_plan: FieldValue.delete(),
+      pending_audience: FieldValue.delete(),
       activated_at: now,
       updated_at: now,
     },
@@ -135,7 +136,7 @@ export async function deactivateStripeEntitlement(input: {
   stripeSubscriptionId?: string | null;
   reason?: string;
 }) {
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (tx) => {
     const billingRef = db.collection(BILLING_COLLECTION).doc(input.uid);
     const userRef = db.collection(USERS_COLLECTION).doc(input.uid);
@@ -144,7 +145,7 @@ export async function deactivateStripeEntitlement(input: {
       {
         active: false,
         status: input.reason ?? "inactive",
-        stripe_subscription_id: input.stripeSubscriptionId ?? admin.firestore.FieldValue.delete(),
+        stripe_subscription_id: input.stripeSubscriptionId ?? FieldValue.delete(),
         cancelled_at: now,
         updated_at: now,
       },

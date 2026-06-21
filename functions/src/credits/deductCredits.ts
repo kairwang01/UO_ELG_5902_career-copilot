@@ -19,6 +19,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { ensurePlatformCaches, getToolCreditCost } from "../config/env";
 import {
@@ -183,7 +184,7 @@ export async function deductCredits(
           day_key: dayKey,
           request_id: requestId ?? null,
           balance_after: balanceAfter,
-          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          created_at: FieldValue.serverTimestamp(),
         });
         writeUsageCounters(tx, uid, cost, dayKey);
         tx.set(db.collection(CREDIT_LEDGER_COLLECTION).doc(), {
@@ -193,7 +194,7 @@ export async function deductCredits(
           reason: "tool_deduction",
           tool,
           request_id: requestId ?? null,
-          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          created_at: FieldValue.serverTimestamp(),
         });
       });
 
@@ -311,7 +312,7 @@ export async function recordFreeToolRun(
       day_key: dayKey,
       request_id: requestId ?? null,
       balance_after: null,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      created_at: FieldValue.serverTimestamp(),
     });
     // Increment runs (+1) and credits (+0): the run counter is what the free-tier
     // cap reads, so a free run consumes one of the day's allowance.

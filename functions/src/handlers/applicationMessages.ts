@@ -15,6 +15,7 @@
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 
 if (!admin.apps.length) {
@@ -76,7 +77,7 @@ export async function sendApplicationMessageImpl(uid: string, data: Record<strin
   const template =
     senderRole === "employer" && MESSAGE_TEMPLATES.has(requested) ? requested : "custom";
 
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   const ref = await db.collection("application_messages").add({
     application_id: applicationId,
     job_id: jobId,

@@ -26,6 +26,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider, tierFromSubscription } from "../llm/models";
 import { deductCredits, meterToolRun, refundCredits } from "../credits/deductCredits";
@@ -302,7 +303,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       .add({
         report,
         unlocked: false,
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        created_at: FieldValue.serverTimestamp(),
       });
 
     const strengths = Array.isArray(report.strengths) ? (report.strengths as string[]) : [];
@@ -335,7 +336,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
         await deductCredits(uid, price, "mock-interview-report-unlock");
       }
       try {
-        await reportRef.update({ unlocked: true, unlocked_at: admin.firestore.FieldValue.serverTimestamp() });
+        await reportRef.update({ unlocked: true, unlocked_at: FieldValue.serverTimestamp() });
       } catch (err) {
         // Couldn't persist the unlock — reverse the charge so the user is never
         // billed for a report that stayed locked.

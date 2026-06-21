@@ -25,6 +25,7 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 import {
   CREDIT_RENEWALS_COLLECTION,
@@ -80,8 +81,8 @@ export const grantMonthlyCreditsFunction = onSchedule(
           if (renewalSnap.exists && renewalSnap.get("period") === period) {
             return false; // already granted this month
           }
-          const now = admin.firestore.FieldValue.serverTimestamp();
-          tx.set(userDoc.ref, { [USER_FIELDS.credits]: admin.firestore.FieldValue.increment(monthlyGrant), [USER_FIELDS.updatedAt]: now }, { merge: true });
+          const now = FieldValue.serverTimestamp();
+          tx.set(userDoc.ref, { [USER_FIELDS.credits]: FieldValue.increment(monthlyGrant), [USER_FIELDS.updatedAt]: now }, { merge: true });
           tx.set(renewalRef, { period, plan, granted_amount: monthlyGrant, granted_at: now }, { merge: true });
           return true;
         });

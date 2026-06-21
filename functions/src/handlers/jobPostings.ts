@@ -15,6 +15,7 @@
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth, isAdminUid } from "../middleware/auth";
 import { ensurePlatformCaches, getActiveJobLimit } from "../config/env";
 
@@ -181,7 +182,7 @@ function buildContent(input: Record<string, unknown>): Record<string, unknown> {
 async function writeEvent(jobId: string, employerId: string, action: string, reason: string | null): Promise<void> {
   await db.collection("job_posting_events").add({
     job_id: jobId, employer_id: employerId, action, reason,
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    created_at: FieldValue.serverTimestamp(),
   }).catch((e) => console.error("job_posting_events write failed", e));
 }
 
@@ -208,7 +209,7 @@ export async function createJobPostingImpl(uid: string, data: Record<string, unk
   const content = buildContent((data?.posting ?? data ?? {}) as Record<string, unknown>);
   await assertWithinLimit(uid, poster, token);
 
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   const ref = await db.collection("job_postings").add({
     ...content,
     employer_id: uid,
@@ -234,7 +235,7 @@ export async function updateJobPostingImpl(uid: string, data: Record<string, unk
   const jobId = String(data?.jobId ?? "");
   const { ref } = await ownedJobRef(uid, jobId);
   const content = buildContent((data?.posting ?? data ?? {}) as Record<string, unknown>);
-  await ref.update({ ...content, updated_at: admin.firestore.FieldValue.serverTimestamp() });
+  await ref.update({ ...content, updated_at: FieldValue.serverTimestamp() });
   await writeEvent(jobId, uid, "updated", null);
   return { jobId };
 }
@@ -251,7 +252,7 @@ export async function setJobPostingActiveImpl(uid: string, data: Record<string, 
   if (isActive && snap.data()?.is_active !== true) {
     await assertWithinLimit(uid, poster, token);
   }
-  await ref.update({ is_active: isActive, updated_at: admin.firestore.FieldValue.serverTimestamp() });
+  await ref.update({ is_active: isActive, updated_at: FieldValue.serverTimestamp() });
   await writeEvent(jobId, uid, isActive ? "reopened" : "closed", reason);
   return { jobId, isActive };
 }

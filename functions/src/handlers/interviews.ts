@@ -14,6 +14,7 @@
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 
 if (!admin.apps.length) {
@@ -59,7 +60,7 @@ export async function scheduleInterviewImpl(uid: string, data: Record<string, un
   const format = str(data.format, 20);
   if (!FORMATS.has(format)) throw new HttpsError("invalid-argument", "Interview format is required.");
 
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   const ref = await db.collection("application_interviews").add({
     application_id: applicationId,
     job_id: jobId,
@@ -82,7 +83,7 @@ export async function scheduleInterviewImpl(uid: string, data: Record<string, un
 
 export async function updateInterviewImpl(uid: string, data: Record<string, unknown>) {
   const { ref } = await ownedInterview(uid, str(data.interviewId, 200), "employer_id");
-  const patch: Record<string, unknown> = { updated_at: admin.firestore.FieldValue.serverTimestamp() };
+  const patch: Record<string, unknown> = { updated_at: FieldValue.serverTimestamp() };
 
   const interviewStatus = str(data.interviewStatus, 20);
   if (interviewStatus) {
@@ -115,7 +116,7 @@ export async function confirmInterviewImpl(uid: string, data: Record<string, unk
   if (interview.interview_status === "cancelled") {
     throw new HttpsError("failed-precondition", "This interview was cancelled.");
   }
-  await ref.update({ candidate_confirmed: true, updated_at: admin.firestore.FieldValue.serverTimestamp() });
+  await ref.update({ candidate_confirmed: true, updated_at: FieldValue.serverTimestamp() });
   return { interviewId: ref.id };
 }
 

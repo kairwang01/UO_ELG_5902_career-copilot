@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 
 export type TalentValue = string | string[];
 export type TalentRecord = Record<string, TalentValue>;
@@ -142,7 +143,7 @@ function cleanSkills(value: unknown): Record<string, string[]> {
 
 function toIso(value: unknown): string | undefined {
   if (value && typeof (value as { toDate?: unknown }).toDate === "function") {
-    return (value as admin.firestore.Timestamp).toDate().toISOString();
+    return (value as Timestamp).toDate().toISOString();
   }
   return typeof value === "string" && value.trim() ? value.trim().slice(0, 80) : undefined;
 }

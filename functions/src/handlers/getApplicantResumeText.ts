@@ -11,6 +11,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 import { assertEmployerOwnsApplication } from "./applicantAccess";
 
@@ -43,7 +44,7 @@ export const getApplicantResumeTextFunction = onCall(
     // Idempotent (set once) and best-effort — never block the resume read.
     if (!appData.employer_viewed_at) {
       db.collection("job_applications").doc(applicationId)
-        .update({ employer_viewed_at: admin.firestore.FieldValue.serverTimestamp() })
+        .update({ employer_viewed_at: FieldValue.serverTimestamp() })
         .catch(() => { /* non-fatal */ });
     }
 

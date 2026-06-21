@@ -34,6 +34,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import * as crypto from "crypto";
 import { LLMProvider, LLMRequest, LLMResult } from "./LLMProvider";
 import { GeminiProvider } from "./providers/geminiProvider";
@@ -298,9 +299,9 @@ interface KeyHealthDoc {
   provider: string;
   modelId: string;
   failureCount: number;
-  lastFailureAt: admin.firestore.Timestamp | null;
-  lastSuccessAt: admin.firestore.Timestamp | null;
-  cooldownUntil: admin.firestore.Timestamp | null;
+  lastFailureAt: Timestamp | null;
+  lastSuccessAt: Timestamp | null;
+  cooldownUntil: Timestamp | null;
   lastErrorCode: string | null;
 }
 
@@ -321,7 +322,7 @@ async function recordKeySuccess(
         keyHash: hash,
         provider,
         modelId,
-        lastSuccessAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSuccessAt: FieldValue.serverTimestamp(),
         cooldownUntil: null,
         lastErrorCode: null,
       } as Partial<KeyHealthDoc>,
@@ -348,7 +349,7 @@ async function recordKeyFailure(
     const snap = await ref.get();
     const existing = snap.exists ? (snap.data() as KeyHealthDoc) : null;
     const failureCount = (existing?.failureCount ?? 0) + 1;
-    const cooldownUntil = admin.firestore.Timestamp.fromMillis(Date.now() + COOLDOWN_MS);
+    const cooldownUntil = Timestamp.fromMillis(Date.now() + COOLDOWN_MS);
     const lastErrorCode = extractErrorCode(err);
     await ref.set(
       {
@@ -356,7 +357,7 @@ async function recordKeyFailure(
         provider,
         modelId,
         failureCount,
-        lastFailureAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastFailureAt: FieldValue.serverTimestamp(),
         cooldownUntil,
         lastErrorCode,
       } as Partial<KeyHealthDoc>,

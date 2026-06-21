@@ -31,6 +31,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { requireRole } from "../admin/roles";
 import {
   PLATFORM_CONFIG_COLLECTION,
@@ -70,9 +71,9 @@ interface PromptVersionDoc {
   status: "draft" | "published" | "archived";
   content: string;
   createdBy: string;
-  createdAt: admin.firestore.FieldValue | admin.firestore.Timestamp;
+  createdAt: FieldValue | Timestamp;
   publishedBy?: string;
-  publishedAt?: admin.firestore.FieldValue | admin.firestore.Timestamp;
+  publishedAt?: FieldValue | Timestamp;
   changeSummary?: string;
 }
 
@@ -202,7 +203,7 @@ export const adminSavePromptDraftFunction = onCall({ invoker: "public" }, async 
   const newDocRef = db.collection(PROMPT_VERSIONS_COLLECTION).doc();
 
   const versionDoc: Omit<PromptVersionDoc, "createdAt"> & {
-    createdAt: admin.firestore.FieldValue;
+    createdAt: FieldValue;
   } = await db.runTransaction(async (tx) => {
     const versionNumber = await nextVersionNumber(tx, promptKey);
     const doc = {
@@ -211,7 +212,7 @@ export const adminSavePromptDraftFunction = onCall({ invoker: "public" }, async 
       status: "draft" as const,
       content,
       createdBy: adminUid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       ...(changeSummary ? { changeSummary } : {}),
     };
     tx.set(newDocRef, doc);
@@ -292,7 +293,7 @@ export const adminPublishPromptFunction = onCall({ invoker: "public" }, async (r
     tx.update(targetRef, {
       status: "published",
       publishedBy: superUid,
-      publishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      publishedAt: FieldValue.serverTimestamp(),
     });
   });
 
@@ -361,17 +362,17 @@ export const adminRollbackPromptFunction = onCall({ invoker: "public" }, async (
 
     // Create new published version (rollback copy)
     const newDoc: Omit<PromptVersionDoc, "createdAt" | "publishedAt"> & {
-      createdAt: admin.firestore.FieldValue;
-      publishedAt: admin.firestore.FieldValue;
+      createdAt: FieldValue;
+      publishedAt: FieldValue;
     } = {
       promptKey,
       version: newVersionNumber,
       status: "published",
       content,
       createdBy: superUid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       publishedBy: superUid,
-      publishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      publishedAt: FieldValue.serverTimestamp(),
       changeSummary: `Rollback from version ${source.version} (${versionId})`,
     };
     tx.set(newDocRef, newDoc);
@@ -490,13 +491,13 @@ export const adminUpdatePromptFunction = onCall({ invoker: "public" }, async (re
       status: "published",
       content: template,
       createdBy: adminUid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       publishedBy: adminUid,
-      publishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      publishedAt: FieldValue.serverTimestamp(),
       changeSummary: "Direct update via adminUpdatePrompt (back-compat)",
     } as Omit<PromptVersionDoc, "createdAt" | "publishedAt"> & {
-      createdAt: admin.firestore.FieldValue;
-      publishedAt: admin.firestore.FieldValue;
+      createdAt: FieldValue;
+      publishedAt: FieldValue;
     });
   });
 
@@ -547,7 +548,7 @@ export const adminResetPromptFunction = onCall({ invoker: "public" }, async (req
   // Delete the field from the prompts doc (FieldValue.delete() on a merge)
   const ref = db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.prompts);
   await ref.set(
-    { [key]: admin.firestore.FieldValue.delete() },
+    { [key]: FieldValue.delete() },
     { merge: true }
   );
 

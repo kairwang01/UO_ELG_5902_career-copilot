@@ -25,6 +25,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
@@ -103,7 +104,7 @@ function tryParseJson(str: string): unknown {
 
 function isoFromTimestamp(value: unknown): string | null {
   if (value && typeof (value as { toDate?: unknown }).toDate === "function") {
-    return (value as admin.firestore.Timestamp).toDate().toISOString();
+    return (value as Timestamp).toDate().toISOString();
   }
   return null;
 }

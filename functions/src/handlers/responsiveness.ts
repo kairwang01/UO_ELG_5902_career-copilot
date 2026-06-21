@@ -17,6 +17,7 @@
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -26,7 +27,7 @@ const db = admin.firestore();
 
 const toMillis = (v: unknown): number | null =>
   v && typeof (v as { toMillis?: unknown }).toMillis === "function"
-    ? (v as admin.firestore.Timestamp).toMillis()
+    ? (v as Timestamp).toMillis()
     : null;
 
 export const onApplicationStatusEventCreatedFunction = onDocumentCreated(
@@ -38,7 +39,7 @@ export const onApplicationStatusEventCreatedFunction = onDocumentCreated(
     const employerId = typeof data.employer_id === "string" ? data.employer_id : "";
     const applicationId = typeof data.application_id === "string" ? data.application_id : "";
     const fromStatus = typeof data.from_status === "string" ? data.from_status : "";
-    const eventAt = data.created_at as admin.firestore.Timestamp | undefined;
+    const eventAt = data.created_at as Timestamp | undefined;
     if (!employerId) return;
 
     const respRef = db.collection("employer_responsiveness").doc(employerId);
@@ -60,7 +61,7 @@ export const onApplicationStatusEventCreatedFunction = onDocumentCreated(
             firstActionDays = Math.max(0, (eventMs - appliedMs) / 86_400_000);
           }
           tx.update(appRef, {
-            first_actioned_at: eventAt ?? admin.firestore.FieldValue.serverTimestamp(),
+            first_actioned_at: eventAt ?? FieldValue.serverTimestamp(),
           });
         }
       }
@@ -78,8 +79,8 @@ export const onApplicationStatusEventCreatedFunction = onDocumentCreated(
           employer_id: employerId,
           sum_days: sumDays,
           count,
-          last_action_at: lastActionAt ?? admin.firestore.FieldValue.serverTimestamp(),
-          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          last_action_at: lastActionAt ?? FieldValue.serverTimestamp(),
+          updated_at: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );

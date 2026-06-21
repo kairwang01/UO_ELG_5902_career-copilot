@@ -28,6 +28,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 import {
@@ -174,7 +175,7 @@ export async function applySubscriptionSelection(
     const snap = await tx.get(userRef);
     const renewalSnap = await tx.get(renewalRef);
     const billingSnap = isPrivileged ? await tx.get(billingRef) : null;
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
 
     const entitled = !!(billingSnap?.exists && billingSnap.get("active") === true);
 

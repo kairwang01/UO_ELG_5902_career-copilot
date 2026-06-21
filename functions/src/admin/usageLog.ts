@@ -3,6 +3,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
   ADMIN_AUDIT_LOG_COLLECTION,
   CREDIT_LEDGER_COLLECTION,
@@ -53,7 +54,7 @@ function counterTotals(data: admin.firestore.DocumentData | undefined): { runs: 
 }
 
 async function scanTodayUsageTotals(): Promise<{ runs: number; credits: number }> {
-  const dayStartTs = admin.firestore.Timestamp.fromDate(utcDayStart());
+  const dayStartTs = Timestamp.fromDate(utcDayStart());
   const snap = await db
     .collection(USAGE_EVENTS_COLLECTION)
     .where("created_at", ">=", dayStartTs)
@@ -69,7 +70,7 @@ async function scanTodayUsageTotals(): Promise<{ runs: number; credits: number }
 }
 
 async function scanUserTodayUsage(uid: string): Promise<{ runs: number; credits: number }> {
-  const dayStartTs = admin.firestore.Timestamp.fromDate(utcDayStart());
+  const dayStartTs = Timestamp.fromDate(utcDayStart());
   const snap = await db
     .collection(USAGE_EVENTS_COLLECTION)
     .where("uid", "==", uid)
@@ -110,10 +111,10 @@ export function writeUsageCounters(
   creditCost: number,
   dayKey = utcDayKey()
 ): void {
-  const updatedAt = admin.firestore.FieldValue.serverTimestamp();
+  const updatedAt = FieldValue.serverTimestamp();
   const delta = {
-    runs: admin.firestore.FieldValue.increment(1),
-    credits: admin.firestore.FieldValue.increment(creditCost),
+    runs: FieldValue.increment(1),
+    credits: FieldValue.increment(creditCost),
     updated_at: updatedAt,
   };
   tx.set(
@@ -143,14 +144,14 @@ export async function logUsageEvent(
   creditCost: number,
   status: "deducted" | "refunded"
 ): Promise<void> {
-  const payload: Omit<UsageEventDoc, "created_at"> & { created_at: admin.firestore.FieldValue } = {
+  const payload: Omit<UsageEventDoc, "created_at"> & { created_at: FieldValue } = {
     uid,
     tool,
     credit_cost: creditCost,
     status,
     day_key: utcDayKey(),
     request_id: null,
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    created_at: FieldValue.serverTimestamp(),
   };
   await db.collection(USAGE_EVENTS_COLLECTION).add(payload);
 }
@@ -165,7 +166,7 @@ export async function logCreditLedger(entry: {
 }): Promise<void> {
   await db.collection(CREDIT_LEDGER_COLLECTION).add({
     ...entry,
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    created_at: FieldValue.serverTimestamp(),
   });
 }
 
@@ -185,7 +186,7 @@ export async function logAdminAction(entry: {
     action: entry.action,
     target_uid: entry.target_uid ?? null,
     details: entry.details ?? {},
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    created_at: FieldValue.serverTimestamp(),
   });
 }
 

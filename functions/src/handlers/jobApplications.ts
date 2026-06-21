@@ -18,6 +18,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 
 if (!admin.apps.length) {
@@ -190,7 +191,7 @@ export async function createJobApplicationImpl(
       compatibility_score: data.compatibilityScore ?? null,
       screener_answers: screenerAnswers,
       notes: null,
-      application_date: admin.firestore.FieldValue.serverTimestamp(),
+      application_date: FieldValue.serverTimestamp(),
     });
     batch.create(snapRef, {
       application_id: applicationId,
@@ -201,7 +202,7 @@ export async function createJobApplicationImpl(
       screener_answers_snapshot: screenerAnswers,
       resume_file_snapshot_path: null,
       resume_file_snapshot_name: null,
-      submitted_at: admin.firestore.FieldValue.serverTimestamp(),
+      submitted_at: FieldValue.serverTimestamp(),
     });
     await batch.commit();
   } catch (e) {

@@ -11,6 +11,7 @@
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 
 if (!admin.apps.length) {
@@ -82,7 +83,7 @@ export async function upsertScorecardImpl(uid: string, data: Record<string, unkn
   }
 
   const scorecardId = str(data.scorecardId, 200);
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   const payload = {
     application_id: applicationId,
     interview_id: interviewId,

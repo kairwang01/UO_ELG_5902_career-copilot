@@ -27,6 +27,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 
 if (!admin.apps.length) {
@@ -175,7 +176,7 @@ export const createCompanyReviewFunction = onCall(
     const existingSnap = await reviewRef.get();
     const createdAt = existingSnap.exists
       ? existingSnap.data()?.created_at
-      : admin.firestore.FieldValue.serverTimestamp();
+      : FieldValue.serverTimestamp();
 
     await reviewRef.set(
       {
@@ -187,7 +188,7 @@ export const createCompanyReviewFunction = onCall(
         verification_tier: verificationTier,
         verified: verificationTier === "hired",
         created_at: createdAt,
-        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
@@ -227,7 +228,7 @@ export const listCompanyReviewsFunction = onCall({ invoker: "public" }, async (r
       const r = d.data();
       const createdAt =
         r.created_at && typeof (r.created_at as { toDate?: unknown }).toDate === "function"
-          ? (r.created_at as admin.firestore.Timestamp).toDate().toISOString()
+          ? (r.created_at as Timestamp).toDate().toISOString()
           : null;
       const tier =
         r.verification_tier === "hired" ||
@@ -286,7 +287,7 @@ export const onCompanyReviewWrittenFunction = onDocumentWritten(
       await db.collection("employer_rating").doc(employerId).set({
         avg,
         count,
-        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp(),
       });
     } catch (err) {
       // best-effort; swallow so the function never retries forever
