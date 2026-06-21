@@ -13,6 +13,10 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Type } from "@google/genai";
+import { lookup } from "node:dns/promises";
+import * as http from "node:http";
+import * as https from "node:https";
+import { isIP } from "node:net";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { buildPrompt } from "../llm/prompts";
@@ -22,12 +26,71 @@ interface ExtractTextRequest {
   model?: string;
 }
 
+const MAX_HTML_BYTES = 200_000;
+const MAX_REDIRECT_HOPS = 5;
+const FETCH_TIMEOUT_MS = 10_000;
+
+const FETCH_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+};
+
+function parseIpv4(address: string): number[] | null {
+  const parts = address.split(".");
+  if (parts.length !== 4) return null;
+  const nums = parts.map((part) => Number(part));
+  if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+  return nums;
+}
+
 /**
- * Validates a user-supplied URL against SSRF abuse. Hostname-based guard covers the
- * obvious private/metadata targets; DNS-rebinding (a public host resolving to a
- * private IP) remains a residual risk — acceptable behind auth for this milestone.
+ * Blocks private, link-local, loopback, metadata-adjacent, multicast, and reserved
+ * destinations after DNS resolution. Hostname validation alone is not enough for
+ * SSRF because public names can resolve to private IPs.
  */
-function assertSafeUrl(raw: string): URL {
+export function isBlockedIpAddress(address: string): boolean {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, "");
+  const mappedV4 = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+  if (mappedV4) return isBlockedIpAddress(mappedV4);
+
+  if (isIP(normalized) === 4) {
+    const octets = parseIpv4(normalized);
+    if (!octets) return true;
+    const [a, b] = octets;
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
+  }
+
+  if (isIP(normalized) === 6) {
+    return (
+      normalized === "::" ||
+      normalized === "::1" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      /^fe[89ab]/.test(normalized) ||
+      normalized.startsWith("ff")
+    );
+  }
+
+  return true;
+}
+
+/**
+ * Validates a user-supplied URL against SSRF abuse before any DNS/network work.
+ * DNS results are checked separately for every request/redirect hop.
+ */
+export function assertSafeUrl(raw: string): URL {
   let u: URL;
   try {
     u = new URL(raw);
@@ -37,34 +100,132 @@ function assertSafeUrl(raw: string): URL {
   if (u.protocol !== "http:" && u.protocol !== "https:") {
     throw new HttpsError("invalid-argument", "URL must use http or https.");
   }
-  // Strip IPv6 brackets so `[::1]` / `[fc00::1]` are checked, not just IPv4 literals.
+  const allowedPort =
+    !u.port ||
+    (u.protocol === "http:" && u.port === "80") ||
+    (u.protocol === "https:" && u.port === "443");
+  if (!allowedPort) {
+    throw new HttpsError("invalid-argument", "URL must use the default http or https port.");
+  }
+
   const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  // IPv4-mapped IPv6 (::ffff:10.0.0.1) — pull out the embedded v4 and check it too.
-  const mappedV4 = host.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
-  const isPrivateV4 = (h: string) =>
-    /^127\./.test(h) ||
-    /^10\./.test(h) ||
-    /^192\.168\./.test(h) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
-    /^169\.254\./.test(h) || // link-local (incl. cloud metadata)
-    h === "0.0.0.0";
   const blocked =
     host === "localhost" ||
     host === "metadata.google.internal" ||
     host.endsWith(".local") ||
     host.endsWith(".internal") ||
-    isPrivateV4(host) ||
-    (mappedV4 ? isPrivateV4(mappedV4) : false) ||
-    // IPv6 loopback / unspecified
-    host === "::1" ||
-    host === "::" ||
-    // IPv6 unique-local fc00::/7 (fc/fd) + link-local fe80::/10
-    /^f[cd][0-9a-f]*:/.test(host) ||
-    /^fe[89ab][0-9a-f]*:/.test(host);
+    (isIP(host) !== 0 && isBlockedIpAddress(host));
   if (blocked) {
     throw new HttpsError("invalid-argument", "This URL host is not allowed.");
   }
   return u;
+}
+
+async function resolveSafeAddresses(hostname: string): Promise<Array<{ address: string; family: 4 | 6 }>> {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (isIP(host) !== 0) {
+    if (isBlockedIpAddress(host)) {
+      throw new HttpsError("invalid-argument", "This URL host is not allowed.");
+    }
+    return [{ address: host, family: isIP(host) as 4 | 6 }];
+  }
+
+  const results = await lookup(host, { all: true, verbatim: true });
+  if (!results.length) {
+    throw new HttpsError("failed-precondition", "Couldn't resolve that URL host.");
+  }
+  for (const result of results) {
+    if (isBlockedIpAddress(result.address)) {
+      throw new HttpsError("invalid-argument", "This URL host resolves to a blocked network address.");
+    }
+  }
+  return results.map((result) => ({ address: result.address, family: result.family as 4 | 6 }));
+}
+
+function requestLimitedText(url: URL): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (value: { status: number; headers: http.IncomingHttpHeaders; body: string }) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
+
+    const transport = url.protocol === "https:" ? https : http;
+    const req = transport.request(
+      url,
+      {
+        method: "GET",
+        headers: FETCH_HEADERS,
+        timeout: FETCH_TIMEOUT_MS,
+        lookup: (hostname, _options, callback) => {
+          resolveSafeAddresses(String(hostname))
+            .then((addresses) => {
+              const [first] = addresses;
+              callback(null, first.address, first.family);
+            })
+            .catch((err) => callback(err as NodeJS.ErrnoException, "", 4));
+        },
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if (status >= 300 && status < 400) {
+          res.resume();
+          finish({ status, headers: res.headers, body: "" });
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+        let total = 0;
+        res.on("data", (chunk: Buffer | string) => {
+          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          const remaining = MAX_HTML_BYTES - total;
+          if (remaining > 0) {
+            chunks.push(buf.subarray(0, remaining));
+            total += Math.min(buf.length, remaining);
+          }
+          if (total >= MAX_HTML_BYTES) {
+            finish({ status, headers: res.headers, body: Buffer.concat(chunks).toString("utf8") });
+            res.destroy();
+          }
+        });
+        res.on("end", () => {
+          finish({ status, headers: res.headers, body: Buffer.concat(chunks).toString("utf8") });
+        });
+        res.on("error", (err) => {
+          if (!settled) fail(err);
+        });
+      }
+    );
+
+    req.on("timeout", () => req.destroy(new Error("request timeout")));
+    req.on("error", fail);
+    req.end();
+  });
+}
+
+export async function fetchLimitedHtml(initialUrl: URL): Promise<string> {
+  let target = assertSafeUrl(initialUrl.toString());
+  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
+    await resolveSafeAddresses(target.hostname);
+    const resp = await requestLimitedText(target);
+    if (resp.status >= 300 && resp.status < 400) {
+      const loc = resp.headers.location;
+      if (!loc) break;
+      target = assertSafeUrl(new URL(loc, target).toString());
+      continue;
+    }
+    if (resp.status < 200 || resp.status >= 300) {
+      throw new Error(`status ${resp.status || "none"}`);
+    }
+    return resp.body;
+  }
+  throw new Error("too many redirects");
 }
 
 export const extractTextFromUrlFunction = onCall({ invoker: "public" }, async (request) => {
@@ -90,34 +251,7 @@ export const extractTextFromUrlFunction = onCall({ invoker: "public" }, async (r
 
   let html: string;
   try {
-    let target = safe;
-    let resp: Awaited<ReturnType<typeof fetch>> | undefined;
-    // Follow redirects MANUALLY, re-validating each hop with assertSafeUrl — a
-    // submitted-safe URL must not be able to 3xx-redirect us to an internal host
-    // (e.g. the cloud metadata endpoint) that the initial guard never saw.
-    for (let hop = 0; hop < 5; hop++) {
-      resp = await fetch(target.toString(), {
-        redirect: "manual",
-        // A real browser User-Agent — many sites (incl. some résumé hosts) return
-        // 403/999 to header-less requests but serve content to browser-like ones.
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (resp.status >= 300 && resp.status < 400) {
-        const loc = resp.headers.get("location");
-        if (!loc) break;
-        target = assertSafeUrl(new URL(loc, target).toString()); // throws if the hop host is blocked
-        continue;
-      }
-      break;
-    }
-    if (!resp || !resp.ok) throw new Error(`status ${resp?.status ?? "none"}`);
-    html = (await resp.text()).slice(0, 200_000); // cap to keep token cost bounded
+    html = await fetchLimitedHtml(safe);
   } catch (err) {
     if (err instanceof HttpsError) throw err; // surface host-not-allowed / LinkedIn guidance
     // A single bad URL (anti-bot block, login wall, timeout, DNS) is NOT a platform
