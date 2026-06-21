@@ -720,6 +720,18 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // sourcing_outreach/{outreachId} — consent-gated sourcing requests created
+    // from Discover Talent. Employers see only safe candidate signals until the
+    // candidate accepts; then the employer retrieves the richer packet through
+    // getSourcingCandidatePacket. BOTH parties may READ their own request status;
+    // all WRITES are server-only to prevent forged acceptance/unlock records.
+    match /sourcing_outreach/{outreachId} {
+      allow read: if isSignedIn() &&
+        (resource.data.candidate_id == request.auth.uid ||
+         resource.data.employer_id == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // employer_responsiveness/{employerId} — coarse, backward-looking aggregate
     // (avg days-to-first-action, last action) derived server-side from the audit
     // log. Employer-level, NO candidate PII — any signed-in user may read it to

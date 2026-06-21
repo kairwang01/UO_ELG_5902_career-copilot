@@ -86,6 +86,10 @@ export { updateInterviewFunction            as updateInterview           } from 
 export { confirmInterviewFunction           as confirmInterview          } from "./handlers/interviews";
 export { upsertScorecardFunction            as upsertScorecard           } from "./handlers/scorecards";
 export { sendApplicationMessageFunction     as sendApplicationMessage    } from "./handlers/applicationMessages";
+export { createSourcingOutreachFunction     as createSourcingOutreach    } from "./handlers/sourcingOutreach";
+export { respondSourcingOutreachFunction    as respondSourcingOutreach   } from "./handlers/sourcingOutreach";
+export { cancelSourcingOutreachFunction     as cancelSourcingOutreach    } from "./handlers/sourcingOutreach";
+export { getSourcingCandidatePacketFunction as getSourcingCandidatePacket } from "./handlers/sourcingOutreach";
 export { createCheckoutSessionFunction      as createCheckoutSession     } from "./handlers/stripeBilling";
 export { stripeWebhookFunction              as stripeWebhook             } from "./handlers/stripeBilling";
 export { confirmSimulatedCheckoutFunction   as confirmSimulatedCheckout  } from "./handlers/stripeBilling";

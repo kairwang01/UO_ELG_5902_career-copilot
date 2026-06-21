@@ -155,6 +155,33 @@ describe('saved tool_results tier gate', () => {
   });
 });
 
+describe('interview_sessions history access', () => {
+  const validSession = {
+    started_at: ts(),
+    market_name: 'Canada',
+    job_description: 'Job Title: Product Manager',
+    overall_summary: 'Clear STAR structure with one measurable result.',
+    exchanges: [
+      { question: 'Tell me about a project.', answer: 'I led the launch.', score: 82, feedback: 'Good structure.' },
+    ],
+  };
+
+  it('the owner CAN save and read a mock-interview session', async () => {
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertSucceeds(setDoc(doc(db, 'users', 'cand1', 'interview_sessions', 'session1'), validSession));
+    await assertSucceeds(getDoc(doc(db, 'users', 'cand1', 'interview_sessions', 'session1')));
+  });
+
+  it('another user CANNOT read or write your mock-interview history', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'cand1', 'interview_sessions', 'session1'), validSession);
+    });
+    const other = testEnv.authenticatedContext('other').firestore();
+    await assertFails(getDoc(doc(other, 'users', 'cand1', 'interview_sessions', 'session1')));
+    await assertFails(setDoc(doc(other, 'users', 'cand1', 'interview_sessions', 'session2'), validSession));
+  });
+});
+
 describe('application_interviews access', () => {
   async function seedInterview() {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -249,5 +276,33 @@ describe('application_messages access', () => {
     const db = testEnv.authenticatedContext('emp1').firestore();
     await assertFails(setDoc(doc(db, 'application_messages', 'msg2'), { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1', body: 'forged' }));
     await assertFails(updateDoc(doc(db, 'application_messages', 'msg1'), { body: 'edited' }));
+  });
+});
+
+describe('sourcing_outreach access', () => {
+  async function seedOutreach() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'sourcing_outreach', 'out1'),
+        { employer_id: 'emp1', candidate_id: 'cand1', status: 'requested', message: 'Interested in connecting' });
+    });
+  }
+  it('the requested candidate can read the outreach request', async () => {
+    await seedOutreach();
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('cand1').firestore(), 'sourcing_outreach', 'out1')));
+  });
+  it('the requesting employer can read the outreach request', async () => {
+    await seedOutreach();
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('emp1').firestore(), 'sourcing_outreach', 'out1')));
+  });
+  it('an unrelated user CANNOT read the outreach request', async () => {
+    await seedOutreach();
+    await assertFails(getDoc(doc(testEnv.authenticatedContext('other').firestore(), 'sourcing_outreach', 'out1')));
+  });
+  it('clients CANNOT create or mutate consent state directly', async () => {
+    await seedOutreach();
+    const emp = testEnv.authenticatedContext('emp1').firestore();
+    const cand = testEnv.authenticatedContext('cand1').firestore();
+    await assertFails(setDoc(doc(emp, 'sourcing_outreach', 'out2'), { employer_id: 'emp1', candidate_id: 'cand1', status: 'requested' }));
+    await assertFails(updateDoc(doc(cand, 'sourcing_outreach', 'out1'), { status: 'accepted' }));
   });
 });
