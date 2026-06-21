@@ -37,18 +37,30 @@ function assertSafeUrl(raw: string): URL {
   if (u.protocol !== "http:" && u.protocol !== "https:") {
     throw new HttpsError("invalid-argument", "URL must use http or https.");
   }
-  const host = u.hostname.toLowerCase();
+  // Strip IPv6 brackets so `[::1]` / `[fc00::1]` are checked, not just IPv4 literals.
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  // IPv4-mapped IPv6 (::ffff:10.0.0.1) — pull out the embedded v4 and check it too.
+  const mappedV4 = host.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+  const isPrivateV4 = (h: string) =>
+    /^127\./.test(h) ||
+    /^10\./.test(h) ||
+    /^192\.168\./.test(h) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    /^169\.254\./.test(h) || // link-local (incl. cloud metadata)
+    h === "0.0.0.0";
   const blocked =
     host === "localhost" ||
-    host === "0.0.0.0" ||
-    host === "169.254.169.254" || // AWS/GCP metadata
     host === "metadata.google.internal" ||
     host.endsWith(".local") ||
     host.endsWith(".internal") ||
-    /^127\./.test(host) ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+    isPrivateV4(host) ||
+    (mappedV4 ? isPrivateV4(mappedV4) : false) ||
+    // IPv6 loopback / unspecified
+    host === "::1" ||
+    host === "::" ||
+    // IPv6 unique-local fc00::/7 (fc/fd) + link-local fe80::/10
+    /^f[cd][0-9a-f]*:/.test(host) ||
+    /^fe[89ab][0-9a-f]*:/.test(host);
   if (blocked) {
     throw new HttpsError("invalid-argument", "This URL host is not allowed.");
   }

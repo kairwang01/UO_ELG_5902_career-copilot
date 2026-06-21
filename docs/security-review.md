@@ -92,12 +92,18 @@ are deny-by-default with narrow owner/role reads and almost no client writes.
   (Sentry) wired yet — tracked as SCRUM-39. Until then, runtime visibility relies on
   Cloud Functions logs.
 
-## A10 — SSRF  ⚠ review
+## A10 — SSRF  ✅ (hardened) / ⚠ DNS-rebinding residual
 
-- `extractTextFromUrl` (resume URL import) fetches a user-supplied URL server-side.
-  Recommendation: confirm it cannot reach internal/metadata addresses (block private
-  IP ranges / link-local `169.254.169.254`), cap response size + redirects, and allow
-  only http/https. Treat as a follow-up hardening item.
+- `extractTextFromUrl` (resume URL import) fetches a user-supplied URL server-side
+  behind auth, with: http(s)-only; a host block-list covering localhost, IPv4 private
+  ranges (10/8, 172.16/12, 192.168/16, 127/8), link-local `169.254/16` (cloud
+  metadata), `metadata.google.internal`, `.local`/`.internal`, **and now IPv6**
+  (`::1`, `::`, `fc00::/7` unique-local, `fe80::/10` link-local, and IPv4-mapped
+  `::ffff:<private v4>`); **manual redirect following (≤5 hops) that re-validates every
+  hop** so a safe URL can't 3xx into an internal host; 10s timeout; 200 KB response cap.
+- ⚠ Residual: DNS rebinding (a public hostname resolving to a private IP) is not
+  caught by the hostname guard — acceptable behind auth for this milestone; a full fix
+  resolves + pins the IP. Tracked, not blocking.
 
 ---
 
@@ -105,7 +111,7 @@ are deny-by-default with narrow owner/role reads and almost no client writes.
 
 | # | Sev | Item | Action |
 |---|-----|------|--------|
-| 1 | Med | SSRF on `extractTextFromUrl` | Block private/link-local IPs, cap size/redirects, http(s) only |
+| 1 | Low | SSRF on `extractTextFromUrl` — hostname guard hardened (IPv4+IPv6+mapped, redirect re-validation, caps). | Residual: DNS-rebinding (resolve+pin IP) — optional |
 | 2 | Med | No error monitoring | Wire Sentry (SCRUM-39) |
 | 3 | Low | `BILLING_SIMULATION` must stay off in prod | Add explicit check to deploy checklist |
 | 4 | Low | Half-created account (BusinessSignUp) | Auth-rollback or resume-detection on profile-write failure |
