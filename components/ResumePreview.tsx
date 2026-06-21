@@ -1,16 +1,19 @@
 import React from 'react';
-import { cleanResumeDisplay, parseResumeSections } from '../lib/resumePreview';
-import type { ResumeSection } from '../lib/resumePreview';
+import { cleanResumeDisplay, getResumeMarketStyle, parseResumeSections } from '../lib/resumePreview';
+import type { ResumeMarketStyle } from '../lib/resumePreview';
 
 interface ResumePreviewProps {
   resumeText: string;
   market: string;
   t: (key: string) => string;
+  heightClassName?: string;
 }
 
 type ParsedHeader = { name: string; contacts: string[]; summary: string };
 
 const CONTACT_REGEX = /(?:电话|手机|Phone|Mobile|Tel)\s*[:：]?\s*[+\d][+\d\s().-]{6,}|(?:Email|邮箱|E-mail)\s*[:：]?\s*[\w.+-]+@[\w.-]+\.\w+|(?:个人网站|网站|Website|Portfolio|LinkedIn|GitHub)\s*[:：]?\s*(?:https?:\/\/)?[^\s•|，,]+/gi;
+
+const CONTACT_LABEL_REGEX = /^(?:电话|手机|Phone|Mobile|Tel|Email|邮箱|E-mail|个人网站|网站|Website|Portfolio|LinkedIn|GitHub)\s*[:：]?\s*/i;
 
 const parseHeader = (content: string): ParsedHeader => {
     const compact = content.replace(/\s+/g, ' ').trim();
@@ -29,7 +32,11 @@ const parseHeader = (content: string): ParsedHeader => {
     CONTACT_REGEX.lastIndex = 0;
 
     const contacts = contactMatches
-        .map((match) => match[0].replace(/\s+/g, ' ').replace(/[•|，,]+$/g, '').trim())
+        .map((match) => match[0]
+            .replace(CONTACT_LABEL_REGEX, '')
+            .replace(/\s+/g, ' ')
+            .replace(/[•|，,]+$/g, '')
+            .trim())
         .filter(Boolean);
 
     let summary = compact;
@@ -76,13 +83,13 @@ const splitBullets = (line: string): string[] => {
     return [];
 };
 
-const renderResumeBody = (content: string) => {
+const renderResumeBody = (content: string, style: ResumeMarketStyle) => {
     const blocks: React.ReactNode[] = [];
     let bullets: string[] = [];
     const flushBullets = () => {
         if (!bullets.length) return;
         blocks.push(
-            <ul key={`list-${blocks.length}`} className="my-2 list-disc space-y-1 pl-5 text-[13px] leading-[1.55] text-slate-700 dark:text-slate-300">
+            <ul key={`list-${blocks.length}`} className={style.bulletListClassName}>
                 {bullets.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
             </ul>,
         );
@@ -101,7 +108,7 @@ const renderResumeBody = (content: string) => {
         blocks.push(
             <p
                 key={`p-${index}`}
-                className={`${isLeadLine ? 'font-semibold text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'} mb-1.5 text-[13px] leading-[1.6]`}
+                className={`${isLeadLine ? style.leadLineClassName : style.bodyClassName} mb-1 text-[12.5px] leading-[1.55]`}
             >
                 {paragraph}
             </p>,
@@ -114,31 +121,41 @@ const renderResumeBody = (content: string) => {
 
 const sectionTitle = (title: string): string => title === 'Resume Content' ? 'Resume' : title;
 
-const ResumePreview: React.FC<ResumePreviewProps> = ({ resumeText, t }) => {
+const ResumePreview: React.FC<ResumePreviewProps> = ({ resumeText, market, t, heightClassName = 'h-[420px] sm:h-[520px]' }) => {
+  const style = getResumeMarketStyle(market);
   const cleaned = cleanResumeDisplay(resumeText);
   const sections = parseResumeSections(cleaned);
   const header = parseHeader(sections.find((s) => s.title === 'Header')?.content ?? '');
   const contentSections = sections.filter((section) => section.title !== 'Header');
 
   return (
-    <div className="h-[420px] overflow-y-auto rounded-xl border border-slate-200 bg-slate-100 p-3 shadow-inner dark:border-slate-700 dark:bg-slate-950 sm:h-[520px]">
-      <div className="mx-auto min-h-full w-full max-w-[720px] bg-white px-6 py-7 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700 sm:px-9 sm:py-8">
+    <div className={`${heightClassName} overflow-y-auto rounded-xl border border-slate-200 bg-slate-100 p-3 shadow-inner dark:border-slate-700 dark:bg-slate-950`}>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+        <span>{style.label}</span>
+        <span>{style.pageSize.toUpperCase()} · {style.density}</span>
+      </div>
+      <div className={`mx-auto min-h-full w-full ${style.documentWidthClass} ${style.documentClassName} px-7 py-7 sm:px-10 sm:py-9`}>
         {resumeText.trim() ? (
           <div className="font-sans text-slate-800 dark:text-slate-100">
             {(header.name || header.contacts.length > 0 || header.summary) && (
-              <header className="mb-5 border-b border-slate-300 pb-4 text-center dark:border-slate-700">
+              <header className={style.headerClassName}>
                 {header.name && (
-                  <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-2xl">
+                  <h1 className={style.nameClassName}>
                     {header.name}
                   </h1>
                 )}
                 {header.contacts.length > 0 && (
-                  <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[12px] leading-5 text-slate-600 dark:text-slate-300">
-                    {header.contacts.map((item) => <span key={item}>{item}</span>)}
+                  <div className={style.contactsClassName}>
+                    {header.contacts.map((item, index) => (
+                      <React.Fragment key={item}>
+                        {index > 0 && <span aria-hidden="true">|</span>}
+                        <span>{item}</span>
+                      </React.Fragment>
+                    ))}
                   </div>
                 )}
                 {header.summary && (
-                  <p className="mx-auto mt-3 max-w-2xl text-left text-[13px] leading-[1.65] text-slate-700 dark:text-slate-300">
+                  <p className={style.summaryClassName}>
                     {header.summary}
                   </p>
                 )}
@@ -146,12 +163,12 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ resumeText, t }) => {
             )}
 
             {contentSections.map((section, index) => (
-              <section key={`${section.title}-${index}`} className="mb-4 break-inside-avoid">
-                <h2 className="mb-2 border-b border-slate-300 pb-1 text-[12px] font-bold uppercase tracking-[0.16em] text-slate-900 dark:border-slate-700 dark:text-slate-100">
+              <section key={`${section.title}-${index}`} className={style.sectionClassName}>
+                <h2 className={style.sectionHeadingClassName}>
                   {sectionTitle(section.title)}
                 </h2>
                 <div className="space-y-1">
-                  {renderResumeBody(section.content)}
+                  {renderResumeBody(section.content, style)}
                 </div>
               </section>
             ))}

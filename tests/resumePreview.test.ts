@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanResumeDisplay, parseResumeSections } from '../lib/resumePreview';
+import { cleanResumeDisplay, getResumeMarketStyle, parseResumeSections } from '../lib/resumePreview';
 
 describe('ResumePreview parsing', () => {
   it('recovers CJK section breaks from a one-line extracted resume', () => {
@@ -15,5 +15,17 @@ describe('ResumePreview parsing', () => {
   it('keeps ordinary free-text resumes renderable', () => {
     const sections = parseResumeSections(cleanResumeDisplay('Jane Doe\nEmail: jane@example.com\nExperience\nBuilt hiring workflows.'));
     expect(sections.map((section) => section.title)).toEqual(['Header', 'Experience']);
+  });
+
+  it('normalizes markdown section labels before parsing', () => {
+    const sections = parseResumeSections(cleanResumeDisplay('Jane Doe\n**SUMMARY**\nBuilt hiring workflows.\n## Skills\nResearch, Jira, SQL'));
+    expect(sections.map((section) => section.title)).toEqual(['Header', 'SUMMARY', 'Skills']);
+  });
+
+  it('maps resume preview style by target market', () => {
+    expect(getResumeMarketStyle('Canada').region).toBe('north-america');
+    expect(getResumeMarketStyle('Germany').pageSize).toBe('a4');
+    expect(getResumeMarketStyle('Japan').region).toBe('japan');
+    expect(getResumeMarketStyle('Singapore').region).toBe('apac');
   });
 });

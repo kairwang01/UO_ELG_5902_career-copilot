@@ -5,9 +5,11 @@ import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, renderFormattedText, SavedResultBar } from './ToolUtils';
+import { DownloadButtons, SavedResultBar } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
+import ResumePreview from '../ResumePreview';
+import { getResumeMarketStyle } from '../../lib/resumePreview';
 
 const MARKET_HINT_KEY: Record<string, string> = {
   'Canada':         'resume_market_hint_canada',
@@ -164,6 +166,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     if (!result) return null;
 
     const { formattedText } = result;
+    const marketStyle = getResumeMarketStyle(targetMarket);
     return (
       <div className="space-y-4 animate-fade-in">
         <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
@@ -172,9 +175,26 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} {t('tool_resume_formatter_results_for').replace('{market}', targetMarket)}</h4>
           <DownloadButtons textContent={formattedText} baseFilename={`${targetMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
         </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 max-h-96 overflow-y-auto font-serif text-sm dark:text-gray-300">
-          {renderFormattedText(formattedText)}
+
+        <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-blue-700 dark:text-blue-300">
+            <span>{marketStyle.label}</span>
+            <span aria-hidden="true">·</span>
+            <span>{marketStyle.pageSize.toUpperCase()}</span>
+          </div>
+          {MARKET_HINT_KEY[targetMarket] && (
+            <p className="mt-1 text-sm leading-6 text-blue-900 dark:text-blue-100">{t(MARKET_HINT_KEY[targetMarket])}</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {marketStyle.principles.map((principle) => (
+              <span key={principle} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                {principle}
+              </span>
+            ))}
+          </div>
         </div>
+
+        <ResumePreview resumeText={formattedText} market={targetMarket} t={t} heightClassName="h-[560px] max-h-[72vh]" />
         <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300">
             &larr; {t('tool_resume_formatter_localize_again')}
         </button>
