@@ -14,9 +14,24 @@ describe('extractTextFromUrl SSRF guard', () => {
     expect(isBlockedIpAddress('::ffff:10.0.0.1')).toBe(true);
   });
 
+  it('blocks IPv4-mapped IPv6 in HEX form (the canonical form new URL emits)', () => {
+    // `new URL("http://[::ffff:169.254.169.254]")` serializes the host to the hex
+    // form below; a dotted-decimal-only guard misses it → metadata/loopback SSRF.
+    expect(isBlockedIpAddress('::ffff:a9fe:a9fe')).toBe(true); // 169.254.169.254 metadata
+    expect(isBlockedIpAddress('::ffff:7f00:1')).toBe(true);    // 127.0.0.1 loopback
+    expect(isBlockedIpAddress('::ffff:a00:1')).toBe(true);     // 10.0.0.1 private
+    expect(isBlockedIpAddress('::ffff:c0a8:1')).toBe(true);    // 192.168.0.1 private
+  });
+
+  it('rejects IPv4-mapped IPv6 metadata/loopback literals through assertSafeUrl', () => {
+    expect(() => assertSafeUrl('http://[::ffff:169.254.169.254]/latest/meta-data')).toThrow();
+    expect(() => assertSafeUrl('http://[::ffff:127.0.0.1]/')).toThrow();
+  });
+
   it('allows ordinary public addresses', () => {
     expect(isBlockedIpAddress('8.8.8.8')).toBe(false);
     expect(isBlockedIpAddress('2606:4700:4700::1111')).toBe(false);
+    expect(isBlockedIpAddress('::ffff:808:808')).toBe(false); // ::ffff:8.8.8.8 — public, still allowed
   });
 
   it('rejects unsafe URL schemes, hostnames, and non-default ports', () => {
