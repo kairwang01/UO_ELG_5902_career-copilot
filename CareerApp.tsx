@@ -1513,6 +1513,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // shell so it never floats over the employer portal, where it's nonsensical
   // and its tool-launch would target views the employer doesn't have.
   const canUseCareerCoach = Boolean(session && isLangLoaded && !isWorkspaceSessionLoading && showCandidateShell);
+  const hasCandidateStickyActionBar = showCandidateShell && dashboardView === 'talent_profile';
 
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
@@ -1542,7 +1543,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         {canUseCareerCoach && !isChatOpen && (
           <button
             onClick={() => setIsChatOpen(true)}
-            className="fixed right-4 top-[calc(4.75rem+env(safe-area-inset-top))] bottom-auto z-40 flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl sm:top-auto sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
+            className={`fixed right-4 top-[calc(4.75rem+env(safe-area-inset-top))] bottom-auto z-40 flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl sm:top-auto sm:right-6 sm:h-16 sm:w-16 ${
+              hasCandidateStickyActionBar
+                ? 'sm:bottom-[calc(5.75rem+env(safe-area-inset-bottom))]'
+                : 'sm:bottom-6'
+            }`}
             aria-label={t('coach_open_label')}
             aria-expanded={isChatOpen}
             data-qa="career-coach-launcher"

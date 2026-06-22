@@ -143,7 +143,9 @@ function assertOverlayState(metrics, label) {
   assertInsideViewport(metrics.saveBar, metrics.viewport, `${label} save bar`);
   assertInsideViewport(metrics.saveButton, metrics.viewport, `${label} save button`);
   assertNoOverlap(metrics.cookie, metrics.coach, `${label} cookie/coach`);
+  assertNoOverlap(metrics.cookie, metrics.saveBar, `${label} cookie/save bar`);
   assertNoOverlap(metrics.cookie, metrics.saveButton, `${label} cookie/save button`);
+  assertNoOverlap(metrics.coach, metrics.saveBar, `${label} coach/save bar`);
   assertNoOverlap(metrics.coach, metrics.saveButton, `${label} coach/save button`);
 }
 
