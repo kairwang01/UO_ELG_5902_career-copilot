@@ -1,17 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet } from 'lucide-react';
+import { BriefcaseBusiness, Building2, CheckCircle2, CircleDollarSign, MessageSquareText, ShieldCheck, Target, TrendingUp, Wallet } from 'lucide-react';
 import { generateSalaryNegotiationStrategy } from '../../services/aiClient';
 import type { SalaryNegotiationResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { CopyButton, DownloadButtons, SavedResultBar } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 
-type SalaryResult = SalaryNegotiationResult & { groundingChunks: any[] | undefined };
+type GroundingChunk = { web?: { uri?: string; title?: string } };
+type SalaryResult = SalaryNegotiationResult & {
+  groundingChunks?: GroundingChunk[];
+  jobTitle?: string;
+  company?: string;
+  offer?: string;
+  currency?: string;
+  market?: string;
+};
 
 const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'JPY', 'SGD', 'AED'];
 
-// (b) sample constants
 const SAMPLE_JOB_TITLE = 'Senior Software Engineer';
 const SAMPLE_COMPANY = 'Shopify';
 const SAMPLE_OFFER = '110000';
@@ -23,6 +30,40 @@ interface SalaryNegotiatorProps {
   t: (key: string) => string;
 }
 
+const CardShell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <section className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
+    {children}
+  </section>
+);
+
+const MetricTile: React.FC<{ label: string; value: string | number; icon: React.ElementType }> = ({ label, value, icon: Icon }) => (
+  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+    <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+      <Icon className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+      {label}
+    </div>
+    <p className="mt-3 break-words text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{value}</p>
+  </div>
+);
+
+const formatMoney = (value: number, currencyCode: string) => {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, minimumFractionDigits: 0 }).format(value);
+  } catch {
+    return `${currencyCode} ${Math.round(value).toLocaleString()}`;
+  }
+};
+
+const hasMeaningfulSalaryResult = (value: Partial<SalaryNegotiationResult> | null | undefined) =>
+  Boolean(
+    value?.marketAnalysisSummary?.trim()
+    || value?.recommendedRange
+    || value?.keyStrengths?.length
+    || value?.negotiationStrategy?.length
+    || value?.counterOfferEmailDraft?.trim()
+    || value?.objectionHandlers?.length
+  );
+
 const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const { canSave, saved, persist } = useToolResults<SalaryResult>();
@@ -32,41 +73,23 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
   const [jobTitle, setJobTitle] = useState('');
   const [company, setCompany] = useState('');
   const [offer, setOffer] = useState('');
-  const [currency, setCurrency] = useState(CURRENCIES[1]); // Default to CAD
+  const [currency, setCurrency] = useState(CURRENCIES[1]);
 
-  // Hydrate the last saved result (paid tiers) so it shows for free on reopen.
   useEffect(() => {
-    if (saved && !result) {
+    if (saved && !result && hasMeaningfulSalaryResult(saved.result)) {
       setResult(saved.result);
       setFromSaved(true);
+      if (saved.result.jobTitle) setJobTitle(saved.result.jobTitle);
+      if (saved.result.company) setCompany(saved.result.company);
+      if (saved.result.offer) setOffer(saved.result.offer);
+      if (saved.result.currency) setCurrency(saved.result.currency);
     }
   }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const runTool = async (input: { jobTitle: string, company: string, offer: string, currency: string }) => {
-    const { jobTitle, company, offer, currency: offerCurrency } = input;
-    if (!jobTitle || !company || !offer || !offerCurrency) {
-      setError(t('tool_salary_negotiator_error_required'));
-      return;
-    }
-    const alive = begin();
-    setError(null);
+  const resetResult = () => {
     setResult(null);
-    try {
-      const apiResult = await generateSalaryNegotiationStrategy(resumeText, jobTitle, company, market, offer, offerCurrency);
-      if (!alive()) return;
-      setResult(apiResult);
-      setFromSaved(false);
-      persist(apiResult); // paid tiers: revisit free next time
-    } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-    } finally {
-      if (alive()) end();
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    runTool({ jobTitle, company, offer, currency });
+    setFromSaved(false);
+    setError(null);
   };
 
   const handleTryExample = () => {
@@ -76,76 +99,201 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
     setCurrency(SAMPLE_CURRENCY);
   };
 
+  const runTool = async (input: { jobTitle: string; company: string; offer: string; currency: string }) => {
+    const nextJobTitle = input.jobTitle.trim();
+    const nextCompany = input.company.trim();
+    const nextOffer = input.offer.trim();
+    const nextCurrency = input.currency.trim();
+    if (!nextJobTitle || !nextCompany || !nextOffer || !nextCurrency) {
+      setError(t('tool_salary_negotiator_error_required'));
+      return;
+    }
+
+    setJobTitle(nextJobTitle);
+    setCompany(nextCompany);
+    setOffer(nextOffer);
+    setCurrency(nextCurrency);
+
+    const alive = begin();
+    setError(null);
+    setResult(null);
+    try {
+      const apiResult = await generateSalaryNegotiationStrategy(resumeText, nextJobTitle, nextCompany, market, nextOffer, nextCurrency);
+      if (!alive()) return;
+      if (!hasMeaningfulSalaryResult(apiResult)) {
+        throw new Error(t('ai_error_empty_response'));
+      }
+      const nextResult: SalaryResult = {
+        ...apiResult,
+        jobTitle: nextJobTitle,
+        company: nextCompany,
+        offer: nextOffer,
+        currency: nextCurrency,
+        market,
+      };
+      setResult(nextResult);
+      setFromSaved(false);
+      persist(nextResult);
+    } catch (err) {
+      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+    } finally {
+      if (alive()) end();
+    }
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void runTool({ jobTitle, company, offer, currency });
+  };
+
   const renderInput = () => (
-    <div className="space-y-4">
-      {/* (a) INTRO CARD */}
-      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-0.5">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_salary_negotiator_intro_title')}</p>
-        <p>{t('tool_salary_negotiator_intro_desc')}</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-5">
+      <CardShell className="overflow-hidden">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">
+              <Wallet className="h-4 w-4" />
+              {t('tool_salary_negotiation_title')}
+            </div>
+            <h2 className="mt-3 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+              {t('tool_salary_negotiator_intro_title')}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              {t('tool_salary_negotiator_intro_desc')}
+            </p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* (b) SAMPLE FILL */}
-        <div className="text-right">
-          <button
-            type="button"
-            onClick={handleTryExample}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            {t('tool_try_example')}
-          </button>
-        </div>
+            <div className="mt-7 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="salary-job-title" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {t('tool_salary_negotiator_job_title_label')}
+                </label>
+                <div className="relative mt-2">
+                  <BriefcaseBusiness className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    id="salary-job-title"
+                    value={jobTitle}
+                    onChange={(event) => setJobTitle(event.target.value)}
+                    required
+                    className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="job-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_salary_negotiator_job_title_label')}</label>
-            <input type="text" id="job-title" value={jobTitle} onChange={e => setJobTitle(e.target.value)} required className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
-          </div>
-          <div>
-            <label htmlFor="company" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_salary_negotiator_company_label')}</label>
-            <input type="text" id="company" value={company} onChange={e => setCompany(e.target.value)} required className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
-          </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label htmlFor="salary-company" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {t('tool_salary_negotiator_company_label')}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleTryExample}
+                    className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
+                  >
+                    {t('tool_try_example')}
+                  </button>
+                </div>
+                <div className="relative">
+                  <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    id="salary-company"
+                    value={company}
+                    onChange={(event) => setCompany(event.target.value)}
+                    required
+                    className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="salary-offer" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {t('tool_salary_negotiator_offer_label')}
+                </label>
+                <div className="relative mt-2">
+                  <CircleDollarSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    id="salary-offer"
+                    value={offer}
+                    onChange={(event) => setOffer(event.target.value)}
+                    required
+                    placeholder={t('tool_salary_negotiator_offer_placeholder')}
+                    className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="salary-currency" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {t('tool_salary_negotiator_currency_label')}
+                </label>
+                <select
+                  id="salary-currency"
+                  value={currency}
+                  onChange={(event) => setCurrency(event.target.value)}
+                  className="mt-2 block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                >
+                  {CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {error && (
+              <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300" role="alert">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="leading-relaxed">{error}</p>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:hover:bg-red-900/30"
+                  >
+                    {t('tool_try_again')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-lg bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-400"
+            >
+              {loading ? t('tool_salary_negotiator_generating_button') : t('tool_salary_negotiator_generate_button')}
+            </button>
+          </form>
+
+          <aside className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/40 sm:p-6 lg:border-l lg:border-t-0">
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">
+              <div className="flex items-start gap-3">
+                <Target className="mt-0.5 h-5 w-5 shrink-0" />
+                <p className="text-sm font-semibold leading-relaxed">{t('tool_salary_negotiator_setup_desc')}</p>
+              </div>
+            </div>
+            <div className="mt-5 space-y-3">
+              {[
+                t('tool_salary_negotiator_market_analysis'),
+                t('tool_salary_negotiator_recommended_range'),
+                t('tool_salary_negotiator_email_draft'),
+                t('tool_salary_negotiator_objections'),
+              ].map((label, index) => (
+                <div key={label} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    {index + 1}
+                  </span>
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{label}</span>
+                </div>
+              ))}
+            </div>
+          </aside>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="offer" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_salary_negotiator_offer_label')}</label>
-            <input type="number" id="offer" value={offer} onChange={e => setOffer(e.target.value)} required placeholder={t('tool_salary_negotiator_offer_placeholder')} className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
-          </div>
-          <div>
-            <label htmlFor="currency" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_salary_negotiator_currency_label')}</label>
-            <select id="currency" value={currency} onChange={e => setCurrency(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-        </div>
-        <button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
-          {loading ? t('tool_salary_negotiator_generating_button') : t('tool_salary_negotiator_generate_button')}
-        </button>
-      </form>
+      </CardShell>
     </div>
   );
 
   const renderResult = () => {
-    // (c) StagedLoader already has onCancel + icon + accent — preserved as-is
-    if (loading) return <StagedLoader title="Building your strategy" steps={["Reading your offer details…","Researching current market rates…","Crafting your negotiation plan…","Polishing talking points…"]} onCancel={cancel} icon={<Wallet />} accent="emerald" />;
-
-    // (e) ERROR RETRY
-    if (error) return (
-      <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 space-y-3">
-        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-        <button
-          type="button"
-          onClick={() => runTool({ jobTitle, company, offer, currency })}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
-        >
-          {t('tool_try_again')}
-        </button>
-      </div>
-    );
-
     if (!result) return null;
 
-    // Defensive defaults: a partial AI response must not white-screen the panel.
     const {
       marketAnalysisSummary = '',
       recommendedRange,
@@ -156,94 +304,191 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       groundingChunks,
     } = result;
 
-    const fmtMoney = (v: number) =>
-      new Intl.NumberFormat('en-US', { style: 'currency', currency: recommendedRange?.currency || 'USD', minimumFractionDigits: 0 }).format(v);
+    const resultCurrency = result.currency || recommendedRange?.currency || currency;
+    const resultOffer = result.offer || offer;
+    const offerNumber = Number(resultOffer);
+    const offerLabel = Number.isFinite(offerNumber) && offerNumber > 0
+      ? formatMoney(offerNumber, resultCurrency)
+      : `${resultCurrency} ${resultOffer || '-'}`;
+    const rangeLabel = recommendedRange
+      ? `${formatMoney(recommendedRange.baseMin, recommendedRange.currency || resultCurrency)} - ${formatMoney(recommendedRange.baseMax, recommendedRange.currency || resultCurrency)}`
+      : '-';
+    const job = result.jobTitle || jobTitle || t('tool_salary_negotiator_job_title_label');
+    const employer = result.company || company || t('tool_salary_negotiator_company_label');
 
-    // Build a downloadable text blob of the key output
     const downloadText = [
+      `${t('tool_salary_negotiator_results_title')}: ${job} at ${employer}`,
+      `${t('tool_salary_negotiator_offer_label')}: ${offerLabel}`,
       `${t('tool_salary_negotiator_market_analysis')}\n${marketAnalysisSummary}`,
       ...(recommendedRange
-        ? [`\n${t('tool_salary_negotiator_recommended_range')}\n${fmtMoney(recommendedRange.baseMin)} - ${fmtMoney(recommendedRange.baseMax)}\n${recommendedRange.explanation}`]
+        ? [`\n${t('tool_salary_negotiator_recommended_range')}\n${rangeLabel}\n${recommendedRange.explanation}`]
         : []),
-      `\n${t('tool_salary_negotiator_key_strengths')}\n${keyStrengths.map(s => `- ${s}`).join('\n')}`,
-      `\n${t('tool_salary_negotiator_strategy')}\n${negotiationStrategy.map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
+      `\n${t('tool_salary_negotiator_key_strengths')}\n${keyStrengths.map((strength) => `- ${strength}`).join('\n')}`,
+      `\n${t('tool_salary_negotiator_strategy')}\n${negotiationStrategy.map((step, index) => `${index + 1}. ${step}`).join('\n')}`,
       `\n${t('tool_salary_negotiator_email_draft')}\n${counterOfferEmailDraft}`,
-    ].join('\n');
+    ].join('\n\n');
 
     return (
-      <div className="space-y-6 animate-fade-in">
+      <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
         <SavedResultBar
           t={t}
           canSave={canSave}
           isSaved={fromSaved}
           savedAt={saved?.savedAt ?? null}
-          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+          onTryNext={resetResult}
         />
-        {/* (d) RESULT ACTIONS — download + start-over */}
-        <div className="flex flex-wrap justify-between items-center gap-3">
-          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_salary_negotiator_results_title')}</h4>
-          <div className="flex items-center gap-2">
-            <DownloadButtons textContent={downloadText} baseFilename="salary_negotiation_strategy" />
-            <button
-              type="button"
-              onClick={() => setResult(null)}
-              className="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
-            >
-              {t('tool_start_over')}
-            </button>
+
+        <CardShell className="overflow-hidden">
+          <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="min-w-0 p-5 sm:p-6">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">
+                <Wallet className="h-4 w-4" />
+                {t('tool_salary_negotiator_results_title')}
+              </div>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+                {job}
+              </h2>
+              <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-400">{employer}</p>
+              <p className="mt-4 max-w-4xl text-base leading-relaxed text-slate-700 dark:text-slate-300">{marketAnalysisSummary}</p>
+            </div>
+            <div className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/40 sm:p-6 xl:border-l xl:border-t-0">
+              <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                <MetricTile label={t('tool_salary_negotiator_offer_label')} value={offerLabel} icon={CircleDollarSign} />
+                <MetricTile label={t('tool_salary_negotiator_recommended_range')} value={rangeLabel} icon={TrendingUp} />
+                <MetricTile label={t('tool_salary_negotiator_strategy')} value={negotiationStrategy.length} icon={ShieldCheck} />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <DownloadButtons textContent={downloadText} baseFilename={`salary_negotiation_${employer.replace(/\s/g, '_')}`} />
+                <button
+                  type="button"
+                  onClick={resetResult}
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  {t('tool_start_over')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </CardShell>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="space-y-5">
+            {recommendedRange && (
+              <CardShell className="p-5">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                  <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_recommended_range')}</h3>
+                </div>
+                <p className="mt-4 break-words text-3xl font-semibold tracking-tight text-emerald-800 dark:text-emerald-200">{rangeLabel}</p>
+                <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{recommendedRange.explanation}</p>
+              </CardShell>
+            )}
+
+            <CardShell className="p-5">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_strategy')}</h3>
+              </div>
+              <div className="mt-4 space-y-3">
+                {negotiationStrategy.map((step, index) => (
+                  <div key={index} className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-xs font-semibold text-white">
+                      {index + 1}
+                    </span>
+                    <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </CardShell>
+
+            <CardShell className="p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <MessageSquareText className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                  <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_email_draft')}</h3>
+                </div>
+                <CopyButton text={counterOfferEmailDraft} label={t('tool_networking_assistant_copy_button')} />
+              </div>
+              <div className="mt-4 whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                {counterOfferEmailDraft}
+              </div>
+            </CardShell>
+          </div>
+
+          <div className="space-y-5">
+            <CardShell className="p-5">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_key_strengths')}</h3>
+              </div>
+              <ul className="mt-4 space-y-3">
+                {keyStrengths.map((strength, index) => (
+                  <li key={index} className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
+                    <span>{strength}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardShell>
+
+            <CardShell className="p-5">
+              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_objections')}</h3>
+              <div className="mt-4 space-y-3">
+                {objectionHandlers.map((item, index) => (
+                  <details key={index} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60" open={index === 0}>
+                    <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-100">{item.objection}</summary>
+                    <p className="mt-3 border-l-2 border-emerald-300 pl-3 text-sm leading-relaxed text-slate-600 dark:border-emerald-700 dark:text-slate-300">{item.response}</p>
+                  </details>
+                ))}
+              </div>
+            </CardShell>
+
+            {groundingChunks?.some((chunk) => chunk.web) && (
+              <CardShell className="p-5">
+                <h3 className="text-sm font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_sources')}</h3>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {groundingChunks.filter((chunk) => chunk.web).map((chunk, index) => (
+                    <li key={index}>
+                      <a href={chunk.web?.uri} target="_blank" rel="noopener noreferrer" className="break-words text-emerald-700 hover:underline dark:text-emerald-300">
+                        {chunk.web?.title || chunk.web?.uri}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </CardShell>
+            )}
           </div>
         </div>
-        <div className="p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
-          <h5 className="font-bold text-blue-900 dark:text-blue-300">{t('tool_salary_negotiator_market_analysis')}</h5>
-          <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">{marketAnalysisSummary}</p>
-        </div>
-        {recommendedRange && (
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 shadow-sm">
-          <h5 className="font-bold text-green-800 dark:text-green-300">{t('tool_salary_negotiator_recommended_range')}</h5>
-          <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">
-            {fmtMoney(recommendedRange.baseMin)} - {fmtMoney(recommendedRange.baseMax)}
-          </p>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{recommendedRange.explanation}</p>
-        </div>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-            <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_salary_negotiator_key_strengths')}</h5>
-            <ul className="list-disc list-inside mt-2 space-y-1 text-sm dark:text-gray-300">{keyStrengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
-          </div>
-          <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-            <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_salary_negotiator_strategy')}</h5>
-            <ul className="list-decimal list-inside mt-2 space-y-1 text-sm dark:text-gray-300">{negotiationStrategy.map((s, i) => <li key={i}>{s}</li>)}</ul>
-          </div>
-        </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_salary_negotiator_email_draft')}</h5>
-          <div className="mt-2 text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md whitespace-pre-wrap border dark:border-slate-600 dark:text-gray-300">{counterOfferEmailDraft}</div>
-        </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_salary_negotiator_objections')}</h5>
-          <div className="space-y-3 mt-2">
-            {objectionHandlers.map((o, i) => (
-              <details key={i} className="text-sm bg-gray-50 dark:bg-slate-700 p-2 rounded-md border dark:border-slate-600">
-                <summary className="font-semibold cursor-pointer dark:text-gray-200">{o.objection}</summary>
-                <p className="mt-2 pl-4 border-l-2 ml-2 dark:text-gray-300">{o.response}</p>
-              </details>
-            ))}
-          </div>
-        </div>
-        {groundingChunks?.some((c: any) => c.web) && (
-          <div className="pt-2 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400">
-            <p className="font-semibold mb-1">{t('tool_salary_negotiator_sources')}:</p>
-            <ul className="list-disc list-inside">
-              {groundingChunks.filter((chunk: any) => chunk.web).map((chunk: any, i: number) => (
-                <li key={i}><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">{chunk.web.title}</a></li>
-              ))}
-            </ul>
-          </div>
-        )}
+
+        <button
+          type="button"
+          onClick={resetResult}
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+        >
+          {t('tool_start_over')}
+        </button>
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <StagedLoader
+        title={t('tool_salary_negotiator_generating_button')}
+        steps={[
+          t('tool_salary_negotiator_market_analysis'),
+          t('tool_salary_negotiator_recommended_range'),
+          t('tool_salary_negotiator_strategy'),
+          t('tool_salary_negotiator_email_draft'),
+        ]}
+        onCancel={cancel}
+        cancelLabel={t('tool_loader_hide_button')}
+        cancelHint={t('tool_loader_hide_hint')}
+        icon={<Wallet />}
+        accent="emerald"
+      />
+    );
+  }
 
   return result ? renderResult() : renderInput();
 };
