@@ -53,6 +53,7 @@ import { hasBusinessPortalAccess, normalizeBusinessSubscriptionStatus } from './
 import { decideWorkspaceShell } from './lib/access/navigationDecisions';
 import { decideSessionTransition } from './lib/access/sessionTransitions';
 import { useSession } from './contexts/SessionContext';
+import { ALL_TOOLS_CONFIG } from './constants/tools';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -121,6 +122,13 @@ const dashboardViewFromPath = (pathname: string): DashboardView | null => {
 const dashboardPathForView = (view: DashboardView): string => {
   const segment = DASHBOARD_VIEW_PATHS[view];
   return segment ? `/workspace/${segment}` : '/workspace';
+};
+
+const WORKSPACE_TOOL_KEYS = new Set(ALL_TOOLS_CONFIG.map((tool) => tool.key));
+
+const workspaceToolFromSearch = (search: string): string | null => {
+  const tool = new URLSearchParams(search).get('tool');
+  return tool && WORKSPACE_TOOL_KEYS.has(tool) ? tool : null;
 };
 
 const FIRESTORE_RESUME_TEXT_LIMIT = 200_000;
@@ -333,7 +341,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         if (pathView !== 'resume') setIsUpdatingResume(false);
       }
       if (pathView === 'toolkit') {
-        setActiveTool(new URLSearchParams(location.search).get('tool'));
+        const rawTool = new URLSearchParams(location.search).get('tool');
+        const nextTool = workspaceToolFromSearch(location.search);
+        setActiveTool(nextTool);
+        if (rawTool && !nextTool) {
+          navigate(dashboardPathForView('toolkit'), { replace: true });
+        }
       }
       return;
     }
@@ -739,7 +752,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
     const nextDashboardView = dashboardViewFromPath(location.pathname) ?? 'dashboard';
     const nextActiveTool = nextDashboardView === 'toolkit'
-      ? new URLSearchParams(location.search).get('tool')
+      ? workspaceToolFromSearch(location.search)
       : null;
 
     setDashboardView(nextDashboardView);
@@ -983,6 +996,17 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   );
 
   const openWorkspaceTool = (tool: string) => {
+    if (!WORKSPACE_TOOL_KEYS.has(tool)) {
+      setActiveTool(null);
+      setDashboardView('toolkit');
+      setAnalysisResult(null);
+      setIsUpdatingResume(false);
+      if (entry === 'workspace') {
+        navigate(dashboardPathForView('toolkit'), { replace: true });
+      }
+      return;
+    }
+
     setActiveTool(tool);
     setDashboardView('toolkit');
     setAnalysisResult(null);
