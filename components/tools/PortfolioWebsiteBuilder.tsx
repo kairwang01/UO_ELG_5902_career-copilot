@@ -24,20 +24,21 @@ const HTML_TEMPLATE = `
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Professional Portfolio</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root { --primary: #2563eb; --secondary: #64748b; --dark: #1e293b; --light: #f8fafc; --accent: #f97316; --transition: all 0.3s ease; --surface-card: white; --header-bg: rgba(255, 255, 255, 0.95); }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         html { scroll-behavior: smooth; }
         body { background-color: var(--light); color: var(--dark); line-height: 1.6; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .container { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 0; }
         section { padding: 80px 0; }
         .section-title { text-align: center; margin-bottom: 50px; position: relative; }
         .section-title h2 { font-size: 2.5rem; color: var(--dark); margin-bottom: 15px; }
         .section-title::after { content: ''; position: absolute; width: 80px; height: 4px; background-color: var(--primary); bottom: -10px; left: 50%; transform: translateX(-50%); }
         .btn { display: inline-block; padding: 12px 28px; background-color: var(--primary); color: white; border-radius: 5px; text-decoration: none; font-weight: 600; transition: var(--transition); border: none; cursor: pointer; }
-        .btn:hover { background-color: var(--dark); transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1); }
-        header { position: fixed; top: 0; left: 0; width: 100%; z-index: 1000; background-color: var(--header-bg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 15px 0; }
+        .btn:hover, .btn:focus-visible { background-color: var(--dark); transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1); }
+        a:focus-visible, button:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, white); outline-offset: 3px; }
+        header { position: sticky; top: 0; width: 100%; z-index: 1000; background-color: var(--header-bg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); padding: 15px 0; }
         nav { display: flex; justify-content: space-between; align-items: center; }
         .logo { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
         .logo span { color: var(--accent); }
@@ -45,8 +46,9 @@ const HTML_TEMPLATE = `
         .nav-links li { margin-left: 30px; }
         .nav-links a { text-decoration: none; color: var(--dark); font-weight: 500; transition: var(--transition); }
         .nav-links a:hover { color: var(--primary); }
-        .menu-btn { display: none; font-size: 1.5rem; cursor: pointer; color: var(--dark); }
-        .hero { padding-top: 150px; padding-bottom: 80px; display: flex; align-items: center; min-height: 100vh; }
+        .menu-btn { display: none; background: transparent; border: 0; border-radius: 10px; color: var(--dark); cursor: pointer; font-size: 1.5rem; line-height: 1; padding: 8px 10px; }
+        .menu-btn span { display: block; width: 24px; height: 2px; margin: 5px 0; background: currentColor; border-radius: 999px; }
+        .hero { padding-top: 96px; padding-bottom: 80px; display: flex; align-items: center; min-height: calc(100vh - 76px); }
         .hero .container > div { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 30px; }
         .hero-content { flex: 1; }
         .hero-content h1 { font-size: 3.5rem; margin-bottom: 20px; color: var(--dark); }
@@ -55,8 +57,9 @@ const HTML_TEMPLATE = `
         .hero-image { flex: 1; text-align: center; max-width: 400px; }
         .profile-img { width: 350px; height: 350px; border-radius: 50%; object-fit: cover; border: 5px solid var(--primary); box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1); }
         .social-icons { margin-top: 20px; }
-        .social-icons a { display: inline-block; width: 40px; height: 40px; background-color: var(--primary); color: white; border-radius: 50%; line-height: 40px; text-align: center; margin-right: 10px; transition: var(--transition); font-size: 1rem; }
-        .social-icons a:hover { background-color: var(--accent); transform: translateY(-5px); }
+        .social-icons { display: flex; flex-wrap: wrap; gap: 10px; }
+        .social-icons a { display: inline-flex; width: 40px; height: 40px; align-items: center; justify-content: center; background-color: var(--primary); color: white; border-radius: 50%; text-align: center; text-decoration: none; transition: var(--transition); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.03em; }
+        .social-icons a:hover, .social-icons a:focus-visible { background-color: var(--accent); transform: translateY(-5px); }
         .about-content { display: flex; align-items: center; gap: 50px; }
         .about-text { width: 100%; }
         .about-text h3 { font-size: 2rem; margin-bottom: 20px; color: var(--dark); }
@@ -64,18 +67,18 @@ const HTML_TEMPLATE = `
         .skills-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 30px; }
         .skill { background-color: var(--surface-card, white); padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05); transition: var(--transition); text-align: center; }
         .skill:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1); }
-        .skill i { font-size: 2.5rem; color: var(--primary); margin-bottom: 20px; }
+        .skill-icon { display: inline-flex; width: 48px; height: 48px; align-items: center; justify-content: center; border-radius: 16px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-size: 1rem; font-weight: 800; margin-bottom: 18px; }
         .skill h3 { font-size: 1.5rem; margin-bottom: 15px; color: var(--dark); }
         .skill p { color: var(--secondary); }
         .portfolio-filter { display: flex; justify-content: center; margin-bottom: 30px; flex-wrap: wrap; }
-        .filter-btn { padding: 8px 20px; background-color: var(--surface-card, white); color: var(--dark); border: 1px solid #ddd; margin: 5px; cursor: pointer; border-radius: 5px; transition: var(--transition); font-weight: 500; }
-        .filter-btn.active, .filter-btn:hover { background-color: var(--primary); color: white; border-color: var(--primary); }
+        .filter-btn { padding: 8px 20px; background-color: var(--surface-card, white); color: var(--dark); border: 1px solid #ddd; margin: 5px; cursor: pointer; border-radius: 999px; transition: var(--transition); font-weight: 600; }
+        .filter-btn.active, .filter-btn:hover, .filter-btn:focus-visible { background-color: var(--primary); color: white; border-color: var(--primary); }
         .portfolio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 25px; }
         .portfolio-item { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); height: 250px; }
         .portfolio-item img { width: 100%; height: 100%; object-fit: cover; transition: var(--transition); }
-        .portfolio-item:hover img { transform: scale(1.1); }
+        .portfolio-item:hover img, .portfolio-item:focus-within img { transform: scale(1.1); }
         .portfolio-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(37, 99, 235, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; opacity: 0; transition: var(--transition); padding: 20px; text-align: center; }
-        .portfolio-item:hover .portfolio-overlay { opacity: 1; }
+        .portfolio-item:hover .portfolio-overlay, .portfolio-item:focus-within .portfolio-overlay { opacity: 1; }
         .portfolio-overlay h3 { color: white; font-size: 1.5rem; margin-bottom: 10px; }
         .portfolio-overlay p { color: rgba(255, 255, 255, 0.9); }
         .timeline { position: relative; max-width: 800px; margin: 0 auto; }
@@ -93,14 +96,12 @@ const HTML_TEMPLATE = `
         .contact-container { display: grid; grid-template-columns: 1fr 1.5fr; gap: 50px; align-items: flex-start; }
         .contact-info { display: flex; flex-direction: column; }
         .contact-item { display: flex; align-items: flex-start; margin-bottom: 25px; }
-        .contact-item i { font-size: 1.5rem; color: var(--primary); margin-right: 15px; width: 30px; text-align: center; }
+        .contact-icon { flex: 0 0 auto; display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 12px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-size: 0.8rem; font-weight: 800; margin-right: 15px; text-align: center; }
         .contact-text h3 { margin-bottom: 5px; color: var(--dark); }
         .contact-text p { color: var(--secondary); }
-        .contact-form { background-color: var(--surface-card, white); padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05); }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: var(--dark); }
-        .form-control { width: 100%; padding: 12px 15px; border: 1px solid #ddd; border-radius: 5px; font-size: 1rem; background-color: var(--light); color: var(--dark); }
-        textarea.form-control { min-height: 150px; resize: vertical; }
+        .contact-card { background-color: var(--surface-card, white); padding: 30px; border-radius: 14px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05); }
+        .contact-card h3 { color: var(--dark); font-size: 1.5rem; margin-bottom: 12px; }
+        .contact-card p { color: var(--secondary); margin-bottom: 20px; }
         footer { background-color: var(--dark); color: white; padding: 50px 0 20px; text-align: center; }
         .footer-content { margin-bottom: 30px; }
         .footer-content h2 { font-size: 2rem; margin-bottom: 20px; }
@@ -119,7 +120,7 @@ const HTML_TEMPLATE = `
         }
         @media (max-width: 768px) {
             .menu-btn { display: block; }
-            .nav-links { position: fixed; top: 75px; left: -100%; width: 100%; height: calc(100vh - 75px); background-color: var(--light); flex-direction: column; align-items: center; justify-content: center; transition: var(--transition); }
+            .nav-links { position: fixed; top: 72px; left: -100%; width: 100%; height: calc(100vh - 72px); background-color: var(--light); flex-direction: column; align-items: center; justify-content: center; transition: var(--transition); }
             .nav-links.active { left: 0; }
             .nav-links li { margin: 15px 0; }
             .hero-content h1 { font-size: 2.5rem; }
@@ -128,12 +129,12 @@ const HTML_TEMPLATE = `
         @media (max-width: 480px) {
             section { padding: 56px 0; }
             .container { width: min(100% - 24px, 1120px); }
-            .hero { padding-top: 120px; min-height: auto; }
+            .hero { padding-top: 72px; min-height: auto; }
             .hero-content h1 { font-size: 2.1rem; line-height: 1.15; }
             .hero-content p { font-size: 1rem; }
             .profile-img { width: min(230px, 80vw); height: min(230px, 80vw); }
             .skills-container, .portfolio-grid { gap: 18px; }
-            .skill, .contact-form, .timeline-content { padding: 20px; }
+            .skill, .contact-card, .timeline-content { padding: 20px; }
         }
     </style>
 </head>
@@ -142,7 +143,7 @@ const HTML_TEMPLATE = `
         <div class="container">
             <nav>
                 <div class="logo">Port<span>folio</span></div>
-                <ul class="nav-links">
+                <ul id="site-navigation" class="nav-links">
                     <li><a href="#home">Home</a></li>
                     <li><a href="#about">About</a></li>
                     <li><a href="#skills">Skills</a></li>
@@ -150,7 +151,9 @@ const HTML_TEMPLATE = `
                     <li><a href="#experience">Experience</a></li>
                     <li><a href="#contact">Contact</a></li>
                 </ul>
-                <div class="menu-btn"><i class="fas fa-bars"></i></div>
+                <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="site-navigation" aria-expanded="false">
+                    <span></span><span></span><span></span>
+                </button>
             </nav>
         </div>
     </header>
@@ -224,35 +227,31 @@ const HTML_TEMPLATE = `
             <div class="contact-container">
                 <div class="contact-info">
                     <div class="contact-item">
-                        <i class="fas fa-envelope"></i>
+                        <span class="contact-icon" aria-hidden="true">@</span>
                         <div class="contact-text">
                             <h3>Email</h3>
                             <p><!-- EMAIL --></p>
                         </div>
                     </div>
                     <div class="contact-item">
-                        <i class="fas fa-phone"></i>
+                        <span class="contact-icon" aria-hidden="true">TEL</span>
                         <div class="contact-text">
                             <h3>Phone</h3>
                             <p><!-- PHONE --></p>
                         </div>
                     </div>
                     <div class="contact-item">
-                        <i class="fas fa-map-marker-alt"></i>
+                        <span class="contact-icon" aria-hidden="true">LOC</span>
                         <div class="contact-text">
                             <h3>Location</h3>
                             <p><!-- LOCATION --></p>
                         </div>
                     </div>
                 </div>
-                <div class="contact-form">
-                    <form>
-                        <div class="form-group"><label for="name">Your Name</label><input type="text" id="name" class="form-control" placeholder="Enter your name"></div>
-                        <div class="form-group"><label for="email">Your Email</label><input type="email" id="email" class="form-control" placeholder="Enter your email"></div>
-                        <div class="form-group"><label for="subject">Subject</label><input type="text" id="subject" class="form-control" placeholder="Enter subject"></div>
-                        <div class="form-group"><label for="message">Your Message</label><textarea id="message" class="form-control" placeholder="Enter your message"></textarea></div>
-                        <a href="mailto:email@example.com" class="btn">Send Message</a>
-                    </form>
+                <div class="contact-card">
+                    <h3>Start a conversation</h3>
+                    <p>If this work matches what you are building, the fastest next step is a short email with the role, team, and timeline.</p>
+                    <!-- EMAIL CTA -->
                 </div>
             </div>
         </div>
@@ -273,7 +272,10 @@ const HTML_TEMPLATE = `
         const menuBtn = document.querySelector('.menu-btn');
         const navLinks = document.querySelector('.nav-links');
         if (menuBtn && navLinks) {
-            menuBtn.addEventListener('click', () => { navLinks.classList.toggle('active'); });
+            menuBtn.addEventListener('click', () => {
+                const isOpen = navLinks.classList.toggle('active');
+                menuBtn.setAttribute('aria-expanded', String(isOpen));
+            });
         }
         
         const filterBtns = document.querySelectorAll('.filter-btn');
@@ -281,7 +283,9 @@ const HTML_TEMPLATE = `
             filterBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     filterBtns.forEach(b => b.classList.remove('active'));
+                    filterBtns.forEach(b => b.setAttribute('aria-pressed', 'false'));
                     btn.classList.add('active');
+                    btn.setAttribute('aria-pressed', 'true');
                     const filterValue = btn.getAttribute('data-filter');
                     document.querySelectorAll('.portfolio-item').forEach(item => {
                         const itemCategory = item.getAttribute('data-category');
@@ -303,7 +307,10 @@ const HTML_TEMPLATE = `
                 const targetElement = document.querySelector(targetId);
                 if (targetElement) {
                     window.scrollTo({ top: targetElement.offsetTop - 70, behavior: 'smooth' });
-                    if (navLinks && navLinks.classList.contains('active')) { navLinks.classList.remove('active'); }
+                    if (navLinks && navLinks.classList.contains('active')) {
+                        navLinks.classList.remove('active');
+                        if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+                    }
                 }
             });
         });
@@ -573,6 +580,16 @@ const buildProjectPlaceholderDataUrl = (project: Project): string => {
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
+const buildSkillInitials = (category: string | null | undefined): string => {
+    const value = compact(category);
+    if (!value) return 'SK';
+    const words = value.split(/[\s/&|,+-]+/).filter(Boolean);
+    const initials = words.length > 1
+        ? words.slice(0, 2).map(word => word[0]).join('')
+        : value.slice(0, 2);
+    return initials.toUpperCase();
+};
+
 const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): string => {
     let html = HTML_TEMPLATE;
     
@@ -594,7 +611,12 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     );
 
     html = html.replace('<!-- EMAIL -->', escapeHtml(content.contactEmail || 'N/A'));
-    html = html.replace('<a href="mailto:email@example.com" class="btn">Send Message</a>', `<a href="mailto:${escapeAttr(content.contactEmail)}" class="btn">Send Message</a>`);
+    html = html.replace(
+        '<!-- EMAIL CTA -->',
+        content.contactEmail
+            ? `<a href="mailto:${escapeAttr(content.contactEmail)}" class="btn">Send Message</a>`
+            : '<span class="btn" aria-disabled="true">Email unavailable</span>'
+    );
     html = html.replace('<!-- PHONE -->', escapeHtml(content.contactPhone || 'N/A'));
     html = html.replace('<!-- LOCATION -->', escapeHtml(content.contactLocation || 'N/A'));
     html = html.replace(/&copy; \d{4} Alex Johnson/g, `&copy; ${new Date().getFullYear()} ${escapeHtml(content.fullName)}`);
@@ -608,9 +630,9 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     const githubUrl = normalizeExternalUrl(content.socials?.github);
     const twitterUrl = normalizeExternalUrl(content.socials?.twitter);
     const socialIconsHtml = `
-        ${linkedinUrl ? `<a href="${escapeAttr(linkedinUrl)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-linkedin-in"></i></a>` : ''}
-        ${githubUrl ? `<a href="${escapeAttr(githubUrl)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-github"></i></a>` : ''}
-        ${twitterUrl ? `<a href="${escapeAttr(twitterUrl)}" target="_blank" rel="noopener noreferrer"><i class="fab fa-twitter"></i></a>` : ''}
+        ${linkedinUrl ? `<a href="${escapeAttr(linkedinUrl)}" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><span aria-hidden="true">in</span></a>` : ''}
+        ${githubUrl ? `<a href="${escapeAttr(githubUrl)}" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><span aria-hidden="true">GH</span></a>` : ''}
+        ${twitterUrl ? `<a href="${escapeAttr(twitterUrl)}" target="_blank" rel="noopener noreferrer" aria-label="X / Twitter"><span aria-hidden="true">X</span></a>` : ''}
     `;
     html = html.replace('<!-- SOCIAL ICONS - HERO -->', socialIconsHtml);
     html = html.replace('<!-- SOCIAL ICONS - FOOTER -->', socialIconsHtml);
@@ -618,7 +640,7 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     // Skills
     const skillsHtml = content.skills.map(skill => `
         <div class="skill">
-            <i class="${escapeAttr(skill.icon || 'fas fa-star')}"></i>
+            <span class="skill-icon" aria-hidden="true">${escapeHtml(buildSkillInitials(skill.category))}</span>
             <h3>${escapeHtml(skill.category)}</h3>
             <p>${escapeHtml(skill.description)}</p>
         </div>`).join('');
@@ -647,9 +669,9 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
             <div class="portfolio-item" data-category="${categorySlug}">
                 <a href="${escapeAttr(projectHref)}"${projectTarget} class="portfolio-overlay">
                     <h3>${escapeHtml(p.title)}</h3>
-                    <p>${escapeHtml(p.description.substring(0, 100))}</p>
+                    <p>${escapeHtml(truncate(p.description, 140))}</p>
                 </a>
-                <img src="${escapeAttr(projectImageSrc)}" alt="${escapeAttr(p.title)}">
+                <img src="${escapeAttr(projectImageSrc)}" alt="${escapeAttr(p.title || p.category || 'Portfolio item')}">
             </div>`;
     }).join('');
     html = html.replace('<!-- PORTFOLIO ITEMS -->', projectsHtml);
@@ -657,10 +679,10 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     // Dynamic Filter Buttons
     const categories = [...new Set(projects.map(p => p.category).filter(Boolean))];
     const filterButtonsHtml = `
-        <button class="filter-btn active" data-filter="all">All</button>
+        <button type="button" class="filter-btn active" data-filter="all" aria-pressed="true">All</button>
         ${categories.map(cat => {
             const catSlug = escapeAttr(cat.toLowerCase().trim().replace(/\s+/g, '-'));
-            return `<button class="filter-btn" data-filter="${catSlug}">${escapeHtml(cat)}</button>`;
+            return `<button type="button" class="filter-btn" data-filter="${catSlug}" aria-pressed="false">${escapeHtml(cat)}</button>`;
         }).join('')}
     `;
     html = html.replace(/<div class="portfolio-filter">[\s\S]*?<\/div>/, `<div class="portfolio-filter">${filterButtonsHtml}</div>`);
