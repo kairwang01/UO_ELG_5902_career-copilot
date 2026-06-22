@@ -1,10 +1,9 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import { PenLine } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { BriefcaseBusiness, CheckCircle2, ClipboardList, FileText, PenLine, ShieldCheck, Sparkles, Wand2 } from 'lucide-react';
 import { generateCoverLetter } from '../../services/aiClient';
 import type { CoverLetter } from '../../types';
 import StagedLoader from '../StagedLoader';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { CopyButton, DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { useApiStatus } from '../../contexts/ApiStatusContext';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
@@ -19,98 +18,179 @@ interface CoverLetterGeneratorProps {
   session: Session | null;
 }
 
+type CoverLetterResult = CoverLetter & {
+  jobDescription?: string;
+  market?: string;
+  generatedAt?: number;
+};
+
 const COVER_LETTER_TEMPLATE = `[Your Name]
 [Your Address] | [Your Email] | [Your Phone Number]
 
 [Date]
 
-[Hiring Manager Name] (If known, otherwise use title)
-[Hiring Manager Title]
+[Hiring Manager Name]
 [Company Name]
-[Company Address]
 
-Dear [Mr./Ms./Mx. Last Name],
+Dear Hiring Manager,
 
-I am writing to express my enthusiastic interest in the [Job Title] position at [Company Name], which I discovered through [Platform where you saw the ad, e.g., LinkedIn, company website]. Having followed [Company Name]'s impressive work in [Industry], I am confident that my skills and experience in [mention 1-2 key skills from your resume, e.g., project management and data analysis] align perfectly with the requirements of this role.
+I am writing to apply for the [Job Title] role at [Company Name]. My background in [relevant skill area] and experience with [specific project or achievement] align with the responsibilities in this position.
 
-In my previous position at [Previous Company], I was responsible for [mention a key responsibility]. I successfully [mention a key achievement that relates to the job description, quantifying it if possible, e.g., increased user engagement by 15% by redesigning the onboarding flow]. This experience has equipped me with a strong foundation in [relevant skill], which I am eager to bring to your team.
+In my recent work, I [specific action] which led to [measurable or clear outcome]. I would bring the same combination of ownership, communication, and practical execution to your team.
 
-I am particularly drawn to [Company Name]'s commitment to [mention a company value, project, or mission statement you admire]. My own professional values are centered on [mention your own values, e.g., collaboration, innovation, and user-centric design], and I believe I would be a great cultural fit.
-
-Thank you for considering my application. I have attached my resume for your review and welcome the opportunity to discuss how my background and passion for [Industry] can contribute to [Company Name].
+I am especially interested in this role because [company or role-specific reason]. Thank you for considering my application. I would welcome the opportunity to discuss how my experience can contribute to your team.
 
 Sincerely,
 [Your Name]`;
 
-// Sample job description for "Try an example"
 const SAMPLE_JOB_DESC = `Job Title: Frontend Software Engineer
 Company: Shopify
 Location: Ottawa, ON (Remote-friendly)
 
-We are looking for a Frontend Software Engineer to join our growing team. You will build and maintain high-quality React/TypeScript components, collaborate with designers and backend engineers, and ship features used by millions of merchants worldwide.
+We are looking for a Frontend Software Engineer to join our team. You will build accessible React and TypeScript product surfaces, collaborate with product and design, and improve reliability for merchant-facing workflows.
 
 Requirements:
-- 2+ years of experience with React and TypeScript
-- Strong understanding of web performance and accessibility
-- Experience with REST and GraphQL APIs
-- Passion for clean, maintainable code`;
+- 2+ years of React and TypeScript experience
+- Strong web accessibility and performance fundamentals
+- Comfortable working with REST or GraphQL APIs
+- Clear written communication and ownership in cross-functional teams`;
+
+const hasMeaningfulCoverLetter = (value: Partial<CoverLetter> | null | undefined) =>
+  Boolean(value?.letter?.trim() && value.letter.trim().length > 80);
+
+const extractJobTitle = (text: string) => {
+  const match = text.match(/(?:^|\n)\s*(?:job\s*title|role|position)\s*:\s*(.+)/i);
+  return match?.[1]?.trim() || '';
+};
+
+const extractCompany = (text: string) => {
+  const match = text.match(/(?:^|\n)\s*(?:company|organization|employer)\s*:\s*(.+)/i);
+  return match?.[1]?.trim() || '';
+};
+
+const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+const hasCjkText = (text: string) => /[\u3040-\u30ff\u3400-\u9fff]/.test(text);
+const describeTextLength = (text: string, useChineseUnit = false) => {
+  const trimmed = text.trim();
+  if (!trimmed) return useChineseUnit ? '0 词' : '0 words';
+  if (hasCjkText(trimmed)) return `${trimmed.length.toLocaleString()} ${useChineseUnit ? '字' : 'chars'}`;
+  return `${countWords(trimmed).toLocaleString()} ${useChineseUnit ? '词' : 'words'}`;
+};
+
+const CardShell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <section className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
+    {children}
+  </section>
+);
+
+const ChecklistItem: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <li className="flex gap-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+    <span>{children}</span>
+  </li>
+);
 
 const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText, market, initialInput, t, session }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<CoverLetter | null>(null);
-  const { canSave, saved, persist } = useToolResults<CoverLetter>();
+  const [result, setResult] = useState<CoverLetterResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<CoverLetterResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [jobDescription, setJobDescription] = useState(initialInput);
   const [editableResult, setEditableResult] = useState('');
-
   const { apiStatus } = useApiStatus();
-
-  // Recent applications for the job-context selector
   const { applications } = useRecentApplications(session);
-
-  // Hydrate a previously-saved result (free for paid users on reopen).
-  useEffect(() => { if (saved && !result) { setResult(saved.result); setEditableResult(saved.result.letter); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Guard so the paid auto-generate fires at most once per (job, resume) input
-  // set — resumeText loading in (a new object/length) must never re-charge a
-  // second cover letter without the user asking.
   const lastAutoRunKey = useRef<string | null>(null);
+  const isChineseUi = /[\u3400-\u9fff]/.test(t('tool_cover_letter_generate_button'));
+  const ui = {
+    editTemplate: isChineseUi ? '你可以先编辑这个模板并导出，稍后再尝试生成。' : 'You can edit this template now and export it while generation is unavailable.',
+    checksTitle: isChineseUi ? '生成前会检查' : 'What this checks',
+    inputQuality: isChineseUi ? '输入质量' : 'Input quality',
+    length: isChineseUi ? '长度' : 'Length',
+    role: isChineseUi ? '岗位' : 'Role',
+    company: isChineseUi ? '公司' : 'Company',
+    notDetected: isChineseUi ? '暂未识别' : 'Not detected yet',
+    sourceResume: isChineseUi ? '以你的简历作为事实来源。' : 'Uses your resume as the evidence source.',
+    adaptRole: isChineseUi ? '根据职位描述调整开头和正文重点。' : 'Adapts the opening and body to the pasted role.',
+    editableBeforeDownload: isChineseUi ? '生成后仍可编辑，再下载发送。' : 'Keeps the draft editable before download.',
+    copyLetter: isChineseUi ? '复制求职信' : 'Copy letter',
+    copied: isChineseUi ? '已复制' : 'Copied',
+    editableDraft: isChineseUi ? '可编辑草稿' : 'Editable draft',
+    beforeSending: isChineseUi ? '发送前检查' : 'Before sending',
+    reviewSpecifics: isChineseUi ? '确认细节后再发送' : 'Review the specifics',
+    confirmManager: isChineseUi ? '如果知道招聘负责人姓名，请替换称呼。' : 'Confirm the hiring manager name if you know it.',
+    replaceCompanyContext: isChineseUi ? '把泛泛的公司描述改成一个具体原因。' : 'Replace generic company context with one concrete reason.',
+    keepOnePage: isChineseUi ? '导出前尽量保持在一页以内。' : 'Keep the final version to one page when exported.',
+    draftContext: isChineseUi ? '草稿上下文' : 'Draft context',
+    roleNotDetected: isChineseUi ? '未识别到岗位' : 'Role not detected',
+  };
+
+  useEffect(() => {
+    if (saved && !result && hasMeaningfulCoverLetter(saved.result)) {
+      setResult(saved.result);
+      setEditableResult(saved.result.letter);
+      setJobDescription(saved.result.jobDescription || '');
+      setFromSaved(true);
+    }
+  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     setJobDescription(initialInput);
-    // Only auto-run once the resume is available — otherwise the call fails
-    // server-side (no resume) and wastes a credit.
     if (initialInput && resumeText?.trim()) {
-        const key = `${initialInput}|${resumeText.length}`;
-        if (lastAutoRunKey.current === key) return;
-        lastAutoRunKey.current = key;
-        runTool(initialInput);
+      const key = `${initialInput}|${resumeText.length}`;
+      if (lastAutoRunKey.current === key) return;
+      lastAutoRunKey.current = key;
+      void runTool(initialInput);
     }
-  }, [initialInput, resumeText]);
+  }, [initialInput, resumeText]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resetResult = () => {
+    setResult(null);
+    setEditableResult('');
+    setFromSaved(false);
+    setError(null);
+  };
+
+  const handleTryExample = () => {
+    setJobDescription(SAMPLE_JOB_DESC);
+    setError(null);
+  };
 
   const runTool = async (input: string) => {
+    const nextInput = input.trim();
     if (apiStatus !== 'online') {
-        setError(t('tool_cover_letter_ai_unavailable_error'));
-        return;
+      setError(t('tool_cover_letter_ai_unavailable_error'));
+      return;
     }
     if (!resumeText?.trim()) {
-        setError(t('tool_resume_required_error'));
-        return;
+      setError(t('tool_resume_required_error'));
+      return;
     }
-    if (!input) {
-        setError(t('tool_cover_letter_error_required'));
-        return;
+    if (!nextInput) {
+      setError(t('tool_cover_letter_error_required'));
+      return;
     }
+
+    setJobDescription(nextInput);
     const alive = begin();
     setError(null);
     setResult(null);
     try {
-      const apiResult = await generateCoverLetter(resumeText, input, market);
+      const apiResult = await generateCoverLetter(resumeText, nextInput, market);
       if (!alive()) return;
-      setResult(apiResult);
+      if (!hasMeaningfulCoverLetter(apiResult)) {
+        throw new Error(t('ai_error_empty_response'));
+      }
+      const nextResult: CoverLetterResult = {
+        ...apiResult,
+        jobDescription: nextInput,
+        market,
+        generatedAt: Date.now(),
+      };
+      setResult(nextResult);
+      setEditableResult(nextResult.letter);
       setFromSaved(false);
-      persist(apiResult);
-      setEditableResult(apiResult.letter);
+      persist(nextResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -118,170 +198,295 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    runTool(jobDescription);
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void runTool(jobDescription);
   };
 
-  // Fill job description from a recent application (job_title only — no stored description)
   const handleSelectRecentApp = (appId: string) => {
     if (!appId) return;
-    const app = applications.find(a => a.id === appId);
+    const app = applications.find((application) => application.id === appId);
     if (!app) return;
-    setJobDescription(prev => {
-      // Prepend the job title line if not already present
+    setJobDescription((prev) => {
       const titleLine = `Job Title: ${app.job_title}`;
       if (prev.includes(titleLine)) return prev;
-      return titleLine + (prev ? '\n\n' + prev : '');
+      return titleLine + (prev ? `\n\n${prev}` : '');
     });
   };
 
   const renderFallback = () => (
-    <div className="space-y-4">
-        <div className="p-4 bg-yellow-50 dark:bg-amber-900/20 border-l-4 border-yellow-400">
-            <h4 className="font-bold text-yellow-800 dark:text-amber-300">{t('tool_cover_letter_ai_unavailable_title')}</h4>
-            <p className="text-sm text-yellow-700 dark:text-amber-300 mt-1">{t('tool_cover_letter_ai_unavailable_desc')}</p>
+    <div className="mx-auto max-w-6xl space-y-5">
+      <CardShell className="overflow-hidden">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="p-5 sm:p-6 lg:p-8">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">
+              <PenLine className="h-4 w-4" />
+              {t('tool_cover_letter_ai_unavailable_title')}
+            </div>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+              {t('tool_cover_letter_results_title')}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              {t('tool_cover_letter_ai_unavailable_desc')}
+            </p>
+            <textarea
+              value={editableResult || COVER_LETTER_TEMPLATE}
+              onChange={(event) => setEditableResult(event.target.value)}
+              className="mt-6 min-h-[520px] w-full resize-y rounded-xl border border-slate-200 bg-white p-5 font-serif text-base leading-8 text-slate-950 shadow-inner outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            />
+          </div>
+          <aside className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/50 lg:border-l lg:border-t-0 lg:p-6">
+            <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{t('tool_cover_letter_ai_unavailable_error')}</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              {ui.editTemplate}
+            </p>
+            <div className="mt-5">
+              <DownloadButtons textContent={editableResult || COVER_LETTER_TEMPLATE} baseFilename="cover_letter_template" />
+            </div>
+          </aside>
         </div>
-        <textarea
-          value={editableResult || COVER_LETTER_TEMPLATE}
-          onChange={(e) => setEditableResult(e.target.value)}
-          className="w-full h-96 p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-serif text-sm dark:text-gray-300"
-        />
-        <DownloadButtons textContent={editableResult || COVER_LETTER_TEMPLATE} baseFilename="cover_letter_template" />
+      </CardShell>
     </div>
   );
 
   const renderInput = () => (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* (a) Intro card */}
-      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-1">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_cover_letter_intro_title')}</p>
-        <p>{t('tool_cover_letter_intro_desc')}</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-5">
+      <CardShell className="overflow-hidden">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">
+              <PenLine className="h-4 w-4" />
+              {t('tool_cover_letter_title')}
+            </div>
+            <h2 className="mt-3 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+              {t('tool_cover_letter_intro_title')}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              {t('tool_cover_letter_intro_desc')}
+            </p>
 
-      {/* (b) Sample fill + recent apps row */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setJobDescription(SAMPLE_JOB_DESC)}
-          className="text-xs text-blue-600 dark:text-blue-400 hover:underline self-start"
-        >
-          {t('tool_cover_letter_try_example')}
-        </button>
-        {/* Recent applications selector */}
-        {applications.length > 0 && (
-          <div className="flex-1 sm:max-w-xs">
-            <select
-              defaultValue=""
-              onChange={(e) => handleSelectRecentApp(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="" disabled>{t('tool_cover_letter_recent_apps_placeholder')}</option>
-              {applications.map((app) => (
-                <option key={app.id} value={app.id}>
-                  {app.job_title}{app.status ? ` — ${app.status}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={handleTryExample}
+                className="inline-flex w-fit items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+              >
+                <Sparkles className="h-4 w-4" />
+                {t('tool_cover_letter_try_example')}
+              </button>
 
-      <textarea
-        className="w-full h-40 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
-        placeholder={t('tool_cover_letter_placeholder')}
-        value={jobDescription}
-        onChange={(e) => setJobDescription(e.target.value)}
-        required
-      />
+              {applications.length > 0 && (
+                <label className="min-w-0 sm:w-80">
+                  <span className="sr-only">{t('tool_cover_letter_recent_apps_placeholder')}</span>
+                  <select
+                    defaultValue=""
+                    onChange={(event) => handleSelectRecentApp(event.target.value)}
+                    className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  >
+                    <option value="" disabled>{t('tool_cover_letter_recent_apps_placeholder')}</option>
+                    {applications.map((app) => (
+                      <option key={app.id} value={app.id}>
+                        {app.job_title}{app.status ? ` - ${app.status}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
 
-      {/* (e) Error box with retry */}
-      {error && apiStatus === 'online' && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
-          <svg className="h-5 w-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
-          <div className="flex-1">
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <label htmlFor="cover-letter-job-description" className="mt-7 block text-sm font-semibold text-slate-800 dark:text-slate-200">
+              {t('tool_cover_letter_placeholder')}
+            </label>
+            <textarea
+              id="cover-letter-job-description"
+              className="mt-2 min-h-[280px] w-full resize-y rounded-xl border border-slate-300 bg-white p-4 text-sm leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+              placeholder={t('tool_cover_letter_placeholder')}
+              value={jobDescription}
+              onChange={(event) => setJobDescription(event.target.value)}
+              required
+            />
+
+            {error && apiStatus === 'online' && (
+              <div className="mt-4">
+                <ToolError message={error} onRetry={() => void runTool(jobDescription)} retryLabel={t('tool_cover_letter_retry')} />
+              </div>
+            )}
+
             <button
-              type="button"
-              onClick={() => runTool(jobDescription)}
-              className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:underline"
+              type="submit"
+              disabled={loading}
+              className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400"
             >
-              {t('tool_cover_letter_retry')}
+              <Wand2 className="h-4 w-4" />
+              {loading ? t('tool_cover_letter_generating_button') : t('tool_cover_letter_generate_button')}
             </button>
-          </div>
-        </div>
-      )}
+          </form>
 
-      <button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
-        {loading ? t('tool_cover_letter_generating_button') : t('tool_cover_letter_generate_button')}
-      </button>
-    </form>
+          <aside className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/50 lg:border-l lg:border-t-0 lg:p-6">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                  <ClipboardList className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{ui.checksTitle}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{market}</p>
+                </div>
+              </div>
+              <ul className="mt-4 space-y-3">
+                <ChecklistItem>{ui.sourceResume}</ChecklistItem>
+                <ChecklistItem>{ui.adaptRole}</ChecklistItem>
+                <ChecklistItem>{ui.editableBeforeDownload}</ChecklistItem>
+              </ul>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{ui.inputQuality}</p>
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{ui.length}</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">{describeTextLength(jobDescription, isChineseUi)}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{ui.role}</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-950 dark:text-slate-100">{extractJobTitle(jobDescription) || ui.notDetected}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{ui.company}</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-950 dark:text-slate-100">{extractCompany(jobDescription) || ui.notDetected}</p>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </CardShell>
+    </div>
   );
 
   const renderResult = () => {
-    if (loading) return (
-      <StagedLoader
-        title="Writing your cover letter"
-        steps={[
-          'Reading your resume…',
-          'Understanding the job description…',
-          `Tailoring for the ${market} market…`,
-          'Drafting & polishing…',
-        ]}
-        intervalMs={1800}
-        onCancel={cancel}
-        icon={<PenLine />}
-        accent="lime"
-      />
-    );
-    if (error && apiStatus === 'online') return (
-      <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
-        <svg className="h-5 w-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
-        <div className="flex-1">
-          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-          <button
-            type="button"
-            onClick={() => runTool(jobDescription)}
-            className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:underline"
-          >
-            {t('tool_cover_letter_retry')}
-          </button>
-        </div>
-      </div>
-    );
     if (!result) return apiStatus !== 'online' ? renderFallback() : renderInput();
+    const jobTitle = extractJobTitle(result.jobDescription || jobDescription);
+    const company = extractCompany(result.jobDescription || jobDescription);
+    const letterLength = describeTextLength(editableResult, isChineseUi);
 
     return (
-      <div className="space-y-4 animate-fade-in">
+      <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
         <SavedResultBar
           t={t}
           canSave={canSave}
           isSaved={fromSaved}
           savedAt={saved?.savedAt ?? null}
-          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+          onTryNext={resetResult}
         />
-        <div className="flex justify-between items-center">
-          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_cover_letter_results_title')}</h4>
-          <DownloadButtons textContent={editableResult} baseFilename="cover_letter" />
-        </div>
-        <textarea
-          value={editableResult}
-          onChange={(e) => setEditableResult(e.target.value)}
-          className="w-full h-96 p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-serif text-sm dark:text-gray-300"
-        />
-        {/* (d) Start over / run again */}
-        <button
-          type="button"
-          onClick={() => { setResult(null); setError(null); }}
-          className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300"
-        >
-          &larr; {t('tool_cover_letter_back_button')}
-        </button>
+
+        <CardShell className="overflow-hidden">
+          <div className="border-b border-slate-200 bg-slate-50 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">
+                  <FileText className="h-4 w-4" />
+                  {t('tool_cover_letter_results_title')}
+                </div>
+                <h2 className="mt-2 break-words text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+                  {jobTitle || t('tool_cover_letter_title')}
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                  {company || market} · {letterLength}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <CopyButton text={editableResult} label={ui.copyLetter} copiedLabel={ui.copied} />
+                <DownloadButtons textContent={editableResult} baseFilename="cover_letter" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0 p-5 sm:p-6 lg:p-8">
+              <label htmlFor="cover-letter-result" className="mb-3 block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {ui.editableDraft}
+              </label>
+              <textarea
+                id="cover-letter-result"
+                value={editableResult}
+                onChange={(event) => setEditableResult(event.target.value)}
+                className="min-h-[620px] w-full resize-y rounded-xl border border-slate-200 bg-white p-5 font-serif text-base leading-8 text-slate-950 shadow-inner outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+            </div>
+
+            <aside className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/50 lg:border-l lg:border-t-0 lg:p-6">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    <ShieldCheck className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{ui.beforeSending}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{ui.reviewSpecifics}</p>
+                  </div>
+                </div>
+                <ul className="mt-4 space-y-3">
+                  <ChecklistItem>{ui.confirmManager}</ChecklistItem>
+                  <ChecklistItem>{ui.replaceCompanyContext}</ChecklistItem>
+                  <ChecklistItem>{ui.keepOnePage}</ChecklistItem>
+                </ul>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{ui.draftContext}</p>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                    <BriefcaseBusiness className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{ui.role}</p>
+                      <p className="mt-1 break-words text-sm font-semibold text-slate-950 dark:text-slate-100">{jobTitle || ui.roleNotDetected}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{isChineseUi ? '地区' : 'Market'}</p>
+                      <p className="mt-1 break-words text-sm font-semibold text-slate-950 dark:text-slate-100">{result.market || market}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={resetResult}
+                className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {t('tool_cover_letter_back_button')}
+              </button>
+            </aside>
+          </div>
+        </CardShell>
       </div>
     );
   };
 
-  return apiStatus !== 'online' && !result ? renderFallback() : (result ? renderResult() : renderInput());
+  if (loading) {
+    return (
+      <StagedLoader
+        title={t('tool_cover_letter_generating_button')}
+        steps={[
+          'Reading your resume',
+          'Matching the job requirements',
+          `Adapting for ${market}`,
+          'Writing the editable draft',
+        ]}
+        intervalMs={1600}
+        onCancel={cancel}
+        cancelLabel={t('tool_loader_hide_button')}
+        cancelHint={t('tool_loader_hide_hint')}
+        icon={<PenLine />}
+        accent="lime"
+      />
+    );
+  }
+
+  return result ? renderResult() : (apiStatus !== 'online' ? renderFallback() : renderInput());
 };
 
 export default CoverLetterGenerator;
