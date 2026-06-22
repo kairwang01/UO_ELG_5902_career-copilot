@@ -284,7 +284,13 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   // Slide-over nav for narrow screens — the sidebar itself is hidden below lg.
   const renderMobileNavDrawer = (page: PortalPage) =>
     isMobileNavOpen ? (
-      <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={t('portal_open_navigation')}>
+      <div
+        className="fixed inset-0 z-50 lg:hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('portal_open_navigation')}
+        data-qa="employer-mobile-nav-drawer"
+      >
         <div
           className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
           onClick={() => setIsMobileNavOpen(false)}
@@ -303,7 +309,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
           <PortalSidebar {...sidebarProps} currentPage={prevPage} />
           {renderMobileNavDrawer(prevPage)}
-          <main ref={mainRef} className="flex-1 overflow-y-auto">
+          <main ref={mainRef} className="flex-1 overflow-y-auto" data-qa-employer-page="applicant-funnel">
             <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
             <div className="mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8">
               <ApplicantFunnel
@@ -325,7 +331,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         <PortalSidebar {...sidebarProps} currentPage={currentPage} />
         {renderMobileNavDrawer(currentPage)}
 
-        <main ref={mainRef} className="flex-1 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 overflow-y-auto" data-qa-employer-page={currentPage}>
           {currentPage === 'dashboard' && (
             <PortalDashboard
               jobPostings={jobPostings}

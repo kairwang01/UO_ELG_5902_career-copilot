@@ -34,7 +34,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
   const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? 'Console';
 
   return (
-    <div className="h-screen overflow-hidden bg-[#f0f2f5] flex">
+    <div className="h-screen overflow-hidden bg-[#f0f2f5] flex" data-qa-shell="admin" data-qa-admin-tab={activeTab}>
       {/* Sidebar */}
       <aside className="hidden md:flex sticky top-0 h-screen w-60 lg:w-64 shrink-0 flex-col bg-[#0f2744] text-white">
         <div className="px-5 py-6 border-b border-white/10">
@@ -51,6 +51,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
                 key={tb.id}
                 type="button"
                 onClick={() => onTabChange(tb.id)}
+                data-qa={`admin-nav-${tb.id}`}
                 className={`w-full text-left px-3 py-2.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 ${
                   active
                     ? 'bg-white/15 text-white'
@@ -86,6 +87,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {/* Mobile nav */}
               <select
+                data-qa="admin-mobile-section-select"
                 className="md:hidden text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white text-gray-700"
                 value={activeTab}
                 onChange={(e) => onTabChange(e.target.value)}

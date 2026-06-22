@@ -62,6 +62,7 @@ export function PortalSidebar({
   const navItem = (page: PortalPage, label: string, Icon: React.ElementType) => (
     <button
       key={page}
+      data-qa={`employer-nav-${page}`}
       onClick={() => onNavigate(page)}
       aria-current={currentPage === page ? 'page' : undefined}
       className={`flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm transition-colors ${
@@ -80,6 +81,7 @@ export function PortalSidebar({
 
   return (
     <aside
+      data-qa={mobile ? 'employer-mobile-sidebar' : 'employer-sidebar'}
       className={`${
         mobile ? 'flex w-72 max-w-[85vw] h-full' : 'hidden lg:flex w-64 h-screen'
       } flex-shrink-0 flex-col border-r ${
@@ -134,6 +136,7 @@ export function PortalSidebar({
         {/* My Profile — single profile access point (no duplicate top-right menu). */}
         <button
           type="button"
+          data-qa="employer-nav-account-settings"
           onClick={() => onNavigate('account-settings')}
           className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
             currentPage === 'account-settings'

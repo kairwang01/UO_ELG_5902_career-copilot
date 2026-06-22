@@ -97,6 +97,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
+      data-qa={mobile ? 'candidate-mobile-sidebar' : 'candidate-sidebar'}
       className={`${
         mobile ? 'flex w-72 max-w-[85vw] h-full' : 'hidden lg:flex w-64 h-screen sticky top-0'
       } flex-shrink-0 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex-col`}
@@ -124,6 +125,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 return (
                     <button
                         key={item.id}
+                        data-qa={`candidate-nav-${item.id}`}
                         data-tour={`nav-${item.id}`}
                         onClick={() => {
                             onViewChange(item.id);
@@ -162,6 +164,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Dedicated tools gallery — declutters the sidebar; the quick-list stays
                 one tap away via the chevron above. */}
             <button
+                data-qa="candidate-nav-toolkit"
                 data-tour="nav-toolkit"
                 onClick={() => { onViewChange('toolkit'); onToolSelect(null); }}
                 aria-current={activeView === 'toolkit' ? 'page' : undefined}
@@ -184,6 +187,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         return (
                             <button
                                 key={tool.key}
+                                data-qa={`candidate-tool-${tool.key}`}
                                 onClick={() => {
                                     onViewChange('toolkit');
                                     onToolSelect(tool.key);
@@ -229,6 +233,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="mt-1 pt-3 border-t border-gray-200/50 dark:border-slate-800/50" data-tour="account-menu">
             <button
                 type="button"
+                data-qa="candidate-nav-account"
                 onClick={() => { onViewChange('account'); onToolSelect(null); }}
                 aria-current={activeView === 'account' ? 'page' : undefined}
                 className={`w-full flex items-center gap-3 rounded-lg p-1.5 text-left transition-colors ${

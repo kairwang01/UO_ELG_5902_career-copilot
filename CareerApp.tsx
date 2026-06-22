@@ -1348,7 +1348,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         <Sidebar {...sidebarProps} />
         {/* Mobile navigation drawer — the sidebar is hidden below lg */}
         {isMobileNavOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={t('portal_open_navigation')}>
+          <div
+            className="fixed inset-0 z-50 lg:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('portal_open_navigation')}
+            data-qa="candidate-mobile-nav-drawer"
+          >
             <div
               className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
               onClick={() => setIsMobileNavOpen(false)}
@@ -1366,6 +1372,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               onClick={() => setIsMobileNavOpen(true)}
               className="lg:hidden p-2 -ml-2 mr-2 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"
               aria-label={t('portal_open_navigation')}
+              data-qa="candidate-mobile-nav-open"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -1380,7 +1387,10 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               </span>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10">
+          <main
+            className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10"
+            data-qa-workspace-view={dashboardView}
+          >
             <div className="max-w-6xl mx-auto" data-tour="main">
               {isUpdatingResume && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                 <div className="mt-4 animate-slide-in-up">

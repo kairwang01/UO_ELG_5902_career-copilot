@@ -17,6 +17,7 @@ const SMOKES = [
   ['aiproxy-guard', 'scripts/aiproxy-guard-smoke.mjs'],
   ['dialogs', 'scripts/dialog-positioning-smoke.mjs'],
   ['overlays', 'scripts/overlay-collision-smoke.mjs'],
+  ['navigation-ui', 'scripts/navigation-ui-smoke.mjs'],
 ];
 
 function runSmoke(script) {

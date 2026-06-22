@@ -16,6 +16,7 @@
     "smoke:aiproxy-guard": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-careercopilot \"node scripts/aiproxy-guard-smoke.mjs\"",
     "smoke:dialogs": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-careercopilot \"node scripts/dialog-positioning-smoke.mjs\"",
     "smoke:overlays": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-careercopilot \"node scripts/overlay-collision-smoke.mjs\"",
+    "smoke:navigation-ui": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-careercopilot \"node scripts/navigation-ui-smoke.mjs\"",
     "smoke:runtime-critical": "BILLING_SIMULATION=true npm --prefix functions run build && BILLING_SIMULATION=true firebase emulators:exec --only auth,firestore,functions --project demo-careercopilot \"node scripts/run-all-smokes.mjs\"",
     "scan:functional-bugs": "node scripts/scan-functional-bug-signatures.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-careercopilot \"vitest run tests/firestore.rules.test.ts\"",

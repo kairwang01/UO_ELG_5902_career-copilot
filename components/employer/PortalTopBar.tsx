@@ -41,6 +41,7 @@ export function PortalTopBar({ title, darkMode = false, accountMenuProps }: Port
         <button
           type="button"
           onClick={onOpenMobileNav}
+          data-qa="employer-mobile-nav-open"
           className={`lg:hidden p-2 -ml-2 mr-2 rounded-lg ${
             darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
           }`}
