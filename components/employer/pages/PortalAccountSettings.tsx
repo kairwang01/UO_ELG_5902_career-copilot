@@ -6,8 +6,6 @@ import { PortalTopBar } from '../PortalTopBar';
 interface PortalAccountSettingsProps {
   session: Session;
   darkMode: boolean;
-  onSubscriptionChange: () => Promise<void>;
-  navigateToPricing: () => void;
   t: (key: string) => string;
 }
 
@@ -16,8 +14,6 @@ interface PortalAccountSettingsProps {
 export function PortalAccountSettings({
   session,
   darkMode,
-  onSubscriptionChange,
-  navigateToPricing,
   t,
 }: PortalAccountSettingsProps) {
   return (
@@ -30,8 +26,6 @@ export function PortalAccountSettings({
           // Account uses onSetView only to navigate to api_docs or back to home.
           // In the portal context these are no-ops; the user stays in the portal.
           onSetView={() => {}}
-          onSubscriptionChange={onSubscriptionChange}
-          navigateToPricing={navigateToPricing}
           t={t}
         />
       </div>

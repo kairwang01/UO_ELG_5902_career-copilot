@@ -423,8 +423,6 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
             <PortalAccountSettings
               session={session}
               darkMode={darkMode}
-              onSubscriptionChange={refreshProfile}
-              navigateToPricing={navigateToBusinessPricing}
               t={t}
             />
           )}

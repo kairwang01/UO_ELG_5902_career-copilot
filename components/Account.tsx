@@ -4,11 +4,6 @@ import { data } from '@/lib/data';
 import { firestoreDb } from '@/lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
 import Avatar from './Avatar';
-import {
-  STRIPE_CUSTOMER_PORTAL_LINK,
-  ALL_PLANS,
-  PLAN_HIERARCHY,
-} from '../config';
 import { ethers } from 'ethers';
 // TEMP HIDDEN: user-facing API keys + BYOA custom endpoint are hidden from the
 // settings page. Model/endpoint config is superadmin-only via the Admin Console.
@@ -42,6 +37,32 @@ const TALENT_NFT_ABI = [
 
 const TARGET_CHAIN_ID = 11155111; // Sepolia Testnet Chain ID
 const TARGET_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia Chain ID in Hex
+
+type AccountNotice = {
+  type: 'success' | 'error' | 'info';
+  text: string;
+};
+
+const AccountNoticeBanner: React.FC<{ notice: AccountNotice | null; qa: string }> = ({ notice, qa }) => {
+  if (!notice) return null;
+
+  const toneClass = notice.type === 'success'
+    ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800/50 dark:bg-green-900/25 dark:text-green-200'
+    : notice.type === 'error'
+      ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800/50 dark:bg-red-900/25 dark:text-red-200'
+      : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800/50 dark:bg-blue-900/25 dark:text-blue-200';
+
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2 text-sm leading-6 ${toneClass}`}
+      role={notice.type === 'error' ? 'alert' : 'status'}
+      aria-live={notice.type === 'error' ? 'assertive' : 'polite'}
+      data-qa={qa}
+    >
+      {notice.text}
+    </div>
+  );
+};
 
 /**
  * Shown to non-business users in place of the removed model picker.
@@ -84,16 +105,12 @@ interface AccountProps {
   onSetView: (
     view: 'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs',
   ) => void;
-  onSubscriptionChange: () => Promise<void>;
-  navigateToPricing: () => void;
   t: (key: string) => string;
 }
 
 const Account: React.FC<AccountProps> = ({
   session,
   onSetView,
-  onSubscriptionChange,
-  navigateToPricing,
   t,
 }) => {
   const [profileLoading, setProfileLoading] = useState(true);
@@ -103,18 +120,15 @@ const Account: React.FC<AccountProps> = ({
   // so a late resolve must not setState. passwordSavingRef latches a synchronous double-Enter.
   const mountedRef = useRef(true);
   const passwordSavingRef = useRef(false);
-  const [subscriptionBusy, setSubscriptionBusy] = useState(false);
   const [web3Busy, setWeb3Busy] = useState(false);
   const [fullName, setFullName] = useState<string>('');
   const [birthDate, setBirthDate] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string>('');
-  const [subscriptionStatus, setSubscriptionStatus] = useState<string>('free');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [message, setMessage] = useState<{
-    type: 'success' | 'error' | 'info';
-    text: string;
-  } | null>(null);
+  const [profileNotice, setProfileNotice] = useState<AccountNotice | null>(null);
+  const [passwordNotice, setPasswordNotice] = useState<AccountNotice | null>(null);
+  const [web3Notice, setWeb3Notice] = useState<AccountNotice | null>(null);
 
   // Web3 State
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -143,11 +157,11 @@ const Account: React.FC<AccountProps> = ({
 
     setIsSyncing(true);
     setIsWrongNetwork(false);
-    setMessage({ type: 'info', text: t('account_web3_syncing') });
+    setWeb3Notice({ type: 'info', text: t('account_web3_syncing') });
 
     try {
       if (!(window as any).ethereum) {
-        setMessage({ type: 'error', text: t('account_web3_no_wallet') });
+        setWeb3Notice({ type: 'error', text: t('account_web3_no_wallet') });
         setIsSyncing(false);
         return;
       }
@@ -162,7 +176,7 @@ const Account: React.FC<AccountProps> = ({
 
       if (network.chainId !== BigInt(TARGET_CHAIN_ID)) {
         setIsWrongNetwork(true);
-        setMessage({
+        setWeb3Notice({
           type: 'error',
           text: t('account_web3_wrong_network_message'),
         });
@@ -214,11 +228,11 @@ const Account: React.FC<AccountProps> = ({
         await data.profiles.update(session.user.id, newValues);
       }
       if (!mountedRef.current) return;
-      setMessage(null); // Clear info message on successful sync
+      setWeb3Notice(null); // Clear info message on successful sync
     } catch (err) {
       console.error('Error syncing with blockchain:', err);
       if (mountedRef.current) {
-        setMessage({ type: 'error', text: t('account_web3_sync_failed') });
+        setWeb3Notice({ type: 'error', text: t('account_web3_sync_failed') });
       }
     } finally {
       if (mountedRef.current) setIsSyncing(false);
@@ -279,9 +293,6 @@ const Account: React.FC<AccountProps> = ({
           }).catch(() => { /* best-effort migration; the local fallback still displays */ });
         }
         setAvatarUrl(profileData.avatar_url || '');
-        // Legacy/partial docs can lack subscription_status — default to 'free' so the
-        // plan hierarchy / manage-subscription routing never branches on undefined.
-        setSubscriptionStatus(profileData.subscription_status || 'free');
         setWalletAddress(profileData.wallet_address || null);
         setNftMinted(profileData.nft_minted || false);
         setNftStaked(profileData.nft_staked || false);
@@ -292,7 +303,7 @@ const Account: React.FC<AccountProps> = ({
     } catch (error: any) {
       console.error('Error getting profile:', error);
       if (mountedRef.current) {
-        setMessage({
+        setProfileNotice({
           type: 'error',
           text: t('account_profile_load_error'),
         });
@@ -311,6 +322,7 @@ const Account: React.FC<AccountProps> = ({
     }
     try {
       setProfileSaving(true);
+      setProfileNotice(null);
       const { user } = session;
 
       const updates = {
@@ -325,7 +337,7 @@ const Account: React.FC<AccountProps> = ({
       if (error) throw new Error(error.message);
       saveBirthdayLocal(user.id, birthDate);
       if (mountedRef.current) {
-        setMessage({
+        setProfileNotice({
           type: 'success',
           text: t('account_profile_updated_success'),
         });
@@ -334,7 +346,7 @@ const Account: React.FC<AccountProps> = ({
     } catch (error: any) {
       console.error('Error updating profile:', error);
       if (mountedRef.current) {
-        setMessage({
+        setProfileNotice({
           type: 'error',
           text: t('account_profile_updated_error'),
         });
@@ -348,24 +360,25 @@ const Account: React.FC<AccountProps> = ({
   const handleUpdatePassword = async (event: React.FormEvent) => {
     event.preventDefault();
     if (password !== confirmPassword) {
-      setMessage({ type: 'error', text: t('account_password_mismatch_error') });
+      setPasswordNotice({ type: 'error', text: t('account_password_mismatch_error') });
       return;
     }
     if (password.length > 0 && password.length < 6) {
-      setMessage({ type: 'error', text: t('account_password_length_error') });
+      setPasswordNotice({ type: 'error', text: t('account_password_length_error') });
       return;
     }
 
     if (passwordSavingRef.current) return; // block synchronous double-submit (a double Enter)
     passwordSavingRef.current = true;
     setPasswordSaving(true);
+    setPasswordNotice(null);
     try {
       const { error } = await data.auth.updatePassword(password);
       if (!mountedRef.current) return;
       if (error) {
-        setMessage({ type: 'error', text: error.message });
+        setPasswordNotice({ type: 'error', text: error.message });
       } else {
-        setMessage({
+        setPasswordNotice({
           type: 'success',
           text: t('account_password_updated_success'),
         });
@@ -375,28 +388,6 @@ const Account: React.FC<AccountProps> = ({
     } finally {
       passwordSavingRef.current = false;
       if (mountedRef.current) setPasswordSaving(false);
-    }
-  };
-
-  const handleManageSubscription = async () => {
-    const userLevel = PLAN_HIERARCHY[subscriptionStatus] ?? 0;
-    if (userLevel > 0) {
-      // Any paid plan — open the Stripe customer portal, but only when a real
-      // (non-test) portal link is configured. The placeholder test link would
-      // navigate the user out of the app to a dead page (mirrors the same
-      // `/test_` guard the plan-purchase flow already uses).
-      if (!STRIPE_CUSTOMER_PORTAL_LINK || STRIPE_CUSTOMER_PORTAL_LINK.includes('/test_')) {
-        setMessage({ type: 'info', text: t('account_billing_portal_unavailable') });
-        return;
-      }
-      setSubscriptionBusy(true);
-      const portalUrl = new URL(STRIPE_CUSTOMER_PORTAL_LINK);
-      if (session.user.email) {
-        portalUrl.searchParams.append('prefilled_email', session.user.email);
-      }
-      window.location.href = portalUrl.toString();
-    } else {
-      navigateToPricing();
     }
   };
 
@@ -415,7 +406,7 @@ const Account: React.FC<AccountProps> = ({
 
       if (!mountedRef.current) return;
       setWalletAddress(address);
-      setMessage({
+      setWeb3Notice({
         type: 'success',
         text: t(
           address
@@ -426,7 +417,7 @@ const Account: React.FC<AccountProps> = ({
     } catch (error: any) {
       console.error('Error updating wallet:', error);
       if (mountedRef.current) {
-        setMessage({
+        setWeb3Notice({
           type: 'error',
           text: t('account_web3_wallet_update_failed'),
         });
@@ -451,19 +442,19 @@ const Account: React.FC<AccountProps> = ({
       } catch (error) {
         if (!mountedRef.current) return;
         if ((error as any).code === 4001) {
-          setMessage({
+          setWeb3Notice({
             type: 'error',
             text: t('account_web3_connection_rejected'),
           });
         } else {
-          setMessage({ type: 'error', text: t('account_web3_connect_failed') });
+          setWeb3Notice({ type: 'error', text: t('account_web3_connect_failed') });
           console.error(error);
         }
       } finally {
         if (mountedRef.current) setWeb3Busy(false);
       }
     } else {
-      setMessage({ type: 'error', text: t('account_web3_no_wallet') });
+      setWeb3Notice({ type: 'error', text: t('account_web3_no_wallet') });
     }
   };
 
@@ -473,7 +464,7 @@ const Account: React.FC<AccountProps> = ({
 
   const handleSwitchNetwork = async () => {
     setWeb3Busy(true);
-    setMessage({ type: 'info', text: t('account_web3_switch_approve') });
+    setWeb3Notice({ type: 'info', text: t('account_web3_switch_approve') });
     try {
       await (window as any).ethereum.request({
         method: 'wallet_switchEthereumChain',
@@ -503,13 +494,13 @@ const Account: React.FC<AccountProps> = ({
           });
         } catch (addError) {
           if (!mountedRef.current) return;
-          setMessage({
+          setWeb3Notice({
             type: 'error',
             text: t('account_web3_add_network_failed'),
           });
         }
       } else {
-        setMessage({ type: 'error', text: t('account_web3_switch_failed') });
+        setWeb3Notice({ type: 'error', text: t('account_web3_switch_failed') });
       }
     } finally {
       if (mountedRef.current) setWeb3Busy(false);
@@ -518,11 +509,11 @@ const Account: React.FC<AccountProps> = ({
 
   const handleMintNFT = async () => {
     if (!walletAddress) {
-      setMessage({ type: 'error', text: t('account_web3_connect_first') });
+      setWeb3Notice({ type: 'error', text: t('account_web3_connect_first') });
       return;
     }
     setWeb3Busy(true);
-    setMessage({ type: 'info', text: t('account_web3_approve_transaction') });
+    setWeb3Notice({ type: 'info', text: t('account_web3_approve_transaction') });
     try {
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
@@ -534,7 +525,7 @@ const Account: React.FC<AccountProps> = ({
 
       const tx = await contract.mint(walletAddress);
       if (!mountedRef.current) return;
-      setMessage({ type: 'info', text: t('account_web3_minting_wait') });
+      setWeb3Notice({ type: 'info', text: t('account_web3_minting_wait') });
       const receipt = await tx.wait();
       if (!mountedRef.current) return;
 
@@ -557,7 +548,7 @@ const Account: React.FC<AccountProps> = ({
           nft_token_id: newTokenId,
         });
         if (!mountedRef.current) return;
-        setMessage({
+        setWeb3Notice({
           type: 'success',
           text: t('account_web3_mint_success').replace(
             '{id}',
@@ -569,7 +560,7 @@ const Account: React.FC<AccountProps> = ({
       }
     } catch (error: any) {
       if (mountedRef.current) {
-        setMessage({
+        setWeb3Notice({
           type: 'error',
           text: error.message || t('account_web3_mint_failed'),
         });
@@ -583,7 +574,7 @@ const Account: React.FC<AccountProps> = ({
     if (!tokenId) return;
     setWeb3Busy(true);
     const action = nftStaked ? 'unstake' : 'stake';
-    setMessage({
+    setWeb3Notice({
       type: 'info',
       text: t(
         nftStaked
@@ -601,7 +592,7 @@ const Account: React.FC<AccountProps> = ({
       );
       const tx = await contract[action](tokenId);
       if (!mountedRef.current) return;
-      setMessage({
+      setWeb3Notice({
         type: 'info',
         text: t(
           nftStaked ? 'account_web3_unstake_wait' : 'account_web3_stake_wait',
@@ -616,7 +607,7 @@ const Account: React.FC<AccountProps> = ({
         nft_staked: newStakedStatus,
       });
       if (!mountedRef.current) return;
-      setMessage({
+      setWeb3Notice({
         type: 'success',
         text: t(
           newStakedStatus
@@ -626,7 +617,7 @@ const Account: React.FC<AccountProps> = ({
       });
     } catch (error: any) {
       if (mountedRef.current) {
-        setMessage({
+        setWeb3Notice({
           type: 'error',
           text:
             error.message ||
@@ -645,7 +636,7 @@ const Account: React.FC<AccountProps> = ({
   const handleClaimRewards = async () => {
     if (!walletAddress) return;
     setWeb3Busy(true);
-    setMessage({ type: 'info', text: t('account_web3_claim_approve') });
+    setWeb3Notice({ type: 'info', text: t('account_web3_claim_approve') });
     try {
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
@@ -657,7 +648,7 @@ const Account: React.FC<AccountProps> = ({
 
       const tx = await contract.claimRewards();
       if (!mountedRef.current) return;
-      setMessage({ type: 'info', text: t('account_web3_claim_wait') });
+      setWeb3Notice({ type: 'info', text: t('account_web3_claim_wait') });
       await tx.wait();
       if (!mountedRef.current) return;
 
@@ -670,10 +661,10 @@ const Account: React.FC<AccountProps> = ({
         nft_earnings: newEarnings,
       });
       if (!mountedRef.current) return;
-      setMessage({ type: 'success', text: t('account_web3_claim_success') });
+      setWeb3Notice({ type: 'success', text: t('account_web3_claim_success') });
     } catch (error: any) {
       if (mountedRef.current) {
-        setMessage({
+        setWeb3Notice({
           type: 'error',
           text: error.message || t('account_web3_claim_failed'),
         });
@@ -683,15 +674,7 @@ const Account: React.FC<AccountProps> = ({
     }
   };
 
-  const currentPlan = ALL_PLANS[subscriptionStatus] || ALL_PLANS.free;
-  const userLevel = PLAN_HIERARCHY[subscriptionStatus] ?? 0;
   const web3ActionBusy = web3Busy || isSyncing;
-
-  const getSubscriptionButtonText = () => {
-    if (subscriptionBusy) return t('account_processing_button');
-    if (userLevel === 0) return t('account_upgrade_plan_button');
-    return t('account_manage_subscription_button');
-  };
 
   return (
     <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 p-8 rounded-lg shadow-md border border-gray-200 dark:border-slate-700 animate-fade-in">
@@ -707,15 +690,6 @@ const Account: React.FC<AccountProps> = ({
         </button>
       </div>
 
-      {message && (
-        <div
-          className={`p-4 mb-4 text-sm rounded-lg ${message.type === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200' : message.type === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'}`}
-          role="alert"
-        >
-          {message.text}
-        </div>
-      )}
-
       {/* Profile Details Form */}
       <form
         onSubmit={(e) => updateProfile(e, { fullName, avatarUrl, birthDate })}
@@ -724,6 +698,7 @@ const Account: React.FC<AccountProps> = ({
         <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
           {t('account_profile_details')}
         </h2>
+        <AccountNoticeBanner notice={profileNotice} qa="account-profile-notice" />
         <Avatar
           url={avatarUrl}
           size={150}
@@ -838,6 +813,7 @@ const Account: React.FC<AccountProps> = ({
           <p className="text-xs text-gray-500 dark:text-gray-400 -mt-3">
             {t('account_web3_optional_note')}
           </p>
+          <AccountNoticeBanner notice={web3Notice} qa="account-web3-notice" />
           <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg space-y-4">
             {isWrongNetwork && walletAddress ? (
               <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-500/30 rounded-lg text-center">
@@ -1076,6 +1052,7 @@ const Account: React.FC<AccountProps> = ({
         <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
           {t('account_change_password')}
         </h2>
+        <AccountNoticeBanner notice={passwordNotice} qa="account-password-notice" />
         <div>
           <label
             htmlFor="newPassword"
