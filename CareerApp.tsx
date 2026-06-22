@@ -1498,7 +1498,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const showCandidateShell = workspaceShell === 'candidate';
   const showEmployerShell = workspaceShell === 'employer';
   const showUnsupportedRole = workspaceShell === 'unsupported';
-  const canUseCareerCoach = Boolean(session && isLangLoaded && !isWorkspaceSessionLoading);
+  // The career coach is a candidate-only assistant (resume/career advice, and
+  // onLaunchTool opens candidate workspace tools). Gate it to the candidate
+  // shell so it never floats over the employer portal, where it's nonsensical
+  // and its tool-launch would target views the employer doesn't have.
+  const canUseCareerCoach = Boolean(session && isLangLoaded && !isWorkspaceSessionLoading && showCandidateShell);
 
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
