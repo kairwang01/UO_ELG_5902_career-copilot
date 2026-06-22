@@ -7,6 +7,7 @@ import {
   Code2,
   Compass,
   Flag,
+  Info,
   Layers3,
   Lightbulb,
   Network,
@@ -56,6 +57,14 @@ const MetricTile: React.FC<{ label: string; value: string | number; icon: React.
       {label}
     </div>
     <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{value}</p>
+  </div>
+);
+
+const EmptyResultBlock: React.FC<{ title: string; description: string; icon: React.ElementType }> = ({ title, description, icon: Icon }) => (
+  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center dark:border-slate-700 dark:bg-slate-800/40">
+    <Icon className="mx-auto h-5 w-5 text-slate-400 dark:text-slate-500" />
+    <p className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</p>
+    <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
   </div>
 );
 
@@ -357,6 +366,8 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
     const targetRole = result.targetRole || desiredRole;
     const downloadRole = (targetRole || 'target_role').replace(/\s/g, '_');
+    const primaryGap = overallSkillGaps[0] ?? null;
+    const firstRoadmapPhase = roadmap[0] ?? null;
 
     return (
       <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
@@ -400,6 +411,37 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
           </div>
         </CardShell>
 
+        {(primaryGap || firstRoadmapPhase) && (
+          <CardShell className="p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
+                  <Target className="h-4 w-4" />
+                  {t('tool_career_path_actionable_steps')}
+                </div>
+                <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+                  {primaryGap ? primaryGap.skill : firstRoadmapPhase?.phaseTitle}
+                </h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+                  {primaryGap
+                    ? primaryGap.reason
+                    : firstRoadmapPhase?.goal}
+                </p>
+              </div>
+              {primaryGap && (
+                <button
+                  type="button"
+                  onClick={() => handleGenerateProject(primaryGap.skill)}
+                  disabled={generatingProjectForSkill === primaryGap.skill}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-wait disabled:bg-emerald-400"
+                >
+                  {generatingProjectForSkill === primaryGap.skill ? '...' : t('tool_career_path_project_button')}
+                </button>
+              )}
+            </div>
+          </CardShell>
+        )}
+
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
           <CardShell className="p-5">
             <div className="flex items-start justify-between gap-4">
@@ -408,41 +450,61 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                 <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{t('ws_plan_skill_gaps_desc')}</p>
               </div>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {overallSkillGaps.map((gap) => (
-                <div key={gap.skill} className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-amber-950 dark:text-amber-100">{gap.skill}</p>
-                      <p className="mt-2 text-sm leading-relaxed text-amber-900 dark:text-amber-200">{gap.reason}</p>
+            {overallSkillGaps.length > 0 ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {overallSkillGaps.map((gap) => (
+                  <div key={gap.skill} className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-amber-950 dark:text-amber-100">{gap.skill}</p>
+                        <p className="mt-2 text-sm leading-relaxed text-amber-900 dark:text-amber-200">{gap.reason}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateProject(gap.skill)}
+                        disabled={generatingProjectForSkill === gap.skill}
+                        className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-800 dark:bg-slate-950 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                      >
+                        {generatingProjectForSkill === gap.skill ? '...' : t('tool_career_path_project_button')}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleGenerateProject(gap.skill)}
-                      disabled={generatingProjectForSkill === gap.skill}
-                      className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-800 dark:bg-slate-950 dark:text-amber-200 dark:hover:bg-amber-950/30"
-                    >
-                      {generatingProjectForSkill === gap.skill ? '...' : t('tool_career_path_project_button')}
-                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4">
+                <EmptyResultBlock
+                  icon={CheckCircle2}
+                  title={t('tool_career_path_skill_gaps')}
+                  description="No critical gaps were returned for this role. Use the roadmap below as your operating plan."
+                />
+              </div>
+            )}
           </CardShell>
 
           <CardShell className="p-5">
             <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_career_path_bridge_roles')}</h3>
-            <div className="mt-4 space-y-3">
-              {bridgeRoles.map((role) => (
-                <div key={role.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" />
-                    <p className="font-semibold text-slate-950 dark:text-slate-100">{role.title}</p>
+            {bridgeRoles.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {bridgeRoles.map((role) => (
+                  <div key={role.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" />
+                      <p className="font-semibold text-slate-950 dark:text-slate-100">{role.title}</p>
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{role.reason}</p>
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{role.reason}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4">
+                <EmptyResultBlock
+                  icon={Briefcase}
+                  title={t('tool_career_path_bridge_roles')}
+                  description="No bridge role was returned. Start from the first roadmap phase and re-run with a more specific target role if needed."
+                />
+              </div>
+            )}
           </CardShell>
         </div>
 
@@ -455,9 +517,10 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
               <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{t('ws_plan_four_week_desc')}</p>
             </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {roadmap.map((phase, index) => (
-              <article key={`${phase.phaseTitle}-${index}`} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
+          {roadmap.length > 0 ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {roadmap.map((phase, index) => (
+                <article key={`${phase.phaseTitle}-${index}`} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -504,9 +567,16 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                     ))}
                   </ul>
                 </div>
-              </article>
-            ))}
-          </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyResultBlock
+              icon={Info}
+              title={t('tool_career_path_roadmap_title')}
+              description="No roadmap phases were returned. Try generating again with a narrower role, level, and industry."
+            />
+          )}
         </CardShell>
       </div>
     );
