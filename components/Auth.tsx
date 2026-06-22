@@ -5,7 +5,7 @@ import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
 import { BUSINESS_PLANS } from '@/config';
 import type { Plan } from '@/types';
-import { X } from 'lucide-react';
+import { X, Eye, EyeOff } from 'lucide-react';
 import { BrandMark } from './BrandLogo';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
 
@@ -15,6 +15,52 @@ const INPUT_CLASS =
 import { markOnboardingPending } from '../lib/onboarding';
 import { createSubscriptionCheckout, setUserSubscription } from '../services/subscriptionClient';
 import { useToast } from './Toast';
+
+/**
+ * Password input with a show/hide toggle — a standard auth affordance that lets
+ * users catch typos before submitting (especially on the confirm-password field
+ * and on mobile). Each field keeps its own visibility state. The toggle stays
+ * keyboard-reachable with an aria-pressed label; the eye glyphs are decorative.
+ */
+const PasswordField: React.FC<{
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder: string;
+  autoComplete: string;
+  minLength?: number;
+  t: (key: string) => string;
+}> = ({ value, onChange, placeholder, autoComplete, minLength, t }) => {
+  const [visible, setVisible] = useState(false);
+  // aria-labels fall back to English when a locale hasn't translated the key,
+  // so the toggle never surfaces a raw i18n key to screen readers.
+  const label = (key: string, fallback: string) => {
+    const v = t(key);
+    return v === key ? fallback : v;
+  };
+  return (
+    <div className="relative">
+      <input
+        className={`${INPUT_CLASS} pr-11`}
+        type={visible ? 'text' : 'password'}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        required
+        autoComplete={autoComplete}
+        minLength={minLength}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? label('auth_hide_password', 'Hide password') : label('auth_show_password', 'Show password')}
+        aria-pressed={visible}
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 transition-colors hover:text-gray-600 focus:outline-none focus-visible:text-blue-600 dark:hover:text-gray-200 dark:focus-visible:text-blue-400"
+      >
+        {visible ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
+      </button>
+    </div>
+  );
+};
 
 interface AuthProps {
   onClose: () => void;
@@ -319,10 +365,10 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
             {googleBlock}
 
             <form onSubmit={handleSignUp} className="space-y-3">
-              <input className={INPUT_CLASS} type="text" placeholder={t('auth_placeholder_full_name')} value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} maxLength={80} />
-              <input className={INPUT_CLASS} type="email" placeholder={mode === 'business' ? t('auth_placeholder_email_business') : t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
-              <input className={INPUT_CLASS} type="password" placeholder={t('auth_placeholder_password')} value={password} onChange={(e) => setPassword(e.target.value)} required />
-              <input className={INPUT_CLASS} type="password" placeholder={t('auth_placeholder_confirm_password')} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+              <input className={INPUT_CLASS} type="text" placeholder={t('auth_placeholder_full_name')} value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} maxLength={80} autoComplete="name" />
+              <input className={INPUT_CLASS} type="email" placeholder={mode === 'business' ? t('auth_placeholder_email_business') : t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+              <PasswordField value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('auth_placeholder_password')} autoComplete="new-password" minLength={6} t={t} />
+              <PasswordField value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={t('auth_placeholder_confirm_password')} autoComplete="new-password" minLength={6} t={t} />
               <button className="w-full rounded-lg bg-blue-700 py-2.5 font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-400" type="submit" disabled={loading}>
                 {loading ? t('auth_creating_account') : (mode === 'business' ? t('auth_signup_for_jobs') : t('auth_signup'))}
               </button>
@@ -353,8 +399,8 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
             <h2 className="text-2xl font-bold text-center text-gray-800 dark:text-gray-100">{mode === 'business' ? t('auth_employer_signin_title') : t('auth_welcome_back')}</h2>
             {googleBlock}
             <form onSubmit={handleLogin} className="space-y-3">
-              <input className={INPUT_CLASS} type="email" placeholder={t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required />
-              <input className={INPUT_CLASS} type="password" placeholder={t('auth_placeholder_password_signin')} value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <input className={INPUT_CLASS} type="email" placeholder={t('auth_placeholder_email')} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+              <PasswordField value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('auth_placeholder_password_signin')} autoComplete="current-password" t={t} />
               <button className="w-full rounded-lg bg-blue-700 py-2.5 font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-400" type="submit" disabled={loading}>
                 {loading ? t('auth_signing_in') : t('auth_sign_in')}
               </button>
