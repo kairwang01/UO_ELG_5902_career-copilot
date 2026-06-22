@@ -47,7 +47,12 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const [targetMarket, setTargetMarket] = useState<string>(market);
   const hasResume = resumeText.trim().length > 0;
 
-  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!saved || result) return;
+    if (saved.result.targetMarket) setTargetMarket(saved.result.targetMarket);
+    setResult(saved.result);
+    setFromSaved(true);
+  }, [saved, result]);
 
   const runTool = async (options: { coverLetter?: string } = {}) => {
     if (!resumeText?.trim()) {
@@ -60,7 +65,11 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     try {
       const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter);
       if (!alive()) return;
-      const normalizedResult = { ...apiResult, formattedText: cleanResumeDisplay(apiResult.formattedText) };
+      const normalizedResult = {
+        ...apiResult,
+        formattedText: cleanResumeDisplay(apiResult.formattedText),
+        targetMarket,
+      };
       setResult(normalizedResult);
       setFromSaved(false);
       persist(normalizedResult);
@@ -303,7 +312,15 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     );
   };
 
-  return result ? renderResult() : renderInput();
+  return (
+    <div
+      data-qa="resume-formatter"
+      data-qa-resume-formatter-state={result ? 'result' : 'input'}
+      data-qa-resume-formatter-market={targetMarket}
+    >
+      {result ? renderResult() : renderInput()}
+    </div>
+  );
 };
 
 export default ResumeFormatter;

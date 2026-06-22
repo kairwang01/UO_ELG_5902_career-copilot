@@ -19,6 +19,7 @@ export interface ResumeImage {
 
 export interface FormattedResume {
   formattedText: string;
+  targetMarket?: string;
 }
 
 export interface Opportunity {

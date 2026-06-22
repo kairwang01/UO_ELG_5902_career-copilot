@@ -169,14 +169,20 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ resumeText, market, t, he
   const contentSections = sections.filter((section) => section.title !== 'Header');
 
   return (
-    <div className={`${heightClassName} overflow-y-auto rounded-xl border border-slate-200 bg-slate-100 p-3 shadow-inner dark:border-slate-700 dark:bg-slate-950`}>
+    <div
+      className={`${heightClassName} overflow-y-auto rounded-xl border border-slate-200 bg-slate-100 p-3 shadow-inner dark:border-slate-700 dark:bg-slate-950`}
+      data-qa="resume-preview-shell"
+      data-qa-resume-region={style.region}
+      data-qa-resume-page-size={style.pageSize}
+    >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-        <span>{style.label}</span>
-        <span>{style.pageSize.toUpperCase()} · {style.density}</span>
+        <span data-qa="resume-preview-style-label">{style.label}</span>
+        <span data-qa="resume-preview-style-meta">{style.pageSize.toUpperCase()} · {style.density}</span>
       </div>
       <div
         className={`mx-auto min-h-full w-full ${style.documentWidthClass} ${style.documentClassName} px-7 py-7 sm:px-10 sm:py-9`}
         role="document"
+        data-qa="resume-preview-document"
         aria-label={header.name ? `${header.name} resume preview` : t('resume_preview_placeholder')}
       >
         {resumeText.trim() ? (
@@ -207,8 +213,13 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ resumeText, market, t, he
             )}
 
             {contentSections.map((section, index) => (
-              <section key={`${section.title}-${index}`} className={style.sectionClassName}>
-                <div className={style.sectionHeadingClassName}>
+              <section
+                key={`${section.title}-${index}`}
+                className={style.sectionClassName}
+                data-qa="resume-preview-section"
+                data-qa-section-title={sectionTitle(section.title)}
+              >
+                <div className={style.sectionHeadingClassName} data-qa="resume-preview-section-title">
                   {sectionTitle(section.title)}
                 </div>
                 <div className="space-y-1">

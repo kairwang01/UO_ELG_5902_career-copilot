@@ -18,6 +18,7 @@ const SMOKES = [
   ['dialogs', 'scripts/dialog-positioning-smoke.mjs'],
   ['overlays', 'scripts/overlay-collision-smoke.mjs'],
   ['navigation-ui', 'scripts/navigation-ui-smoke.mjs'],
+  ['resume-preview', 'scripts/resume-preview-smoke.mjs'],
 ];
 
 function runSmoke(script) {
