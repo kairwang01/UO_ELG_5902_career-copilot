@@ -112,6 +112,16 @@ export const CopyButton: React.FC<{ text: string; label?: string; copiedLabel?: 
   );
 };
 
+const FORMATTED_HEADING_CLASSES: Record<number, string> = {
+  1: 'mt-5 mb-2 text-base font-semibold leading-6 text-slate-950 dark:text-white',
+  2: 'mt-4 mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-slate-700 dark:text-slate-200',
+  3: 'mt-3 mb-1.5 text-sm font-semibold leading-6 text-slate-800 dark:text-slate-100',
+};
+
+const formattedHeadingClass = (markdownLevel: number): string => (
+  FORMATTED_HEADING_CLASSES[Math.min(markdownLevel, 3)] || FORMATTED_HEADING_CLASSES[3]
+);
+
 export const renderFormattedText = (text: string) => {
     const lines = text.split('\n');
     const elements: React.ReactNode[] = [];
@@ -130,7 +140,7 @@ export const renderFormattedText = (text: string) => {
     const flushList = () => {
         if (listItems.length > 0) {
             elements.push(
-                <ul key={`ul-tool-${elements.length}`} className="list-disc list-outside ml-5 my-2 space-y-1">
+                <ul key={`ul-tool-${elements.length}`} className="my-2 ml-5 list-outside list-disc space-y-1 text-sm leading-6 text-slate-700 dark:text-slate-300">
                     {listItems.map((item, index) => (
                         <li key={index}>{renderInlineFormatting(item)}</li>
                     ))}
@@ -150,9 +160,9 @@ export const renderFormattedText = (text: string) => {
                 const level = line.match(/^#+/)![0].length;
                 const content = line.replace(/^#+\s/, '');
                 const Tag = `h${Math.min(level + 2, 6)}` as React.ElementType;
-                elements.push(<Tag key={index} className="font-bold my-4 text-xl">{renderInlineFormatting(content)}</Tag>);
+                elements.push(<Tag key={index} className={formattedHeadingClass(level)}>{renderInlineFormatting(content)}</Tag>);
             } else if (trimmedLine !== '') {
-                elements.push(<p key={index} className="mb-2">{renderInlineFormatting(line)}</p>);
+                elements.push(<p key={index} className="mb-2 text-sm leading-6 text-slate-700 dark:text-slate-300">{renderInlineFormatting(line)}</p>);
             }
         }
     });
