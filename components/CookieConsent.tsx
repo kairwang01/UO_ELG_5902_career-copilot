@@ -42,41 +42,47 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
     };
 
     const positionClass = avoidSidebar
-        ? 'fixed inset-x-3 top-[calc(0.75rem+env(safe-area-inset-top))] bottom-auto z-50 sm:inset-x-auto sm:left-auto sm:right-6 sm:top-[calc(1rem+env(safe-area-inset-top))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:left-4 lg:right-auto lg:top-auto lg:bottom-[calc(1rem+env(safe-area-inset-bottom))] lg:w-[14.5rem]'
+        ? 'fixed left-3 right-16 top-[calc(0.75rem+env(safe-area-inset-top))] z-50 sm:inset-x-auto sm:right-5 sm:top-[calc(1rem+env(safe-area-inset-top))] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] lg:left-[17rem] lg:right-auto lg:w-[25rem] xl:left-[17.5rem]'
         : 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-6 sm:right-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:w-[30rem]';
 
     return (
         <div
             className={positionClass}
-            role="dialog"
+            role="region"
             aria-live="polite"
             aria-label="Cookie consent"
         >
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/95 p-3 text-gray-200 shadow-2xl shadow-slate-950/25 backdrop-blur sm:p-4">
-                <p className="text-xs leading-5 sm:text-sm">
-                    {t('cookie_consent_message')}{' '}
-                    <a
-                        href="/privacy.html"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 underline hover:text-blue-300"
-                    >
-                        {t('cookie_consent_learn_more')}
-                    </a>
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-                    <button
-                        onClick={() => decide('declined')}
-                        className="min-h-10 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950"
-                    >
-                        {t('cookie_consent_decline')}
-                    </button>
-                    <button
-                        onClick={() => decide('accepted')}
-                        className="min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950"
-                    >
-                        {t('cookie_consent_accept')}
-                    </button>
+            <div className={`rounded-2xl border border-slate-700 bg-slate-950/95 text-gray-200 shadow-2xl shadow-slate-950/25 backdrop-blur ${
+                avoidSidebar ? 'p-3 sm:p-3.5' : 'p-3 sm:p-4'
+            }`}>
+                <div className={`${avoidSidebar ? 'gap-3 sm:flex sm:items-start' : ''}`}>
+                    <p className={`${avoidSidebar ? 'min-w-0 flex-1 text-xs leading-5' : 'text-xs leading-5 sm:text-sm'}`}>
+                        {t('cookie_consent_message')}{' '}
+                        <a
+                            href="/privacy.html"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 underline hover:text-blue-300"
+                        >
+                            {t('cookie_consent_learn_more')}
+                        </a>
+                    </p>
+                    <div className={`${avoidSidebar ? 'mt-3 grid grid-cols-2 gap-2 sm:mt-0 sm:flex sm:shrink-0' : 'mt-3 grid grid-cols-2 gap-2 sm:flex sm:justify-end'}`}>
+                        <button
+                            type="button"
+                            onClick={() => decide('declined')}
+                            className="min-h-10 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {t('cookie_consent_decline')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => decide('accepted')}
+                            className="min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {t('cookie_consent_accept')}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
