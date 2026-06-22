@@ -189,6 +189,7 @@ async function collectPreviewMetrics(page) {
       formatterMarket: document.querySelector('[data-qa="resume-formatter"]')?.getAttribute('data-qa-resume-formatter-market') || '',
       region: shell?.getAttribute('data-qa-resume-region') || '',
       pageSize: shell?.getAttribute('data-qa-resume-page-size') || '',
+      generatedMarket: document.querySelector('[data-qa="resume-formatter"]')?.getAttribute('data-qa-resume-formatter-generated-market') || '',
       shellOverflowX: shell ? Math.max(0, shell.scrollWidth - shell.clientWidth) : null,
       documentOverflowX: documentNode ? Math.max(0, documentNode.scrollWidth - documentNode.clientWidth) : null,
       pageOverflowX: Math.max(0, root.scrollWidth - root.clientWidth),
@@ -218,6 +219,7 @@ async function assertPreviewCase(browser, testCase, viewport) {
 
     const metrics = await collectPreviewMetrics(page);
     assert(metrics.formatterMarket === testCase.market, `${label}: formatter market ${metrics.formatterMarket}, expected ${testCase.market}`);
+    assert(metrics.generatedMarket === testCase.market, `${label}: generated market ${metrics.generatedMarket}, expected ${testCase.market}`);
     assert(metrics.region === testCase.expectedRegion, `${label}: region ${metrics.region}, expected ${testCase.expectedRegion}`);
     assert(metrics.pageSize === testCase.expectedPageSize, `${label}: page size ${metrics.pageSize}, expected ${testCase.expectedPageSize}`);
     assert(metrics.pageOverflowX === 0, `${label}: page horizontal overflow ${metrics.pageOverflowX}px`);
@@ -231,6 +233,15 @@ async function assertPreviewCase(browser, testCase, viewport) {
     for (const forbidden of testCase.forbiddenText || []) {
       assert(!metrics.documentText.includes(forbidden), `${label}: forbidden text survived in preview: ${forbidden}`);
     }
+
+    if (testCase.market === 'Japan' && viewport.width >= 1000) {
+      await page.locator('[data-qa="resume-formatter-result-market-select"]').selectOption('Canada');
+      const changedMetrics = await collectPreviewMetrics(page);
+      assert(changedMetrics.formatterMarket === 'Canada', `${label}: target market did not update after select`);
+      assert(changedMetrics.generatedMarket === 'Japan', `${label}: generated market changed before regeneration`);
+      assert(changedMetrics.region === 'japan', `${label}: preview style changed before regeneration`);
+      await expectButtonEnabled(page, '[data-qa="resume-formatter-regenerate-market"]', label);
+    }
     assert(consoleErrors.length === 0, `${label}: console errors:\n${consoleErrors.join('\n')}`);
     console.log(`  ✓ ${label} region=${metrics.region} page=${metrics.pageSize} sections=${metrics.sectionTitles.length}`);
   } catch (error) {
@@ -239,6 +250,11 @@ async function assertPreviewCase(browser, testCase, viewport) {
   } finally {
     await context.close();
   }
+}
+
+async function expectButtonEnabled(page, selector, label) {
+  const disabled = await page.locator(selector).evaluate((button) => button.disabled);
+  assert(!disabled, `${label}: regenerate button should enable after selecting a different target market`);
 }
 
 async function main() {

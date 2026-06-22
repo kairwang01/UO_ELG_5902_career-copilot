@@ -249,7 +249,8 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     if (!result) return null;
 
     const formattedText = cleanResumeDisplay(result.formattedText);
-    const marketStyle = getResumeMarketStyle(targetMarket);
+    const generatedMarket = result.targetMarket || targetMarket;
+    const marketStyle = getResumeMarketStyle(generatedMarket);
     const validation = assessFormattedResume(formattedText);
     return (
       <div className="space-y-4 animate-fade-in">
@@ -282,32 +283,69 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
 
         {/* (d) DownloadButtons already present; "format for another market" button already present — preserved */}
         <div className="flex flex-wrap justify-between items-center gap-2">
-          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} {t('tool_resume_formatter_results_for').replace('{market}', targetMarket)}</h4>
-          <DownloadButtons textContent={formattedText} baseFilename={`${targetMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
+          <div>
+            <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} {t('tool_resume_formatter_results_for').replace('{market}', generatedMarket)}</h4>
+            {targetMarket !== generatedMarket && (
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Current preview is still the {generatedMarket} version. Generate again to create a {targetMarket} version.
+              </p>
+            )}
+          </div>
+          <DownloadButtons textContent={formattedText} baseFilename={`${generatedMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
         </div>
 
-        <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-blue-700 dark:text-blue-300">
-            <span>{marketStyle.label}</span>
-            <span aria-hidden="true">·</span>
-            <span>{marketStyle.pageSize.toUpperCase()}</span>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-blue-700 dark:text-blue-300">
+              <span>{marketStyle.label}</span>
+              <span aria-hidden="true">·</span>
+              <span>{marketStyle.pageSize.toUpperCase()}</span>
+            </div>
+            {MARKET_HINT_KEY[generatedMarket] && (
+              <p className="mt-1 text-sm leading-6 text-blue-900 dark:text-blue-100">{t(MARKET_HINT_KEY[generatedMarket])}</p>
+            )}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {marketStyle.principles.map((principle) => (
+                <span key={principle} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                  {principle}
+                </span>
+              ))}
+            </div>
           </div>
-          {MARKET_HINT_KEY[targetMarket] && (
-            <p className="mt-1 text-sm leading-6 text-blue-900 dark:text-blue-100">{t(MARKET_HINT_KEY[targetMarket])}</p>
-          )}
-          <div className="mt-2 flex flex-wrap gap-2">
-            {marketStyle.principles.map((principle) => (
-              <span key={principle} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                {principle}
-              </span>
-            ))}
+
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <label htmlFor="result-target-market" className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+              {t('tool_resume_formatter_target_market_label')}
+            </label>
+            <select
+              id="result-target-market"
+              value={targetMarket}
+              onChange={(e) => setTargetMarket(e.target.value)}
+              className="mt-2 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
+              data-qa="resume-formatter-result-market-select"
+            >
+              {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <button
+              type="button"
+              onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
+              disabled={loading || targetMarket === generatedMarket}
+              className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 dark:disabled:bg-slate-800 dark:disabled:text-slate-400"
+              data-qa="resume-formatter-regenerate-market"
+            >
+              {targetMarket === generatedMarket ? 'Current version' : `${t('tool_resume_formatter_format_button')} · ${targetMarket}`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setResult(null)}
+              className="mt-2 w-full rounded-lg border border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              &larr; {t('tool_resume_formatter_localize_again')}
+            </button>
           </div>
         </div>
 
-        <ResumePreview resumeText={formattedText} market={targetMarket} t={t} heightClassName="h-[560px] max-h-[72vh]" />
-        <button onClick={() => setResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300">
-            &larr; {t('tool_resume_formatter_localize_again')}
-        </button>
+        <ResumePreview resumeText={formattedText} market={generatedMarket} t={t} heightClassName="h-[560px] max-h-[72vh]" />
       </div>
     );
   };
@@ -317,6 +355,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
       data-qa="resume-formatter"
       data-qa-resume-formatter-state={result ? 'result' : 'input'}
       data-qa-resume-formatter-market={targetMarket}
+      data-qa-resume-formatter-generated-market={result?.targetMarket || ''}
     >
       {result ? renderResult() : renderInput()}
     </div>
