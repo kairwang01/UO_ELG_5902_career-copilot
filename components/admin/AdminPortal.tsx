@@ -1609,6 +1609,41 @@ const AdminPortal: React.FC = () => {
                   </div>
                 </Card>
 
+                {/* Free / uncharged tool volume — observability only, never billed or capped */}
+                <Card>
+                  <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <SectionHeading>7-day free tool usage (no charge)</SectionHeading>
+                  </div>
+                  <div className="overflow-x-auto">
+                    {Object.keys(dashboard.free_tool_breakdown ?? {}).length === 0 ? (
+                      <EmptyState message="No uncharged tool usage recorded in the past 7 days." />
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left border-b border-gray-200 dark:border-gray-700">
+                            <th className="px-5 py-3 text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                              Tool
+                            </th>
+                            <th className="px-5 py-3 text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase text-right">
+                              Calls
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                          {Object.entries(dashboard.free_tool_breakdown ?? {}).map(
+                            ([tool, stats]: [string, { runs: number }]) => (
+                              <tr key={tool} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <td className="px-5 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">{tool}</td>
+                                <td className="px-5 py-3 text-right tabular-nums text-gray-800 dark:text-gray-200">{stats.runs}</td>
+                              </tr>
+                            ),
+                          )}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </Card>
+
                 {/* Recent events */}
                 <Card>
                   <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">

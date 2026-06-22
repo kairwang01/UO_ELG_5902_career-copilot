@@ -13,6 +13,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { GoogleGenAI } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
+import { recordObservedToolRun } from "../admin/usageLog";
 import { ensurePlatformCaches, getGeminiApiKey } from "../config/env";
 
 interface GenerateHeadshotRequest {
@@ -23,7 +24,7 @@ interface GenerateHeadshotRequest {
 const MAX_IMAGE_BASE64_LEN = 8_000_000;
 
 export const generateHeadshotFunction = onCall({ invoker: "public" }, async (request) => {
-  requireAuth(request);
+  const uid = requireAuth(request);
 
   const { imageBase64 } = (request.data ?? {}) as GenerateHeadshotRequest;
   if (!imageBase64 || typeof imageBase64 !== "string") {
@@ -32,6 +33,9 @@ export const generateHeadshotFunction = onCall({ invoker: "public" }, async (req
   if (imageBase64.length > MAX_IMAGE_BASE64_LEN) {
     throw new HttpsError("invalid-argument", "Image is too large.");
   }
+
+  // Observability only — uncharged tool, never capped (see recordObservedToolRun).
+  void recordObservedToolRun(uid, "generate-headshot");
 
   // Warm the platform-config cache so the key getter reads the admin-configured
   // Firestore value (this handler reads the key directly, not via resolveProvider).

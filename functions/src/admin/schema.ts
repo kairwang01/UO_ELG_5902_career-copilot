@@ -181,8 +181,10 @@ export interface UsageEventDoc {
   uid: string;
   tool: string;
   credit_cost: number;
-  // "free" = a $0 helper run, metered for the daily run cap but never charged.
-  status: "deducted" | "refunded" | "free";
+  // "free"     = a $0 helper run, metered for the daily run cap but never charged.
+  // "observed" = an uncharged tool call logged for admin volume visibility ONLY —
+  //              NOT counted toward any cap and NOT written to usage counters.
+  status: "deducted" | "refunded" | "free" | "observed";
   day_key?: string;
   request_id?: string | null;
   balance_after?: number | null;

@@ -197,6 +197,24 @@ export const adminGetDashboardFunction = onCall({ invoker: "public" }, async (re
     byUser[uid] = (byUser[uid] ?? 0) + cost;
   });
 
+  // Uncharged ("observed") tool volume — recorded for visibility only, never hits a
+  // credit counter or cap. Aggregated from a SEPARATE query and returned on its own
+  // field so it never distorts the charged spend/run metrics above. Reuses the same
+  // (status, created_at) index the deducted query already relies on.
+  const freeUsageSnap = await db
+    .collection(USAGE_EVENTS_COLLECTION)
+    .where("created_at", ">=", weekStart)
+    .where("status", "==", "observed")
+    .limit(5000)
+    .get();
+  const freeByTool: Record<string, { runs: number }> = {};
+  freeUsageSnap.forEach((doc) => {
+    const tool = doc.data().tool as string;
+    if (!tool) return;
+    if (!freeByTool[tool]) freeByTool[tool] = { runs: 0 };
+    freeByTool[tool].runs += 1;
+  });
+
   const topUsers = Object.entries(byUser)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
@@ -231,6 +249,8 @@ export const adminGetDashboardFunction = onCall({ invoker: "public" }, async (re
     today_credits: today.credits,
     week_tool_breakdown: byTool,
     week_usage_truncated: usageSnap.size >= 5000,
+    free_tool_breakdown: freeByTool,
+    free_usage_truncated: freeUsageSnap.size >= 5000,
     top_users_week: topUsers,
     recent_events: recent,
     quotas,

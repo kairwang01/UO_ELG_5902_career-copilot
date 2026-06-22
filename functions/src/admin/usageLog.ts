@@ -156,6 +156,33 @@ export async function logUsageEvent(
   await db.collection(USAGE_EVENTS_COLLECTION).add(payload);
 }
 
+/**
+ * Records an uncharged tool call for admin VOLUME visibility only.
+ *
+ * Unlike recordFreeToolRun, this deliberately does NOT (a) enforce any quota
+ * (checkQuotasOrThrow) or (b) bump usage counters — so it can never throw
+ * resource-exhausted and never inflates the run counter the free-tier cap reads.
+ * It is therefore invisible to the user's experience: zero behavior change, just an
+ * observability breadcrumb. Best-effort and non-throwing — a logging failure must
+ * never break the tool it instruments.
+ */
+export async function recordObservedToolRun(uid: string, tool: string): Promise<void> {
+  try {
+    await db.collection(USAGE_EVENTS_COLLECTION).add({
+      uid,
+      tool,
+      credit_cost: 0,
+      status: "observed",
+      day_key: utcDayKey(),
+      request_id: null,
+      balance_after: null,
+      created_at: FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.error("recordObservedToolRun failed", { uid, tool, err });
+  }
+}
+
 export async function logCreditLedger(entry: {
   uid: string;
   amount: number;

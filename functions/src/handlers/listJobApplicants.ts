@@ -27,6 +27,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
+import { recordObservedToolRun } from "../admin/usageLog";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
@@ -149,6 +150,10 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
   if (job.employer_id !== uid) {
     throw new HttpsError("permission-denied", "You do not own this job posting.");
   }
+
+  // Observability only — uncharged tool, never capped (see recordObservedToolRun).
+  void recordObservedToolRun(uid, "list-job-applicants");
+
   const jobDescription = typeof job.description === "string" ? job.description.trim() : "";
 
   // 2. Read applications for this job (Admin SDK). Name/date/status live on the

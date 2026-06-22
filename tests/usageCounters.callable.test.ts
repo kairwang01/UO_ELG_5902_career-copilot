@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as admin from '../functions/node_modules/firebase-admin';
 import { deductCredits } from '../functions/src/credits/deductCredits';
-import { getTodayUsageTotals, getUserTodayUsage, utcDayKey } from '../functions/src/admin/usageLog';
+import { getTodayUsageTotals, getUserTodayUsage, recordObservedToolRun, utcDayKey } from '../functions/src/admin/usageLog';
 
 const PROJECT = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const db = admin.firestore();
@@ -118,5 +118,41 @@ describe('usage counters and idempotent credit deduction', () => {
 
     await expect(getTodayUsageTotals()).resolves.toEqual({ runs: 2, credits: 16 });
     await expect(getUserTodayUsage('legacy-user')).resolves.toEqual({ runs: 2, credits: 16 });
+  });
+});
+
+describe('observed (uncharged) tool runs — admin visibility only, zero cap impact', () => {
+  it('writes "observed" usage events but never charges, bumps counters, or counts toward the cap', async () => {
+    await seedUser('obs-user', 50);
+
+    await recordObservedToolRun('obs-user', 'career-coach');
+    await recordObservedToolRun('obs-user', 'discover-talent');
+
+    // The observed events exist (this is the admin volume signal).
+    const events = await db.collection('usage_events').where('uid', '==', 'obs-user').get();
+    expect(events.size).toBe(2);
+    expect(events.docs.every((d) => d.data().status === 'observed')).toBe(true);
+    expect(events.docs.every((d) => d.data().credit_cost === 0)).toBe(true);
+
+    // No usage_counters written → the free-tier run cap input is untouched.
+    expect((await counterDocs()).length).toBe(0);
+
+    // Balance unchanged and the cap-read view sees ZERO runs, so these calls can never
+    // push a free user toward resource-exhausted on other tools.
+    const user = (await db.collection('users').doc('obs-user').get()).data()!;
+    expect(user.credits).toBe(50);
+    await expect(getUserTodayUsage('obs-user')).resolves.toEqual({ runs: 0, credits: 0 });
+  });
+
+  it('is invisible to the charged run counter when mixed with a real deduction', async () => {
+    await seedUser('mix-user', 100);
+    await recordObservedToolRun('mix-user', 'career-coach');
+    await deductCredits('mix-user', 7, 'resume-analysis', { requestId: 'req_mix_001' });
+    await recordObservedToolRun('mix-user', 'list-job-applicants');
+
+    // Only the charged run counts; the 2 observed calls do not inflate runs/credits.
+    await expect(getUserTodayUsage('mix-user')).resolves.toEqual({ runs: 1, credits: 7 });
+    const events = await db.collection('usage_events').where('uid', '==', 'mix-user').get();
+    expect(events.size).toBe(3); // 2 observed + 1 deducted
   });
 });

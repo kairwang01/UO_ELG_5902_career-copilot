@@ -15,6 +15,10 @@ export interface AdminDashboard {
   today_credits: number;
   week_tool_breakdown: Record<string, { runs: number; credits: number }>;
   week_usage_truncated?: boolean;
+  // Uncharged tools (careerCoach/discoverTalent/listJobApplicants/generateHeadshot):
+  // call volume only, never billed or capped.
+  free_tool_breakdown?: Record<string, { runs: number }>;
+  free_usage_truncated?: boolean;
   top_users_week: { uid: string; credits_spent: number }[];
   recent_events: Array<Record<string, unknown>>;
   quotas: Record<string, unknown>;

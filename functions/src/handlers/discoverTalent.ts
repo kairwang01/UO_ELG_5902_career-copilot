@@ -23,6 +23,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requireAuth } from "../middleware/auth";
+import { recordObservedToolRun } from "../admin/usageLog";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
@@ -108,6 +109,9 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
   if (jobDescription.length > MAX_JD_CHARS) {
     throw new HttpsError("invalid-argument", `jobDescription must be ≤ ${MAX_JD_CHARS} characters.`);
   }
+
+  // Observability only — uncharged tool, never capped (see recordObservedToolRun).
+  void recordObservedToolRun(uid, "discover-talent");
 
   // Admin-SDK candidate scan (clients are rules-blocked from this read by design).
   const snap = await db

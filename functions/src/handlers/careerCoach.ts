@@ -16,6 +16,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAuth } from "../middleware/auth";
+import { recordObservedToolRun } from "../admin/usageLog";
 import { resolveProvider } from "../llm/models";
 import { buildPrompt } from "../llm/prompts";
 import { ensurePlatformCaches } from "../config/env";
@@ -43,6 +44,9 @@ export const careerCoachFunction = onCall({ invoker: "public", timeoutSeconds: 1
   if (!Array.isArray(data.messages) || data.messages.length === 0) {
     throw new HttpsError("invalid-argument", "messages is required.");
   }
+
+  // Observability only — uncharged tool, never capped (see recordObservedToolRun).
+  void recordObservedToolRun(uid, "career-coach");
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();
