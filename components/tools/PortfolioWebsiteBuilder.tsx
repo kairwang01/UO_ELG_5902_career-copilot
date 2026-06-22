@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { Globe, Sparkles } from 'lucide-react';
 import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
@@ -30,7 +30,7 @@ const HTML_TEMPLATE = `
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         html { scroll-behavior: smooth; }
         body { background-color: var(--light); color: var(--dark); line-height: 1.6; }
-        .container { width: 90%; max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        .container { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 0; }
         section { padding: 80px 0; }
         .section-title { text-align: center; margin-bottom: 50px; position: relative; }
         .section-title h2 { font-size: 2.5rem; color: var(--dark); margin-bottom: 15px; }
@@ -70,7 +70,7 @@ const HTML_TEMPLATE = `
         .portfolio-filter { display: flex; justify-content: center; margin-bottom: 30px; flex-wrap: wrap; }
         .filter-btn { padding: 8px 20px; background-color: var(--surface-card, white); color: var(--dark); border: 1px solid #ddd; margin: 5px; cursor: pointer; border-radius: 5px; transition: var(--transition); font-weight: 500; }
         .filter-btn.active, .filter-btn:hover { background-color: var(--primary); color: white; border-color: var(--primary); }
-        .portfolio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 25px; }
+        .portfolio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 25px; }
         .portfolio-item { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); height: 250px; }
         .portfolio-item img { width: 100%; height: 100%; object-fit: cover; transition: var(--transition); }
         .portfolio-item:hover img { transform: scale(1.1); }
@@ -124,6 +124,16 @@ const HTML_TEMPLATE = `
             .nav-links li { margin: 15px 0; }
             .hero-content h1 { font-size: 2.5rem; }
             .section-title h2 { font-size: 2rem; }
+        }
+        @media (max-width: 480px) {
+            section { padding: 56px 0; }
+            .container { width: min(100% - 24px, 1120px); }
+            .hero { padding-top: 120px; min-height: auto; }
+            .hero-content h1 { font-size: 2.1rem; line-height: 1.15; }
+            .hero-content p { font-size: 1rem; }
+            .profile-img { width: min(230px, 80vw); height: min(230px, 80vw); }
+            .skills-container, .portfolio-grid { gap: 18px; }
+            .skill, .contact-form, .timeline-content { padding: 20px; }
         }
     </style>
 </head>
@@ -346,6 +356,12 @@ const truncate = (value: string, maxLength: number): string => {
 const isBlankProject = (project: Project): boolean =>
     !compact(project.title) && !compact(project.description) && !compact(project.url);
 
+let projectIdSequence = Date.now();
+const createProjectId = (): number => {
+    projectIdSequence += 1;
+    return projectIdSequence;
+};
+
 const DEFAULT_PROJECT: Project = { id: 1, title: '', description: '', url: '', category: 'Web' };
 
 const toDraftProject = (project: Project): PortfolioDraftProject => ({
@@ -356,7 +372,7 @@ const toDraftProject = (project: Project): PortfolioDraftProject => ({
 });
 
 const fromDraftProject = (project: PortfolioDraftProject, index: number): Project => ({
-    id: Date.now() + index,
+    id: createProjectId() + index,
     title: project.title,
     description: project.description,
     url: project.url,
@@ -428,7 +444,7 @@ const buildProjectsFromContent = (content: PortfolioContent): Project[] => {
         .filter(project => compact(project.title) || compact(project.description))
         .slice(0, 4)
         .map((project, index) => ({
-            id: Date.now() + index,
+            id: createProjectId() + index,
             title: truncate(compact(project.title), 120),
             description: truncate(compact(project.description), 420),
             url: compact(project.url),
@@ -441,7 +457,7 @@ const buildProjectsFromContent = (content: PortfolioContent): Project[] => {
         .filter(exp => compact(exp.title) || compact(exp.description))
         .slice(0, 3)
         .map((exp, index) => ({
-            id: Date.now() + index,
+            id: createProjectId() + index,
             title: truncate([compact(exp.title), compact(exp.company)].filter(Boolean).join(' at '), 120),
             description: truncate(compact(exp.description), 420),
             url: '',
@@ -454,7 +470,7 @@ const buildProjectsFromContent = (content: PortfolioContent): Project[] => {
         .filter(skill => compact(skill.category) || compact(skill.description))
         .slice(0, 3)
         .map((skill, index) => ({
-            id: Date.now() + index,
+            id: createProjectId() + index,
             title: truncate(compact(skill.category), 120),
             description: truncate(compact(skill.description), 420),
             url: '',
@@ -463,7 +479,7 @@ const buildProjectsFromContent = (content: PortfolioContent): Project[] => {
 
     return fromSkills.length > 0
         ? fromSkills
-        : [{ id: Date.now(), title: '', description: '', url: '', category: 'Web' }];
+        : [{ id: createProjectId(), title: '', description: '', url: '', category: 'Web' }];
 };
 
 const resizeImage = (file: File, maxSize: number): Promise<{ mimeType: string; data: string; }> => {
@@ -662,6 +678,7 @@ interface PortfolioWebsiteBuilderProps {
 
 const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resumeText, initialInput, profile, session, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
+  const formId = useId();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioWebsiteResult | null>(null);
   const [portfolioContent, setPortfolioContent] = useState<PortfolioContent | null>(null);
@@ -687,6 +704,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const mountedRef = useRef(true);
   const autoFillRunRef = useRef(0);
   const headshotRunRef = useRef(0);
+  const imageUploadRunRef = useRef(0);
+  const projectImageRunRef = useRef<Record<number, number>>({});
   const saveDraftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDraftRef = useRef('');
   const resumeFingerprint = useMemo(() => portfolioDraftResumeFingerprint(resumeText), [resumeText]);
@@ -809,7 +828,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                     if(prev.length === 1 && !prev[0].title && !prev[0].description) {
                         return [{...prev[0], title: project.projectTitle, description: project.objective }];
                     }
-                    return [...prev, { id: Date.now(), title: project.projectTitle, description: project.objective, url: '', category: 'Web' }]
+                    return [...prev, { id: createProjectId(), title: project.projectTitle, description: project.objective, url: '', category: 'Web' }]
                 });
             }
         } catch (e) {
@@ -928,9 +947,10 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const runId = ++imageUploadRunRef.current;
     try {
         const resizedImage = await resizeImage(file, 800);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || imageUploadRunRef.current !== runId) return;
         setUploadedImage(resizedImage);
         setHeadshotStep('photo_uploaded');
         setHeadshotError(null);
@@ -998,6 +1018,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   };
 
   const resetHeadshotFlow = () => {
+    imageUploadRunRef.current++;
+    headshotRunRef.current++;
     setHeadshotStep('initial');
     setHeadshotError(null);
     setUploadedImage(null);
@@ -1014,10 +1036,26 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const [resultTab, setResultTab] = useState<'preview' | 'code' | 'deploy'>('preview');
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [previewTheme, setPreviewTheme] = useState<string | null>(null);
+  const isChineseUi = t('ws_nav_resume') === '简历';
+  const stripStepNumber = (value: string) => value.replace(/^\s*\d+\.\s*/, '');
+  const checklistCopyLabel = stripStepNumber(t('tool_portfolio_step1_title'));
+  const checklistItemsLabel = stripStepNumber(t('tool_portfolio_step3_title'));
+  const checklistLabels = {
+    title: isChineseUi ? '发布检查' : 'Build checklist',
+    resume: t('ws_nav_resume'),
+    ready: t('dashboard_priority_status_ready'),
+    missing: isChineseUi ? '缺少' : 'Missing',
+    copy: checklistCopyLabel,
+    reviewed: isChineseUi ? '已检查' : 'Reviewed',
+    needsReview: t('applicant_funnel_needs_review_chip'),
+    items: checklistItemsLabel,
+    selected: isChineseUi ? '个已选择' : 'selected',
+    theme: isChineseUi ? '风格' : 'Theme',
+  };
 
   const handleDetailChange = (field: keyof typeof details, value: string) => setDetails(prev => ({ ...prev, [field]: value }));
   const handleProjectChange = (id: number, field: string, value: string) => setProjects(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
-  const addProject = () => setProjects(prev => [...prev, { id: Date.now(), title: '', description: '', url: '', category: 'Web' }]);
+  const addProject = () => setProjects(prev => [...prev, { id: createProjectId(), title: '', description: '', url: '', category: 'Web' }]);
   const removeProject = (id: number) => setProjects(prev => prev.filter(p => p.id !== id));
 
   const clearSavedDraft = async () => {
@@ -1045,9 +1083,11 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const handleProjectImageUpload = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const runId = (projectImageRunRef.current[id] ?? 0) + 1;
+    projectImageRunRef.current[id] = runId;
     try {
         const resizedImage = await resizeImage(file, 600);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || projectImageRunRef.current[id] !== runId) return;
         setProjects(prev => prev.map(p => p.id === id ? { ...p, image: resizedImage } : p));
     } catch (err) {
         setError(t('tool_portfolio_image_process_failed'));
@@ -1188,7 +1228,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       />
     );
     return (
-    <div className="max-w-4xl mx-auto space-y-10 animate-fade-in">
+    <div className="max-w-6xl mx-auto space-y-10 animate-fade-in">
         <div className="flex items-center justify-between mb-2">
             <button 
                 onClick={() => setCurrentStep('template')}
@@ -1220,12 +1260,13 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                     </button>
                 )}
                 <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-full text-xs font-bold border border-blue-100 dark:border-blue-800/50">
-                    Template: {PORTFOLIO_TEMPLATES.find(t => t.key === details.theme)?.name}
+                    {checklistLabels.theme}: {PORTFOLIO_TEMPLATES.find(t => t.key === details.theme)?.name}
                 </div>
             </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+          <div className="min-w-0 space-y-8">
             <div>
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -1248,12 +1289,12 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 </div>
                 <div className="space-y-4 p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_tagline_label')}</label>
-                        <input type="text" value={details.tagline} onChange={e => handleDetailChange('tagline', e.target.value)} placeholder={t('tool_portfolio_tagline_placeholder')} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                        <label htmlFor={`${formId}-tagline`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_tagline_label')}</label>
+                        <input id={`${formId}-tagline`} type="text" value={details.tagline} onChange={e => handleDetailChange('tagline', e.target.value)} placeholder={t('tool_portfolio_tagline_placeholder')} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_bio_label')}</label>
-                        <textarea value={details.bio} onChange={e => handleDetailChange('bio', e.target.value)} rows={3} placeholder={t('tool_portfolio_bio_placeholder')} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                        <label htmlFor={`${formId}-bio`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_bio_label')}</label>
+                        <textarea id={`${formId}-bio`} value={details.bio} onChange={e => handleDetailChange('bio', e.target.value)} rows={3} placeholder={t('tool_portfolio_bio_placeholder')} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                     </div>
                 </div>
             </div>
@@ -1276,32 +1317,32 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                     {projects.map(p => (
                         <div key={p.id} className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm relative group overflow-hidden">
                             {projects.length > 1 && (
-                                <button type="button" onClick={() => removeProject(p.id)} className="absolute top-4 right-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full h-8 w-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button type="button" aria-label={isChineseUi ? `移除 ${p.title || '项目'}` : `Remove ${p.title || 'project'}`} onClick={() => removeProject(p.id)} className="absolute top-4 right-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full h-8 w-8 flex items-center justify-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                                 </button>
                             )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_title_label')}</label>
-                                    <input type="text" value={p.title} onChange={e => handleProjectChange(p.id, 'title', e.target.value)} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                    <label htmlFor={`${formId}-project-title-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_title_label')}</label>
+                                    <input id={`${formId}-project-title-${p.id}`} type="text" value={p.title} onChange={e => handleProjectChange(p.id, 'title', e.target.value)} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_url_label')}</label>
-                                    <input type="url" value={p.url} onChange={e => handleProjectChange(p.id, 'url', e.target.value)} placeholder={t('tool_portfolio_project_url_placeholder')} className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                    <label htmlFor={`${formId}-project-url-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_url_label')}</label>
+                                    <input id={`${formId}-project-url-${p.id}`} type="url" value={p.url} onChange={e => handleProjectChange(p.id, 'url', e.target.value)} placeholder={t('tool_portfolio_project_url_placeholder')} className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                                     <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">{t('tool_portfolio_project_url_hint')}</p>
                                 </div>
                             </div>
                             <div className="mt-6">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_category_label')}</label>
-                                <input type="text" value={p.category} onChange={e => handleProjectChange(p.id, 'category', e.target.value)} required placeholder={t('tool_portfolio_project_category_placeholder')} className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                <label htmlFor={`${formId}-project-category-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_category_label')}</label>
+                                <input id={`${formId}-project-category-${p.id}`} type="text" value={p.category} onChange={e => handleProjectChange(p.id, 'category', e.target.value)} required placeholder={t('tool_portfolio_project_category_placeholder')} className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                             </div>
                             <div className="mt-6">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_desc_label')}</label>
-                                <textarea value={p.description} onChange={e => handleProjectChange(p.id, 'description', e.target.value)} rows={2} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                <label htmlFor={`${formId}-project-description-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_desc_label')}</label>
+                                <textarea id={`${formId}-project-description-${p.id}`} value={p.description} onChange={e => handleProjectChange(p.id, 'description', e.target.value)} rows={2} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                             </div>
                             <div className="mt-6">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_image_label')}</label>
-                                <input type="file" accept="image/*" onChange={e => handleProjectImageUpload(p.id, e)} className="mt-1 block w-full text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-50 dark:file:bg-blue-900/20 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/30"/>
+                                <label htmlFor={`${formId}-project-image-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_image_label')}</label>
+                                <input id={`${formId}-project-image-${p.id}`} type="file" accept="image/*" onChange={e => handleProjectImageUpload(p.id, e)} className="mt-1 block w-full text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-50 dark:file:bg-blue-900/20 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/30"/>
                             </div>
                         </div>
                     ))}
@@ -1310,15 +1351,50 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                     </button>
                 </div>
             </div>
-            
-            {error && <div className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-xl text-sm border border-red-200 dark:border-red-800/50">{error}</div>}
-            
+          </div>
+
+          <aside className="space-y-4 xl:sticky xl:top-6">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">{checklistLabels.title}</p>
+                <div className="mt-4 space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-gray-700 dark:text-slate-300">{checklistLabels.resume}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${resumeText.trim() ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'}`}>
+                            {resumeText.trim() ? checklistLabels.ready : checklistLabels.missing}
+                        </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-gray-700 dark:text-slate-300">{checklistLabels.copy}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${details.tagline && details.bio ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                            {details.tagline && details.bio ? checklistLabels.reviewed : checklistLabels.needsReview}
+                        </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-gray-700 dark:text-slate-300">{checklistLabels.items}</span>
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
+                            {isChineseUi
+                                ? `${projects.filter(project => !isBlankProject(project)).length}${checklistLabels.selected}`
+                                : `${projects.filter(project => !isBlankProject(project)).length} ${checklistLabels.selected}`}
+                        </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-gray-700 dark:text-slate-300">{checklistLabels.theme}</span>
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-700 dark:bg-slate-700 dark:text-slate-200">
+                            {PORTFOLIO_TEMPLATES.find(t_template => t_template.key === details.theme)?.name}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {error && <div role="alert" className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-xl text-sm border border-red-200 dark:border-red-800/50">{error}</div>}
+
             <button type="submit" disabled={loading || autoFillLoading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transform active:scale-[0.98] transition-all">
                 <>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
                     <span>{t('tool_portfolio_generate_button')}</span>
                 </>
             </button>
+          </aside>
         </form>
     </div>
     );
@@ -1347,29 +1423,31 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     const downloadHtml = () => {
       const element = document.createElement("a");
       const file = new Blob([themedHtmlContent], { type: 'text/html' });
-      element.href = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
+      element.href = objectUrl;
       element.download = "showcase.html";
       document.body.appendChild(element);
       element.click();
       element.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
     };
     const copyToClipboard = () => navigator.clipboard.writeText(themedHtmlContent).then(() => addToast(t('tool_portfolio_copy_code_success'), 'success'), () => addToast(t('tool_portfolio_copy_code_fail'), 'error'));
 
     return (
       <div className="space-y-4">
         <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_portfolio_results_title')}</h4>
-        <div className="border-b border-gray-200 dark:border-slate-800">
-          <nav className="-mb-px flex space-x-6">
-            <button onClick={() => setResultTab('preview')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'preview' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_preview')}</button>
-            <button onClick={() => setResultTab('deploy')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'deploy' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_deploy')}</button>
-            <button onClick={() => setResultTab('code')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'code' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_code')}</button>
+        <div className="overflow-x-auto border-b border-gray-200 dark:border-slate-800">
+          <nav role="tablist" aria-label={t('tool_portfolio_results_title')} className="-mb-px flex min-w-max space-x-6">
+            <button type="button" role="tab" aria-selected={resultTab === 'preview'} onClick={() => setResultTab('preview')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'preview' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_preview')}</button>
+            <button type="button" role="tab" aria-selected={resultTab === 'deploy'} onClick={() => setResultTab('deploy')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'deploy' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_deploy')}</button>
+            <button type="button" role="tab" aria-selected={resultTab === 'code'} onClick={() => setResultTab('code')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'code' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_code')}</button>
           </nav>
         </div>
         {resultTab === 'preview' && (
           <div>
             <div className="flex flex-wrap justify-center items-center gap-2 p-2 bg-gray-200/70 dark:bg-slate-800/50 rounded-md mb-3">
               {(['desktop', 'tablet', 'mobile'] as const).map(d => (
-                <button key={d} onClick={() => setPreviewDevice(d)} className={`p-2 rounded-md transition-colors ${previewDevice === d ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400'}`} title={t(`tool_portfolio_preview_device_${d}`)}>
+                <button key={d} type="button" aria-pressed={previewDevice === d} onClick={() => setPreviewDevice(d)} className={`p-2 rounded-md transition-colors ${previewDevice === d ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400'}`} title={t(`tool_portfolio_preview_device_${d}`)}>
                   {d === 'desktop' && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
                   {d === 'tablet' && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>}
                   {d === 'mobile' && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2H7z" /></svg>}
@@ -1377,13 +1455,20 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
               ))}
               <div className="h-6 border-l border-gray-300 dark:border-slate-700 mx-2"></div>
               {PORTFOLIO_TEMPLATES.map(t_template => (
-                <button key={t_template.key} onClick={() => setPreviewTheme(t_template.key)} className={`p-1 border-2 rounded-md ${previewTheme === t_template.key ? 'border-blue-500' : 'border-transparent'}`} title={t_template.name}>
+                <button key={t_template.key} type="button" aria-pressed={previewTheme === t_template.key} onClick={() => setPreviewTheme(t_template.key)} className={`p-1 border-2 rounded-md ${previewTheme === t_template.key ? 'border-blue-500' : 'border-transparent'}`} title={t_template.name}>
                   <div className="flex -space-x-1">{t_template.colors.map(c => <div key={c} className="h-4 w-4 rounded-full border border-white dark:border-slate-800" style={{ backgroundColor: c }}></div>)}</div>
                 </button>
               ))}
             </div>
-            <div className="mx-auto bg-gray-800 p-4 rounded-lg shadow-inner">
-                 <iframe title="Showcase Preview" srcDoc={themedHtmlContent} className="w-full h-[60vh] border-0 bg-white transition-all duration-500 ease-in-out" style={{ maxWidth: PREVIEW_SIZES[previewDevice], margin: '0 auto' }} />
+            <div className="mx-auto overflow-x-auto rounded-xl bg-gray-900 p-3 shadow-inner sm:p-4">
+                 <iframe
+                    title="Showcase Preview"
+                    srcDoc={themedHtmlContent}
+                    sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
+                    referrerPolicy="no-referrer"
+                    className="block h-[60vh] min-h-[520px] w-full border-0 bg-white transition-all duration-500 ease-in-out"
+                    style={{ maxWidth: PREVIEW_SIZES[previewDevice], margin: '0 auto' }}
+                 />
             </div>
           </div>
         )}
@@ -1411,7 +1496,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             <div className="flex justify-end mb-2">
               <button onClick={copyToClipboard} className="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 font-semibold rounded-md text-sm hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors">{t('tool_portfolio_copy_code_button')}</button>
             </div>
-            <pre className="p-4 bg-gray-800 text-white rounded-lg h-[60vh] overflow-auto text-xs scrollbar-thin scrollbar-thumb-gray-600"><code className="language-html">{themedHtmlContent}</code></pre>
+            <pre className="max-w-full p-4 bg-gray-800 text-white rounded-lg h-[60vh] overflow-auto text-xs scrollbar-thin scrollbar-thumb-gray-600"><code className="language-html">{themedHtmlContent}</code></pre>
           </div>
         )}
       </div>
