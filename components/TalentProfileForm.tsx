@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Trash2, ChevronDown, ChevronRight, Check, Loader2, Save, Sparkles, X, AlertTriangle, RotateCcw } from 'lucide-react';
 import {
   TALENT_PROFILE_SCHEMA,
@@ -623,10 +624,35 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
     );
   };
 
+  const saveBar = (
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 lg:left-64">
+      <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
+        {saveError && (
+          <span id={saveErrorId} className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
+            Couldn't save. Check your connection and try again.
+          </span>
+        )}
+        {!saveError && hasBlockingValidation && (
+          <span className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
+            Fix validation issues before saving.
+          </span>
+        )}
+        <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling || hasBlockingValidation} aria-describedby={saveButtonDescription} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
+        </button>
+        {onPrimary && (
+          <button type="button" disabled={saving || prefilling || !ready || hasBlockingValidation} aria-describedby={primaryButtonDescription} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+            {primaryLabel ?? 'Save & apply'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-3xl pb-28">
       <div className="mb-5">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Talent Profile</h2>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Talent Profile</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Fill this once. It pre-fills every job application and lets employers discover you. References are shown to employers as “available on request”.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button ref={prefillButtonRef} type="button" onClick={openPrefillDialog} disabled={prefilling} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
@@ -773,29 +799,9 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
 
       <div className="space-y-3">{TALENT_PROFILE_SCHEMA.map(renderSection)}</div>
 
-      {/* Sticky action bar */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-        <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
-          {saveError && (
-            <span id={saveErrorId} className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
-              Couldn't save. Check your connection and try again.
-            </span>
-          )}
-          {!saveError && hasBlockingValidation && (
-            <span className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
-              Fix validation issues before saving.
-            </span>
-          )}
-          <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling || hasBlockingValidation} aria-describedby={saveButtonDescription} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
-          </button>
-          {onPrimary && (
-            <button type="button" disabled={saving || prefilling || !ready || hasBlockingValidation} aria-describedby={primaryButtonDescription} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-              {primaryLabel ?? 'Save & apply'}
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Rendered outside the workspace scroll container so fixed positioning
+          stays viewport-based on long forms and across browser engines. */}
+      {typeof document !== 'undefined' ? createPortal(saveBar, document.body) : saveBar}
     </div>
   );
 };

@@ -112,11 +112,19 @@ const DASHBOARD_PATH_TO_VIEW = Object.entries(DASHBOARD_VIEW_PATHS).reduce<Recor
   {},
 );
 
+const DASHBOARD_PATH_ALIASES: Record<string, DashboardView> = {
+  plan: 'plan',
+  career: 'plan',
+  'talent-profile': 'talent_profile',
+  profile: 'talent_profile',
+  tools: 'toolkit',
+};
+
 const dashboardViewFromPath = (pathname: string): DashboardView | null => {
   if (!pathname.startsWith('/workspace')) return null;
   const rest = pathname.replace(/^\/workspace\/?/, '');
   const segment = rest.split('/')[0] ?? '';
-  return DASHBOARD_PATH_TO_VIEW[segment] ?? null;
+  return DASHBOARD_PATH_TO_VIEW[segment] ?? DASHBOARD_PATH_ALIASES[segment] ?? null;
 };
 
 const dashboardPathForView = (view: DashboardView): string => {

@@ -164,6 +164,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button
                 data-tour="nav-toolkit"
                 onClick={() => { onViewChange('toolkit'); onToolSelect(null); }}
+                aria-current={activeView === 'toolkit' ? 'page' : undefined}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
                     activeView === 'toolkit'
                         ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50'
@@ -187,6 +188,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     onViewChange('toolkit');
                                     onToolSelect(tool.key);
                                 }}
+                                aria-current={isToolActive ? 'page' : undefined}
                                 className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-[11px] font-medium transition-all ${
                                     isToolActive
                                         ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'

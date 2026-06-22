@@ -248,7 +248,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
                                     {t('studio_assisted_tool')}
                                   </p>
-                                  <h2 className="truncate text-lg font-semibold text-slate-900 dark:text-slate-100">{toolTitle}</h2>
+                                  <h1 className="truncate text-lg font-semibold text-slate-900 dark:text-slate-100">{toolTitle}</h1>
                                 </div>
                             </div>
                             <button 
@@ -299,9 +299,9 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                       <Wrench className="h-4 w-4" />
                                       {t('studio_toolkit_kicker')}
                                     </div>
-                                    <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+                                    <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
                                       {t('studio_toolkit_title')}
-                                    </h2>
+                                    </h1>
                                     <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                                       {t('studio_toolkit_subtitle')}
                                     </p>
@@ -347,7 +347,8 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                             </div>
 
                             <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_280px]">
-                              <div className="flex gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 dark:border-slate-800 dark:bg-slate-900">
+                              <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 dark:border-slate-800 dark:bg-slate-900">
+                                <div className="flex max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                                 {TOOL_GROUPS.map((group) => (
                                   <button
                                     key={group.id}
@@ -363,6 +364,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                     {t(group.label)}
                                   </button>
                                 ))}
+                                </div>
                               </div>
                               <label className="relative block">
                                 <span className="sr-only">{t('studio_search_label')}</span>
