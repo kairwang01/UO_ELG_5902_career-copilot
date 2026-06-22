@@ -14,7 +14,8 @@
 import { setGlobalOptions } from "firebase-functions/v2/options";
 
 // Region must match the frontend Functions client (lib/firebaseClient.ts → us-central1).
-// API keys are plain env vars from functions/.env (test-phase; no Secret Manager bindings).
+// Provider keys are server-side only. Stripe secrets use Firebase Secret Manager
+// in deployed functions with process.env fallback for emulator/test fixtures.
 setGlobalOptions({
   region: "us-central1",
   memory: "512MiB",

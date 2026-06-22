@@ -9,6 +9,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onRequest } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
+import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
@@ -22,6 +23,8 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const BILLING_COLLECTION = "billing";
+const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
+const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 type BillingAudience = "candidate" | "business";
 type CheckoutMode = "subscription" | "payment";
@@ -44,8 +47,27 @@ const CHECKOUT_PLANS: Record<string, Omit<CheckoutPlan, "plan">> = {
   job_pack: { audience: "business", mode: "payment", priceEnv: "STRIPE_PRICE_JOB_PACK" },
 };
 
+function secretOrEnv(secret: ReturnType<typeof defineSecret>, envName: string): string | undefined {
+  try {
+    const value = secret.value();
+    if (value) return value;
+  } catch {
+    // Secret Manager values are unavailable in direct unit tests and some
+    // emulator paths; fall back to process.env for local test fixtures.
+  }
+  return process.env[envName];
+}
+
+function getStripeSecretKey(): string | undefined {
+  return secretOrEnv(STRIPE_SECRET_KEY, "STRIPE_SECRET_KEY");
+}
+
+function getStripeWebhookSecret(): string | undefined {
+  return secretOrEnv(STRIPE_WEBHOOK_SECRET, "STRIPE_WEBHOOK_SECRET");
+}
+
 function getStripe(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = getStripeSecretKey();
   if (!key) {
     throw new HttpsError("failed-precondition", "Stripe is not configured.");
   }
@@ -183,7 +205,7 @@ interface CreateCheckoutRequest {
   planKey: string;
 }
 
-export const createCheckoutSessionFunction = onCall(async (request) => {
+export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
   const uid = requireAuth(request);
   const plan = normalizeCheckoutPlan((request.data as CreateCheckoutRequest | undefined)?.planKey);
 
@@ -308,13 +330,13 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   });
 }
 
-export const stripeWebhookFunction = onRequest(async (req, res) => {
+export const stripeWebhookFunction = onRequest({ secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET] }, async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).send("Method Not Allowed");
     return;
   }
 
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secret = getStripeWebhookSecret();
   if (!secret) {
     res.status(500).send("Stripe webhook is not configured.");
     return;
