@@ -46,13 +46,34 @@ function parseIpv4(address: string): number[] | null {
 }
 
 /**
+ * Extracts the embedded IPv4 from an IPv4-mapped IPv6 address (::ffff:0:0/96) in
+ * BOTH textual forms, since a dual-stack socket routes such an address to that IPv4.
+ * Critical: the WHATWG URL parser canonicalizes the dotted ::ffff:1.2.3.4 to the HEX
+ * ::ffff:102:304, so a dotted-decimal-only check is bypassable — e.g.
+ * http://[::ffff:169.254.169.254] would reach cloud metadata and ::ffff:127.0.0.1
+ * would reach loopback.
+ */
+function extractMappedIpv4(normalized: string): string | null {
+  const dotted = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+  if (dotted) return dotted;
+  // Hex form (what `new URL` emits): ::ffff:HHHH:HHHH — the two low 16-bit groups.
+  const hex = normalized.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1], 16);
+    const lo = parseInt(hex[2], 16);
+    return `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
+  }
+  return null;
+}
+
+/**
  * Blocks private, link-local, loopback, metadata-adjacent, multicast, and reserved
  * destinations after DNS resolution. Hostname validation alone is not enough for
  * SSRF because public names can resolve to private IPs.
  */
 export function isBlockedIpAddress(address: string): boolean {
   const normalized = address.toLowerCase().replace(/^\[|\]$/g, "");
-  const mappedV4 = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+  const mappedV4 = extractMappedIpv4(normalized);
   if (mappedV4) return isBlockedIpAddress(mappedV4);
 
   if (isIP(normalized) === 4) {

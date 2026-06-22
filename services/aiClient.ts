@@ -13,6 +13,7 @@
 
 import { httpsCallable } from 'firebase/functions';
 import { firebaseFunctions } from '../lib/firebaseClient';
+import { withInFlightDedupe } from '../lib/inFlightDedupe';
 import type { TalentProfile } from '../lib/talentProfile';
 import type {
   AnalysisResult, ResumeImage,
@@ -108,16 +109,29 @@ function reportStatusFromError(err: any): void {
   }
 }
 
-/** Surfaces callable failures to the status banner and rethrows for local UI error text. */
-async function callDedicated<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    const result = await fn();
-    updateApiStatus('online');
-    return result;
-  } catch (err) {
-    reportStatusFromError(err);
-    throw new Error(formatCallableError(err));
-  }
+const inFlightDedicatedCalls = new Map<string, Promise<unknown>>();
+
+/**
+ * Surfaces callable failures to the status banner and rethrows for local UI error text.
+ *
+ * When `dedupeKey` is supplied, concurrent identical calls share ONE in-flight network
+ * request (mirrors callAiProxy's inFlightAiProxyCalls). This is the real double-charge
+ * guard for the charged dedicated callables: useCancellableLoading.begin() only
+ * supersedes the UI result — it can NOT abort an in-flight Firebase callable — and a
+ * fresh-per-call requestId can't dedup two distinct invocations, so a double-click /
+ * rapid re-submit would otherwise bill twice server-side.
+ */
+function callDedicated<T>(fn: () => Promise<T>, dedupeKey?: string): Promise<T> {
+  return withInFlightDedupe(inFlightDedicatedCalls, dedupeKey, async () => {
+    try {
+      const result = await fn();
+      updateApiStatus('online');
+      return result;
+    } catch (err) {
+      reportStatusFromError(err);
+      throw new Error(formatCallableError(err));
+    }
+  });
 }
 
 type AiProxyPayload = {
@@ -136,11 +150,11 @@ function stableStringify(value: unknown): string {
   return `{${Object.keys(obj).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(obj[key])}`).join(',')}}`;
 }
 
-function makeAiProxyRequestId(): string {
+function makeCallableRequestId(prefix: string): string {
   const randomId = typeof globalThis.crypto?.randomUUID === 'function'
     ? globalThis.crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `ai_${randomId}`;
+  return `${prefix}_${randomId}`;
 }
 
 async function callAiProxy<TResponse, TResult>(
@@ -155,7 +169,7 @@ async function callAiProxy<TResponse, TResult>(
 
   const promise = (async () => {
     const fn = httpsCallable<AiProxyPayload, TResponse>(firebaseFunctions, 'aiProxy', { timeout: 190_000 });
-    const res = await fn({ tool, payload, model: currentModelId, requestId: makeAiProxyRequestId() });
+    const res = await fn({ tool, payload, model: currentModelId, requestId: makeCallableRequestId('ai') });
     updateApiStatus('online');
     return mapResult(res.data);
   })();
@@ -177,9 +191,16 @@ export interface InterviewEvaluation { score: number; strengths: string[]; impro
 export const generateInterviewQuestions = async (resumeText: string, jobDescription: string, marketName: string): Promise<InterviewQuestion[]> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, { questions: InterviewQuestion[] }>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
-    const res = await fn({ mode: 'generate', resumeText, jobDescription, marketName, model: currentModelId });
+    const res = await fn({
+      mode: 'generate',
+      resumeText,
+      jobDescription,
+      marketName,
+      model: currentModelId,
+      requestId: makeCallableRequestId('mock_interview'),
+    });
     return res.data.questions;
-  });
+  }, `mockInterview:${currentModelId ?? ''}:${stableStringify({ resumeText, jobDescription, marketName })}`);
 
 export const evaluateInterviewAnswer = async (question: string, answer: string, jobDescription: string): Promise<InterviewEvaluation> =>
   callDedicated(async () => {
@@ -253,7 +274,13 @@ export const analyzeResume = async (
 ): Promise<AnalysisResult & { extractedText?: string }> => {
   return callDedicated(async () => {
     const fn = httpsCallable<any, AnalysisResult & { extractedText?: string }>(firebaseFunctions, 'analyzeResume', { timeout: 190_000 });
-    const res = await fn({ resumeText, resumeImages: resumeImages ?? undefined, marketName, model: currentModelId });
+    const res = await fn({
+      resumeText,
+      resumeImages: resumeImages ?? undefined,
+      marketName,
+      model: currentModelId,
+      requestId: makeCallableRequestId('resume_analysis'),
+    });
     return res.data;
   });
 };
@@ -575,16 +602,28 @@ export const convertResumeFormat = (resumeText: string, marketName: string, cove
 export const generateCoverLetter = async (resumeText: string, jobDescription: string, marketName: string): Promise<CoverLetter> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, CoverLetter>(firebaseFunctions, 'generateCoverLetter', { timeout: 190_000 });
-    const res = await fn({ resumeText, jobDescription, marketName, model: currentModelId });
+    const res = await fn({
+      resumeText,
+      jobDescription,
+      marketName,
+      model: currentModelId,
+      requestId: makeCallableRequestId('cover_letter'),
+    });
     return res.data;
-  });
+  }, `coverLetter:${currentModelId ?? ''}:${stableStringify({ resumeText, jobDescription, marketName })}`);
 
 export const generateCareerPath = async (resumeText: string, desiredRole: string, marketName: string, _session?: Session): Promise<CareerPathResult> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, CareerPathResult>(firebaseFunctions, 'generateCareerPath', { timeout: 190_000 });
-    const res = await fn({ resumeText, desiredRole, marketName, model: currentModelId });
+    const res = await fn({
+      resumeText,
+      desiredRole,
+      marketName,
+      model: currentModelId,
+      requestId: makeCallableRequestId('career_path'),
+    });
     return res.data;
-  });
+  }, `careerPath:${currentModelId ?? ''}:${stableStringify({ resumeText, desiredRole, marketName })}`);
 
 // ---- Matching / opportunities ---------------------------------------------
 export const calculateCompatibility = (resumeText: string, jobDescription: string) =>

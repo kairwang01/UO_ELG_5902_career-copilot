@@ -43,6 +43,8 @@ interface AnalyzeResumeRequest {
   resumeImages?: ResumeImage[];
   /** Target job market, e.g. "Canada", "United States". Required. */
   marketName: string;
+  /** Client-generated idempotency key for one user action. */
+  requestId?: string;
 }
 
 interface Improvement {
@@ -112,7 +114,9 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
 
   // Step 3: Deduct credits BEFORE the LLM call — atomic, server-side, un-bypassable.
   // If the user has insufficient credits, this throws and the LLM is never called.
-  const metered = await meterToolRun(uid, "resume-analysis", TOOL_CREDIT_COSTS["resume-analysis"]);
+  const metered = await meterToolRun(uid, "resume-analysis", TOOL_CREDIT_COSTS["resume-analysis"], {
+    requestId: data.requestId,
+  });
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();
