@@ -223,6 +223,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
   const [hasSalaryFilter, setHasSalaryFilter] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'title_az'>('newest');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // ── employer reviews cache: Record<employerId, {avg, count, reviews}> ─────
   // Keyed by employer_id, not job id. Populated lazily when a card expands.
@@ -269,6 +270,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
     setHasSalaryFilter(false);
     setSortOrder('newest');
     setExpandedId(null);
+    setFiltersOpen(false);
   };
 
   // ── fetch jobs on mount (ONCE — no reactive deps; a translated generic
@@ -528,6 +530,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
     }
     return chips;
   }, [hasSalaryFilter, keyword, locationFilter, sortOrder, t, workModeFilter]);
+  const filterPanelId = 'browse-jobs-filter-panel';
   const hasSavedGoals = hasFilterablePreferences(prefs);
   const goalKeyword = buildGoalKeyword(prefs);
   const goalLocation = findPreferredLocation(prefs, locations);
@@ -549,6 +552,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
     setHasSalaryFilter(goalSalaryFilter);
     setSortOrder('newest');
     setExpandedId(null);
+    setFiltersOpen(false);
   };
 
   const removeFilter = (filter: ActiveFilterKey) => {
@@ -654,8 +658,8 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-full text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 sm:w-auto">
+        <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
             {t('browse_jobs_popular_searches')}
           </span>
           {QUICK_SEARCHES.map(({ labelKey, aliases }) => {
@@ -672,7 +676,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                 disabled={loading}
                 aria-pressed={active}
                 aria-label={t('browse_jobs_quick_search_aria').replace('{label}', label)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
                   active
                     ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300'
@@ -717,8 +721,32 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
           </div>
         )}
 
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((open) => !open)}
+          aria-expanded={filtersOpen}
+          aria-controls={filterPanelId}
+          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 text-left text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 lg:hidden"
+        >
+          <span className="inline-flex min-w-0 items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+            <span className="truncate">{t('browse_jobs_filters_label')}</span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-2">
+            {activeFilterChips.length > 0 && (
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                {activeFilterChips.length}
+              </span>
+            )}
+            <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+
         {/* filter row */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div
+          id={filterPanelId}
+          className={`${filtersOpen ? 'flex' : 'hidden'} flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-900/50 lg:flex lg:flex-row lg:items-start lg:justify-between lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:dark:bg-transparent`}
+        >
           <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
             <div className="hidden items-center gap-2 lg:flex">
               <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
