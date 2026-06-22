@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, FileText, Link2, UserRound } from 'lucide-react';
 import { optimizeLinkedInProfile, optimizeLinkedInProfileFromText } from '../../services/aiClient';
 import type { LinkedInOptimization } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 
 // (b) sample constant — profile-text tab only (never touches resumeText)
@@ -31,6 +31,8 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
 
   // Track which mode was used so the error retry can call the right path
   const [lastMode, setLastMode] = useState<'resume' | 'profile'>('resume');
+  const hasResume = resumeText.trim().length > 0;
+  const profileTextReady = linkedinProfileText.trim().length > 0;
 
   useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -41,6 +43,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
     additionalUrl?: string;
   } = {}) => {
     const mode = options.mode ?? 'resume';
+    if (loading) return;
     setLastMode(mode);
     const alive = begin();
     setError(null);
@@ -48,16 +51,17 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
     try {
       let apiResult;
       if (mode === 'profile') {
-        if (!options.profileText) throw new Error(t('tool_linkedin_optimizer_error_required'));
+        const profileText = options.profileText?.trim() ?? '';
+        if (!profileText) throw new Error(t('tool_linkedin_optimizer_error_required'));
         apiResult = await optimizeLinkedInProfileFromText(
-            options.profileText,
+            profileText,
             resumeText,
             market,
-            options.customPrompt,
-            options.additionalUrl
+            options.customPrompt?.trim(),
+            options.additionalUrl?.trim()
         );
       } else {
-        if (!resumeText?.trim()) throw new Error(t('tool_resume_required_error'));
+        if (!hasResume) throw new Error(t('tool_resume_required_error'));
         apiResult = await optimizeLinkedInProfile(resumeText, market);
       }
       if (!alive()) return;
@@ -95,81 +99,164 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
   };
 
   const renderInput = () => (
-    <div className="space-y-4">
-      {/* (a) INTRO CARD */}
-      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-0.5">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_linkedin_optimizer_intro_title')}</p>
-        <p>{t('tool_linkedin_optimizer_intro_desc')}</p>
-      </div>
-
-      <div className="border-b border-gray-200 dark:border-slate-700">
-        <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-          <button onClick={() => setLinkedinTab('resume')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${linkedinTab === 'resume' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'}`}>
-            {t('tool_linkedin_optimizer_tab_resume')}
-          </button>
-          <button onClick={() => setLinkedinTab('profile')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${linkedinTab === 'profile' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'}`}>
-            {t('tool_linkedin_optimizer_tab_profile')}
-          </button>
-        </nav>
-      </div>
-
-      {linkedinTab === 'resume' ? (
-        <div className="text-center p-4">
-          <p className="text-gray-600 dark:text-gray-300 mb-4">{t('tool_linkedin_optimizer_resume_desc')}</p>
-          <button onClick={handleResumeSubmit} disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
-            {loading ? t('tool_linkedin_optimizer_optimizing_button') : t('tool_linkedin_optimizer_generate_button')}
-          </button>
+    <div className="animate-fade-in space-y-5">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
+              <Link2 className="h-4 w-4" aria-hidden="true" />
+              {t('tool_linkedin_optimizer_intro_title')}
+            </div>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+              {t('tool_linkedin_optimizer_intro_desc')}
+            </p>
+          </div>
+          <div className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+            hasResume
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300'
+              : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200'
+          }`}>
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            {hasResume
+              ? t('ob_resume_chars').replace('{n}', resumeText.trim().length.toLocaleString())
+              : t('tool_resume_required_error')}
+          </div>
         </div>
-      ) : (
-        <div className="p-2">
-          <p className="text-gray-600 dark:text-gray-300 mb-4 text-center">{t('tool_linkedin_optimizer_profile_desc')}</p>
-          {/* (b) SAMPLE FILL — only fills profile-specific fields */}
-          <div className="text-right mb-2">
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] lg:items-start">
+        <aside className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="grid gap-2" role="tablist" aria-label={t('tool_linkedin_optimizer_intro_title')}>
             <button
               type="button"
-              onClick={() => setLinkedinProfileText(SAMPLE_PROFILE_TEXT)}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              role="tab"
+              aria-selected={linkedinTab === 'resume'}
+              onClick={() => setLinkedinTab('resume')}
+              className={`rounded-lg border p-3 text-left transition ${
+                linkedinTab === 'resume'
+                  ? 'border-blue-300 bg-blue-50 text-blue-900 ring-2 ring-blue-100 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-100 dark:ring-blue-900/50'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
             >
-              {t('tool_try_example')}
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                {t('tool_linkedin_optimizer_tab_resume')}
+              </span>
+              <span className="mt-1 block text-xs leading-5 opacity-80">{t('tool_linkedin_optimizer_resume_desc')}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={linkedinTab === 'profile'}
+              onClick={() => setLinkedinTab('profile')}
+              className={`rounded-lg border p-3 text-left transition ${
+                linkedinTab === 'profile'
+                  ? 'border-blue-300 bg-blue-50 text-blue-900 ring-2 ring-blue-100 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-100 dark:ring-blue-900/50'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <UserRound className="h-4 w-4" aria-hidden="true" />
+                {t('tool_linkedin_optimizer_tab_profile')}
+              </span>
+              <span className="mt-1 block text-xs leading-5 opacity-80">{t('tool_linkedin_optimizer_profile_desc')}</span>
             </button>
           </div>
-          <form onSubmit={handleProfileSubmit} className="space-y-4">
-            <textarea
-              className="w-full h-40 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
-              placeholder={t('tool_linkedin_optimizer_profile_placeholder')}
-              value={linkedinProfileText}
-              onChange={(e) => setLinkedinProfileText(e.target.value)}
-              required
-            />
-             <div className="text-left text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                <label htmlFor="custom-prompt" className="font-semibold">{t('tool_linkedin_optimizer_prompt_label')}</label>
-                <p className="text-xs mb-1">{t('tool_linkedin_optimizer_prompt_desc')}</p>
+        </aside>
+
+        {linkedinTab === 'resume' ? (
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+                <FileText className="h-4 w-4" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-base font-semibold text-slate-950 dark:text-slate-100">{t('tool_linkedin_optimizer_tab_resume')}</h4>
+                <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{t('tool_linkedin_optimizer_resume_desc')}</p>
+              </div>
+            </div>
+            {!hasResume && (
+              <div className="mt-4">
+                <ToolError message={t('tool_resume_required_error')} />
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleResumeSubmit}
+              disabled={loading || !hasResume}
+              className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:text-white/90 dark:disabled:bg-blue-900/60 sm:w-auto"
+            >
+              {loading ? t('tool_linkedin_optimizer_optimizing_button') : t('tool_linkedin_optimizer_generate_button')}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </section>
+        ) : (
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h4 className="text-base font-semibold text-slate-950 dark:text-slate-100">{t('tool_linkedin_optimizer_tab_profile')}</h4>
+                <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{t('tool_linkedin_optimizer_profile_desc')}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkedinProfileText(SAMPLE_PROFILE_TEXT)}
+                className="shrink-0 text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
+              >
+                {t('tool_try_example')}
+              </button>
+            </div>
+
+            <form onSubmit={handleProfileSubmit} className="mt-4 space-y-4">
+              <div>
+                <label htmlFor="linkedin-profile-text" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {t('tool_linkedin_optimizer_tab_profile')}
+                </label>
                 <textarea
+                  id="linkedin-profile-text"
+                  className="mt-2 block h-44 w-full resize-y rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
+                  placeholder={t('tool_linkedin_optimizer_profile_placeholder')}
+                  value={linkedinProfileText}
+                  onChange={(e) => setLinkedinProfileText(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="text-left text-sm text-slate-600 dark:text-slate-300">
+                  <label htmlFor="custom-prompt" className="font-semibold text-slate-800 dark:text-slate-200">{t('tool_linkedin_optimizer_prompt_label')}</label>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{t('tool_linkedin_optimizer_prompt_desc')}</p>
+                  <textarea
                     id="custom-prompt"
-                    className="w-full h-20 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg p-2 text-sm dark:text-gray-100"
+                    className="mt-2 block h-24 w-full resize-y rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
                     placeholder={t('tool_linkedin_optimizer_prompt_placeholder')}
                     value={customPrompt}
                     onChange={(e) => setCustomPrompt(e.target.value)}
-                />
-            </div>
-             <div className="text-left text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                <label htmlFor="additional-url" className="font-semibold">{t('tool_linkedin_optimizer_url_label')}</label>
-                <p className="text-xs mb-1">{t('tool_linkedin_optimizer_url_desc')}</p>
-                <input
+                  />
+                </div>
+                <div className="text-left text-sm text-slate-600 dark:text-slate-300">
+                  <label htmlFor="additional-url" className="font-semibold text-slate-800 dark:text-slate-200">{t('tool_linkedin_optimizer_url_label')}</label>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{t('tool_linkedin_optimizer_url_desc')}</p>
+                  <input
                     type="url"
                     id="additional-url"
-                    className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg p-2 text-sm dark:text-gray-100"
+                    className="mt-2 block min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
                     placeholder={t('tool_linkedin_optimizer_url_placeholder')}
                     value={additionalUrl}
                     onChange={(e) => setAdditionalUrl(e.target.value)}
-                />
-            </div>
-            <button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
-              {loading ? t('tool_linkedin_optimizer_optimizing_button') : t('tool_linkedin_optimizer_generate_button')}
-            </button>
-          </form>
-        </div>
-      )}
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={loading || !profileTextReady}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:text-white/90 dark:disabled:bg-blue-900/60 sm:w-auto"
+              >
+                {loading ? t('tool_linkedin_optimizer_optimizing_button') : t('tool_linkedin_optimizer_generate_button')}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </form>
+          </section>
+        )}
+      </div>
     </div>
   );
 
@@ -178,18 +265,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
     if (loading) return <StagedLoader title="Optimizing your profile" steps={["Reading your profile…","Identifying improvements…","Rewriting headline & summary…"]} onCancel={cancel} icon={<Link2 />} accent="cyan" />;
 
     // (e) ERROR RETRY
-    if (error) return (
-      <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 space-y-3">
-        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-        <button
-          type="button"
-          onClick={handleRetry}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
-        >
-          {t('tool_try_again')}
-        </button>
-      </div>
-    );
+    if (error) return <ToolError message={error} onRetry={handleRetry} retryLabel={t('tool_try_again')} />;
 
     if (!result) return null;
 
@@ -226,21 +302,21 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
             </button>
           </div>
         </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_headline_label')}</h5>
-          <p className="mt-1 text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md break-words dark:text-gray-300">{headline}</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h5 className="text-sm font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_headline_label')}</h5>
+          <p className="mt-2 rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-800 break-words dark:bg-slate-800 dark:text-slate-200">{headline}</p>
         </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_summary_label')}</h5>
-          <p className="mt-1 text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md whitespace-pre-wrap break-words dark:text-gray-300">{summary}</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h5 className="text-sm font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_summary_label')}</h5>
+          <p className="mt-2 rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-800 whitespace-pre-wrap break-words dark:bg-slate-800 dark:text-slate-200">{summary}</p>
         </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_experience_label')}</h5>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h5 className="text-sm font-bold text-gray-800 dark:text-gray-100">{t('tool_linkedin_optimizer_experience_label')}</h5>
           <ul className="mt-2 space-y-3">
             {experienceSuggestions.map((item, i) => (
-              <li key={i} className="text-sm p-3 border-t dark:border-slate-700">
-                <strong className="font-semibold block dark:text-gray-200">{item.title}</strong>
-                <p className="text-gray-700 dark:text-gray-300 mt-1">{item.suggestion}</p>
+              <li key={i} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800">
+                <strong className="font-semibold block text-slate-900 dark:text-gray-200">{item.title}</strong>
+                <p className="text-slate-700 dark:text-gray-300 mt-1 leading-6">{item.suggestion}</p>
               </li>
             ))}
           </ul>
@@ -249,7 +325,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
     );
   };
 
-  return result ? renderResult() : renderInput();
+  return loading || error || result ? renderResult() : renderInput();
 };
 
 export default LinkedInOptimizer;
