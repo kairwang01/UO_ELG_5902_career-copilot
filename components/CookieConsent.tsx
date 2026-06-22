@@ -51,6 +51,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
             role="region"
             aria-live="polite"
             aria-label="Cookie consent"
+            data-qa="cookie-consent-banner"
         >
             <div className={`rounded-2xl border border-slate-700 bg-slate-950/95 text-gray-200 shadow-2xl shadow-slate-950/25 backdrop-blur ${
                 avoidSidebar ? 'p-3 sm:p-3.5' : 'p-3 sm:p-4'

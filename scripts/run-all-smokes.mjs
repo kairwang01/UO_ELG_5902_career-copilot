@@ -16,6 +16,7 @@ const SMOKES = [
   ['billing-credits', 'scripts/billing-credits-smoke.mjs'],
   ['aiproxy-guard', 'scripts/aiproxy-guard-smoke.mjs'],
   ['dialogs', 'scripts/dialog-positioning-smoke.mjs'],
+  ['overlays', 'scripts/overlay-collision-smoke.mjs'],
 ];
 
 function runSmoke(script) {
