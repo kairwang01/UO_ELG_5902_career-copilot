@@ -164,9 +164,13 @@ const formatPlanLabel = (planKey: string | undefined): string => {
   return planKey.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
+type ToolTransferInput = {
+  tool: string;
+  input: string;
+};
 
 const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, resumeText, userPlan, market, navigateToPricing, session, profile, refreshProfile, onApplyImprovements, activeTool, setActiveTool, onContinueToToolkit }) => {
-  const [toolInput, setToolInput] = useState<string>('');
+  const [toolInput, setToolInput] = useState<ToolTransferInput | null>(null);
   const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
   const [toolGroup, setToolGroup] = useState<ToolGroupId>('recommended');
   const [toolQuery, setToolQuery] = useState('');
@@ -194,10 +198,12 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
   }, [selectedToolGroup, toolQuery, t]);
 
   const openTool = (tool: string, input: string = '') => {
-    if (input) setToolInput(input);
+    setToolInput({ tool, input });
     setActiveTool(tool);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const activeToolInitialInput = activeTool && toolInput?.tool === activeTool ? toolInput.input : '';
   
   const handleApplySuggestions = async () => {
     if (!result) return;
@@ -269,7 +275,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                         <ToolRunner
                                             tool={activeTool}
                                             resumeText={resumeText}
-                                            initialInput={toolInput}
+                                            initialInput={activeToolInitialInput}
                                             onClose={() => setActiveTool(null)}
                                             openTool={openTool}
                                             market={market}

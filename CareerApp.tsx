@@ -124,7 +124,11 @@ const dashboardPathForView = (view: DashboardView): string => {
   return segment ? `/workspace/${segment}` : '/workspace';
 };
 
-const WORKSPACE_TOOL_KEYS = new Set(ALL_TOOLS_CONFIG.map((tool) => tool.key));
+const INTERNAL_WORKSPACE_TOOL_KEYS = ['website-builder'] as const;
+const WORKSPACE_TOOL_KEYS = new Set([
+  ...ALL_TOOLS_CONFIG.map((tool) => tool.key),
+  ...INTERNAL_WORKSPACE_TOOL_KEYS,
+]);
 
 const workspaceToolFromSearch = (search: string): string | null => {
   const tool = new URLSearchParams(search).get('tool');
