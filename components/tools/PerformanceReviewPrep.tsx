@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { TrendingUp } from 'lucide-react';
+import { BadgeCheck, BookOpenCheck, CheckCircle2, MessageSquareQuote, Target, TrendingUp } from 'lucide-react';
 import { generatePerformanceReviewPrep } from '../../services/aiClient';
 import type { PerformanceReviewResult } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -13,39 +13,76 @@ interface PerformanceReviewPrepProps {
   t: (key: string) => string;
 }
 
+type SavedPerformanceReviewResult = PerformanceReviewResult & {
+  jobTitle?: string;
+};
+
 const SAMPLE_JOB_TITLE = 'Software Engineer II';
 const SAMPLE_ACCOMPLISHMENTS = `- Led the migration of the legacy authentication service to OAuth 2.0, reducing login errors by 40%.
 - Mentored two junior developers through weekly 1-on-1s and code reviews.
 - Refactored the payment module, cutting server costs by 12% and improving p99 latency by 200 ms.
 - Drove adoption of automated integration tests; coverage rose from 45% to 78%.`;
 
+const CardShell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <section className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
+    {children}
+  </section>
+);
+
+const MetricTile: React.FC<{ label: string; value: string | number; icon: React.ElementType }> = ({ label, value, icon: Icon }) => (
+  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+    <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+      <Icon className="h-4 w-4 text-indigo-700 dark:text-indigo-300" />
+      {label}
+    </div>
+    <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{value}</p>
+  </div>
+);
+
 const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeText, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<PerformanceReviewResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<PerformanceReviewResult>();
+  const [result, setResult] = useState<SavedPerformanceReviewResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<SavedPerformanceReviewResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [accomplishments, setAccomplishments] = useState('');
   const [jobTitle, setJobTitle] = useState('');
 
-  // SmartSuggest: derive role chips from resume (pure, no AI)
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
 
-  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (saved && !result) {
+      setResult(saved.result);
+      setFromSaved(true);
+      if (saved.result.jobTitle) setJobTitle(saved.result.jobTitle);
+    }
+  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resetResult = () => {
+    setResult(null);
+    setFromSaved(false);
+    setError(null);
+  };
 
   const runTool = async () => {
-    if (!accomplishments.trim() || !jobTitle.trim()) {
+    const title = jobTitle.trim();
+    const evidence = accomplishments.trim();
+    if (!evidence || !title) {
       setError(t('tool_perf_review_error_required'));
       return;
     }
+    setJobTitle(title);
+    setAccomplishments(evidence);
     const alive = begin();
     setError(null);
+    setResult(null);
     try {
-      const apiResult = await generatePerformanceReviewPrep(resumeText, accomplishments, jobTitle);
+      const apiResult = await generatePerformanceReviewPrep(resumeText, evidence, title);
       if (!alive()) return;
-      setResult(apiResult);
+      const nextResult: SavedPerformanceReviewResult = { ...apiResult, jobTitle: title };
+      setResult(nextResult);
       setFromSaved(false);
-      persist(apiResult);
+      persist(nextResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -53,162 +90,278 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
     }
   };
 
-  const formatForDownload = (res: PerformanceReviewResult): string => {
-    let content = `# Performance Review Prep: ${jobTitle}\n\n`;
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void runTool();
+  };
+
+  const formatForDownload = (res: SavedPerformanceReviewResult): string => {
+    const title = res.jobTitle || jobTitle || 'Current role';
+    let content = `# Performance Review Prep: ${title}\n\n`;
     content += `## Opening Statement\n${res.summary}\n\n`;
     content += `## Key Strengths\n`;
-    res.strengthsToHighlight.forEach(s => { content += `* ${s}\n`; });
+    (res.strengthsToHighlight ?? []).forEach((strength) => { content += `* ${strength}\n`; });
     content += `\n## STAR Talking Points\n`;
-    res.talkingPoints.forEach(tp => {
-      content += `### ${tp.accomplishment}\n${tp.starMethodPoint}\n\n`;
+    (res.talkingPoints ?? []).forEach((point) => {
+      content += `### ${point.accomplishment}\n${point.starMethodPoint}\n\n`;
     });
     content += `## Growth Area Discussion Points\n`;
-    res.growthAreaDiscussionPoints.forEach(s => { content += `* ${s}\n`; });
+    (res.growthAreaDiscussionPoints ?? []).forEach((point) => { content += `* ${point}\n`; });
     return content;
   };
 
   const renderInput = () => (
-    <div className="space-y-4">
-      {/* (a) INTRO CARD */}
-      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-        <p className="font-medium text-slate-700 dark:text-slate-300">{t('tool_perf_review_intro_line1')}</p>
-        <p className="mt-0.5">{t('tool_perf_review_intro_line2')}</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-5">
+      <CardShell className="overflow-hidden">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-indigo-700 dark:text-indigo-300">
+              <TrendingUp className="h-4 w-4" />
+              {t('tool_performance_review_prep_title')}
+            </div>
+            <h2 className="mt-3 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+              {t('tool_perf_review_intro_line1')}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              {t('tool_perf_review_intro_line2')}
+            </p>
 
-      {/* (b) SAMPLE-FILL */}
-      <button
-        type="button"
-        onClick={() => {
-          setJobTitle(SAMPLE_JOB_TITLE);
-          setAccomplishments(SAMPLE_ACCOMPLISHMENTS);
-        }}
-        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-      >
-        {t('try_example')}
-      </button>
+            <div className="mt-7 space-y-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label htmlFor="performance-review-job-title" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {t('tool_perf_review_job_title_label')}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setJobTitle(SAMPLE_JOB_TITLE);
+                      setAccomplishments(SAMPLE_ACCOMPLISHMENTS);
+                    }}
+                    className="text-sm font-semibold text-indigo-700 transition hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200"
+                  >
+                    {t('try_example')}
+                  </button>
+                </div>
 
-      <div>
-        <label htmlFor="job-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_perf_review_job_title_label')}</label>
+                {resumeText && (
+                  <div className="mb-3">
+                    <SmartSuggestChips
+                      items={suggestions.roles}
+                      onPick={(value) => setJobTitle(value)}
+                      label={t('smart_suggest_target_roles')}
+                    />
+                  </div>
+                )}
 
-        {/* SmartSuggestChips for job title */}
-        {resumeText && (
-          <div className="mt-1 mb-2">
-            <SmartSuggestChips
-              items={suggestions.roles}
-              onPick={(v) => setJobTitle(v)}
-              label={t('smart_suggest_target_roles')}
-            />
-          </div>
-        )}
+                <input
+                  type="text"
+                  id="performance-review-job-title"
+                  value={jobTitle}
+                  onChange={(event) => setJobTitle(event.target.value)}
+                  required
+                  className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  placeholder={t('tool_perf_review_job_title_placeholder')}
+                />
+              </div>
 
-        <input
-          type="text"
-          id="job-title"
-          value={jobTitle}
-          onChange={e => setJobTitle(e.target.value)}
-          required
-          className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 p-2.5"
-          placeholder={t('tool_perf_review_job_title_placeholder')}
-        />
-      </div>
-      <div>
-        <label htmlFor="accomplishments" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_perf_review_accomplishments_label')}</label>
-        <textarea
-          id="accomplishments"
-          value={accomplishments}
-          onChange={(e) => setAccomplishments(e.target.value)}
-          rows={8}
-          className="mt-1 w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 p-2.5"
-          placeholder={t('tool_perf_review_accomplishments_placeholder')}
-          required
-        />
-      </div>
+              <div>
+                <label htmlFor="performance-review-accomplishments" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {t('tool_perf_review_accomplishments_label')}
+                </label>
+                <textarea
+                  id="performance-review-accomplishments"
+                  value={accomplishments}
+                  onChange={(event) => setAccomplishments(event.target.value)}
+                  rows={8}
+                  className="mt-2 block min-h-[220px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base leading-relaxed text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  placeholder={t('tool_perf_review_accomplishments_placeholder')}
+                  required
+                />
+              </div>
 
-      {/* (e) ERROR RETRY */}
-      {error && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-4 flex items-start gap-3 animate-panel-expand">
-          <p className="text-sm text-red-700 dark:text-red-400 flex-1">{error}</p>
-          <button
-            type="button"
-            onClick={runTool}
-            className="shrink-0 text-xs font-semibold text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded px-2 py-1 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-          >
-            {t('try_again')}
-          </button>
+              {error && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300" role="alert">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="leading-relaxed">{error}</p>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:hover:bg-red-900/30"
+                    >
+                      {t('try_again')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex min-h-[48px] w-full items-center justify-center rounded-lg bg-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-indigo-400"
+              >
+                {loading ? t('tool_perf_review_generating_button') : t('tool_perf_review_generate_button')}
+              </button>
+            </div>
+          </form>
+
+          <aside className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/40 sm:p-6 lg:border-l lg:border-t-0">
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-4 text-indigo-950 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-100">
+              <div className="flex items-start gap-3">
+                <Target className="mt-0.5 h-5 w-5 shrink-0" />
+                <p className="text-sm font-semibold leading-relaxed">{t('tool_perf_review_setup_desc')}</p>
+              </div>
+            </div>
+            <div className="mt-5 space-y-3">
+              {([
+                { label: t('tool_perf_review_opening_label'), Icon: MessageSquareQuote },
+                { label: t('tool_perf_review_strengths_label'), Icon: BadgeCheck },
+                { label: t('tool_perf_review_star_label'), Icon: BookOpenCheck },
+                { label: t('tool_perf_review_growth_label'), Icon: CheckCircle2 },
+              ] satisfies Array<{ label: string; Icon: React.ElementType }>).map(({ label, Icon }, index) => (
+                <div key={label} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    {index + 1}
+                  </span>
+                  <Icon className="h-4 w-4 shrink-0 text-indigo-700 dark:text-indigo-300" />
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{label}</span>
+                </div>
+              ))}
+            </div>
+          </aside>
         </div>
-      )}
-
-      <button
-        onClick={runTool}
-        disabled={loading}
-        className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg"
-      >
-        {loading ? t('tool_perf_review_generating_button') : t('tool_perf_review_generate_button')}
-      </button>
+      </CardShell>
     </div>
   );
 
   const renderResult = () => {
     if (!result) return null;
+
+    const strengths = result.strengthsToHighlight ?? [];
+    const talkingPoints = result.talkingPoints ?? [];
+    const growthPoints = result.growthAreaDiscussionPoints ?? [];
+    const title = result.jobTitle || jobTitle || t('tool_performance_review_prep_title');
+    const downloadTitle = title.replace(/\s/g, '_');
+
     return (
-      <div className="space-y-6 animate-fade-in">
+      <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
         <SavedResultBar
           t={t}
           canSave={canSave}
           isSaved={fromSaved}
           savedAt={saved?.savedAt ?? null}
-          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+          onTryNext={resetResult}
         />
-        {/* (d) RESULT ACTIONS */}
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_perf_review_results_title')}</h4>
-          <div className="flex items-center gap-2">
-            <DownloadButtons textContent={formatForDownload(result)} baseFilename={`performance_review_prep_${jobTitle.replace(/\s/g, '_')}`} />
-            <button
-              type="button"
-              onClick={() => { setResult(null); setError(null); }}
-              className="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-            >
-              {t('tool_start_over')}
-            </button>
+
+        <CardShell className="overflow-hidden">
+          <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="min-w-0 p-5 sm:p-6">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-indigo-700 dark:text-indigo-300">
+                <TrendingUp className="h-4 w-4" />
+                {t('tool_perf_review_results_title')}
+              </div>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+                {title}
+              </h2>
+              <p className="mt-4 max-w-4xl text-base leading-relaxed text-slate-700 dark:text-slate-300">{result.summary}</p>
+            </div>
+            <div className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/40 sm:p-6 xl:border-l xl:border-t-0">
+              <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                <MetricTile label={t('tool_perf_review_strengths_label')} value={strengths.length} icon={BadgeCheck} />
+                <MetricTile label={t('tool_perf_review_star_label')} value={talkingPoints.length} icon={BookOpenCheck} />
+                <MetricTile label={t('tool_perf_review_growth_label')} value={growthPoints.length} icon={CheckCircle2} />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <DownloadButtons textContent={formatForDownload(result)} baseFilename={`performance_review_prep_${downloadTitle}`} />
+                <button
+                  type="button"
+                  onClick={resetResult}
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  {t('tool_start_over')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </CardShell>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <CardShell className="p-5">
+            <div className="mb-5">
+              <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_perf_review_star_label')}</h3>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{t('tool_perf_review_intro_line2')}</p>
+            </div>
+            <div className="grid gap-4">
+              {talkingPoints.map((point, index) => (
+                <article key={`${point.accomplishment}-${index}`} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-700 text-xs font-semibold text-white">{index + 1}</span>
+                    <div className="min-w-0">
+                      <h4 className="text-base font-semibold text-slate-950 dark:text-slate-100">{point.accomplishment}</h4>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{point.starMethodPoint}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </CardShell>
+
+          <div className="space-y-5">
+            <CardShell className="p-5">
+              <div className="flex items-center gap-2">
+                <BadgeCheck className="h-5 w-5 text-indigo-700 dark:text-indigo-300" />
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_perf_review_strengths_label')}</h3>
+              </div>
+              <ul className="mt-4 space-y-3">
+                {strengths.map((strength, index) => (
+                  <li key={index} className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
+                    <span>{strength}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardShell>
+
+            <CardShell className="p-5">
+              <div className="flex items-center gap-2">
+                <MessageSquareQuote className="h-5 w-5 text-indigo-700 dark:text-indigo-300" />
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_perf_review_growth_label')}</h3>
+              </div>
+              <ul className="mt-4 space-y-3">
+                {growthPoints.map((point, index) => (
+                  <li key={index} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </CardShell>
           </div>
         </div>
 
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400">
-            <h5 className="font-semibold text-blue-900 dark:text-blue-300">{t('tool_perf_review_opening_label')}</h5>
-            <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">{result.summary}</p>
-        </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-            <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_perf_review_strengths_label')}</h5>
-            <ul className="list-disc list-inside mt-2 space-y-1 text-sm dark:text-gray-300">{result.strengthsToHighlight.map((s, i) => <li key={i}>{s}</li>)}</ul>
-        </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-            <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_perf_review_star_label')}</h5>
-            <div className="space-y-3 mt-2">
-                {result.talkingPoints.map((tp, i) => (
-                    <div key={i} className="text-sm p-3 bg-gray-50 dark:bg-slate-700 rounded-md border dark:border-slate-600">
-                        <p className="font-semibold dark:text-gray-200">{tp.accomplishment}</p>
-                        <p className="mt-1 dark:text-gray-300">{tp.starMethodPoint}</p>
-                    </div>
-                ))}
-            </div>
-        </div>
-         <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-            <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_perf_review_growth_label')}</h5>
-            <ul className="list-disc list-inside mt-2 space-y-1 text-sm dark:text-gray-300">{result.growthAreaDiscussionPoints.map((s, i) => <li key={i}>{s}</li>)}</ul>
-        </div>
         <button
           type="button"
-          onClick={() => { setResult(null); setError(null); }}
-          className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300"
+          onClick={resetResult}
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
         >
-          &larr; {t('tool_start_over')}
+          {t('tool_start_over')}
         </button>
       </div>
     );
   };
 
-  if (loading) return <StagedLoader title={t('tool_perf_review_loader_title')} steps={[t('tool_perf_review_step1'), t('tool_perf_review_step2'), t('tool_perf_review_step3')]} onCancel={cancel} icon={<TrendingUp />} accent="indigo" />;
+  if (loading) {
+    return (
+      <StagedLoader
+        title={t('tool_perf_review_loader_title')}
+        steps={[t('tool_perf_review_step1'), t('tool_perf_review_step2'), t('tool_perf_review_step3')]}
+        onCancel={cancel}
+        cancelLabel={t('tool_loader_hide_button')}
+        cancelHint={t('tool_loader_hide_hint')}
+        icon={<TrendingUp />}
+        accent="indigo"
+      />
+    );
+  }
 
   return result ? renderResult() : renderInput();
 };
