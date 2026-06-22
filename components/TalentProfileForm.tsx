@@ -661,26 +661,31 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   };
 
   const saveBar = (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 lg:left-64">
-      <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
+    <div
+      data-qa="talent-profile-save-bar"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:px-4 lg:left-64"
+    >
+      <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:pr-24 xl:pr-0">
         {saveError && (
-          <span id={saveErrorId} className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
+          <span id={saveErrorId} className="text-xs font-medium text-red-600 dark:text-red-400 sm:mr-auto">
             Couldn't save. Check your connection and try again.
           </span>
         )}
         {!saveError && hasBlockingValidation && (
-          <span className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
+          <span className="text-xs font-medium text-red-600 dark:text-red-400 sm:mr-auto">
             Fix validation issues before saving.
           </span>
         )}
-        <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling || hasBlockingValidation} aria-describedby={saveButtonDescription} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
-        </button>
-        {onPrimary && (
-          <button type="button" disabled={saving || prefilling || !ready || hasBlockingValidation} aria-describedby={primaryButtonDescription} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-            {primaryLabel ?? 'Save & apply'}
+        <div className="flex flex-wrap justify-end gap-2 sm:flex-nowrap">
+          <button type="button" onClick={() => { persist(true).catch(() => {}); }} disabled={saving || prefilling || hasBlockingValidation} aria-describedby={saveButtonDescription} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
           </button>
-        )}
+          {onPrimary && (
+            <button type="button" disabled={saving || prefilling || !ready || hasBlockingValidation} aria-describedby={primaryButtonDescription} onClick={async () => { try { const p = await persist(true); onPrimary(p); } catch { /* error shown inline */ } }} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {primaryLabel ?? 'Save & apply'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
