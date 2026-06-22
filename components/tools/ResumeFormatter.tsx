@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Info } from 'lucide-react';
+import { CheckCircle2, FileText, Globe2, Info } from 'lucide-react';
 import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
 import ResumePreview from '../ResumePreview';
@@ -45,6 +45,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [coverLetterForFormatting, setCoverLetterForFormatting] = useState('');
   const [targetMarket, setTargetMarket] = useState<string>(market);
+  const hasResume = resumeText.trim().length > 0;
 
   useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -70,81 +71,153 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     }
   };
 
-  const renderInput = () => (
-    <div className="space-y-4 animate-fade-in">
-      {/* (a) INTRO CARD */}
-      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-0.5">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_resume_formatter_intro_title')}</p>
-        <p>{t('tool_resume_formatter_intro_desc')}</p>
-      </div>
-
-      <div>
-        <label htmlFor="target-market" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_resume_formatter_target_market_label')}</label>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{t('tool_resume_formatter_target_market_desc')}</p>
-        <select
-          id="target-market"
-          value={targetMarket}
-          onChange={(e) => setTargetMarket(e.target.value)}
-          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-        >
-          {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        {MARKET_HINT_KEY[targetMarket] && (
-          <div className="mt-2 flex items-start gap-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2">
-            <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500 dark:text-blue-400" aria-hidden="true" />
-            <p className="text-xs text-blue-700 dark:text-blue-300">{t(MARKET_HINT_KEY[targetMarket])}</p>
+  const renderInput = () => {
+    const marketStyle = getResumeMarketStyle(targetMarket);
+    return (
+      <div className="animate-fade-in space-y-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
+                <Globe2 className="h-4 w-4" aria-hidden="true" />
+                {t('tool_resume_formatter_intro_title')}
+              </div>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+                {t('tool_resume_formatter_intro_desc')}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+              <FileText className="h-4 w-4 text-slate-400" aria-hidden="true" />
+              {hasResume
+                ? t('ob_resume_chars').replace('{n}', resumeText.trim().length.toLocaleString())
+                : t('tool_resume_required_error')}
+            </div>
           </div>
+        </div>
+
+        {!hasResume && (
+          <ToolError message={t('tool_resume_required_error')} />
         )}
-      </div>
 
-      <div className="relative flex items-start">
-        <div className="flex h-6 items-center">
-          <input
-            id="include-cover-letter"
-            type="checkbox"
-            checked={includeCoverLetter}
-            onChange={(e) => setIncludeCoverLetter(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+                <span className="text-sm font-bold">1</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <label htmlFor="target-market" className="block text-sm font-semibold text-slate-950 dark:text-slate-100">
+                  {t('tool_resume_formatter_target_market_label')}
+                </label>
+                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  {t('tool_resume_formatter_target_market_desc')}
+                </p>
+                <select
+                  id="target-market"
+                  value={targetMarket}
+                  onChange={(e) => setTargetMarket(e.target.value)}
+                  className="mt-3 block min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
+                >
+                  {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/50 dark:bg-blue-950/30">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-blue-700 dark:text-blue-300">
+                <span>{marketStyle.label}</span>
+                <span aria-hidden="true">·</span>
+                <span>{marketStyle.pageSize.toUpperCase()}</span>
+              </div>
+              {MARKET_HINT_KEY[targetMarket] && (
+                <p className="mt-2 text-sm leading-6 text-blue-950 dark:text-blue-100">{t(MARKET_HINT_KEY[targetMarket])}</p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {marketStyle.principles.slice(0, 3).map((principle) => (
+                  <span key={principle} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                    {principle}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <span className="text-sm font-bold">2</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <label htmlFor="include-cover-letter" className="block text-sm font-semibold text-slate-950 dark:text-slate-100">
+                  {t('tool_resume_formatter_include_cover_letter_label')}
+                </label>
+                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  {t('tool_resume_formatter_include_cover_letter_desc')}
+                </p>
+              </div>
+              <input
+                id="include-cover-letter"
+                type="checkbox"
+                checked={includeCoverLetter}
+                onChange={(e) => setIncludeCoverLetter(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600"
+              />
+            </div>
+
+            {includeCoverLetter ? (
+              <div className="mt-4 animate-fade-in space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="cover-letter-text" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {t('tool_resume_formatter_cover_letter_label')}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setCoverLetterForFormatting(SAMPLE_COVER_LETTER)}
+                    className="shrink-0 text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    {t('tool_try_example')}
+                  </button>
+                </div>
+                <textarea
+                  id="cover-letter-text"
+                  rows={8}
+                  className="block w-full resize-y rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
+                  placeholder={t('tool_resume_formatter_cover_letter_placeholder')}
+                  value={coverLetterForFormatting}
+                  onChange={(e) => setCoverLetterForFormatting(e.target.value)}
+                />
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                {t('tool_resume_formatter_intro_desc')}
+              </div>
+            )}
+          </section>
         </div>
-        <div className="ml-3 text-sm leading-6">
-          <label htmlFor="include-cover-letter" className="font-medium text-gray-900 dark:text-gray-100">{t('tool_resume_formatter_include_cover_letter_label')}</label>
-          <p className="text-gray-500 dark:text-gray-400">{t('tool_resume_formatter_include_cover_letter_desc')}</p>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <CheckCircle2 className={`h-4 w-4 ${hasResume ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'}`} aria-hidden="true" />
+              {t('tool_resume_formatter_intro_title')}
+            </div>
+            <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+              {MARKET_HINT_KEY[targetMarket] ? t(MARKET_HINT_KEY[targetMarket]) : t('tool_resume_formatter_target_market_desc')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
+            disabled={loading || !hasResume}
+            className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:text-white/90 dark:disabled:bg-blue-900/60 sm:mt-0 sm:w-auto"
+          >
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            {loading ? t('tool_resume_formatter_formatting_button') : t('tool_resume_formatter_format_button')}
+          </button>
         </div>
       </div>
-      {includeCoverLetter && (
-        <div className="animate-fade-in space-y-1">
-          <div className="flex justify-between items-center">
-            <label htmlFor="cover-letter-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_resume_formatter_cover_letter_label')}</label>
-            {/* (b) SAMPLE FILL — only fills cover letter, never touches resumeText */}
-            <button
-              type="button"
-              onClick={() => setCoverLetterForFormatting(SAMPLE_COVER_LETTER)}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              {t('tool_try_example')}
-            </button>
-          </div>
-          <textarea
-            id="cover-letter-text"
-            rows={10}
-            className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
-            placeholder={t('tool_resume_formatter_cover_letter_placeholder')}
-            value={coverLetterForFormatting}
-            onChange={(e) => setCoverLetterForFormatting(e.target.value)}
-          />
-        </div>
-      )}
-      <button
-        onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
-        disabled={loading}
-        className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" /></svg>
-        {loading ? t('tool_resume_formatter_formatting_button') : t('tool_resume_formatter_format_button')}
-      </button>
-    </div>
-  );
+    );
+  };
 
   const renderResult = () => {
     // (c) StagedLoader already has onCancel + icon + accent — preserved as-is
