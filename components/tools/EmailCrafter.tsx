@@ -1,33 +1,33 @@
-
-
-import React, { useState, useEffect } from 'react';
-import { Mail } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { BriefcaseBusiness, CheckCircle2, ClipboardList, Mail, MessageSquareReply, SlidersHorizontal, Sparkles, Wand2 } from 'lucide-react';
 import { generateProfessionalEmail } from '../../services/aiClient';
 import type { ProfessionalEmailResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { CopyButton, DownloadButtons, SavedResultBar } from './ToolUtils';
+import { CopyButton, DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
 import type { AppSession as Session } from '../../lib/data';
 
-const EMAIL_SCENARIOS = { 'Thank You': 'Post-Interview Thank You', 'Follow-up': 'Application Follow-up', 'Networking': 'Networking Outreach', 'Application': 'Job Application Submission' };
+const EMAIL_SCENARIOS = {
+  'Thank You': 'Post-Interview Thank You',
+  'Follow-up': 'Application Follow-up',
+  Networking: 'Networking Outreach',
+  Application: 'Job Application Submission',
+} as const;
 
-// Fields that take a date value (matched by exact label):
 const DATE_FIELDS = new Set(['Date of Application']);
-
-// Sample data for "Try an example":
 const SAMPLE_SCENARIO = 'Post-Interview Thank You';
 const SAMPLE_DETAILS: Record<string, string> = {
   'Interviewer Name': 'Sarah Chen',
   'Job Title': 'Frontend Software Engineer',
 };
 
-const SCENARIO_DETAILS: { [key: string]: string[] } = {
+const SCENARIO_DETAILS: Record<string, string[]> = {
   'Thank You': ['Interviewer Name', 'Job Title'],
   'Follow-up': ['Company Name', 'Job Title', 'Date of Application'],
-  'Networking': ['Recipient Name', 'Recipient Title', 'Recipient Company'],
-  'Application': ['Company Name', 'Job Title', 'Contact Person (optional)'],
+  Networking: ['Recipient Name', 'Recipient Title', 'Recipient Company'],
+  Application: ['Company Name', 'Job Title', 'Contact Person (optional)'],
 };
 
 interface EmailCrafterProps {
@@ -37,83 +37,191 @@ interface EmailCrafterProps {
   session: Session | null;
 }
 
-const Slider: React.FC<{ label: string; minLabel: string; maxLabel: string; value: number; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; }> = ({ label, minLabel, maxLabel, value, onChange }) => (
-    <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-        <input
-            type="range"
-            min="0"
-            max="100"
-            value={value}
-            onChange={onChange}
-            className="w-full h-2 bg-gray-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-600"
-        />
-        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span>{minLabel}</span>
-            <span>{maxLabel}</span>
-        </div>
-    </div>
+type EmailResult = ProfessionalEmailResult & {
+  scenario?: string;
+  mode?: 'draft' | 'reply';
+  market?: string;
+  generatedAt?: number;
+};
+
+const hasMeaningfulEmailResult = (value: Partial<ProfessionalEmailResult> | null | undefined) =>
+  Boolean(value?.subject?.trim() && value?.body?.trim() && value.body.trim().length > 40);
+
+const scenarioLabelKey = (key: string) => `tool_email_crafter_scenario_${key.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+const hasCjkText = (text: string) => /[\u3040-\u30ff\u3400-\u9fff]/.test(text);
+const describeTextLength = (text: string, useChineseUnit = false) => {
+  const trimmed = text.trim();
+  if (!trimmed) return useChineseUnit ? '0 词' : '0 words';
+  if (hasCjkText(trimmed)) return `${trimmed.length.toLocaleString()} ${useChineseUnit ? '字' : 'chars'}`;
+  return `${countWords(trimmed).toLocaleString()} ${useChineseUnit ? '词' : 'words'}`;
+};
+
+const CardShell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <section className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
+    {children}
+  </section>
 );
 
+const ChecklistItem: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <li className="flex gap-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+    <span>{children}</span>
+  </li>
+);
+
+const SliderControl: React.FC<{
+  label: string;
+  minLabel: string;
+  maxLabel: string;
+  value: number;
+  onChange: (value: number) => void;
+}> = ({ label, minLabel, maxLabel, value, onChange }) => (
+  <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex items-center justify-between gap-3">
+      <label className="text-sm font-semibold text-slate-800 dark:text-slate-200">{label}</label>
+      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{value}</span>
+    </div>
+    <input
+      type="range"
+      min="0"
+      max="100"
+      value={value}
+      onChange={(event) => onChange(Number(event.target.value))}
+      className="mt-3 h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-blue-700 dark:bg-slate-700"
+      aria-label={label}
+    />
+    <div className="mt-2 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+      <span>{minLabel}</span>
+      <span>{maxLabel}</span>
+    </div>
+  </div>
+);
 
 const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, session }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<ProfessionalEmailResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<ProfessionalEmailResult>();
+  const [result, setResult] = useState<EmailResult | null>(null);
+  const { canSave, saved, persist } = useToolResults<EmailResult>();
   const [fromSaved, setFromSaved] = useState(false);
+  const [editableSubject, setEditableSubject] = useState('');
   const [editableResult, setEditableResult] = useState('');
-
-  // State for new features
   const [craftingMode, setCraftingMode] = useState<'draft' | 'reply'>('draft');
   const [receivedEmailText, setReceivedEmailText] = useState('');
   const [tone, setTone] = useState(50);
   const [style, setStyle] = useState(50);
   const [confidence, setConfidence] = useState(50);
-
-  // State for draft mode
   const [emailScenario, setEmailScenario] = useState<string>('');
-  const [emailDetails, setEmailDetails] = useState<{ [key: string]: string }>({});
-
-  // Recent applications hook for the job-context selector
+  const [emailDetails, setEmailDetails] = useState<Record<string, string>>({});
   const { applications } = useRecentApplications(session);
 
-  // Hydrate from a cloud-saved result on reopen (paid users)
+  const isChineseUi = /[\u3400-\u9fff]/.test(t('tool_email_crafter_generate_button'));
+  const ui = {
+    mode: isChineseUi ? '模式' : 'Mode',
+    setup: isChineseUi ? '邮件设置' : 'Email setup',
+    style: isChineseUi ? '语气控制' : 'Tone controls',
+    context: isChineseUi ? '上下文' : 'Context',
+    quality: isChineseUi ? '输入质量' : 'Input quality',
+    length: isChineseUi ? '长度' : 'Length',
+    selected: isChineseUi ? '已选择' : 'Selected',
+    notSelected: isChineseUi ? '未选择' : 'Not selected',
+    readyChecks: isChineseUi ? '发送前要点' : 'Before sending',
+    reviewSubject: isChineseUi ? '确认主题是否具体。' : 'Confirm the subject is specific.',
+    reviewNames: isChineseUi ? '检查姓名、岗位、公司是否准确。' : 'Check names, role, and company details.',
+    reviewTone: isChineseUi ? '按关系远近调整正式程度。' : 'Tune formality to the relationship.',
+    subject: isChineseUi ? '主题' : 'Subject',
+    body: isChineseUi ? '正文' : 'Body',
+    editableDraft: isChineseUi ? '可编辑草稿' : 'Editable draft',
+    copyEmail: isChineseUi ? '复制邮件' : 'Copy email',
+    copied: isChineseUi ? '已复制' : 'Copied',
+    draftContext: isChineseUi ? '草稿上下文' : 'Draft context',
+  };
+
   useEffect(() => {
-    if (saved && !result) {
+    if (saved && !result && hasMeaningfulEmailResult(saved.result)) {
       setResult(saved.result);
+      setEditableSubject(saved.result.subject);
       setEditableResult(saved.result.body);
       setFromSaved(true);
     }
   }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const resetResult = () => {
+    setResult(null);
+    setEditableSubject('');
+    setEditableResult('');
+    setFromSaved(false);
+    setError(null);
+  };
+
+  const selectedScenarioKey = Object.keys(EMAIL_SCENARIOS).find((key) => EMAIL_SCENARIOS[key as keyof typeof EMAIL_SCENARIOS] === emailScenario) || '';
+  const requiredDetails = SCENARIO_DETAILS[selectedScenarioKey] || [];
+  const completedDetailCount = requiredDetails.filter((detail) => detail.includes('optional') || emailDetails[detail]?.trim()).length;
+
+  const handleTryExample = () => {
+    setEmailScenario(SAMPLE_SCENARIO);
+    setEmailDetails(SAMPLE_DETAILS);
+    setCraftingMode('draft');
+    setError(null);
+  };
+
+  const handleSelectRecentApp = (appId: string) => {
+    if (!appId) return;
+    const app = applications.find((application) => application.id === appId);
+    if (!app) return;
+    setEmailDetails((prev) => ({
+      ...prev,
+      ...(Object.prototype.hasOwnProperty.call(prev, 'Job Title') || emailScenario.includes('Follow-up') || emailScenario.includes('Thank You')
+        ? { 'Job Title': app.job_title }
+        : {}),
+    }));
+  };
+
+  const handleScenarioSelect = (value: string) => {
+    setEmailScenario(value);
+    setError(null);
+  };
+
+  const handleDetailChange = (key: string, value: string) => {
+    setEmailDetails((prev) => ({ ...prev, [key]: value }));
+  };
+
   const runTool = async () => {
     const alive = begin();
     setError(null);
+    setResult(null);
     try {
       let scenarioForApi = '';
-      let detailsForApi: { [key: string]: string } = {};
+      let detailsForApi: Record<string, string> = {};
 
       if (craftingMode === 'reply') {
-        if (!receivedEmailText.trim()) {
-          throw new Error(t('tool_email_crafter_error_required_reply'));
-        }
+        const received = receivedEmailText.trim();
+        if (!received) throw new Error(t('tool_email_crafter_error_required_reply'));
         scenarioForApi = 'Reply Assistant';
-        detailsForApi = { receivedEmailText };
+        detailsForApi = { receivedEmailText: received };
       } else {
-        if (!emailScenario) {
-          throw new Error(t('tool_email_crafter_error_required_scenario'));
-        }
+        if (!emailScenario) throw new Error(t('tool_email_crafter_error_required_scenario'));
+        const missing = requiredDetails.filter((detail) => !detail.includes('optional') && !emailDetails[detail]?.trim());
+        if (missing.length > 0) throw new Error(`${missing[0]} is required.`);
         scenarioForApi = emailScenario;
         detailsForApi = emailDetails;
       }
 
       const apiResult = await generateProfessionalEmail(resumeText, scenarioForApi, detailsForApi, market, tone, style, confidence);
       if (!alive()) return;
-      setResult(apiResult);
-      setEditableResult(apiResult.body);
+      if (!hasMeaningfulEmailResult(apiResult)) throw new Error(t('ai_error_empty_response'));
+      const nextResult: EmailResult = {
+        ...apiResult,
+        scenario: scenarioForApi,
+        mode: craftingMode,
+        market,
+        generatedAt: Date.now(),
+      };
+      setResult(nextResult);
+      setEditableSubject(nextResult.subject);
+      setEditableResult(nextResult.body);
       setFromSaved(false);
-      persist(apiResult);
+      persist(nextResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -121,39 +229,323 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    runTool();
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void runTool();
   };
 
-  const handleDetailChange = (key: string, value: string) => {
-    setEmailDetails(prev => ({ ...prev, [key]: value }));
-  };
+  const renderInput = () => (
+    <div className="mx-auto max-w-6xl space-y-5">
+      <CardShell className="overflow-hidden">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">
+              <Mail className="h-4 w-4" />
+              {t('tool_email_crafter_title')}
+            </div>
+            <h2 className="mt-3 max-w-2xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+              {t('tool_email_crafter_intro_title')}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+              {t('tool_email_crafter_intro_desc')}
+            </p>
 
-  // "Try an example" — only fills tool-specific fields, never overwrites resume
-  const handleTryExample = () => {
-    setEmailScenario(SAMPLE_SCENARIO);
-    setEmailDetails(SAMPLE_DETAILS);
-    setCraftingMode('draft');
-  };
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-950">
+              <div className="grid grid-cols-2 gap-1" role="tablist" aria-label={ui.mode}>
+                <button
+                  type="button"
+                  onClick={() => { setCraftingMode('draft'); setError(null); }}
+                  aria-pressed={craftingMode === 'draft'}
+                  className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    craftingMode === 'draft'
+                      ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-800 dark:text-blue-300'
+                      : 'text-slate-600 hover:bg-white/70 dark:text-slate-400 dark:hover:bg-slate-800/70'
+                  }`}
+                >
+                  <Mail className="h-4 w-4" />
+                  {t('tool_email_crafter_mode_draft')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCraftingMode('reply'); setError(null); }}
+                  aria-pressed={craftingMode === 'reply'}
+                  className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    craftingMode === 'reply'
+                      ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-800 dark:text-blue-300'
+                      : 'text-slate-600 hover:bg-white/70 dark:text-slate-400 dark:hover:bg-slate-800/70'
+                  }`}
+                >
+                  <MessageSquareReply className="h-4 w-4" />
+                  {t('tool_email_crafter_mode_reply')}
+                </button>
+              </div>
+            </div>
 
-  // Fill job title from a recent application
-  const handleSelectRecentApp = (appId: string) => {
-    if (!appId) return;
-    const app = applications.find(a => a.id === appId);
-    if (!app) return;
-    // For Thank You / Follow-up scenarios, fill Job Title
-    if (emailScenario === 'Post-Interview Thank You') {
-      setEmailDetails(prev => ({ ...prev, 'Job Title': app.job_title }));
-    } else if (emailScenario === 'Application Follow-up') {
-      setEmailDetails(prev => ({ ...prev, 'Job Title': app.job_title }));
-    } else {
-      // Generic: if the current details have a 'Job Title' key, fill it
-      setEmailDetails(prev => ({
-        ...prev,
-        ...(Object.prototype.hasOwnProperty.call(prev, 'Job Title') ? { 'Job Title': app.job_title } : {}),
-      }));
-    }
+            {craftingMode === 'draft' ? (
+              <div className="mt-6 space-y-5 animate-fade-in">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">{t('tool_email_crafter_draft_desc')}</p>
+                  <button
+                    type="button"
+                    onClick={handleTryExample}
+                    className="inline-flex w-fit items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {t('tool_email_crafter_try_example')}
+                  </button>
+                </div>
+
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t('tool_email_crafter_scenario_label')}</p>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    {Object.entries(EMAIL_SCENARIOS).map(([key, value]) => (
+                      <button
+                        type="button"
+                        key={key}
+                        onClick={() => handleScenarioSelect(value)}
+                        aria-pressed={emailScenario === value}
+                        className={`min-h-[76px] rounded-xl border p-4 text-left transition ${
+                          emailScenario === value
+                            ? 'border-blue-500 bg-blue-50 text-blue-800 shadow-sm dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-200'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">{t(scenarioLabelKey(key))}</span>
+                        <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{value}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {emailScenario && (
+                  <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:grid-cols-2">
+                    {applications.length > 0 && (
+                      <label className="sm:col-span-2">
+                        <span className="mb-1 block text-sm font-semibold text-slate-800 dark:text-slate-200">{t('tool_email_crafter_recent_apps_label')}</span>
+                        <select
+                          defaultValue=""
+                          onChange={(event) => handleSelectRecentApp(event.target.value)}
+                          className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        >
+                          <option value="" disabled>{t('tool_email_crafter_recent_apps_placeholder')}</option>
+                          {applications.map((app) => (
+                            <option key={app.id} value={app.id}>
+                              {app.job_title}{app.status ? ` - ${app.status}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    {requiredDetails.map((detail) => (
+                      <label key={detail}>
+                        <span className="mb-1 block text-sm font-semibold text-slate-800 dark:text-slate-200">{detail}</span>
+                        <input
+                          type={DATE_FIELDS.has(detail) ? 'date' : 'text'}
+                          value={emailDetails[detail] || ''}
+                          onChange={(event) => handleDetailChange(detail, event.target.value)}
+                          required={!detail.includes('optional')}
+                          className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-6 animate-fade-in">
+                <label htmlFor="email-reply-source" className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {t('tool_email_crafter_reply_label')}
+                </label>
+                <textarea
+                  id="email-reply-source"
+                  value={receivedEmailText}
+                  onChange={(event) => setReceivedEmailText(event.target.value)}
+                  rows={10}
+                  className="min-h-[260px] w-full resize-y rounded-xl border border-slate-300 bg-white p-4 text-sm leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  placeholder={t('tool_email_crafter_reply_placeholder')}
+                />
+              </div>
+            )}
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <SliderControl label={t('tool_email_crafter_tone_label')} minLabel={t('tool_email_crafter_tone_min')} maxLabel={t('tool_email_crafter_tone_max')} value={tone} onChange={setTone} />
+              <SliderControl label={t('tool_email_crafter_style_label')} minLabel={t('tool_email_crafter_style_min')} maxLabel={t('tool_email_crafter_style_max')} value={style} onChange={setStyle} />
+              <SliderControl label={t('tool_email_crafter_confidence_label')} minLabel={t('tool_email_crafter_confidence_min')} maxLabel={t('tool_email_crafter_confidence_max')} value={confidence} onChange={setConfidence} />
+            </div>
+
+            {error && (
+              <div className="mt-4">
+                <ToolError message={error} onRetry={() => void runTool()} retryLabel={t('tool_email_crafter_retry')} />
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400"
+            >
+              <Wand2 className="h-4 w-4" />
+              {t('tool_email_crafter_generate_button')}
+            </button>
+          </form>
+
+          <aside className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/50 lg:border-l lg:border-t-0 lg:p-6">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                  <ClipboardList className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{ui.setup}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{market}</p>
+                </div>
+              </div>
+              <dl className="mt-4 grid gap-3">
+                <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                  <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{ui.mode}</dt>
+                  <dd className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-100">
+                    {craftingMode === 'draft' ? t('tool_email_crafter_mode_draft') : t('tool_email_crafter_mode_reply')}
+                  </dd>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                  <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{ui.selected}</dt>
+                  <dd className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-100">
+                    {craftingMode === 'reply' ? describeTextLength(receivedEmailText, isChineseUi) : (emailScenario || ui.notSelected)}
+                  </dd>
+                </div>
+                {craftingMode === 'draft' && emailScenario && (
+                  <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{ui.quality}</dt>
+                    <dd className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-100">{completedDetailCount}/{requiredDetails.length}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{ui.style}</p>
+              </div>
+              <ul className="mt-4 space-y-3">
+                <ChecklistItem>{ui.reviewSubject}</ChecklistItem>
+                <ChecklistItem>{ui.reviewNames}</ChecklistItem>
+                <ChecklistItem>{ui.reviewTone}</ChecklistItem>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </CardShell>
+    </div>
+  );
+
+  const renderResult = () => {
+    if (!result) return null;
+    const exportText = `Subject: ${editableSubject}\n\n${editableResult}`;
+    const lengthLabel = describeTextLength(editableResult, isChineseUi);
+
+    return (
+      <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={resetResult}
+        />
+
+        <CardShell className="overflow-hidden">
+          <div className="border-b border-slate-200 bg-slate-50 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">
+                  <Mail className="h-4 w-4" />
+                  {t('tool_email_crafter_results_title')}
+                </div>
+                <h2 className="mt-2 break-words text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-3xl">
+                  {editableSubject || t('tool_email_crafter_subject_label')}
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                  {result.mode === 'reply' ? t('tool_email_crafter_mode_reply') : (result.scenario || t('tool_email_crafter_mode_draft'))} · {lengthLabel}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <CopyButton text={exportText} label={ui.copyEmail} copiedLabel={ui.copied} />
+                <DownloadButtons textContent={exportText} baseFilename="email_draft" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0 space-y-5 p-5 sm:p-6 lg:p-8">
+              <label htmlFor="email-subject-result" className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {ui.subject}
+              </label>
+              <input
+                id="email-subject-result"
+                value={editableSubject}
+                onChange={(event) => setEditableSubject(event.target.value)}
+                className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+
+              <label htmlFor="email-body-result" className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {ui.editableDraft}
+              </label>
+              <textarea
+                id="email-body-result"
+                value={editableResult}
+                onChange={(event) => setEditableResult(event.target.value)}
+                className="min-h-[520px] w-full resize-y rounded-xl border border-slate-200 bg-white p-5 text-base leading-8 text-slate-950 shadow-inner outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+            </div>
+
+            <aside className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/50 lg:border-l lg:border-t-0 lg:p-6">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    <BriefcaseBusiness className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{ui.draftContext}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{result.market || market}</p>
+                  </div>
+                </div>
+                <dl className="mt-4 space-y-3">
+                  <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{ui.mode}</dt>
+                    <dd className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-100">
+                      {result.mode === 'reply' ? t('tool_email_crafter_mode_reply') : t('tool_email_crafter_mode_draft')}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{ui.length}</dt>
+                    <dd className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-100">{lengthLabel}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{ui.readyChecks}</p>
+                <ul className="mt-4 space-y-3">
+                  <ChecklistItem>{ui.reviewSubject}</ChecklistItem>
+                  <ChecklistItem>{ui.reviewNames}</ChecklistItem>
+                  <ChecklistItem>{ui.reviewTone}</ChecklistItem>
+                </ul>
+              </div>
+
+              <button
+                type="button"
+                onClick={resetResult}
+                className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {t('tool_email_crafter_back_button')}
+              </button>
+            </aside>
+          </div>
+        </CardShell>
+      </div>
+    );
   };
 
   if (loading) {
@@ -166,184 +558,13 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
           t('tool_email_crafter_loader_step3'),
         ]}
         onCancel={cancel}
+        cancelLabel={t('tool_loader_hide_button')}
+        cancelHint={t('tool_loader_hide_hint')}
         icon={<Mail />}
         accent="rose"
       />
     );
   }
-
-  const renderInput = () => (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* (a) Intro card */}
-      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-1">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_email_crafter_intro_title')}</p>
-        <p>{t('tool_email_crafter_intro_desc')}</p>
-      </div>
-
-       <div className="p-1 bg-gray-200 dark:bg-slate-700 rounded-lg flex">
-            <button type="button" onClick={() => setCraftingMode('draft')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${craftingMode === 'draft' ? 'bg-white dark:bg-slate-600 text-blue-700 dark:text-blue-300 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}>
-                {t('tool_email_crafter_mode_draft')}
-            </button>
-            <button type="button" onClick={() => setCraftingMode('reply')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${craftingMode === 'reply' ? 'bg-white dark:bg-slate-600 text-blue-700 dark:text-blue-300 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}>
-                {t('tool_email_crafter_mode_reply')}
-            </button>
-        </div>
-
-      {craftingMode === 'draft' ? (
-        <div className="space-y-4 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_email_crafter_draft_desc')}</p>
-            {/* (b) Sample fill */}
-            <button
-              type="button"
-              onClick={handleTryExample}
-              className="shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline ml-4"
-            >
-              {t('tool_email_crafter_try_example')}
-            </button>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('tool_email_crafter_scenario_label')}</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Object.entries(EMAIL_SCENARIOS).map(([key, value]) => (
-                <button type="button" key={key} onClick={() => setEmailScenario(value)} className={`p-3 border-2 rounded-lg text-left transition-all text-sm ${emailScenario === value ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 dark:text-gray-300'}`}>
-                  {t(`tool_email_crafter_scenario_${key.toLowerCase().replace(' ', '_')}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-          {emailScenario && (
-            <div className="space-y-3 pt-2 animate-fade-in">
-              {/* Recent applications selector — hidden when no apps */}
-              {applications.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('tool_email_crafter_recent_apps_label')}
-                  </label>
-                  <select
-                    defaultValue=""
-                    onChange={(e) => handleSelectRecentApp(e.target.value)}
-                    className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="" disabled>{t('tool_email_crafter_recent_apps_placeholder')}</option>
-                    {applications.map((app) => (
-                      <option key={app.id} value={app.id}>
-                        {app.job_title}{app.status ? ` — ${app.status}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {(SCENARIO_DETAILS[Object.keys(EMAIL_SCENARIOS).find(key => EMAIL_SCENARIOS[key as keyof typeof EMAIL_SCENARIOS] === emailScenario) || ''] || []).map(detail => (
-                <div key={detail}>
-                  <label htmlFor={detail} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{detail}</label>
-                  {/* (date) "Date of Application" → real date picker */}
-                  {DATE_FIELDS.has(detail) ? (
-                    <input
-                      type="date"
-                      id={detail}
-                      value={emailDetails[detail] || ''}
-                      onChange={(e) => handleDetailChange(detail, e.target.value)}
-                      className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      required={!detail.includes('optional')}
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      id={detail}
-                      value={emailDetails[detail] || ''}
-                      onChange={(e) => handleDetailChange(detail, e.target.value)}
-                      className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      required={!detail.includes('optional')}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-         <div className="animate-fade-in">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_email_crafter_reply_label')}</label>
-            <textarea
-                value={receivedEmailText}
-                onChange={(e) => setReceivedEmailText(e.target.value)}
-                rows={8}
-                className="w-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 transition shadow-sm"
-                placeholder={t('tool_email_crafter_reply_placeholder')}
-            />
-        </div>
-      )}
-
-      <div className="p-4 bg-gray-50 dark:bg-slate-700 border dark:border-slate-600 rounded-lg space-y-4">
-            <h4 className="font-semibold text-center text-gray-700 dark:text-gray-200">{t('tool_email_crafter_style_title')}</h4>
-            <Slider label={t('tool_email_crafter_tone_label')} minLabel={t('tool_email_crafter_tone_min')} maxLabel={t('tool_email_crafter_tone_max')} value={tone} onChange={e => setTone(parseInt(e.target.value))} />
-            <Slider label={t('tool_email_crafter_style_label')} minLabel={t('tool_email_crafter_style_min')} maxLabel={t('tool_email_crafter_style_max')} value={style} onChange={e => setStyle(parseInt(e.target.value))} />
-            <Slider label={t('tool_email_crafter_confidence_label')} minLabel={t('tool_email_crafter_confidence_min')} maxLabel={t('tool_email_crafter_confidence_max')} value={confidence} onChange={e => setConfidence(parseInt(e.target.value))} />
-      </div>
-
-      {/* (e) Error box with retry */}
-      {error && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
-          <svg className="h-5 w-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
-          <div className="flex-1">
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-            <button
-              type="button"
-              onClick={() => runTool()}
-              className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:underline"
-            >
-              {t('tool_email_crafter_retry')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <button type="submit" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
-        {t('tool_email_crafter_generate_button')}
-      </button>
-    </form>
-  );
-
-  const renderResult = () => {
-    if (!result) return null;
-
-    const { subject } = result;
-    return (
-      <div className="space-y-4 animate-fade-in">
-        <SavedResultBar
-          t={t}
-          canSave={canSave}
-          isSaved={fromSaved}
-          savedAt={saved?.savedAt ?? null}
-          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
-        />
-        <div className="flex flex-wrap justify-between items-center gap-2">
-          <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_email_crafter_results_title')}</h4>
-          <div className="flex items-center gap-2">
-            <CopyButton text={`Subject: ${subject}\n\n${editableResult}`} />
-            <DownloadButtons textContent={`Subject: ${subject}\n\n${editableResult}`} baseFilename="email_draft" />
-          </div>
-        </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_email_crafter_subject_label')}</h5>
-          <p className="mt-1 text-sm p-2 bg-gray-50 dark:bg-slate-700 rounded-md border dark:border-slate-600 dark:text-gray-300">{subject}</p>
-        </div>
-        <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-          <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_email_crafter_body_label')}</h5>
-          <textarea value={editableResult} onChange={(e) => setEditableResult(e.target.value)} className="w-full h-72 mt-1 text-sm p-2 bg-gray-50 dark:bg-slate-700 rounded-md border dark:border-slate-600 dark:text-gray-100" />
-        </div>
-        {/* (d) Start over / run again */}
-        <button
-          type="button"
-          onClick={() => { setResult(null); setError(null); }}
-          className="w-full text-sm py-2 px-4 border-2 border-dashed rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-gray-300"
-        >
-          &larr; {t('tool_email_crafter_back_button')}
-        </button>
-      </div>
-    );
-  };
 
   return result ? renderResult() : renderInput();
 };
