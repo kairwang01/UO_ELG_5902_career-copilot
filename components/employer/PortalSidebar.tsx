@@ -63,9 +63,10 @@ export function PortalSidebar({
     <button
       key={page}
       onClick={() => onNavigate(page)}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm ${
+      aria-current={currentPage === page ? 'page' : undefined}
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm transition-colors ${
         currentPage === page
-          ? 'text-[#1d4ed8] bg-blue-50 border border-blue-200'
+          ? 'bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50'
           : dm
           ? 'text-gray-300 hover:bg-gray-700'
           : 'text-gray-600 hover:bg-gray-50'
