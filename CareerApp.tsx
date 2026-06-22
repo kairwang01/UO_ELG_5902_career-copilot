@@ -737,8 +737,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (roleStateKeyRef.current === roleKey) return;
     roleStateKeyRef.current = roleKey;
 
-    setDashboardView(dashboardViewFromPath(location.pathname) ?? 'dashboard');
-    setActiveTool(null);
+    const nextDashboardView = dashboardViewFromPath(location.pathname) ?? 'dashboard';
+    const nextActiveTool = nextDashboardView === 'toolkit'
+      ? new URLSearchParams(location.search).get('tool')
+      : null;
+
+    setDashboardView(nextDashboardView);
+    setActiveTool(nextActiveTool);
     setAnalysisResult(null);
     setResumeImages(null);
     setIsUpdatingResume(false);
@@ -746,7 +751,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (profile?.role === 'candidate') {
       setPortalInitialPage('dashboard');
     }
-  }, [session?.user?.id, profile?.role, normalizedSubscriptionStatus, location.pathname]);
+  }, [session?.user?.id, profile?.role, normalizedSubscriptionStatus, location.pathname, location.search]);
 
 
   useEffect(() => {
@@ -987,6 +992,18 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     }
   };
 
+  const setWorkspaceActiveTool = (tool: string | null) => {
+    if (tool) {
+      openWorkspaceTool(tool);
+      return;
+    }
+
+    setActiveTool(null);
+    if (entry === 'workspace' && dashboardViewFromPath(location.pathname) === 'toolkit') {
+      navigate(dashboardPathForView('toolkit'), { replace: true });
+    }
+  };
+
   const openResumeUpload = () => {
     setActiveTool(null);
     setWorkspaceView('resume');
@@ -1034,7 +1051,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                         refreshProfile={getProfile}
                         onApplyImprovements={handleApplyImprovements}
                         activeTool={activeTool}
-                        setActiveTool={setActiveTool}
+                        setActiveTool={setWorkspaceActiveTool}
                     />
                 )}
             </div>
@@ -1083,10 +1100,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             <MyApplications
               session={session}
               t={t}
-              onFindSimilar={() => {
-                setActiveTool('opportunity-finder');
-                setWorkspaceView('toolkit');
-              }}
+              onFindSimilar={() => openWorkspaceTool('opportunity-finder')}
             />
           </div>
         )}
