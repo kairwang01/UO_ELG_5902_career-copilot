@@ -25,6 +25,7 @@ type DialogPosition = {
   left: number;
   width: number;
   maxHeight: number;
+  placement: 'center' | 'above' | 'below';
 };
 
 const EDGE_GAP = 16;
@@ -48,7 +49,8 @@ const nearlyEqual = (a: DialogPosition | null, b: DialogPosition) => {
     Math.abs(a.top - b.top) < 0.5 &&
     Math.abs(a.left - b.left) < 0.5 &&
     Math.abs(a.width - b.width) < 0.5 &&
-    Math.abs(a.maxHeight - b.maxHeight) < 0.5
+    Math.abs(a.maxHeight - b.maxHeight) < 0.5 &&
+    a.placement === b.placement
   );
 };
 
@@ -161,7 +163,8 @@ export const ViewportAwareDialog: React.FC<ViewportAwareDialogProps> = ({
       const maxHeight = Math.max(240, viewport.height - EDGE_GAP * 2);
 
       const panelRect = panel.getBoundingClientRect();
-      const panelHeight = Math.min(panelRect.height || maxHeight, maxHeight);
+      const contentHeight = Math.min(Math.max(panelRect.height || 0, panel.scrollHeight || 0, 1), maxHeight);
+      const panelHeight = Math.min(contentHeight, maxHeight);
       const centerTop = viewport.top + (viewport.height - panelHeight) / 2;
       const centerLeft = viewport.left + (viewport.width - width) / 2;
 
@@ -170,6 +173,7 @@ export const ViewportAwareDialog: React.FC<ViewportAwareDialogProps> = ({
         left: clamp(centerLeft, viewport.left + EDGE_GAP, viewportRight - width - EDGE_GAP),
         width,
         maxHeight,
+        placement: 'center',
       };
 
       const anchor = anchorRef?.current;
@@ -187,20 +191,25 @@ export const ViewportAwareDialog: React.FC<ViewportAwareDialogProps> = ({
           const canFitBelow = spaceBelow >= panelHeight;
           const canFitAbove = spaceAbove >= panelHeight;
           const useBelow = canFitBelow || spaceBelow >= spaceAbove;
+          const availableSpace = useBelow ? spaceBelow : spaceAbove;
+          const partialAnchorMinHeight = Math.min(Math.max(contentHeight * 0.65, 240), 360);
+          const anchoredMaxHeight = Math.min(maxHeight, Math.max(availableSpace, 0));
+          const anchoredHeight = Math.min(contentHeight, anchoredMaxHeight);
           const anchoredTop = useBelow
             ? anchorRect.bottom + ANCHOR_GAP
-            : anchorRect.top - ANCHOR_GAP - panelHeight;
+            : anchorRect.top - ANCHOR_GAP - anchoredHeight;
 
-          if (canFitBelow || canFitAbove || Math.max(spaceBelow, spaceAbove) >= Math.min(panelHeight * 0.65, 360)) {
+          if (canFitBelow || canFitAbove || availableSpace >= partialAnchorMinHeight) {
             next = {
-              top: clamp(anchoredTop, viewport.top + EDGE_GAP, viewportBottom - panelHeight - EDGE_GAP),
+              top: anchoredTop,
               left: clamp(
                 anchorRect.left + anchorRect.width / 2 - width / 2,
                 viewport.left + EDGE_GAP,
                 viewportRight - width - EDGE_GAP,
               ),
               width,
-              maxHeight,
+              maxHeight: anchoredMaxHeight,
+              placement: useBelow ? 'below' : 'above',
             };
           }
         }
@@ -255,6 +264,8 @@ export const ViewportAwareDialog: React.FC<ViewportAwareDialogProps> = ({
         aria-describedby={describedBy}
         aria-label={ariaLabel}
         tabIndex={-1}
+        data-qa="viewport-aware-dialog"
+        data-placement={position?.placement ?? 'measuring'}
         className={`viewport-aware-dialog-panel ${className}`}
         style={{
           top: position?.top ?? '50%',
