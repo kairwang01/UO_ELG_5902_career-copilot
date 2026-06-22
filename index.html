@@ -7,6 +7,21 @@
     <title>Career CoPilot — Land the Job You Actually Want</title>
     <meta name="description" content="Your AI career coach. Upload your resume, get an instant score, practice interviews, map your career path, and negotiate offers — all backed by data." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var theme = (stored === 'light' || stored === 'dark')
+            ? stored
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          var root = document.documentElement;
+          root.classList.remove('light', 'dark');
+          root.classList.add(theme);
+          root.style.colorScheme = theme;
+        } catch (e) {}
+      })();
+    </script>
   <script type="importmap">
 {
   "imports": {

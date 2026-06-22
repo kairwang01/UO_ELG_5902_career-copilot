@@ -202,7 +202,17 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [candidatePlanSaving, setCandidatePlanSaving] = useState<CandidatePlanKey | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    // Match the pre-paint bootstrap in index.html so React's first commit agrees
+    // with the class already on <html> — otherwise dark-mode users flash light.
+    try {
+      const stored = localStorage.getItem('theme');
+      if (stored === 'light' || stored === 'dark') return stored;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
   // Deep-link target page for the employer hiring portal
   const [portalInitialPage, setPortalInitialPage] = useState<PortalPage>('dashboard');
   // Experimental Web3 module flag — gates the Identity & Wallet view.
@@ -288,19 +298,14 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // doesn't re-subscribe on every locale change).
   const latestTRef = useRef(t);
   
-  // Initialize theme from localStorage or system preference
-  useEffect(() => {
-    const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initialTheme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
-    setTheme(initialTheme);
-  }, []);
-
-  // Apply theme class to HTML element and persist changes
+  // Apply theme class to HTML element and persist changes. Initial theme is
+  // resolved synchronously in useState above (matching the index.html bootstrap),
+  // so this only re-applies on an explicit toggle — no flash on first paint.
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove(theme === 'dark' ? 'light' : 'dark');
     root.classList.add(theme);
+    root.style.colorScheme = theme;
     try { localStorage.setItem('theme', theme); } catch { /* storage unavailable */ }
   }, [theme]);
   
