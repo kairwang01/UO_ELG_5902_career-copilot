@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Check, ChevronDown, Search, X } from 'lucide-react';
+import { Calendar, Check, ChevronDown, CircleHelp, Search, X } from 'lucide-react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
 import { AdminAccessDenied, AdminVerifying, resolveRoleWithFallback } from './AdminAccessGate';
@@ -175,6 +175,198 @@ const DEFAULT_PLAN_QUOTAS: Record<AdminPlanKey, AdminPlanQuota> = {
 
 const TOOL_KEYS = Object.keys(TOOL_CREDIT_COSTS).sort();
 
+const PROMPT_GROUP_HELP: Record<string, string> = {
+  'Tool prompts': 'Prompts used by generic AI tools routed through aiProxy/toolRegistry, usually tied to a visible tool or helper step.',
+  'Handler prompts': 'Prompts used by dedicated backend handlers with their own auth, credit, or workflow logic, such as resume analysis, coach, cover letters, career path, and interviews.',
+};
+
+const PROMPT_META: Record<string, { module: string; purpose: string }> = {
+  extractTalentProfile: {
+    module: 'Talent Profile',
+    purpose: 'Parses a resume into the structured candidate profile used by apply flows and employer matching.',
+  },
+  applyResumeImprovements: {
+    module: 'Resume Analysis',
+    purpose: 'Rewrites the resume after the analysis flow suggests concrete improvements.',
+  },
+  convertResumeFormat: {
+    module: 'Resume Formatter',
+    purpose: 'Localizes a resume for a target job market while keeping it ATS-readable and factual.',
+  },
+  calculateCompatibility: {
+    module: 'Resume Match',
+    purpose: 'Scores a resume against one job description for candidate-job fit.',
+  },
+  findOpportunities: {
+    module: 'Opportunity Finder',
+    purpose: 'Finds broader job opportunities and job-search strategies, optionally with live search grounding.',
+  },
+  findOpportunitiesOffline: {
+    module: 'Opportunity Finder',
+    purpose: 'Fallback opportunity prompt used when live search grounding is disabled or quota-limited.',
+  },
+  optimizeLinkedInProfile: {
+    module: 'LinkedIn Optimizer',
+    purpose: 'Generates LinkedIn headline, summary, and experience improvements from the user resume.',
+  },
+  optimizeLinkedInProfileFromText: {
+    module: 'LinkedIn Optimizer',
+    purpose: 'Improves an existing LinkedIn profile using profile text, resume context, and optional admin/user guidance.',
+  },
+  generateSkillBridgeProject: {
+    module: 'Skill Learning Planner',
+    purpose: 'Suggests a portfolio project that bridges one target skill toward a desired role.',
+  },
+  generateAgilePracticeTest: {
+    module: 'Agile Coach',
+    purpose: 'Creates agile certification practice questions, answers, and study tips.',
+  },
+  generateSalaryNegotiationStrategy: {
+    module: 'Salary Negotiator',
+    purpose: 'Builds a negotiation strategy for a specific offer, company, location, and candidate background.',
+  },
+  analyzeEnglishProficiency: {
+    module: 'English Pro',
+    purpose: 'Reviews professional email writing and returns IELTS-style level, corrections, and cultural guidance.',
+  },
+  generateSpeakingTopics: {
+    module: 'English Pro',
+    purpose: 'Creates speaking-practice topics for the user target IELTS band.',
+  },
+  analyzeSpokenEnglish: {
+    module: 'English Pro',
+    purpose: 'Scores a spoken transcript for clarity, pace, filler words, and improvement areas.',
+  },
+  generateReadingPracticePassage: {
+    module: 'English Pro',
+    purpose: 'Creates a reading passage and comprehension questions for IELTS-style practice.',
+  },
+  analyzeEnglishReading: {
+    module: 'English Pro',
+    purpose: 'Summarizes a reading text and extracts vocabulary plus comprehension questions.',
+  },
+  evaluateReadingComprehension: {
+    module: 'English Pro',
+    purpose: 'Grades user answers against generated reading-comprehension questions.',
+  },
+  analyzeEnglishListening: {
+    module: 'English Pro',
+    purpose: 'Compares a user transcription with the source text and explains listening mistakes.',
+  },
+  generateVocabularyFlashcards: {
+    module: 'English Pro',
+    purpose: 'Creates vocabulary flashcards and distractors for IELTS-level practice.',
+  },
+  generateProfessionalEmail: {
+    module: 'Email Crafter',
+    purpose: 'Drafts a professional email from scenario, tone, style, market, and resume context.',
+  },
+  generateOutreachEmail: {
+    module: 'Employer Outreach',
+    purpose: 'Writes employer outreach email using candidate resume, job description, and employer profile.',
+  },
+  generatePortfolioWebsite: {
+    module: 'Portfolio Website Builder',
+    purpose: 'Turns resume facts into structured content for a candidate portfolio website.',
+  },
+  generateWeeklySummary: {
+    module: 'Dashboard Summary',
+    purpose: 'Summarizes weekly usage/activity data for reporting surfaces.',
+  },
+  generateJobDescription: {
+    module: 'Employer Job Posting',
+    purpose: 'Drafts a job description from title, company, responsibilities, and company context.',
+  },
+  analyzeSalary: {
+    module: 'Employer Job Posting',
+    purpose: 'Estimates salary ranges for a job title and location, with optional job-description context.',
+  },
+  checkInclusivity: {
+    module: 'Employer Job Posting',
+    purpose: 'Flags biased or exclusionary wording in a job description and suggests inclusive alternatives.',
+  },
+  formatJobDescription: {
+    module: 'Employer Job Posting',
+    purpose: 'Cleans and structures a raw job description for publishing.',
+  },
+  analyzeCandidateMatch: {
+    module: 'Applicant Funnel',
+    purpose: 'Scores an applicant resume against a job and returns strengths, gaps, and screening questions.',
+  },
+  generateNetworkingStrategy: {
+    module: 'Networking Assistant',
+    purpose: 'Creates a networking plan and outreach messages for a target company, role, and location.',
+  },
+  generatePerformanceReviewPrep: {
+    module: 'Performance Review Prep',
+    purpose: 'Turns role and accomplishment notes into review talking points and growth areas.',
+  },
+  generateLearningPlan: {
+    module: 'Skill Learning Planner',
+    purpose: 'Builds a phased learning plan and project ideas for one target skill.',
+  },
+  findIndustryEvents: {
+    module: 'Industry Event Scout',
+    purpose: 'Finds relevant industry events by field and location using live search.',
+  },
+  anonymizeResume: {
+    module: 'Agency Hub',
+    purpose: 'Creates an anonymized candidate resume for recruiting agency sharing.',
+  },
+  generateClientPitchEmail: {
+    module: 'Agency Hub',
+    purpose: 'Drafts a client-facing pitch email for a candidate, optionally tied to a job description.',
+  },
+  generateCandidatePrepKit: {
+    module: 'Agency Hub',
+    purpose: 'Identifies weak spots, key projects, and likely questions for candidate interview prep.',
+  },
+  handler_resume_analysis: {
+    module: 'Resume Analysis',
+    purpose: 'Dedicated text-resume analysis handler that scores, critiques, and extracts improvement guidance.',
+  },
+  handler_resume_analysis_image: {
+    module: 'Resume Analysis',
+    purpose: 'Dedicated image-resume handler that transcribes resume images before scoring and critique.',
+  },
+  handler_mock_interview_generate: {
+    module: 'Mock Interview',
+    purpose: 'Generates role-specific interview questions from resume and job description.',
+  },
+  handler_mock_interview_eval: {
+    module: 'Mock Interview',
+    purpose: 'Grades one interview answer and returns focused coaching plus a model answer.',
+  },
+  handler_mock_interview_session_eval: {
+    module: 'Mock Interview',
+    purpose: 'Evaluates the full timed interview transcript and returns a hire-style verdict.',
+  },
+  handler_career_coach_base: {
+    module: 'Career Coach',
+    purpose: 'Base system instruction for the general AI career coach chat.',
+  },
+  handler_career_coach_candidate: {
+    module: 'Career Coach',
+    purpose: 'Candidate-specific coach instruction that uses resume context for job-search advice.',
+  },
+  handler_career_coach_employer: {
+    module: 'Career Coach',
+    purpose: 'Employer-specific coach instruction for hiring, sourcing, screening, and talent advice.',
+  },
+  handler_cover_letter: {
+    module: 'Cover Letter Generator',
+    purpose: 'Dedicated handler prompt for writing a tailored cover letter from resume and job description.',
+  },
+  handler_career_path: {
+    module: 'Career Path Planner',
+    purpose: 'Dedicated handler prompt for career transition analysis, skill gaps, roadmap, and bridge roles.',
+  },
+  handler_extract_url: {
+    module: 'URL Resume Import',
+    purpose: 'Extracts resume/profile content from fetched HTML while removing site chrome and unrelated text.',
+  },
+};
+
 // Per-field semantics for the plan-quota table. CRITICAL: `0` means different things —
 // for daily runs/credits the runtime gate is `> 0` (so 0 = unlimited), but active_job
 // uses `active >= limit` (so 0 = NONE allowed, blocks posting). monthly_grant is an
@@ -259,6 +451,70 @@ const UserFilterDropdown: React.FC<{
               key={option.value}
               type="button"
               onClick={() => toggle(option.value)}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+            >
+              <span
+                className={`flex h-4 w-4 items-center justify-center rounded border ${
+                  checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white text-transparent'
+                }`}
+                aria-hidden="true"
+              >
+                <Check className="h-3 w-3" />
+              </span>
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </details>
+  );
+};
+
+const UserSingleFilterDropdown: React.FC<{
+  label: string;
+  options: readonly { value: string; label: string }[];
+  value: string;
+  onChange: (next: string) => void;
+}> = ({ label, options, value, onChange }) => {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const selectedLabel = options.find((option) => option.value === value)?.label ?? options[0]?.label ?? label;
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (details && !details.contains(event.target as Node)) details.removeAttribute('open');
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, []);
+
+  return (
+    <details ref={detailsRef} className="group relative">
+      <summary
+        className={`${userFilterControl} flex cursor-pointer list-none items-center justify-between gap-3 px-3 [&::-webkit-details-marker]:hidden`}
+        aria-label={`Filter users by ${label.toLowerCase()}`}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <Calendar className="h-4 w-4 shrink-0 text-gray-400" />
+          <span className="min-w-0">
+            <span className="block text-[11px] font-medium leading-3 text-gray-500">{label}</span>
+            <span className="block truncate text-sm leading-5">{selectedLabel}</span>
+          </span>
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-gray-400 transition group-open:rotate-180" />
+      </summary>
+      <div className="absolute left-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg">
+        {options.map((option) => {
+          const checked = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                detailsRef.current?.removeAttribute('open');
+              }}
               className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
             >
               <span
@@ -2380,7 +2636,14 @@ const AdminPortal: React.FC = () => {
             ) : (() => {
               const q = promptSearch.trim().toLowerCase();
               const filtered = q
-                ? prompts.filter((p) => p.key.toLowerCase().includes(q))
+                ? prompts.filter((p) => {
+                    const meta = PROMPT_META[p.key];
+                    return [
+                      p.key,
+                      meta?.module,
+                      meta?.purpose,
+                    ].some((value) => value?.toLowerCase().includes(q));
+                  })
                 : prompts;
 
               // Separate tool keys from handler_ keys for grouping
@@ -2391,8 +2654,15 @@ const AdminPortal: React.FC = () => {
                 if (group.length === 0) return null;
                 return (
                   <div key={groupLabel} className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 px-1">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-gray-400 px-1">
                       {groupLabel}
+                      <span
+                        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-gray-400 hover:text-gray-600"
+                        title={PROMPT_GROUP_HELP[groupLabel]}
+                        aria-label={`${groupLabel} explanation`}
+                      >
+                        <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
                     </p>
                     <Card>
                       <ul className="divide-y divide-gray-100">
@@ -2400,6 +2670,10 @@ const AdminPortal: React.FC = () => {
                           const isExpanded = expandedPromptKey === entry.key;
                           const isOverridden = entry.override !== null;
                           const feedback = promptFeedback[entry.key];
+                          const meta = PROMPT_META[entry.key] ?? {
+                            module: 'Unmapped',
+                            purpose: 'No module mapping found yet. Check functions/src/llm/prompts.ts and toolRegistry.ts.',
+                          };
 
                           return (
                             <li key={entry.key}>
@@ -2426,15 +2700,25 @@ const AdminPortal: React.FC = () => {
                                 className="w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left hover:bg-gray-50 transition-colors focus:outline-none focus:bg-gray-50"
                                 aria-expanded={isExpanded}
                               >
-                                <span className="flex items-center gap-2.5 min-w-0">
-                                  <span className="font-mono text-sm text-gray-800 truncate">
-                                    {entry.key}
-                                  </span>
-                                  {isOverridden && (
-                                    <span className="shrink-0 inline-block text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                                      overridden
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex items-center gap-2.5 min-w-0">
+                                    <span className="font-mono text-sm text-gray-800 truncate">
+                                      {entry.key}
                                     </span>
-                                  )}
+                                    {isOverridden && (
+                                      <span className="shrink-0 inline-block text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                        overridden
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                                    <span>
+                                      <span className="font-medium text-gray-600">Module:</span> {meta.module}
+                                    </span>
+                                    <span className="min-w-0">
+                                      <span className="font-medium text-gray-600">Purpose:</span> {meta.purpose}
+                                    </span>
+                                  </span>
                                 </span>
                                 <span
                                   className={`shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -3022,20 +3306,12 @@ const AdminPortal: React.FC = () => {
                     selected={userPlanFilters}
                     onChange={setUserPlanFilters}
                   />
-                  <div className="relative">
-                    <Calendar className={userFilterIcon} />
-                    <select
-                      value={userCreatedFilter}
-                      onChange={(e) => setUserCreatedFilter(e.target.value)}
-                      className={`${userFilterControl} appearance-none pl-9 pr-8`}
-                      aria-label="Filter users by registration date"
-                    >
-                      {USER_CREATED_FILTERS.map((filter) => (
-                        <option key={filter.value} value={filter.value}>{filter.label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  </div>
+                  <UserSingleFilterDropdown
+                    label="Joined"
+                    options={USER_CREATED_FILTERS}
+                    value={userCreatedFilter}
+                    onChange={setUserCreatedFilter}
+                  />
                 </div>
                 {activeUserFilterTags.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2">
