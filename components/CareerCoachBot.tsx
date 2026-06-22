@@ -127,7 +127,7 @@ const renderFormattedMessage = (text: string) => {
 };
 
 
-const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, session, profile, resumeText, t }) => {
+const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, session, profile, resumeText, t, onLaunchTool }) => {
     useModalBehavior(onClose, isOpen);
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
@@ -259,6 +259,27 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                                     </button>
                                 ))}
                             </div>
+
+                            {onLaunchTool && (
+                                <div className="mt-4 grid grid-cols-2 gap-2">
+                                    {([
+                                        ['jobs', 'ws_nav_jobs'],
+                                        ['resume', 'ws_nav_resume'],
+                                        ['interview', 'ws_nav_interview'],
+                                        ['plan', 'ws_nav_plan'],
+                                    ] as const).map(([target, labelKey]) => (
+                                        <button
+                                            key={target}
+                                            type="button"
+                                            onClick={() => onLaunchTool(target)}
+                                            className="group flex min-h-10 items-center justify-between rounded-full border border-blue-100 bg-white/80 px-3 py-2 text-left text-xs font-semibold text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                                        >
+                                            <span className="truncate">{t(labelKey)}</span>
+                                            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-blue-500 dark:text-slate-500" aria-hidden="true" />
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
 
                             <div className="mt-5 space-y-3">
                                 {activeTopicConfig.questions.map((questionKey) => (
