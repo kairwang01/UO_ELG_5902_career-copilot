@@ -12,6 +12,7 @@ import {
   DialogDescription,
 } from '../ui/dialog';
 import { Input } from '../ui/input';
+import { PasswordInput } from '../ui/PasswordInput';
 import { Button } from '../ui/button';
 import { Check } from 'lucide-react';
 import { businessPlanDefs, type BusinessPlanId } from './businessPlans';
@@ -209,23 +210,26 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
             aria-label={t('auth_placeholder_email_business')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            t={t}
             placeholder={t('auth_placeholder_password')}
             aria-label={t('auth_placeholder_password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
             minLength={6}
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            t={t}
             placeholder={t('auth_placeholder_confirm_password')}
             aria-label={t('auth_placeholder_confirm_password')}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
             required
           />
 

@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from '../ui/dialog';
 import { Input } from '../ui/input';
+import { PasswordInput } from '../ui/PasswordInput';
 import { Button } from '../ui/button';
 
 interface Props {
@@ -75,14 +76,16 @@ export default function BusinessSignInModal({
             aria-label={t('auth_placeholder_email_business')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            t={t}
             placeholder={t('auth_placeholder_password_signin')}
             aria-label={t('auth_placeholder_password_signin')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
             required
           />
           <Button type="submit" className="w-full" disabled={loading}>
