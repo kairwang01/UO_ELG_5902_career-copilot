@@ -20,9 +20,10 @@ interface InterviewerAvatarProps {
   imageUrl?: string;
   name: string;
   roleLabel: string;
+  compact?: boolean;
 }
 
-export const InterviewerAvatar: React.FC<InterviewerAvatarProps> = ({ speaking, imageUrl, name, roleLabel }) => (
+export const InterviewerAvatar: React.FC<InterviewerAvatarProps> = ({ speaking, imageUrl, name, roleLabel, compact = false }) => (
   <div className="flex flex-col items-center select-none">
     <div className="relative">
       {/* pulsing ring while speaking */}
@@ -33,7 +34,7 @@ export const InterviewerAvatar: React.FC<InterviewerAvatarProps> = ({ speaking, 
         </>
       )}
       <div
-        className={`relative h-32 w-32 sm:h-40 sm:w-40 rounded-full overflow-hidden ring-4 shadow-xl transition-transform duration-700 ${
+        className={`relative ${compact ? 'h-24 w-24' : 'h-32 w-32 sm:h-40 sm:w-40'} rounded-full overflow-hidden ring-4 shadow-xl transition-transform duration-700 ${
           speaking ? 'ring-blue-500 scale-[1.03]' : 'ring-slate-300 dark:ring-slate-600 scale-100'
         } bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800`}
       >
@@ -67,8 +68,8 @@ export const InterviewerAvatar: React.FC<InterviewerAvatarProps> = ({ speaking, 
       </div>
     </div>
 
-    <p className="mt-3 font-semibold text-gray-800 dark:text-gray-100">{name}</p>
-    <p className="text-xs text-gray-500 dark:text-slate-400">{roleLabel}</p>
+    <p className={`${compact ? 'mt-2 text-sm' : 'mt-3'} font-semibold text-gray-800 dark:text-gray-100`}>{name}</p>
+    <p className={`${compact ? 'text-[11px]' : 'text-xs'} text-center text-gray-500 dark:text-slate-400`}>{roleLabel}</p>
   </div>
 );
 

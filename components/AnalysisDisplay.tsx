@@ -254,7 +254,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto bg-slate-50/70 p-4 dark:bg-slate-950/40 sm:p-6 md:p-10">
-                            <div className="max-w-4xl mx-auto">
+                            <div className={`mx-auto ${activeTool === 'mock-interview' ? 'max-w-[1440px]' : 'max-w-4xl'}`}>
                                 {activeTool === 'mock-interview' ? (
                                         <InterviewSimulator
                                             resumeText={resumeText}
