@@ -180,6 +180,11 @@ const PROMPT_GROUP_HELP: Record<string, string> = {
   'Handler prompts': 'Prompts used by dedicated backend handlers with their own auth, credit, or workflow logic, such as resume analysis, coach, cover letters, career path, and interviews.',
 };
 
+const PROMPT_TYPE_OPTIONS = [
+  { value: 'tool', label: 'Tool prompts' },
+  { value: 'handler', label: 'Handler prompts' },
+] as const;
+
 const PROMPT_META: Record<string, { module: string; purpose: string }> = {
   extractTalentProfile: {
     module: 'Talent Profile',
@@ -365,6 +370,29 @@ const PROMPT_META: Record<string, { module: string; purpose: string }> = {
     module: 'URL Resume Import',
     purpose: 'Extracts resume/profile content from fetched HTML while removing site chrome and unrelated text.',
   },
+};
+
+const PROMPT_MODULE_STYLES = [
+  'border-blue-200 bg-blue-50 text-blue-800',
+  'border-emerald-200 bg-emerald-50 text-emerald-800',
+  'border-amber-200 bg-amber-50 text-amber-800',
+  'border-violet-200 bg-violet-50 text-violet-800',
+  'border-cyan-200 bg-cyan-50 text-cyan-800',
+  'border-rose-200 bg-rose-50 text-rose-800',
+  'border-indigo-200 bg-indigo-50 text-indigo-800',
+  'border-teal-200 bg-teal-50 text-teal-800',
+] as const;
+
+const getPromptMeta = (key: string) => PROMPT_META[key] ?? {
+  module: 'Unmapped',
+  purpose: 'No module mapping found yet. Check functions/src/llm/prompts.ts and toolRegistry.ts.',
+};
+
+const getPromptType = (key: string) => (key.startsWith('handler_') ? 'handler' : 'tool');
+
+const getPromptModuleStyle = (module: string) => {
+  const index = module.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) % PROMPT_MODULE_STYLES.length;
+  return PROMPT_MODULE_STYLES[index];
 };
 
 // Per-field semantics for the plan-quota table. CRITICAL: `0` means different things —
@@ -589,6 +617,8 @@ const AdminPortal: React.FC = () => {
   const [prompts, setPrompts] = useState<PromptEntry[]>([]);
   const [promptsLoaded, setPromptsLoaded] = useState(false);
   const [promptSearch, setPromptSearch] = useState('');
+  const [promptTypeFilters, setPromptTypeFilters] = useState<string[]>([]);
+  const [promptModuleFilters, setPromptModuleFilters] = useState<string[]>([]);
   const [expandedPromptKey, setExpandedPromptKey] = useState<string | null>(null);
   // per-row draft text (only kept for the currently-expanded row)
   const [promptDraft, setPromptDraft] = useState('');
@@ -682,6 +712,40 @@ const AdminPortal: React.FC = () => {
       setUserPlanFilters((prev) => prev.filter((plan) => plan !== key.slice(5)));
     } else if (key === 'created') {
       setUserCreatedFilter('');
+    }
+  };
+
+  const promptModuleOptions = useMemo(
+    () => Array.from(new Set(prompts.map((prompt) => getPromptMeta(prompt.key).module)))
+      .sort()
+      .map((module) => ({ value: module, label: module })),
+    [prompts],
+  );
+
+  const activePromptFilterTags = useMemo(() => [
+    ...(promptSearch.trim()
+      ? [{ key: 'search', label: `Search: ${promptSearch.trim()}` }]
+      : []),
+    ...promptTypeFilters.map((type) => ({
+      key: `type:${type}`,
+      label: `Type: ${PROMPT_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type}`,
+    })),
+    ...promptModuleFilters.map((module) => ({ key: `module:${module}`, label: `Module: ${module}` })),
+  ], [promptSearch, promptTypeFilters, promptModuleFilters]);
+
+  const clearPromptFilters = () => {
+    setPromptSearch('');
+    setPromptTypeFilters([]);
+    setPromptModuleFilters([]);
+  };
+
+  const removePromptFilter = (key: string) => {
+    if (key === 'search') {
+      setPromptSearch('');
+    } else if (key.startsWith('type:')) {
+      setPromptTypeFilters((prev) => prev.filter((type) => type !== key.slice(5)));
+    } else if (key.startsWith('module:')) {
+      setPromptModuleFilters((prev) => prev.filter((module) => module !== key.slice(7)));
     }
   };
 
@@ -2604,26 +2668,60 @@ const AdminPortal: React.FC = () => {
               </p>
             </div>
 
-            {/* Search box */}
-            <div className="relative max-w-sm">
-              <svg
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-              </svg>
-              <input
-                type="search"
-                value={promptSearch}
-                onChange={(e) => setPromptSearch(e.target.value)}
-                placeholder="Filter by key…"
-                className={`${textInput} pl-9`}
-                aria-label="Filter prompts by key"
-              />
+            {/* Search and filters */}
+            <div className="space-y-3">
+              <div className="grid gap-2.5 lg:grid-cols-[minmax(240px,1fr)_180px_220px]">
+                <div className="relative">
+                  <Search className={userFilterIcon} />
+                  <input
+                    type="search"
+                    value={promptSearch}
+                    onChange={(e) => setPromptSearch(e.target.value)}
+                    placeholder="Search key, module, or purpose"
+                    className={`${userFilterControl} pl-9 pr-3`}
+                    aria-label="Search prompts"
+                  />
+                </div>
+                <UserFilterDropdown
+                  label="Type"
+                  options={PROMPT_TYPE_OPTIONS}
+                  selected={promptTypeFilters}
+                  onChange={setPromptTypeFilters}
+                />
+                <UserFilterDropdown
+                  label="Module"
+                  options={promptModuleOptions}
+                  selected={promptModuleFilters}
+                  onChange={setPromptModuleFilters}
+                />
+              </div>
+              {activePromptFilterTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {activePromptFilterTags.map((tag) => (
+                    <span
+                      key={tag.key}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 shadow-sm"
+                    >
+                      {tag.label}
+                      <button
+                        type="button"
+                        onClick={() => removePromptFilter(tag.key)}
+                        className="rounded text-blue-500 transition hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        aria-label={`Remove ${tag.label}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={clearPromptFilters}
+                    className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              )}
             </div>
 
             {!promptsLoaded ? (
@@ -2635,16 +2733,18 @@ const AdminPortal: React.FC = () => {
               <EmptyState message="No prompts found." />
             ) : (() => {
               const q = promptSearch.trim().toLowerCase();
-              const filtered = q
-                ? prompts.filter((p) => {
-                    const meta = PROMPT_META[p.key];
-                    return [
-                      p.key,
-                      meta?.module,
-                      meta?.purpose,
-                    ].some((value) => value?.toLowerCase().includes(q));
-                  })
-                : prompts;
+              const filtered = prompts.filter((p) => {
+                const meta = getPromptMeta(p.key);
+                const type = getPromptType(p.key);
+                const matchesSearch = !q || [
+                  p.key,
+                  meta.module,
+                  meta.purpose,
+                ].some((value) => value.toLowerCase().includes(q));
+                return matchesSearch
+                  && (promptTypeFilters.length === 0 || promptTypeFilters.includes(type))
+                  && (promptModuleFilters.length === 0 || promptModuleFilters.includes(meta.module));
+              });
 
               // Separate tool keys from handler_ keys for grouping
               const handlerPrompts = filtered.filter((p) => p.key.startsWith('handler_'));
@@ -2670,10 +2770,8 @@ const AdminPortal: React.FC = () => {
                           const isExpanded = expandedPromptKey === entry.key;
                           const isOverridden = entry.override !== null;
                           const feedback = promptFeedback[entry.key];
-                          const meta = PROMPT_META[entry.key] ?? {
-                            module: 'Unmapped',
-                            purpose: 'No module mapping found yet. Check functions/src/llm/prompts.ts and toolRegistry.ts.',
-                          };
+                          const meta = getPromptMeta(entry.key);
+                          const moduleStyle = getPromptModuleStyle(meta.module);
 
                           return (
                             <li key={entry.key}>
@@ -2712,8 +2810,8 @@ const AdminPortal: React.FC = () => {
                                     )}
                                   </span>
                                   <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                                    <span>
-                                      <span className="font-medium text-gray-600">Module:</span> {meta.module}
+                                    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${moduleStyle}`}>
+                                      {meta.module}
                                     </span>
                                     <span className="min-w-0">
                                       <span className="font-medium text-gray-600">Purpose:</span> {meta.purpose}
@@ -2993,7 +3091,7 @@ const AdminPortal: React.FC = () => {
               return (
                 <div className="space-y-6">
                   {filtered.length === 0 ? (
-                    <EmptyState message={`No prompts match "${promptSearch}".`} />
+                    <EmptyState message={activePromptFilterTags.length > 0 ? 'No prompts match the current filters.' : 'No prompts found.'} />
                   ) : (
                     <>
                       {renderGroup(toolPrompts, 'Tool prompts')}
