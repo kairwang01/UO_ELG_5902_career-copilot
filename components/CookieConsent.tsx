@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 interface CookieConsentProps {
     t: (key: string) => string;
+    avoidSidebar?: boolean;
 }
 
 const CONSENT_COOKIE = 'cookie_consent';
@@ -23,7 +24,7 @@ const consentAlreadyGiven = (): boolean => {
     }
 };
 
-const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
+const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }) => {
     const [visible, setVisible] = useState(false);
 
     // Only show the banner if the visitor has not made a choice yet.
@@ -40,15 +41,17 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
         setVisible(false);
     };
 
+    const sidebarOffsetClass = avoidSidebar ? 'lg:left-[17.5rem]' : '';
+
     return (
         <div
-            className="fixed bottom-0 inset-x-0 z-50 p-4 sm:p-6"
+            className={`fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-6 sm:right-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:w-[30rem] ${sidebarOffsetClass}`}
             role="dialog"
             aria-live="polite"
             aria-label="Cookie consent"
         >
-            <div className="max-w-5xl mx-auto bg-slate-900/95 backdrop-blur border border-slate-700 text-gray-200 rounded-xl shadow-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-                <p className="text-sm leading-relaxed flex-1">
+            <div className="rounded-2xl border border-slate-700 bg-slate-950/95 p-3 text-gray-200 shadow-2xl shadow-slate-950/25 backdrop-blur sm:p-4">
+                <p className="text-xs leading-5 sm:text-sm">
                     {t('cookie_consent_message')}{' '}
                     <a
                         href="/privacy.html"
@@ -59,16 +62,16 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
                         {t('cookie_consent_learn_more')}
                     </a>
                 </p>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
                     <button
                         onClick={() => decide('declined')}
-                        className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-600 text-gray-300 hover:bg-slate-800 transition-colors"
+                        className="min-h-10 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950"
                     >
                         {t('cookie_consent_decline')}
                     </button>
                     <button
                         onClick={() => decide('accepted')}
-                        className="px-5 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        className="min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950"
                     >
                         {t('cookie_consent_accept')}
                     </button>

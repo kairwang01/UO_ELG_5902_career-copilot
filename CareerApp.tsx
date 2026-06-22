@@ -1468,7 +1468,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             </SiteLayout>
         )}
 
-        <CookieConsent t={t} />
+        <CookieConsent t={t} avoidSidebar={showCandidateShell || showEmployerShell} />
 
         {canUseCareerCoach && !isChatOpen && (
           <button
