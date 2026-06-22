@@ -1,13 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { CalendarDays } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  BriefcaseBusiness,
+  CalendarDays,
+  CheckCircle2,
+  ExternalLink,
+  FileSearch,
+  Globe2,
+  MapPin,
+  Search,
+  UsersRound,
+} from 'lucide-react';
 import { findIndustryEvents } from '../../services/aiClient';
-import type { EventScoutResult } from '../../types';
+import type { EventScoutResult, IndustryEvent } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useToolResults } from '../../contexts/ToolResultsContext';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 
-// (b) sample constants
 const SAMPLE_FIELD = 'Artificial Intelligence';
 const SAMPLE_LOCATION = 'Toronto, Canada';
 
@@ -15,40 +24,156 @@ interface IndustryEventScoutProps {
   t: (key: string) => string;
 }
 
-type EventFilter = 'all' | 'job_fair' | 'conference' | 'meetup';
+type EventFilter = 'all' | 'job_fair' | 'conference' | 'meetup' | 'other';
+type GroundingChunk = { web?: { uri?: string; title?: string } };
+type EventScoutResultWithContext = EventScoutResult & {
+  field?: string;
+  locationQuery?: string;
+  generatedAt?: number;
+  groundingChunks?: GroundingChunk[];
+};
 
-const eventTypeConfig: { [key in EventFilter]: { label: string; color: string; } } = {
-    all: { label: 'All', color: ''},
-    job_fair: { label: 'Hiring Event', color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' },
-    conference: { label: 'Conference', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' },
-    meetup: { label: 'Meetup', color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' },
+const FILTERS: EventFilter[] = ['all', 'job_fair', 'conference', 'meetup', 'other'];
+
+const hasMeaningfulEventResult = (value: Partial<EventScoutResult> | null | undefined) =>
+  Array.isArray(value?.events);
+
+const CardShell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <section className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
+    {children}
+  </section>
+);
+
+const InsightItem: React.FC<{ icon: React.ElementType; title: string; body: string }> = ({ icon: Icon, title, body }) => (
+  <div className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700 shadow-sm dark:bg-slate-900 dark:text-blue-300">
+      <Icon className="h-4 w-4" />
+    </div>
+    <div>
+      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
+      <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{body}</p>
+    </div>
+  </div>
+);
+
+const getHostName = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
 };
 
 const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<EventScoutResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<EventScoutResult>();
+  const [result, setResult] = useState<EventScoutResultWithContext | null>(null);
+  const { canSave, saved, persist } = useToolResults<EventScoutResultWithContext>();
   const [fromSaved, setFromSaved] = useState(false);
   const [field, setField] = useState('');
   const [location, setLocation] = useState('');
   const [activeFilter, setActiveFilter] = useState<EventFilter>('all');
+  const isChineseUi = /[\u3400-\u9fff]/.test(t('tool_industry_event_scout_title') || t('tool_event_scout_find_button'));
 
-  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ui = {
+    tryExample: t('tool_try_example'),
+    retry: t('tool_try_again'),
+    all: isChineseUi ? '全部' : 'All',
+    jobFair: isChineseUi ? '招聘活动' : 'Hiring event',
+    conference: isChineseUi ? '会议' : 'Conference',
+    meetup: isChineseUi ? '聚会' : 'Meetup',
+    other: isChineseUi ? '其他' : 'Other',
+    searchQuality: isChineseUi ? '搜索质量' : 'Search quality',
+    fieldStatus: isChineseUi ? '行业方向' : 'Field',
+    locationStatus: isChineseUi ? '地点范围' : 'Location',
+    missing: isChineseUi ? '待填写' : 'Needed',
+    ready: isChineseUi ? '已填写' : 'Ready',
+    resultCount: isChineseUi ? '个活动' : 'events',
+    eventType: isChineseUi ? '活动类型' : 'Event type',
+    sourceShortlist: isChineseUi ? '来源会优先选择官网、活动页和可信社区。' : 'Prioritizes official event pages, organizers, and credible community listings.',
+    fitSignal: isChineseUi ? '适合用于拓展人脉、找招聘活动或了解行业趋势。' : 'Useful for networking, hiring events, and reading the local market.',
+    verifyBeforeRegister: isChineseUi ? '报名之前请确认日期、费用、地点和主办方。' : 'Before registering, verify the date, cost, location, and organizer.',
+    emptyFiltered: t('tool_event_scout_no_filter_results'),
+    emptyAll: t('tool_event_scout_no_results'),
+    preparedFor: isChineseUi ? '搜索范围' : 'Search scope',
+    sources: t('tool_event_scout_sources_label'),
+    sourceFallback: isChineseUi ? '来源' : 'Source',
+    visit: t('tool_event_scout_visit_link'),
+    newSearch: t('tool_event_scout_new_search_button'),
+  };
+
+  const eventTypeConfig: Record<EventFilter, { label: string; chip: string; dot: string }> = {
+    all: { label: ui.all, chip: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200', dot: 'bg-slate-400' },
+    job_fair: { label: ui.jobFair, chip: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:ring-emerald-800', dot: 'bg-emerald-500' },
+    conference: { label: ui.conference, chip: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-900/20 dark:text-blue-200 dark:ring-blue-800', dot: 'bg-blue-500' },
+    meetup: { label: ui.meetup, chip: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-900/20 dark:text-violet-200 dark:ring-violet-800', dot: 'bg-violet-500' },
+    other: { label: ui.other, chip: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:ring-amber-800', dot: 'bg-amber-500' },
+  };
+
+  useEffect(() => {
+    if (saved && !result && hasMeaningfulEventResult(saved.result)) {
+      setResult(saved.result);
+      setFromSaved(true);
+      if (saved.result.field) setField(saved.result.field);
+      if (saved.result.locationQuery) setLocation(saved.result.locationQuery);
+    }
+  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filteredEvents = useMemo(() => {
+    if (!result) return [];
+    return result.events.filter((event) => activeFilter === 'all' || (event.eventType || 'other') === activeFilter);
+  }, [activeFilter, result]);
+
+  const groundingSources = useMemo(() => {
+    const chunks = result?.groundingChunks ?? [];
+    return chunks
+      .filter((chunk): chunk is GroundingChunk & { web: { uri?: string; title?: string } } => Boolean(chunk?.web?.uri || chunk?.web?.title))
+      .slice(0, 6);
+  }, [result]);
+
+  const resetResult = () => {
+    setResult(null);
+    setFromSaved(false);
+    setError(null);
+    setActiveFilter('all');
+  };
+
+  const handleTryExample = () => {
+    setField(SAMPLE_FIELD);
+    setLocation(SAMPLE_LOCATION);
+    setError(null);
+  };
 
   const runTool = async () => {
-    if (!field.trim() || !location.trim()) {
+    const nextField = field.trim();
+    const nextLocation = location.trim();
+    if (!nextField || !nextLocation) {
       setError(t('tool_event_scout_error_required'));
       return;
     }
+
+    setField(nextField);
+    setLocation(nextLocation);
+    setActiveFilter('all');
+
     const alive = begin();
     setError(null);
+    setResult(null);
     try {
-      const apiResult = await findIndustryEvents(field, location);
+      const apiResult = await findIndustryEvents(nextField, nextLocation);
       if (!alive()) return;
-      setResult(apiResult);
+      if (!hasMeaningfulEventResult(apiResult)) {
+        throw new Error(t('ai_error_empty_response'));
+      }
+      const nextResult: EventScoutResultWithContext = {
+        ...apiResult,
+        field: nextField,
+        locationQuery: nextLocation,
+        generatedAt: Date.now(),
+      };
+      setResult(nextResult);
       setFromSaved(false);
-      persist(apiResult);
+      persist(nextResult);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -56,126 +181,301 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
     }
   };
 
-  const renderInput = () => (
-    <div className="space-y-4">
-      {/* (a) INTRO CARD */}
-      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-0.5">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">{t('tool_event_scout_intro_title')}</p>
-        <p>{t('tool_event_scout_intro_desc')}</p>
-      </div>
+  const buildDownloadText = (events: IndustryEvent[]) =>
+    events
+      .map((event) => {
+        const eventType = (event.eventType || 'other') as EventFilter;
+        return [
+          `## ${event.eventName}`,
+          `${event.date} | ${event.location} | ${eventTypeConfig[eventType]?.label ?? ui.other}`,
+          event.summary,
+          event.url,
+        ].filter(Boolean).join('\n');
+      })
+      .join('\n\n');
 
-      {/* (b) SAMPLE FILL */}
-      <div className="text-right">
-        <button
-          type="button"
-          onClick={() => { setField(SAMPLE_FIELD); setLocation(SAMPLE_LOCATION); }}
-          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          {t('tool_try_example')}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="field-of-interest" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_event_scout_field_label')}</label>
-            <input type="text" id="field-of-interest" value={field} onChange={e => setField(e.target.value)} required className="mt-1 block w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder={t('tool_event_scout_field_placeholder')} />
-          </div>
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_event_scout_location_label')}</label>
-            <input type="text" id="location" value={location} onChange={e => setLocation(e.target.value)} required className="mt-1 block w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder={t('tool_event_scout_location_placeholder')} />
-          </div>
-      </div>
-      <button onClick={runTool} disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">
-        {loading ? t('tool_event_scout_searching_button') : t('tool_event_scout_find_button')}
-      </button>
-    </div>
-  );
-
-  const renderResult = () => {
-    // (e) ERROR RETRY
-    if (error) return (
-      <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 space-y-3">
-        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-        <button
-          type="button"
-          onClick={runTool}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
-        >
-          {t('tool_try_again')}
-        </button>
-      </div>
-    );
-    if (!result) return null;
-
-    const filteredEvents = result.events.filter(event =>
-        activeFilter === 'all' || event.eventType === activeFilter
-    );
-
-    // (d) Build downloadable text from events
-    const downloadText = result.events.map(e =>
-      `## ${e.eventName}\n${e.date} | ${e.location} | ${eventTypeConfig[e.eventType as EventFilter]?.label ?? e.eventType}\n${e.summary}\n${e.url}`
-    ).join('\n\n');
-
+  const renderInput = () => {
+    const fieldReady = Boolean(field.trim());
+    const locationReady = Boolean(location.trim());
     return (
-      <div className="space-y-4 animate-fade-in">
-        <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
-        {/* (d) RESULT ACTIONS — download + new search */}
-        <div className="flex flex-wrap justify-between items-center gap-3">
-          <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('tool_event_scout_results_title').replace('{count}', String(filteredEvents.length))}</h4>
-          <DownloadButtons textContent={downloadText} baseFilename="industry_events" />
-        </div>
-
-        <div className="flex flex-wrap gap-2 p-2 bg-gray-100 dark:bg-slate-800 rounded-lg">
-            {(['all', 'job_fair', 'conference', 'meetup'] as EventFilter[]).map(filterKey => (
-                 <button
-                    key={filterKey}
-                    onClick={() => setActiveFilter(filterKey)}
-                    className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${activeFilter === filterKey ? 'bg-blue-600 text-white shadow' : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
-                 >
-                    {eventTypeConfig[filterKey].label}
+      <div className="mx-auto max-w-6xl space-y-6">
+        <CardShell className="overflow-hidden">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_360px]">
+            <div className="p-5 sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.24em] text-blue-700 dark:text-blue-300">
+                    <FileSearch className="h-4 w-4" />
+                    {t('tool_event_scout_intro_title')}
+                  </div>
+                  <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                    {t('tool_industry_event_scout_title')}
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                    {t('tool_event_scout_intro_desc')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTryExample}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <Search className="h-4 w-4" />
+                  {ui.tryExample}
                 </button>
-            ))}
-        </div>
+              </div>
 
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
-            {filteredEvents.map((event, i) => {
-                const typeInfo = eventTypeConfig[event.eventType as EventFilter] || { label: 'Event', color: 'bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200' };
-                return (
-                    <div key={i} className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 shadow-sm">
-                        <div className="flex justify-between items-start">
-                             <h5 className="font-bold text-blue-800 dark:text-blue-300 pr-4">{event.eventName}</h5>
-                             <span className={`text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${typeInfo.color}`}>
-                                {typeInfo.label}
-                             </span>
-                        </div>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 font-semibold mt-1">{event.date} &bull; {event.location}</p>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">{event.summary}</p>
-                        <a href={event.url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block">{t('tool_event_scout_visit_link')} &rarr;</a>
-                    </div>
-                )
-            })}
-            {result.events.length > 0 && filteredEvents.length === 0 && (
-                <p className="text-gray-600 dark:text-gray-400 text-center py-4">{t('tool_event_scout_no_filter_results')}</p>
-            )}
-            {result.events.length === 0 && <p className="text-gray-600 dark:text-gray-400">{t('tool_event_scout_no_results')}</p>}
-        </div>
-        {result.groundingChunks?.some((chunk: any) => chunk.web) && (
-            <div className="pt-2 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400">
-            <p className="font-semibold mb-1">{t('tool_event_scout_sources_label')}:</p>
-            <ul className="list-disc list-inside space-y-1">
-                {result.groundingChunks.filter((chunk: any) => chunk.web).map((chunk: any, i: number) => (
-                <li key={i} className="break-words"><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">{chunk.web.title}</a></li>
-                ))}
-            </ul>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="field-of-interest" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {t('tool_event_scout_field_label')}
+                  </label>
+                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:focus-within:ring-blue-900/40">
+                    <BriefcaseBusiness className="h-4 w-4 shrink-0 text-slate-400" />
+                    <input
+                      type="text"
+                      id="field-of-interest"
+                      value={field}
+                      onChange={(event) => setField(event.target.value)}
+                      required
+                      className="min-w-0 flex-1 bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400 dark:text-slate-100"
+                      placeholder={t('tool_event_scout_field_placeholder')}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="event-location" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {t('tool_event_scout_location_label')}
+                  </label>
+                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:focus-within:ring-blue-900/40">
+                    <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
+                    <input
+                      type="text"
+                      id="event-location"
+                      value={location}
+                      onChange={(event) => setLocation(event.target.value)}
+                      required
+                      className="min-w-0 flex-1 bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400 dark:text-slate-100"
+                      placeholder={t('tool_event_scout_location_placeholder')}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="mt-4">
+                  <ToolError message={error} onRetry={runTool} retryLabel={ui.retry} />
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  onClick={runTool}
+                  disabled={loading}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900"
+                >
+                  <Search className="h-4 w-4" />
+                  {loading ? t('tool_event_scout_searching_button') : t('tool_event_scout_find_button')}
+                </button>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{ui.verifyBeforeRegister}</p>
+              </div>
             </div>
-        )}
-        <button onClick={() => { setResult(null); setError(null); }} className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300">&larr; {t('tool_event_scout_new_search_button')}</button>
+
+            <aside className="border-t border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/60 lg:border-l lg:border-t-0">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">{ui.searchQuality}</p>
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{ui.fieldStatus}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${fieldReady ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200'}`}>
+                      {fieldReady ? ui.ready : ui.missing}
+                    </span>
+                  </div>
+                  <p className="mt-2 truncate text-sm text-slate-500 dark:text-slate-400">{fieldReady ? field.trim() : t('tool_event_scout_field_placeholder')}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{ui.locationStatus}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${locationReady ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200'}`}>
+                      {locationReady ? ui.ready : ui.missing}
+                    </span>
+                  </div>
+                  <p className="mt-2 truncate text-sm text-slate-500 dark:text-slate-400">{locationReady ? location.trim() : t('tool_event_scout_location_placeholder')}</p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                <InsightItem icon={Globe2} title={ui.sources} body={ui.sourceShortlist} />
+                <InsightItem icon={UsersRound} title={ui.eventType} body={ui.fitSignal} />
+              </div>
+            </aside>
+          </div>
+        </CardShell>
       </div>
     );
   };
 
-  // (c) StagedLoader already has onCancel + icon + accent — preserved as-is
-  if (loading) return <StagedLoader title="Finding events" steps={["Understanding your field…","Searching for events…","Curating the best matches…"]} onCancel={cancel} icon={<CalendarDays />} accent="amber" />;
+  const renderEventCard = (event: IndustryEvent, index: number) => {
+    const eventType = (event.eventType || 'other') as EventFilter;
+    const typeInfo = eventTypeConfig[eventType] ?? eventTypeConfig.other;
+    const host = getHostName(event.url);
+    return (
+      <article key={`${event.eventName}-${index}`} className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-start justify-between gap-4">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${typeInfo.chip}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${typeInfo.dot}`} />
+            {typeInfo.label}
+          </span>
+          {host && <span className="max-w-[140px] truncate text-xs font-medium text-slate-400">{host}</span>}
+        </div>
+        <h3 className="mt-4 text-lg font-semibold leading-snug text-slate-950 dark:text-slate-50">{event.eventName}</h3>
+        <div className="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-400">
+          <div className="flex gap-2">
+            <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+            <span>{event.date}</span>
+          </div>
+          <div className="flex gap-2">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+            <span>{event.location}</span>
+          </div>
+        </div>
+        <p className="mt-4 flex-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{event.summary}</p>
+        <a
+          href={event.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-5 inline-flex items-center gap-2 self-start rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 dark:border-slate-700 dark:text-blue-300 dark:hover:bg-blue-950/30"
+        >
+          {ui.visit}
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      </article>
+    );
+  };
+
+  const renderResult = () => {
+    if (!result) return null;
+    const downloadText = buildDownloadText(result.events);
+    const scope = [result.field || field, result.locationQuery || location].filter(Boolean).join(' · ');
+
+    return (
+      <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
+        <SavedResultBar
+          t={t}
+          canSave={canSave}
+          isSaved={fromSaved}
+          savedAt={saved?.savedAt ?? null}
+          onTryNext={resetResult}
+        />
+
+        <CardShell className="overflow-hidden">
+          <div className="flex flex-col gap-4 border-b border-slate-200 p-5 dark:border-slate-800 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">
+                <CalendarDays className="h-4 w-4" />
+                {t('tool_event_scout_results_title')}
+              </div>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                {filteredEvents.length} {ui.resultCount}
+              </h2>
+              {scope && (
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                  {ui.preparedFor}: <span className="font-semibold text-slate-800 dark:text-slate-200">{scope}</span>
+                </p>
+              )}
+            </div>
+            <DownloadButtons textContent={downloadText} baseFilename="industry_events" />
+          </div>
+
+          <div className="p-5 sm:p-6">
+            <div className="flex flex-wrap gap-2">
+              {FILTERS.map((filterKey) => (
+                <button
+                  key={filterKey}
+                  type="button"
+                  onClick={() => setActiveFilter(filterKey)}
+                  className={`min-h-[38px] rounded-full px-3.5 py-2 text-sm font-semibold transition ${
+                    activeFilter === filterKey
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {eventTypeConfig[filterKey].label}
+                </button>
+              ))}
+            </div>
+
+            {error && (
+              <div className="mt-4">
+                <ToolError message={error} onRetry={runTool} retryLabel={ui.retry} />
+              </div>
+            )}
+
+            {result.events.length === 0 ? (
+              <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-800/60">
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{ui.emptyAll}</p>
+              </div>
+            ) : filteredEvents.length === 0 ? (
+              <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-800/60">
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{ui.emptyFiltered}</p>
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                {filteredEvents.map(renderEventCard)}
+              </div>
+            )}
+          </div>
+        </CardShell>
+
+        {groundingSources.length > 0 && (
+          <CardShell className="p-5 sm:p-6">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+              {ui.sources}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {groundingSources.map((chunk, index) => (
+                <a
+                  key={`${chunk.web.uri ?? chunk.web.title ?? index}`}
+                  href={chunk.web.uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-medium text-blue-700 transition hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                >
+                  <span className="line-clamp-2">{chunk.web.title || getHostName(chunk.web.uri || '') || ui.sourceFallback}</span>
+                </a>
+              ))}
+            </div>
+          </CardShell>
+        )}
+
+        <button
+          type="button"
+          onClick={resetResult}
+          className="w-full rounded-xl border-2 border-dashed border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          {ui.newSearch}
+        </button>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <StagedLoader
+        title={t('tool_event_scout_searching_button')}
+        steps={[
+          isChineseUi ? '整理行业与地点信号…' : 'Reading the field and location…',
+          isChineseUi ? '查找可信活动来源…' : 'Finding credible event sources…',
+          isChineseUi ? '筛选值得优先关注的机会…' : 'Shortlisting events worth your time…',
+        ]}
+        onCancel={cancel}
+        icon={<CalendarDays />}
+        accent="amber"
+      />
+    );
+  }
+
   return result ? renderResult() : renderInput();
 };
 
