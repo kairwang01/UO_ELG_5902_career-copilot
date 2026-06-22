@@ -177,10 +177,16 @@ async function collectPreviewMetrics(page) {
     const root = document.documentElement;
     const shell = document.querySelector('[data-qa="resume-preview-shell"]');
     const documentNode = document.querySelector('[data-qa="resume-preview-document"]');
+    const readiness = document.querySelector('[data-qa="resume-formatter-readiness"]');
     const bodyTextNodes = [...document.querySelectorAll('[data-qa="resume-preview-document"] p, [data-qa="resume-preview-document"] li')];
     const sectionTitles = [...document.querySelectorAll('[data-qa="resume-preview-section-title"]')]
       .map((node) => node.textContent?.trim() || '')
       .filter(Boolean);
+    const readinessItems = [...document.querySelectorAll('[data-qa="resume-formatter-readiness-item"]')]
+      .map((node) => ({
+        id: node.getAttribute('data-qa-readiness-item') || '',
+        severity: node.getAttribute('data-qa-readiness-severity') || '',
+      }));
     const paragraphFontSizes = bodyTextNodes
       .map((node) => Number.parseFloat(getComputedStyle(node).fontSize))
       .filter(Number.isFinite);
@@ -190,6 +196,8 @@ async function collectPreviewMetrics(page) {
       region: shell?.getAttribute('data-qa-resume-region') || '',
       pageSize: shell?.getAttribute('data-qa-resume-page-size') || '',
       generatedMarket: document.querySelector('[data-qa="resume-formatter"]')?.getAttribute('data-qa-resume-formatter-generated-market') || '',
+      readinessState: readiness?.getAttribute('data-qa-readiness-state') || '',
+      readinessItems,
       shellOverflowX: shell ? Math.max(0, shell.scrollWidth - shell.clientWidth) : null,
       documentOverflowX: documentNode ? Math.max(0, documentNode.scrollWidth - documentNode.clientWidth) : null,
       pageOverflowX: Math.max(0, root.scrollWidth - root.clientWidth),
@@ -222,6 +230,8 @@ async function assertPreviewCase(browser, testCase, viewport) {
     assert(metrics.generatedMarket === testCase.market, `${label}: generated market ${metrics.generatedMarket}, expected ${testCase.market}`);
     assert(metrics.region === testCase.expectedRegion, `${label}: region ${metrics.region}, expected ${testCase.expectedRegion}`);
     assert(metrics.pageSize === testCase.expectedPageSize, `${label}: page size ${metrics.pageSize}, expected ${testCase.expectedPageSize}`);
+    assert(metrics.readinessState === 'ready', `${label}: readiness state ${metrics.readinessState}, expected ready`);
+    assert(metrics.readinessItems.length >= 4, `${label}: expected readiness checklist items`);
     assert(metrics.pageOverflowX === 0, `${label}: page horizontal overflow ${metrics.pageOverflowX}px`);
     assert(metrics.shellOverflowX === 0, `${label}: preview shell horizontal overflow ${metrics.shellOverflowX}px`);
     assert(metrics.documentOverflowX === 0, `${label}: preview document horizontal overflow ${metrics.documentOverflowX}px`);
@@ -240,6 +250,9 @@ async function assertPreviewCase(browser, testCase, viewport) {
       assert(changedMetrics.formatterMarket === 'Canada', `${label}: target market did not update after select`);
       assert(changedMetrics.generatedMarket === 'Japan', `${label}: generated market changed before regeneration`);
       assert(changedMetrics.region === 'japan', `${label}: preview style changed before regeneration`);
+      assert(changedMetrics.readinessState === 'review', `${label}: readiness should require review after selecting another target`);
+      const targetItem = changedMetrics.readinessItems.find((item) => item.id === 'target-market');
+      assert(targetItem?.severity === 'review', `${label}: target-market readiness should be review after selecting another target`);
       await expectButtonEnabled(page, '[data-qa="resume-formatter-regenerate-market"]', label);
     }
     assert(consoleErrors.length === 0, `${label}: console errors:\n${consoleErrors.join('\n')}`);

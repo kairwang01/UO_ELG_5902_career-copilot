@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, FileText, Globe2, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileText, Globe2, Info } from 'lucide-react';
 import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -28,6 +28,101 @@ const SAMPLE_COVER_LETTER =
   'Dear Hiring Manager,\n\nI am excited to apply for the Software Engineer role at Acme Corp. ' +
   'With 4 years of experience building scalable web applications using React and Node.js, ' +
   'I am confident I can contribute from day one.\n\nThank you for your consideration.\n\nSincerely,\nAlex Chen';
+
+type ReadinessSeverity = 'pass' | 'review' | 'block';
+
+type ReadinessItem = {
+  id: string;
+  label: string;
+  description: string;
+  severity: ReadinessSeverity;
+};
+
+const RESUME_FORMAT_ISSUE_LABELS: Record<string, string> = {
+  empty: 'No resume content was generated.',
+  photo_placeholder: 'A photo placeholder is still present.',
+  pipe_table: 'A table-like layout is still present.',
+  no_sections: 'The resume did not split into clear sections.',
+  overlong_header: 'The header area is still too dense.',
+};
+
+const readinessRank: Record<ReadinessSeverity, number> = {
+  pass: 0,
+  review: 1,
+  block: 2,
+};
+
+const getReadinessState = (items: ReadinessItem[]): 'ready' | 'review' | 'regenerate' => {
+  const maxSeverity = items.reduce<ReadinessSeverity>((current, item) => (
+    readinessRank[item.severity] > readinessRank[current] ? item.severity : current
+  ), 'pass');
+  if (maxSeverity === 'block') return 'regenerate';
+  if (maxSeverity === 'review') return 'review';
+  return 'ready';
+};
+
+const getBlockingIssueSummary = (issues: string[]): string => {
+  const blocking = issues.filter((issue) => issue !== 'sensitive_fields');
+  if (blocking.length === 0) return 'Standard sections and readable line breaks detected.';
+  return blocking.map((issue) => RESUME_FORMAT_ISSUE_LABELS[issue] || issue.replace(/_/g, ' ')).join(' ');
+};
+
+const buildReadinessItems = (
+  validation: ReturnType<typeof assessFormattedResume>,
+  generatedMarket: string,
+  targetMarket: string,
+  marketStyle: ReturnType<typeof getResumeMarketStyle>,
+): ReadinessItem[] => {
+  const blockingIssues = validation.issues.filter((issue) => issue !== 'sensitive_fields');
+  return [
+    {
+      id: 'market-style',
+      label: 'Market style',
+      description: `${marketStyle.label} · ${marketStyle.pageSize.toUpperCase()}`,
+      severity: 'pass',
+    },
+    {
+      id: 'structure',
+      label: 'Document structure',
+      description: getBlockingIssueSummary(validation.issues),
+      severity: blockingIssues.length > 0 ? 'block' : 'pass',
+    },
+    {
+      id: 'privacy',
+      label: 'Privacy check',
+      description: validation.issues.includes('sensitive_fields')
+        ? 'Review personal fields such as birth date, nationality, gender, or visa status before sending.'
+        : 'No obvious protected personal fields detected.',
+      severity: validation.issues.includes('sensitive_fields') ? 'review' : 'pass',
+    },
+    {
+      id: 'target-market',
+      label: 'Current target',
+      description: targetMarket === generatedMarket
+        ? `Download will match the generated ${generatedMarket} version.`
+        : `Preview is still ${generatedMarket}. Generate again before downloading a ${targetMarket} version.`,
+      severity: targetMarket === generatedMarket ? 'pass' : 'review',
+    },
+  ];
+};
+
+const readinessPanelTone = (state: ReturnType<typeof getReadinessState>): string => {
+  if (state === 'regenerate') return 'border-amber-300 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/30';
+  if (state === 'review') return 'border-blue-200 bg-blue-50/70 dark:border-blue-900/60 dark:bg-blue-950/30';
+  return 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/25';
+};
+
+const readinessBadgeTone = (state: ReturnType<typeof getReadinessState>): string => {
+  if (state === 'regenerate') return 'border-amber-200 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100';
+  if (state === 'review') return 'border-blue-200 bg-blue-100 text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100';
+  return 'border-emerald-200 bg-emerald-100 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100';
+};
+
+const readinessItemTone = (severity: ReadinessSeverity): string => {
+  if (severity === 'block') return 'border-amber-200 bg-white text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100';
+  if (severity === 'review') return 'border-blue-200 bg-white text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100';
+  return 'border-emerald-200 bg-white text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100';
+};
 
 interface ResumeFormatterProps {
   resumeText: string;
@@ -252,6 +347,13 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     const generatedMarket = result.targetMarket || targetMarket;
     const marketStyle = getResumeMarketStyle(generatedMarket);
     const validation = assessFormattedResume(formattedText);
+    const readinessItems = buildReadinessItems(validation, generatedMarket, targetMarket, marketStyle);
+    const readinessState = getReadinessState(readinessItems);
+    const readinessHeadline = readinessState === 'ready'
+      ? 'Ready to download'
+      : readinessState === 'review'
+        ? 'Review before downloading'
+        : 'Regenerate before downloading';
     return (
       <div className="space-y-4 animate-fade-in">
         <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
@@ -293,6 +395,59 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
           </div>
           <DownloadButtons textContent={formattedText} baseFilename={`${generatedMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
         </div>
+
+        <section
+          className={`rounded-xl border p-3 shadow-sm ${readinessPanelTone(readinessState)}`}
+          data-qa="resume-formatter-readiness"
+          data-qa-readiness-state={readinessState}
+          aria-label="Resume download readiness"
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                {readinessState === 'regenerate' ? (
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+                ) : readinessState === 'review' ? (
+                  <Info className="h-4 w-4 shrink-0 text-blue-700 dark:text-blue-300" aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+                )}
+                <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{readinessHeadline}</p>
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                {readinessState === 'ready'
+                  ? 'This draft passed the format checks we can verify automatically.'
+                  : 'The preview stays available, but resolve the flagged items before sending it to employers.'}
+              </p>
+            </div>
+            <span className={`inline-flex w-fit shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${readinessBadgeTone(readinessState)}`}>
+              {readinessState}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {readinessItems.map((item) => (
+              <div
+                key={item.id}
+                className={`rounded-lg border px-3 py-2 ${readinessItemTone(item.severity)}`}
+                data-qa="resume-formatter-readiness-item"
+                data-qa-readiness-item={item.id}
+                data-qa-readiness-severity={item.severity}
+              >
+                <div className="flex items-center gap-2">
+                  {item.severity === 'block' ? (
+                    <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  ) : item.severity === 'review' ? (
+                    <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  )}
+                  <p className="text-sm font-semibold">{item.label}</p>
+                </div>
+                <p className="mt-1 text-xs leading-5 opacity-80">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
