@@ -309,12 +309,20 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const [prefillDialogOpen, setPrefillDialogOpen] = useState(false);
   const [prefillLanguage, setPrefillLanguage] = useState('en');
   const [prefillReview, setPrefillReview] = useState<PrefillReviewState | null>(null);
+  const [showAllPrefillPaths, setShowAllPrefillPaths] = useState(false);
   const [prefillMsg, setPrefillMsg] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ basic: true, intention: true });
   const [loadError, setLoadError] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const prefillButtonRef = useRef<HTMLButtonElement | null>(null);
+  const prefillRunRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    prefillRunRef.current += 1;
+  }, []);
 
   const markReviewPath = (path: string) => {
     // Any edit makes the persisted "Saved" indicator stale — clear it so the user
@@ -348,16 +356,37 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
     setPrefillDialogOpen(true);
   };
 
+  const focusReviewPath = (path: string) => {
+    const [sectionId] = path.split('.');
+    if (sectionId) setOpen((current) => ({ ...current, [sectionId]: true }));
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(fieldDomId(path));
+        if (!target) return;
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+          target.focus({ preventScroll: true });
+        } else {
+          target.focus?.({ preventScroll: true });
+        }
+      });
+    });
+  };
+
   const handlePrefill = async (targetLanguage: string) => {
     if (!resumeText || resumeText.trim().length < 40) {
       setPrefillMsg({ kind: 'info', text: 'Add or upload your resume first (the “Resume” tab), then prefill here.' });
       setPrefillDialogOpen(false);
       return;
     }
+    const runId = prefillRunRef.current + 1;
+    prefillRunRef.current = runId;
     setPrefilling(true);
     setPrefillMsg(null);
     try {
       const ex = sanitizeExtractedProfile(await extractTalentProfile(resumeText, { targetLanguage }));
+      if (!mountedRef.current || prefillRunRef.current !== runId) return;
       const before = cloneProfile(profile);
       // Decide which sections will actually receive data (from current state) so
       // we can expand exactly those — the user must see everything before saving.
@@ -419,6 +448,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       if (touched.size) setOpen((o) => ({ ...o, ...Object.fromEntries([...touched].map((id) => [id, true])) }));
       const langLabel = PREFILL_LANGUAGE_OPTIONS.find((opt) => opt.value === targetLanguage)?.label ?? 'your selected language';
       if (reviewPaths.size) {
+        setShowAllPrefillPaths(false);
         setPrefillReview({ before, paths: [...reviewPaths], languageLabel: langLabel });
         setPrefillMsg({ kind: 'ok', text: `Drafted ${reviewPaths.size} fields from your resume in ${langLabel}. Review the highlighted fields before saving.` });
       } else {
@@ -426,10 +456,14 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
         setPrefillMsg({ kind: 'info', text: 'No empty fields were filled. Your existing Talent Profile already has the matching resume details.' });
       }
     } catch (err) {
-      setPrefillMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Could not read your resume. Please fill the form manually.' });
+      if (mountedRef.current && prefillRunRef.current === runId) {
+        setPrefillMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Could not read your resume. Please fill the form manually.' });
+      }
     } finally {
-      setPrefilling(false);
-      setPrefillDialogOpen(false);
+      if (mountedRef.current && prefillRunRef.current === runId) {
+        setPrefilling(false);
+        setPrefillDialogOpen(false);
+      }
     }
   };
 
@@ -474,12 +508,14 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
     // Clearing the highlights + the Save button are the signal — no extra
     // "marked as reviewed, now save" message (a confirmation of a confirmation).
     setPrefillReview(null);
+    setShowAllPrefillPaths(false);
   };
 
   const clearPrefillDraft = () => {
     if (!prefillReview) return;
     setProfile(cloneProfile(prefillReview.before));
     setPrefillReview(null);
+    setShowAllPrefillPaths(false);
     setSaveError(false);
     setPrefillMsg({ kind: 'info', text: 'AI prefill cleared. Your profile is back to the version before this draft.' });
   };
@@ -681,7 +717,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
                 <Sparkles className="h-4 w-4" /> Review AI-filled fields
               </p>
               <p className="mt-1 text-sm leading-6 text-blue-900/80 dark:text-blue-100/80">
-                {prefillReview.paths.length} highlighted field{prefillReview.paths.length === 1 ? '' : 's'} were drafted in {prefillReview.languageLabel}. Confirm each field, edit it, or clear the whole draft before saving.
+                {prefillReview.paths.length} highlighted field{prefillReview.paths.length === 1 ? '' : 's'} were drafted in {prefillReview.languageLabel}. Click a chip to jump to that field, then confirm it from the field row.
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
@@ -694,12 +730,20 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {prefillReview.paths.slice(0, 8).map((path) => (
-              <button key={path} type="button" onClick={() => markReviewPath(path)} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200 dark:hover:bg-blue-950/40">
+            {(showAllPrefillPaths ? prefillReview.paths : prefillReview.paths.slice(0, 8)).map((path) => (
+              <button key={path} type="button" onClick={() => focusReviewPath(path)} aria-label={`Jump to ${getPathLabel(path)}`} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200 dark:hover:bg-blue-950/40">
                 {getPathLabel(path)}
               </button>
             ))}
-            {prefillReview.paths.length > 8 && <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-200">+{prefillReview.paths.length - 8} more</span>}
+            {prefillReview.paths.length > 8 && (
+              <button
+                type="button"
+                onClick={() => setShowAllPrefillPaths((value) => !value)}
+                className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/60"
+              >
+                {showAllPrefillPaths ? 'Show fewer' : `Show ${prefillReview.paths.length - 8} more`}
+              </button>
+            )}
           </div>
         </div>
       )}
