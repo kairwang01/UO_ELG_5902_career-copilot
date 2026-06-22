@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
-import { Globe, Sparkles } from 'lucide-react';
+import { CheckCircle2, Code2, Download, ExternalLink, Eye, Globe, Rocket, Sparkles } from 'lucide-react';
 import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -337,6 +337,40 @@ const THEME_VARS: { [key: string]: { [key: string]: string } } = {
 };
 
 const PREVIEW_SIZES: { [key: string]: string } = { desktop: '100%', tablet: '768px', mobile: '375px' };
+
+interface ResultActionCardProps {
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    description: string;
+    onClick: () => void;
+    tone?: 'primary' | 'neutral';
+}
+
+const ResultActionCard: React.FC<ResultActionCardProps> = ({ icon: Icon, title, description, onClick, tone = 'neutral' }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        className={`group flex min-h-[112px] w-full items-start gap-3 rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
+            tone === 'primary'
+                ? 'border-blue-200 bg-blue-50 text-blue-950 hover:border-blue-300 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
+                : 'border-gray-200 bg-white text-gray-900 hover:border-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100 dark:hover:border-blue-800'
+        }`}
+    >
+        <span className={`mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+            tone === 'primary'
+                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                : 'bg-gray-100 text-blue-600 dark:bg-slate-800 dark:text-blue-300'
+        }`}>
+            <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0">
+            <span className="block text-sm font-bold">{title}</span>
+            <span className="mt-1 block text-xs leading-5 text-gray-600 group-hover:text-gray-700 dark:text-slate-400 dark:group-hover:text-slate-300">
+                {description}
+            </span>
+        </span>
+    </button>
+);
 
 interface HeadshotImage {
     mimeType: string;
@@ -1074,6 +1108,30 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     selected: isChineseUi ? '个已选择' : 'selected',
     theme: isChineseUi ? '风格' : 'Theme',
   };
+  const resultLabels = {
+    backToDetails: isChineseUi ? '返回编辑' : 'Back to details',
+    nextActions: isChineseUi ? '下一步操作' : 'Next actions',
+    generated: isChineseUi ? '作品集已生成' : 'Showcase generated',
+    generatedHint: isChineseUi
+      ? '先检查预览，再下载 HTML 文件，最后按发布步骤上线。'
+      : 'Review the preview, download the HTML file, then follow the publish steps.',
+    reviewTitle: isChineseUi ? '检查预览' : 'Review preview',
+    reviewDesc: isChineseUi ? '确认头像、项目和移动端布局。' : 'Check the headshot, projects, and mobile layout.',
+    downloadTitle: isChineseUi ? '下载文件' : 'Download file',
+    downloadDesc: isChineseUi ? '保存可直接发布的 showcase.html。' : 'Save the deployable showcase.html file.',
+    deployTitle: t('tool_portfolio_tab_deploy'),
+    deployDesc: isChineseUi ? '打开发布说明和外部发布入口。' : 'Open the publishing steps and external deploy links.',
+    codeTitle: t('tool_portfolio_tab_code'),
+    codeDesc: isChineseUi ? '复制源码给开发者或托管平台。' : 'Copy the source for a developer or hosting platform.',
+    emptyTitle: isChineseUi ? '没有可预览的内容' : 'No preview content',
+    emptyDesc: isChineseUi ? '返回编辑页重新生成作品集。' : 'Return to details and generate the showcase again.',
+    deployChecklist: isChineseUi ? '发布检查清单' : 'Publish checklist',
+    openNetlify: isChineseUi ? '打开 Netlify Drop' : 'Open Netlify Drop',
+    openLab: t('tool_portfolio_deploy_open_lab_button'),
+    codeHint: isChineseUi
+      ? '如果要交给开发者、Vercel、Netlify 或自有服务器，可以复制这一份完整 HTML。'
+      : 'Use this full HTML file for a developer, Vercel, Netlify, or your own hosting.',
+  };
 
   const handleDetailChange = (field: keyof typeof details, value: string) => setDetails(prev => ({ ...prev, [field]: value }));
   const handleProjectChange = (id: number, field: string, value: string) => setProjects(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
@@ -1436,11 +1494,30 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   };
 
   const renderResult = () => {
-    if (error) return <ToolError message={error} onRetry={() => { setError(null); setCurrentStep('details'); }} retryLabel="Back to details" />;
-    if (!result || !previewTheme) return null;
+    if (error) return <ToolError message={error} onRetry={() => { setError(null); setCurrentStep('details'); }} retryLabel={resultLabels.backToDetails} />;
+    if (!result || !previewTheme) {
+      return (
+        <ToolError
+          message={`${resultLabels.emptyTitle}. ${resultLabels.emptyDesc}`}
+          onRetry={() => setCurrentStep('details')}
+          retryLabel={resultLabels.backToDetails}
+        />
+      );
+    }
     
     const { htmlContent } = result;
     const themedHtmlContent = getModifiedHtmlContent(htmlContent, previewTheme);
+    if (!themedHtmlContent.trim()) {
+      return (
+        <ToolError
+          message={`${resultLabels.emptyTitle}. ${resultLabels.emptyDesc}`}
+          onRetry={() => setCurrentStep('details')}
+          retryLabel={resultLabels.backToDetails}
+        />
+      );
+    }
+    const completedProjectCount = projects.filter(project => !isBlankProject(project)).length;
+    const themeName = PORTFOLIO_TEMPLATES.find(t_template => t_template.key === previewTheme)?.name ?? previewTheme;
 
     const downloadHtml = () => {
       const element = document.createElement("a");
@@ -1454,20 +1531,51 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
     };
     const copyToClipboard = () => navigator.clipboard.writeText(themedHtmlContent).then(() => addToast(t('tool_portfolio_copy_code_success'), 'success'), () => addToast(t('tool_portfolio_copy_code_fail'), 'error'));
+    const selectTabClass = (tab: 'preview' | 'deploy' | 'code') => `inline-flex min-h-11 items-center justify-center rounded-xl px-3 py-2 text-sm font-bold transition-colors ${
+      resultTab === tab
+        ? 'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:text-blue-300 dark:ring-slate-700'
+        : 'text-gray-600 hover:bg-white/70 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-900/70 dark:hover:text-slate-100'
+    }`;
 
     return (
-      <div className="space-y-4">
-        <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_portfolio_results_title')}</h4>
-        <div className="overflow-x-auto border-b border-gray-200 dark:border-slate-800">
-          <nav role="tablist" aria-label={t('tool_portfolio_results_title')} className="-mb-px flex min-w-max space-x-6">
-            <button type="button" role="tab" aria-selected={resultTab === 'preview'} onClick={() => setResultTab('preview')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'preview' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_preview')}</button>
-            <button type="button" role="tab" aria-selected={resultTab === 'deploy'} onClick={() => setResultTab('deploy')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'deploy' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_deploy')}</button>
-            <button type="button" role="tab" aria-selected={resultTab === 'code'} onClick={() => setResultTab('code')} className={`whitespace-nowrap pb-2 px-1 border-b-2 font-medium text-sm ${resultTab === 'code' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'}`}>{t('tool_portfolio_tab_code')}</button>
+      <div className="space-y-5">
+        <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">{resultLabels.nextActions}</p>
+              <h4 className="mt-2 text-2xl font-bold text-gray-950 dark:text-gray-100">{resultLabels.generated}</h4>
+              <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-slate-400">{resultLabels.generatedHint}</p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {checklistLabels.ready}
+                </span>
+                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-700 dark:bg-slate-800 dark:text-slate-300">{themeName}</span>
+                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-700 dark:bg-slate-800 dark:text-slate-300">
+                  {isChineseUi ? `${completedProjectCount}${checklistLabels.selected}` : `${completedProjectCount} ${checklistLabels.selected}`}
+                </span>
+              </div>
+            </div>
+            <div className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-4">
+              <ResultActionCard icon={Eye} title={resultLabels.reviewTitle} description={resultLabels.reviewDesc} onClick={() => setResultTab('preview')} tone="primary" />
+              <ResultActionCard icon={Download} title={resultLabels.downloadTitle} description={resultLabels.downloadDesc} onClick={downloadHtml} />
+              <ResultActionCard icon={Rocket} title={resultLabels.deployTitle} description={resultLabels.deployDesc} onClick={() => setResultTab('deploy')} />
+              <ResultActionCard icon={Code2} title={resultLabels.codeTitle} description={resultLabels.codeDesc} onClick={() => setResultTab('code')} />
+            </div>
+          </div>
+        </section>
+
+        <div className="rounded-2xl border border-gray-200 bg-gray-100 p-1 dark:border-slate-700 dark:bg-slate-800/80">
+          <nav role="tablist" aria-label={t('tool_portfolio_results_title')} className="grid grid-cols-3 gap-1">
+            <button type="button" role="tab" aria-selected={resultTab === 'preview'} onClick={() => setResultTab('preview')} className={selectTabClass('preview')}>{t('tool_portfolio_tab_preview')}</button>
+            <button type="button" role="tab" aria-selected={resultTab === 'deploy'} onClick={() => setResultTab('deploy')} className={selectTabClass('deploy')}>{t('tool_portfolio_tab_deploy')}</button>
+            <button type="button" role="tab" aria-selected={resultTab === 'code'} onClick={() => setResultTab('code')} className={selectTabClass('code')}>{t('tool_portfolio_tab_code')}</button>
           </nav>
         </div>
         {resultTab === 'preview' && (
-          <div>
-            <div className="flex flex-wrap justify-center items-center gap-2 p-2 bg-gray-200/70 dark:bg-slate-800/50 rounded-md mb-3">
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
               {(['desktop', 'tablet', 'mobile'] as const).map(d => (
                 <button key={d} type="button" aria-pressed={previewDevice === d} onClick={() => setPreviewDevice(d)} className={`p-2 rounded-md transition-colors ${previewDevice === d ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400'}`} title={t(`tool_portfolio_preview_device_${d}`)}>
                   {d === 'desktop' && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
@@ -1475,16 +1583,19 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                   {d === 'mobile' && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2H7z" /></svg>}
                 </button>
               ))}
-              <div className="h-6 border-l border-gray-300 dark:border-slate-700 mx-2"></div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
               {PORTFOLIO_TEMPLATES.map(t_template => (
                 <button key={t_template.key} type="button" aria-pressed={previewTheme === t_template.key} onClick={() => setPreviewTheme(t_template.key)} className={`p-1 border-2 rounded-md ${previewTheme === t_template.key ? 'border-blue-500' : 'border-transparent'}`} title={t_template.name}>
                   <div className="flex -space-x-1">{t_template.colors.map(c => <div key={c} className="h-4 w-4 rounded-full border border-white dark:border-slate-800" style={{ backgroundColor: c }}></div>)}</div>
                 </button>
               ))}
+              </div>
             </div>
             <div className="mx-auto overflow-x-auto rounded-xl bg-gray-900 p-3 shadow-inner sm:p-4">
                  <iframe
                     title="Showcase Preview"
+                    aria-label={t('tool_portfolio_tab_preview')}
                     srcDoc={themedHtmlContent}
                     sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
                     referrerPolicy="no-referrer"
@@ -1495,28 +1606,52 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
           </div>
         )}
         {resultTab === 'deploy' && (
-          <div className="p-4 bg-white dark:bg-slate-800 rounded-lg border dark:border-slate-700 space-y-6">
-              <div>
-                <h5 className="font-bold dark:text-gray-100">{t('tool_portfolio_deploy_step1_title')}</h5>
+          <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">{resultLabels.deployChecklist}</p>
+                  <h5 className="mt-1 text-lg font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_tab_deploy')}</h5>
+                </div>
+                <button type="button" onClick={downloadHtml} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700">
+                  <Download className="h-4 w-4" />
+                  {t('tool_portfolio_deploy_download_button')}
+                </button>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">01</span>
+                <h5 className="mt-2 font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_deploy_step1_title')}</h5>
                 <p className="text-sm mt-1 dark:text-slate-400">{t('tool_portfolio_deploy_step1_desc')}</p>
-                <button onClick={downloadHtml} className="mt-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 transition-colors">{t('tool_portfolio_deploy_download_button')}</button>
-                <p className="text-sm mt-2 dark:text-slate-500">{t('tool_portfolio_deploy_step1_visit')} <a href="https://app.netlify.com/drop" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline">Netlify Drop</a> {t('tool_portfolio_deploy_step1_visit_2')}</p>
+                <a href="https://app.netlify.com/drop" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:underline dark:text-blue-300">
+                  {resultLabels.openNetlify}
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
               </div>
-               <div>
-                <h5 className="font-bold dark:text-gray-100">{t('tool_portfolio_deploy_step2_title')}</h5>
+               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">02</span>
+                <h5 className="mt-2 font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_deploy_step2_title')}</h5>
                 <p className="text-sm mt-1 dark:text-slate-400">{t('tool_portfolio_deploy_step2_desc')}</p>
-                 <a href="https://iot.caiot.co/" target="_blank" rel="noopener noreferrer" className="inline-block mt-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-md shadow-sm hover:bg-green-700 transition-colors">{t('tool_portfolio_deploy_open_lab_button')}</a>
+                 <a href="https://iot.caiot.co/" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:underline dark:text-blue-300">
+                  {resultLabels.openLab}
+                  <ExternalLink className="h-3.5 w-3.5" />
+                 </a>
               </div>
-               <div>
-                <h5 className="font-bold dark:text-gray-100">{t('tool_portfolio_deploy_step3_title')}</h5>
+               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">03</span>
+                <h5 className="mt-2 font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_deploy_step3_title')}</h5>
                 <p className="text-sm mt-1 dark:text-slate-400">{t('tool_portfolio_deploy_step3_desc')}</p>
+              </div>
               </div>
           </div>
         )}
         {resultTab === 'code' && (
-          <div>
-            <div className="flex justify-end mb-2">
-              <button onClick={copyToClipboard} className="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 font-semibold rounded-md text-sm hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors">{t('tool_portfolio_copy_code_button')}</button>
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm leading-6 text-gray-600 dark:text-slate-400">{resultLabels.codeHint}</p>
+              <button type="button" onClick={copyToClipboard} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-gray-800 dark:bg-slate-700 dark:hover:bg-slate-600">
+                <Code2 className="h-4 w-4" />
+                {t('tool_portfolio_copy_code_button')}
+              </button>
             </div>
             <pre className="max-w-full p-4 bg-gray-800 text-white rounded-lg h-[60vh] overflow-auto text-xs scrollbar-thin scrollbar-thumb-gray-600"><code className="language-html">{themedHtmlContent}</code></pre>
           </div>
