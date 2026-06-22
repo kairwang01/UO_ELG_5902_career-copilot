@@ -876,6 +876,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   };
 
   const badge = unreadCount(notifications);
+  const notificationsPopoverId = 'applications-notifications-popover';
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -934,7 +935,10 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   // ── Signed-out ────────────────────────────────────────────────────────────
   if (!session) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-6 py-24 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+          {t('applications_title')}
+        </h1>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {t('applications_signin_prompt')}
         </p>
@@ -945,8 +949,13 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin" />
+      <div className="mx-auto w-full max-w-6xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+          {t('applications_title')}
+        </h1>
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+          <div className="h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin" />
+        </div>
       </div>
     );
   }
@@ -954,7 +963,10 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   // ── Error ─────────────────────────────────────────────────────────────────
   if (loadError) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center px-6 gap-3">
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-center gap-3 rounded-lg border border-red-100 bg-white px-6 py-20 text-center shadow-sm dark:border-red-900/50 dark:bg-slate-900">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+          {t('applications_title')}
+        </h1>
         <p className="text-red-500 dark:text-red-400 text-sm font-semibold">
           {t('applications_error_title')}
         </p>
@@ -991,8 +1003,9 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
               onClick={() => setNotifOpen((v) => !v)}
               className="relative p-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-700 transition-colors shadow-sm"
               aria-label={t('notifications_bell_label')}
-              aria-haspopup="menu"
+              aria-haspopup="dialog"
               aria-expanded={notifOpen}
+              aria-controls={notifOpen ? notificationsPopoverId : undefined}
             >
               <Bell className="h-5 w-5" />
               {badge > 0 && (
@@ -1004,72 +1017,77 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
 
             {/* Dropdown panel */}
             {notifOpen && (
-              <div role="menu" className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-30 animate-fade-scale">
-              {/* Panel header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {t('notifications_panel_title')}
-                </span>
-                <div className="flex items-center gap-2">
-                  {badge > 0 && (
+              <div
+                id={notificationsPopoverId}
+                role="dialog"
+                aria-label={t('notifications_panel_title')}
+                className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-30 animate-fade-scale"
+              >
+                {/* Panel header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {t('notifications_panel_title')}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {badge > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {t('notifications_mark_all_read')}
+                      </button>
+                    )}
                     <button
-                      onClick={handleMarkAllRead}
-                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                      onClick={() => setNotifOpen(false)}
+                      className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-400 dark:text-slate-500"
+                      aria-label={t('notifications_close')}
                     >
-                      {t('notifications_mark_all_read')}
+                      <X className="h-3.5 w-3.5" />
                     </button>
-                  )}
-                  <button
-                    onClick={() => setNotifOpen(false)}
-                    className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-400 dark:text-slate-500"
-                    aria-label={t('notifications_close')}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Notification list */}
-              <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/60">
-                {notifications.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-xs text-gray-500 dark:text-slate-400">
-                    {t('notifications_empty')}
-                  </p>
-                ) : (
-                  notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      className={`flex items-start gap-3 px-4 py-3 transition-colors ${
-                        n.read
-                          ? 'bg-white dark:bg-slate-800'
-                          : 'bg-blue-50/50 dark:bg-blue-900/10'
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">
-                          {n.job_title ?? t('notifications_unknown_job')}
-                        </p>
-                        <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
-                          {t('notifications_status_changed').replace('{status}', t(getApplicationStatusLabelKey(n.status)))}
-                        </p>
-                        {n.candidate_note && (
-                          <p className="mt-1 rounded-md bg-blue-100/60 px-2 py-1 text-[11px] leading-5 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
-                            “{n.candidate_note}”
+                {/* Notification list */}
+                <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-slate-700/60">
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-xs text-gray-500 dark:text-slate-400">
+                      {t('notifications_empty')}
+                    </p>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`flex items-start gap-3 px-4 py-3 transition-colors ${
+                          n.read
+                            ? 'bg-white dark:bg-slate-800'
+                            : 'bg-blue-50/50 dark:bg-blue-900/10'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">
+                            {n.job_title ?? t('notifications_unknown_job')}
                           </p>
+                          <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
+                            {t('notifications_status_changed').replace('{status}', t(getApplicationStatusLabelKey(n.status)))}
+                          </p>
+                          {n.candidate_note && (
+                            <p className="mt-1 rounded-md bg-blue-100/60 px-2 py-1 text-[11px] leading-5 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
+                              “{n.candidate_note}”
+                            </p>
+                          )}
+                        </div>
+                        {!n.read && (
+                          <button
+                            onClick={() => handleMarkRead(n.id)}
+                            className="flex-shrink-0 mt-0.5 h-2 w-2 rounded-full bg-blue-500 dark:bg-blue-400 hover:bg-blue-400 transition-colors"
+                            title={t('notifications_mark_read')}
+                            aria-label={t('notifications_mark_read')}
+                          />
                         )}
                       </div>
-                      {!n.read && (
-                        <button
-                          onClick={() => handleMarkRead(n.id)}
-                          className="flex-shrink-0 mt-0.5 h-2 w-2 rounded-full bg-blue-500 dark:bg-blue-400 hover:bg-blue-400 transition-colors"
-                          title={t('notifications_mark_read')}
-                          aria-label={t('notifications_mark_read')}
-                        />
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>

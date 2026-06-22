@@ -174,15 +174,19 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ resumeText, market, t, he
         <span>{style.label}</span>
         <span>{style.pageSize.toUpperCase()} · {style.density}</span>
       </div>
-      <div className={`mx-auto min-h-full w-full ${style.documentWidthClass} ${style.documentClassName} px-7 py-7 sm:px-10 sm:py-9`}>
+      <div
+        className={`mx-auto min-h-full w-full ${style.documentWidthClass} ${style.documentClassName} px-7 py-7 sm:px-10 sm:py-9`}
+        role="document"
+        aria-label={header.name ? `${header.name} resume preview` : t('resume_preview_placeholder')}
+      >
         {resumeText.trim() ? (
           <div className="font-sans text-slate-800 dark:text-slate-100">
             {(header.name || header.contacts.length > 0 || header.summary) && (
               <header className={style.headerClassName}>
                 {header.name && (
-                  <h1 className={style.nameClassName}>
+                  <div className={style.nameClassName}>
                     {header.name}
-                  </h1>
+                  </div>
                 )}
                 {header.contacts.length > 0 && (
                   <div className={style.contactsClassName}>
@@ -204,9 +208,9 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ resumeText, market, t, he
 
             {contentSections.map((section, index) => (
               <section key={`${section.title}-${index}`} className={style.sectionClassName}>
-                <h2 className={style.sectionHeadingClassName}>
+                <div className={style.sectionHeadingClassName}>
                   {sectionTitle(section.title)}
-                </h2>
+                </div>
                 <div className="space-y-1">
                   {renderResumeBody(section.content, style)}
                 </div>
