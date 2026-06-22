@@ -41,11 +41,13 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
         setVisible(false);
     };
 
-    const sidebarOffsetClass = avoidSidebar ? 'lg:left-[17.5rem]' : '';
+    const positionClass = avoidSidebar
+        ? 'fixed inset-x-3 top-[calc(0.75rem+env(safe-area-inset-top))] bottom-auto z-50 sm:inset-x-auto sm:left-auto sm:right-6 sm:top-[calc(1rem+env(safe-area-inset-top))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:left-4 lg:right-auto lg:top-auto lg:bottom-[calc(1rem+env(safe-area-inset-bottom))] lg:w-[14.5rem]'
+        : 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-6 sm:right-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:w-[30rem]';
 
     return (
         <div
-            className={`fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-6 sm:right-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:w-[30rem] ${sidebarOffsetClass}`}
+            className={positionClass}
             role="dialog"
             aria-live="polite"
             aria-label="Cookie consent"
