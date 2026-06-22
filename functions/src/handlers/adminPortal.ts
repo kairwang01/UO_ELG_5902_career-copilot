@@ -463,35 +463,99 @@ export const adminUpdateQuotasFunction = onCall({ invoker: "public" }, async (re
 interface ListUsersRequest {
   limit?: number;
   start_after_uid?: string;
+  search?: string;
+  roles?: string[];
+  plans?: string[];
+  created_after?: string;
+}
+
+const USER_LIST_SCAN_LIMIT = 2000;
+
+function toIso(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (typeof (value as { toDate?: unknown }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+  return null;
+}
+
+async function authUsersByUid(uids: string[]): Promise<Map<string, admin.auth.UserRecord>> {
+  const out = new Map<string, admin.auth.UserRecord>();
+  for (let i = 0; i < uids.length; i += 100) {
+    const res = await admin.auth().getUsers(uids.slice(i, i + 100).map((uid) => ({ uid })));
+    res.users.forEach((user) => out.set(user.uid, user));
+  }
+  return out;
 }
 
 /** Paginated user list for the admin table. */
 export const adminListUsersFunction = onCall({ invoker: "public" }, async (request) => {
   await requireRole(request, "admin");
-  const { limit = 50, start_after_uid } = (request.data ?? {}) as ListUsersRequest;
+  const {
+    limit = 50,
+    start_after_uid,
+    search,
+    roles = [],
+    plans = [],
+    created_after,
+  } = (request.data ?? {}) as ListUsersRequest;
   const pageSize = Math.min(Math.max(limit, 1), 100);
+  const term = typeof search === "string" ? search.trim().toLowerCase() : "";
+  const roleSet = new Set(Array.isArray(roles) ? roles.filter((v) => typeof v === "string" && v) : []);
+  const planSet = new Set(Array.isArray(plans) ? plans.filter((v) => typeof v === "string" && v) : []);
+  const createdAfterMs = typeof created_after === "string" ? Date.parse(created_after) : NaN;
+  const filtered = Boolean(term || roleSet.size || planSet.size || !Number.isNaN(createdAfterMs));
 
-  let q = db.collection(USERS_COLLECTION).orderBy(USER_FIELDS.createdAt, "desc").limit(pageSize);
+  let q = db
+    .collection(USERS_COLLECTION)
+    .orderBy(USER_FIELDS.createdAt, "desc")
+    .limit(filtered ? USER_LIST_SCAN_LIMIT : pageSize);
   if (start_after_uid) {
     const cursor = await db.collection(USERS_COLLECTION).doc(start_after_uid).get();
-    if (cursor.exists) q = q.startAfter(cursor);
+    if (cursor.exists && !filtered) q = q.startAfter(cursor);
   }
 
   const snap = await q.get();
+  const authByUid = await authUsersByUid(snap.docs.map((doc) => doc.id));
+  const rows = snap.docs.map((doc) => {
+    const d = doc.data();
+    const authUser = authByUid.get(doc.id);
+    return {
+      uid: doc.id,
+      email: authUser?.email ?? (typeof d.email === "string" ? d.email : null),
+      full_name: d.full_name ?? authUser?.displayName ?? null,
+      role: d.role ?? null,
+      subscription_status: d.subscription_status ?? null,
+      credits: d.credits ?? 0,
+      created_at: toIso(d.created_at),
+      updated_at: toIso(d.updated_at),
+    };
+  });
+  const matching = filtered
+    ? rows.filter((u) => {
+        const joined = u.created_at ? Date.parse(u.created_at) : NaN;
+        return (
+          (!term ||
+            u.uid.toLowerCase().includes(term) ||
+            (u.full_name ?? "").toLowerCase().includes(term) ||
+            (u.email ?? "").toLowerCase().includes(term)) &&
+          (!roleSet.size || roleSet.has(u.role ?? "")) &&
+          (!planSet.size || planSet.has(u.subscription_status ?? "")) &&
+          (Number.isNaN(createdAfterMs) || (!Number.isNaN(joined) && joined >= createdAfterMs))
+        );
+      })
+    : rows;
+  const start = filtered && start_after_uid
+    ? Math.max(matching.findIndex((u) => u.uid === start_after_uid) + 1, 0)
+    : 0;
+  const page = matching.slice(start, start + pageSize);
   return {
-    users: snap.docs.map((doc) => {
-      const d = doc.data();
-      return {
-        uid: doc.id,
-        full_name: d.full_name ?? null,
-        role: d.role ?? null,
-        subscription_status: d.subscription_status ?? null,
-        credits: d.credits ?? 0,
-        created_at: d.created_at ?? null,
-        updated_at: d.updated_at ?? null,
-      };
-    }),
-    next_cursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1].id : null,
+    users: page,
+    next_cursor: filtered
+      ? (page.length === pageSize && start + pageSize < matching.length ? page[page.length - 1].uid : null)
+      : (snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1].id : null),
   };
 });
 

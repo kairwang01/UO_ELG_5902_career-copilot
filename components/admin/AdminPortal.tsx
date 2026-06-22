@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Calendar, Check, ChevronDown, Search, X } from 'lucide-react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
 import { AdminAccessDenied, AdminVerifying, resolveRoleWithFallback } from './AdminAccessGate';
@@ -46,6 +47,7 @@ import {
   adminWhoAmI,
   SUBSCRIPTION_PLANS,
   type AdminDashboard,
+  type AdminUserFilters,
   type AdminPlanKey,
   type AdminPlanQuota,
   type AdminQuotas,
@@ -150,6 +152,15 @@ const PLAN_LABELS: Record<AdminPlanKey, string> = {
   job_pack: 'Job Pack',
 };
 
+const USER_ROLE_OPTIONS = ['candidate', 'employer', 'agency'] as const;
+
+const USER_CREATED_FILTERS = [
+  { value: '', label: 'Any time' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' },
+  { value: '90d', label: 'Last 90 days' },
+] as const;
+
 const DEFAULT_PLAN_QUOTAS: Record<AdminPlanKey, AdminPlanQuota> = {
   free: { daily_run_limit: 25, daily_credit_limit: 0, monthly_credit_grant: 0, active_job_limit: 3 },
   essentials: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 200, active_job_limit: 0 },
@@ -191,6 +202,82 @@ const effectiveToolQuota = (quotas: AdminQuotas, tool: string): AdminToolQuota =
   allowed_plans: (quotas.tool_quotas?.[tool]?.allowed_plans as AdminPlanKey[] | undefined) ?? [...PLAN_KEYS],
 });
 
+const userFilterControl =
+  'h-10 w-full rounded-lg border border-gray-200 bg-white text-sm text-gray-900 shadow-sm ' +
+  'transition focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10';
+
+const userFilterIcon = 'pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400';
+
+const formatCountLabel = (label: string, selectedLabels: string[]) => {
+  if (selectedLabels.length === 0) return `All ${label.toLowerCase()}s`;
+  if (selectedLabels.length === 1) return selectedLabels[0];
+  return `${selectedLabels[0]} +${selectedLabels.length - 1}`;
+};
+
+const UserFilterDropdown: React.FC<{
+  label: string;
+  options: readonly { value: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}> = ({ label, options, selected, onChange }) => {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const selectedLabels = options
+    .filter((option) => selected.includes(option.value))
+    .map((option) => option.label);
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (details && !details.contains(event.target as Node)) details.removeAttribute('open');
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, []);
+
+  const toggle = (value: string) => {
+    onChange(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
+  };
+
+  return (
+    <details ref={detailsRef} className="group relative">
+      <summary
+        className={`${userFilterControl} flex cursor-pointer list-none items-center justify-between gap-3 px-3 [&::-webkit-details-marker]:hidden`}
+        aria-label={`Filter users by ${label.toLowerCase()}`}
+      >
+        <span className="min-w-0">
+          <span className="block text-[11px] font-medium leading-3 text-gray-500">{label}</span>
+          <span className="block truncate text-sm leading-5">{formatCountLabel(label, selectedLabels)}</span>
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-gray-400 transition group-open:rotate-180" />
+      </summary>
+      <div className="absolute left-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg">
+        {options.map((option) => {
+          const checked = selected.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => toggle(option.value)}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+            >
+              <span
+                className={`flex h-4 w-4 items-center justify-center rounded border ${
+                  checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white text-transparent'
+                }`}
+                aria-hidden="true"
+              >
+                <Check className="h-3 w-3" />
+              </span>
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </details>
+  );
+};
+
 // ─── main component ────────────────────────────────────────────────────────
 
 const AdminPortal: React.FC = () => {
@@ -209,6 +296,12 @@ const AdminPortal: React.FC = () => {
   const [quotasLoadedAt, setQuotasLoadedAt] = useState<number | null>(null);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [userCursor, setUserCursor] = useState<string | null>(null);
+  const [userListLoading, setUserListLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState('');
+  const [userRoleFilters, setUserRoleFilters] = useState<string[]>([]);
+  const [userPlanFilters, setUserPlanFilters] = useState<string[]>([]);
+  const [userCreatedFilter, setUserCreatedFilter] = useState('');
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   // Tracks the latest selected user so a slow report fetch for a previous user can't
   // paint its data under a user the admin has since switched to.
@@ -291,6 +384,51 @@ const AdminPortal: React.FC = () => {
   const [defaultModelChanging, setDefaultModelChanging] = useState(false);
   const [defaultModelToast, setDefaultModelToast] = useState<{ ok?: string; err?: string } | null>(null);
 
+  const userFilters = useMemo<AdminUserFilters>(() => {
+    const filters: AdminUserFilters = {
+      search: debouncedUserSearch.trim() || undefined,
+      roles: userRoleFilters,
+      plans: userPlanFilters,
+    };
+    const days = Number(userCreatedFilter.replace('d', ''));
+    if (days > 0) {
+      filters.created_after = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    }
+    return filters;
+  }, [debouncedUserSearch, userRoleFilters, userPlanFilters, userCreatedFilter]);
+
+  const activeUserFilterTags = useMemo(() => [
+    ...(debouncedUserSearch.trim()
+      ? [{ key: 'search', label: `Search: ${debouncedUserSearch.trim()}` }]
+      : []),
+    ...userRoleFilters.map((role) => ({ key: `role:${role}`, label: `Role: ${role}` })),
+    ...userPlanFilters.map((plan) => ({ key: `plan:${plan}`, label: `Status: ${PLAN_LABELS[plan as AdminPlanKey] ?? plan}` })),
+    ...(userCreatedFilter
+      ? [{ key: 'created', label: `Joined: ${USER_CREATED_FILTERS.find((f) => f.value === userCreatedFilter)?.label ?? userCreatedFilter}` }]
+      : []),
+  ], [debouncedUserSearch, userRoleFilters, userPlanFilters, userCreatedFilter]);
+
+  const clearUserFilters = () => {
+    setUserSearch('');
+    setDebouncedUserSearch('');
+    setUserRoleFilters([]);
+    setUserPlanFilters([]);
+    setUserCreatedFilter('');
+  };
+
+  const removeUserFilter = (key: string) => {
+    if (key === 'search') {
+      setUserSearch('');
+      setDebouncedUserSearch('');
+    } else if (key.startsWith('role:')) {
+      setUserRoleFilters((prev) => prev.filter((role) => role !== key.slice(5)));
+    } else if (key.startsWith('plan:')) {
+      setUserPlanFilters((prev) => prev.filter((plan) => plan !== key.slice(5)));
+    } else if (key === 'created') {
+      setUserCreatedFilter('');
+    }
+  };
+
   useEffect(() => {
     mountedRef.current = true;
     let active = true;
@@ -334,6 +472,11 @@ const AdminPortal: React.FC = () => {
       active = false;
     };
   }, [session]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedUserSearch(userSearch), 400);
+    return () => window.clearTimeout(timer);
+  }, [userSearch]);
 
   // ── data loaders ──────────────────────────────────────────────────────────
 
@@ -384,16 +527,19 @@ const AdminPortal: React.FC = () => {
   const loadUsers = useCallback(
     async (cursor?: string) => {
       setError(null);
+      setUserListLoading(true);
       try {
-        const res = await adminListUsers(50, cursor);
+        const res = await adminListUsers(50, cursor, userFilters);
         if (!mountedRef.current) return;
         setUsers((prev) => (cursor ? [...prev, ...res.users] : res.users));
         setUserCursor(res.next_cursor);
       } catch (e) {
         if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load users');
+      } finally {
+        if (mountedRef.current) setUserListLoading(false);
       }
     },
-    [],
+    [userFilters],
   );
 
   const loadAdmins = useCallback(async () => {
@@ -2845,19 +2991,97 @@ const AdminPortal: React.FC = () => {
           <div className="grid md:grid-cols-[1fr_380px] gap-6 items-start">
             {/* User list */}
             <Card>
-              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-                <SectionHeading>Users</SectionHeading>
-                <span className="text-xs text-gray-500">{users.length} loaded</span>
+              <div className="px-5 py-4 border-b border-gray-200 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <SectionHeading>Users</SectionHeading>
+                  <span className="text-xs text-gray-500">
+                    {userListLoading ? 'Loading...' : `${users.length} loaded`}
+                  </span>
+                </div>
+                <div className="grid gap-2.5 lg:grid-cols-[minmax(240px,1fr)_150px_190px_160px]">
+                  <div className="relative">
+                    <Search className={userFilterIcon} />
+                    <input
+                      type="search"
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      placeholder="Search name, UID, or email"
+                      className={`${userFilterControl} pl-9 pr-3`}
+                      aria-label="Search users"
+                    />
+                  </div>
+                  <UserFilterDropdown
+                    label="Role"
+                    options={USER_ROLE_OPTIONS.map((role) => ({ value: role, label: role }))}
+                    selected={userRoleFilters}
+                    onChange={setUserRoleFilters}
+                  />
+                  <UserFilterDropdown
+                    label="Plan"
+                    options={PLAN_KEYS.map((plan) => ({ value: plan, label: PLAN_LABELS[plan] }))}
+                    selected={userPlanFilters}
+                    onChange={setUserPlanFilters}
+                  />
+                  <div className="relative">
+                    <Calendar className={userFilterIcon} />
+                    <select
+                      value={userCreatedFilter}
+                      onChange={(e) => setUserCreatedFilter(e.target.value)}
+                      className={`${userFilterControl} appearance-none pl-9 pr-8`}
+                      aria-label="Filter users by registration date"
+                    >
+                      {USER_CREATED_FILTERS.map((filter) => (
+                        <option key={filter.value} value={filter.value}>{filter.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  </div>
+                </div>
+                {activeUserFilterTags.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {activeUserFilterTags.map((tag) => (
+                      <span
+                        key={tag.key}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 shadow-sm"
+                      >
+                        {tag.label}
+                        <button
+                          type="button"
+                          onClick={() => removeUserFilter(tag.key)}
+                          className="rounded text-blue-500 transition hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          aria-label={`Remove ${tag.label}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={clearUserFilters}
+                      className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="overflow-x-auto">
-                {users.length === 0 ? (
-                  <EmptyState message="No users found." />
+                {userListLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+                    <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                    Loading users...
+                  </div>
+                ) : users.length === 0 ? (
+                  <EmptyState message={activeUserFilterTags.length > 0 ? '暂无匹配数据' : 'No users found.'} />
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-200">
                         <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
                           Name
+                        </th>
+                        <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
+                          Email
                         </th>
                         <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 uppercase">
                           Plan
@@ -2882,6 +3106,9 @@ const AdminPortal: React.FC = () => {
                                 {u.uid.slice(0, 10)}…
                               </span>
                             )}
+                          </td>
+                          <td className="px-5 py-3 text-gray-600">
+                            {u.email || <span className="text-gray-400">-</span>}
                           </td>
                           <td className="px-5 py-3">
                             <PlanBadge plan={u.subscription_status} />

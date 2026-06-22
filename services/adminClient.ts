@@ -22,12 +22,20 @@ export interface AdminDashboard {
 
 export interface AdminUserRow {
   uid: string;
+  email: string | null;
   full_name: string | null;
   role: string | null;
   subscription_status: string | null;
   credits: number;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface AdminUserFilters {
+  search?: string;
+  roles?: string[];
+  plans?: string[];
+  created_after?: string;
 }
 
 export const adminCheckAccess = () =>
@@ -105,10 +113,13 @@ export const adminUpdateQuotas = (payload: {
   tool_quotas?: Record<string, Partial<AdminToolQuota>>;
 }) => call<typeof payload, AdminQuotas>('adminUpdateQuotas')(payload).then((r) => r.data);
 
-export const adminListUsers = (limit = 50, start_after_uid?: string) =>
-  call<{ limit?: number; start_after_uid?: string }, { users: AdminUserRow[]; next_cursor: string | null }>(
+export const adminListUsers = (limit = 50, start_after_uid?: string, filters?: AdminUserFilters) =>
+  call<
+    { limit?: number; start_after_uid?: string } & AdminUserFilters,
+    { users: AdminUserRow[]; next_cursor: string | null }
+  >(
     'adminListUsers',
-  )({ limit, start_after_uid }).then((r) => r.data);
+  )({ limit, start_after_uid, ...(filters ?? {}) }).then((r) => r.data);
 
 export const adminGetUserReport = (uid: string) =>
   call<{ uid: string }, Record<string, unknown>>('adminGetUserReport')({ uid }).then((r) => r.data);
