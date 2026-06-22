@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Bookmark, BookmarkCheck, ExternalLink, Info, Search, X } from 'lucide-react';
+import { Bookmark, BookmarkCheck, Briefcase, ChevronDown, ExternalLink, FileText, Info, Mail, Search, X } from 'lucide-react';
 import {
   type SavedOpportunity,
   removeOpportunity,
@@ -40,6 +40,8 @@ interface OpportunityFinderProps {
 // job cards show an at-a-glance match%. The on-demand "Why am I a fit?" button still
 // computes the precise AI-grounded score.
 const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'you', 'your', 'our', 'are', 'that', 'this', 'will', 'have', 'from', 'their', 'they', 'about', 'into', 'over', 'such', 'what', 'when', 'which', 'were', 'been', 'who', 'has', 'not', 'but', 'all', 'can', 'use']);
+const PLATFORM_JOB_LOAD_TIMEOUT_MS = 6500;
+
 function quickMatchScore(resume: string, posting: string): number {
   const tokens = (s: string): Set<string> =>
     new Set((s.toLowerCase().match(/[a-z][a-z0-9+#.]{2,}/g) ?? ([] as string[])).filter((w) => w.length > 2 && !STOP_WORDS.has(w)));
@@ -170,7 +172,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
             where('candidate_id', '==', sessionUserId),
           ),
         );
-        setAppliedJobs(new Set(snap.docs.map((app) => app.data().job_id as string)));
+        if (mountedRef.current) {
+          setAppliedJobs(new Set(snap.docs.map((app) => app.data().job_id as string)));
+        }
     } catch (err) {
         // Non-fatal side-fetch (it only powers the "Applied" badges). It must NOT
         // raise the tool's error gate: a transient read hiccup here would otherwise
@@ -282,15 +286,33 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     }
   }, [sessionUserId, resumeText]);
 
+  const fetchAppliedJobsWithinLimit = useCallback(async () => {
+    await Promise.race([
+      fetchAppliedJobs(),
+      new Promise<void>((resolve) => window.setTimeout(resolve, PLATFORM_JOB_LOAD_TIMEOUT_MS)),
+    ]);
+  }, [fetchAppliedJobs]);
+
+  const fetchInternalJobsWithinLimit = useCallback(async (): Promise<{
+    opps: Opportunity[];
+    meta: Map<string, InternalJobMeta>;
+  }> => {
+    const empty = { opps: [] as Opportunity[], meta: new Map<string, InternalJobMeta>() };
+    return Promise.race([
+      fetchInternalJobs(),
+      new Promise<typeof empty>((resolve) => window.setTimeout(() => resolve(empty), PLATFORM_JOB_LOAD_TIMEOUT_MS)),
+    ]);
+  }, [fetchInternalJobs]);
+
   const runTool = useCallback(async () => {
     const alive = begin();
     setError(null);
     try {
-      await fetchAppliedJobs();
+      await fetchAppliedJobsWithinLimit();
 
       // Platform postings: a fast, free, additive Firestore read (returns [] on any
       // failure) — fetched first so they still show even if the AI search errors.
-      const internal = await fetchInternalJobs();
+      const internal = await fetchInternalJobsWithinLimit();
 
       // Feed job preferences into the AI search (4a)
       const prefs = loadJobPreferences();
@@ -329,7 +351,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     // FIX 1: use sessionUserId (primitive) instead of session (object) so that
     // token-refresh events that recreate the session object do not refire this
     // callback (and therefore the expensive AI search + double credit spend).
-  }, [resumeText, market, sessionUserId, fetchAppliedJobs, fetchInternalJobs, begin, end]);
+  }, [resumeText, market, sessionUserId, fetchAppliedJobsWithinLimit, fetchInternalJobsWithinLimit, begin, end]);
 
   // Free platform-posting load only. The external AI search is credit-charging, so
   // it must be started by an explicit click instead of auto-running on page entry.
@@ -339,8 +361,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     setPlatformLoading(true);
     setError(null);
     try {
-      await fetchAppliedJobs();
-      const internal = await fetchInternalJobs();
+      await fetchAppliedJobsWithinLimit();
+      const internal = await fetchInternalJobsWithinLimit();
       if (!mountedRef.current || runId !== platformRunRef.current) return;
       setInternalJobData(internal.meta);
       setResult(internal.opps.length > 0
@@ -356,7 +378,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     } finally {
       if (mountedRef.current && runId === platformRunRef.current) setPlatformLoading(false);
     }
-  }, [fetchAppliedJobs, fetchInternalJobs, t]);
+  }, [fetchAppliedJobsWithinLimit, fetchInternalJobsWithinLimit, t]);
 
   const lastPlatformRunKey = useRef<string | null>(null);
   useEffect(() => {
@@ -526,11 +548,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
       )}
       
       {jobSearchStrategies && jobSearchStrategies.length > 0 && (
-        <div className="p-4 mb-6 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 rounded-r-lg">
+        <div className="rounded-xl border border-blue-100 bg-blue-50/80 p-4 dark:border-blue-900/60 dark:bg-blue-950/30">
             <h5 className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 7.072l.707-.707a1 1 0 111.414 1.414l-.707.707a1 1 0 01-1.414-1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" />
-                </svg>
+                <Info className="h-5 w-5" aria-hidden="true" />
                 {t('tool_opportunity_finder_strategies_header')}
             </h5>
             <ul className="list-disc list-inside mt-2 space-y-2 text-sm text-blue-800 dark:text-blue-300">
@@ -541,14 +561,35 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 sm:gap-4 items-center text-sm p-2 bg-gray-100 dark:bg-slate-800 rounded-md text-gray-800 dark:text-gray-200">
-        <span>{t('tool_opportunity_finder_filter_label')}:</span>
-        <select value={opportunityFilters.company} onChange={e => setOpportunityFilters(p => ({...p, company: e.target.value}))} className="min-w-0 max-w-[45%] flex-1 sm:flex-none border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
-          {companyOptions.map(c => <option key={c} value={c}>{c === 'all' ? t('tool_opportunity_finder_filter_all_companies') : c}</option>)}
-        </select>
-        <select value={opportunityFilters.location} onChange={e => setOpportunityFilters(p => ({...p, location: e.target.value}))} className="min-w-0 max-w-[45%] flex-1 sm:flex-none border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm">
-          {locationOptions.map(l => <option key={l} value={l}>{l === 'all' ? t('tool_opportunity_finder_filter_all_locations') : l}</option>)}
-        </select>
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] md:items-center">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
+            {t('tool_opportunity_finder_filter_label')}
+          </div>
+          <div>
+            <label htmlFor="opportunity-company-filter" className="sr-only">{t('tool_opportunity_finder_filter_all_companies')}</label>
+            <select
+              id="opportunity-company-filter"
+              value={opportunityFilters.company}
+              onChange={e => setOpportunityFilters(p => ({...p, company: e.target.value}))}
+              className="block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
+            >
+              {companyOptions.map(c => <option key={c} value={c}>{c === 'all' ? t('tool_opportunity_finder_filter_all_companies') : c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="opportunity-location-filter" className="sr-only">{t('tool_opportunity_finder_filter_all_locations')}</label>
+            <select
+              id="opportunity-location-filter"
+              value={opportunityFilters.location}
+              onChange={e => setOpportunityFilters(p => ({...p, location: e.target.value}))}
+              className="block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
+            >
+              {locationOptions.map(l => <option key={l} value={l}>{l === 'all' ? t('tool_opportunity_finder_filter_all_locations') : l}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
       {filteredOpportunities.length === 0 && (
         <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center dark:border-slate-700 dark:bg-slate-800">
@@ -572,52 +613,66 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
           </div>
         </div>
       )}
-      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+      <div className="space-y-3">
         {filteredOpportunities.map((job, i) => {
             const isExpanded = expandedUrl === job.url;
             const jobId = job.isInternal ? job.url.replace('#internal-job-', '') : '';
             const hasApplied = job.isInternal && appliedJobs.has(jobId);
+            const panelId = `opportunity-detail-${i}`;
 
             return (
-                <div key={job.url + i} className="p-3 border rounded-lg bg-white dark:bg-slate-800 shadow-sm transition-all duration-300">
-                    <button onClick={() => setExpandedUrl(isExpanded ? null : job.url)} className="w-full text-left flex justify-between items-center" aria-expanded={isExpanded}>
-                        <div className="flex-grow">
-                             <div className="flex items-center gap-2 flex-wrap">
-                                <h5 className="font-bold text-blue-800 dark:text-blue-300 text-base">{job.jobTitle}</h5>
+                <article key={job.url + i} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 dark:border-slate-700 dark:bg-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedUrl(isExpanded ? null : job.url)}
+                      className="w-full rounded-lg text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/50"
+                      aria-expanded={isExpanded}
+                      aria-controls={panelId}
+                    >
+                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h5 className="break-words text-base font-bold leading-6 text-slate-950 dark:text-slate-100">{job.jobTitle}</h5>
                                 {job.isInternal && (
-                                    <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                                         {t('tool_opportunity_finder_internal_badge')}
                                     </span>
                                 )}
                             </div>
-                            <p className="text-xs text-gray-700 dark:text-gray-400 mt-1">{job.company} - {job.location}</p>
-                        </div>
-                        <div className="flex items-center gap-3 ml-4 shrink-0">
+                            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
+                              <Briefcase className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                              <span className="break-words">{job.company || t('tool_opportunity_finder_filter_all_companies')}</span>
+                              {job.location && <span aria-hidden="true">·</span>}
+                              {job.location && <span className="break-words">{job.location}</span>}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                              {/* 4b: salary chip */}
                              {job.isInternal && internalJobData.get(jobId)?.salary_range && (
-                               <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full whitespace-nowrap">
+                               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                                  {internalJobData.get(jobId)!.salary_range}
                                </span>
                              )}
                              {/* quickMatchScore = lexical keyword overlap (this is the value persisted
                                  as the application's compatibility_score), not the AI match — keep the label honest. */}
                              {job.isInternal && job.compatibilityScore && (
-                                <div className="text-right">
-                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('applications_keyword_overlap')}</p>
-                                    <p className="text-lg font-bold text-green-600">{job.compatibilityScore}%</p>
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-800">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('applications_keyword_overlap')}</p>
+                                    <p className="text-lg font-bold leading-5 text-emerald-600 dark:text-emerald-300">{job.compatibilityScore}%</p>
                                 </div>
                             )}
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-gray-500 transition-transform duration-300 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            <ChevronDown className={`h-5 w-5 flex-shrink-0 text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                          </div>
                         </div>
                     </button>
                     {isExpanded && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700 animate-fade-in">
-                        <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2 prose prose-sm dark:prose-invert max-w-none">{renderFormattedText(job.summary)}</div>
+                        <div id={panelId} className="mt-4 border-t border-slate-200 pt-4 animate-fade-in dark:border-slate-700">
+                        <div className="rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-700 dark:bg-slate-800/70 dark:text-slate-300 prose prose-sm dark:prose-invert max-w-none">{renderFormattedText(job.summary)}</div>
 
                         {/* 4c: Why am I a fit? result */}
                         {whyFitCache[job.url] && (
                           <div className="mt-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm text-blue-900 dark:text-blue-200">
-                            <p className="font-semibold mb-1">{t('job_card_why_fit')} — {whyFitCache[job.url].compatibilityScore}% fit</p>
+                            <p className="font-semibold mb-1">{t('job_card_why_fit')} — {whyFitCache[job.url].compatibilityScore}%</p>
                             <p className="leading-relaxed">{whyFitCache[job.url].summary}</p>
                           </div>
                         )}
@@ -631,15 +686,19 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                           </div>
                         )}
 
-                        <div className="mt-4 flex flex-wrap gap-2 justify-end">
+                        <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                          <div className="flex flex-wrap gap-2">
                              {job.isInternal ? (
-                                <button onClick={() => openApplyReview(jobId, job.jobTitle, job.company, job.compatibilityScore)} disabled={hasApplied} className={`text-sm text-white px-3 py-1.5 rounded-md transition-colors ${hasApplied ? 'bg-green-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                <button onClick={() => openApplyReview(jobId, job.jobTitle, job.company, job.compatibilityScore)} disabled={hasApplied} className={`inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors ${hasApplied ? 'bg-emerald-500 cursor-not-allowed' : 'bg-blue-700 hover:bg-blue-800'}`}>
                                     {hasApplied ? t('tool_opportunity_finder_applied_button') : t('tool_opportunity_finder_apply_button')}
                                 </button>
                              ) : (
-                                <a href={job.url} target="_blank" rel="noopener noreferrer" className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700">{t('tool_opportunity_finder_view_apply_button')}</a>
+                                <a href={job.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">{t('tool_opportunity_finder_view_apply_button')}</a>
                              )}
-                             <button onClick={() => openTool('cover-letter', `Job Title: ${job.jobTitle}\nCompany: ${job.company}\n\n[Paste full job description here]`)} className="text-sm bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-md">{t('tool_opportunity_finder_generate_cover_letter_button')}</button>
+                             <button onClick={() => openTool('cover-letter', `Job Title: ${job.jobTitle}\nCompany: ${job.company}\n\n[Paste full job description here]`)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+                              <FileText className="h-4 w-4" aria-hidden="true" />
+                              {t('tool_opportunity_finder_generate_cover_letter_button')}
+                             </button>
 
                              {/* Save / bookmark this opportunity (SCRUM-28) */}
                              {sessionUserId && (
@@ -647,19 +706,21 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                                  type="button"
                                  onClick={() => toggleSaveOpportunity(job)}
                                  aria-pressed={savedUrls.has(job.url)}
-                                 className={`text-sm px-3 py-1.5 rounded-md inline-flex items-center gap-1.5 transition-colors ${savedUrls.has(job.url) ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200' : 'bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200'}`}
+                                 className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${savedUrls.has(job.url) ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'}`}
                                >
                                  {savedUrls.has(job.url) ? <BookmarkCheck className="h-4 w-4" aria-hidden="true" /> : <Bookmark className="h-4 w-4" aria-hidden="true" />}
                                  {savedUrls.has(job.url) ? t('tool_opportunity_finder_saved_button') : t('tool_opportunity_finder_save_button')}
                                </button>
                              )}
+                          </div>
 
+                          <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
                              {/* 4c: Why am I a fit? button */}
                              <button
                                type="button"
                                onClick={() => handleWhyFit(job)}
                                disabled={!!whyFitLoading[job.url] || !!whyFitCache[job.url]}
-                               className="text-sm bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-md disabled:opacity-60 inline-flex items-center gap-1.5"
+                               className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                              >
                                {whyFitLoading[job.url] ? (
                                  <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
@@ -673,19 +734,21 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                                  type="button"
                                  onClick={() => handleIntroMessage(job)}
                                  disabled={!!introLoading[job.url] || !!introCache[job.url]}
-                                 className="text-sm bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-md disabled:opacity-60 inline-flex items-center gap-1.5"
+                                 className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                                >
                                  {introLoading[job.url] ? (
                                    <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
                                  ) : null}
+                                 <Mail className="h-4 w-4" aria-hidden="true" />
                                  {t('job_card_intro_message')}
                                </button>
                                <span className="text-xs text-gray-400 dark:text-gray-500">{t('job_card_uses_credits')}</span>
                              </div>
+                          </div>
                         </div>
                         </div>
                     )}
-                </div>
+                </article>
             )
         })}
       </div>
