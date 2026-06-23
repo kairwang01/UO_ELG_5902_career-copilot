@@ -3,7 +3,7 @@ import { getDocument, GlobalWorkerOptions, PageViewport } from 'pdfjs-dist';
 import type { ResumeImage } from '../types';
 
 // Set the worker source for pdf.js
-GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.5.136/build/pdf.worker.mjs';
+GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
 
 export interface ParsedFile {
     text: string;
