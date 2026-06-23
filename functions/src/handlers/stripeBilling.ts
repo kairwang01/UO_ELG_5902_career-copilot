@@ -319,6 +319,36 @@ export async function cancelSubscriptionSimulatedImpl(uid: string) {
 export const cancelSubscriptionSimulatedFunction = onCall((request) =>
   cancelSubscriptionSimulatedImpl(requireAuth(request)));
 
+/**
+ * Creates a billing-management entry point for the signed-in user.
+ *   - Simulation mode: returns the in-app fake manage page URL.
+ *   - Real mode: creates a Stripe Customer Portal session (cancel / change card /
+ *     invoices). The customer id is read ONLY from the user's own billing doc —
+ *     never accepted from the client — to prevent managing another user's billing.
+ */
+export async function createBillingPortalSessionImpl(uid: string): Promise<{ url: string; simulated?: boolean }> {
+  if (billingSimulationEnabled()) {
+    return { url: "/billing/manage", simulated: true };
+  }
+  const billingSnap = await db.collection(BILLING_COLLECTION).doc(uid).get();
+  const customerId = billingSnap.get("stripe_customer_id");
+  if (!billingSnap.exists || billingSnap.get("active") !== true || typeof customerId !== "string" || !customerId) {
+    throw new HttpsError("failed-precondition", "No active subscription to manage.");
+  }
+  const stripe = getStripe();
+  const session = await stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: `${appBaseUrl()}/workspace/billing`,
+  });
+  if (!session.url) {
+    throw new HttpsError("internal", "Stripe did not return a Billing Portal URL.");
+  }
+  return { url: session.url };
+}
+
+export const createBillingPortalSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, (request) =>
+  createBillingPortalSessionImpl(requireAuth(request)));
+
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const uid = stringOrNull(session.metadata?.uid) ?? stringOrNull(session.client_reference_id);
   const plan = stringOrNull(session.metadata?.plan_key);

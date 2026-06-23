@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as admin from '../functions/node_modules/firebase-admin';
-import { cancelSubscriptionSimulatedImpl, confirmSimulatedCheckoutImpl } from '../functions/src/handlers/stripeBilling';
+import { cancelSubscriptionSimulatedImpl, confirmSimulatedCheckoutImpl, createBillingPortalSessionImpl } from '../functions/src/handlers/stripeBilling';
 
 const PROJECT = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const db = admin.firestore();
@@ -61,5 +61,23 @@ describe('cancelSubscriptionSimulated', () => {
     });
     const res = await cancelSubscriptionSimulatedImpl('cand3');
     expect(res.status).toBe('inactive');
+  });
+});
+
+describe('createBillingPortalSession (simulation branch)', () => {
+  it('returns the in-app manage URL when simulation is enabled', async () => {
+    await seedActiveSubscriber('cand4');
+    const res = await createBillingPortalSessionImpl('cand4');
+    expect(res.url).toBe('/billing/manage');
+    expect(res.simulated).toBe(true);
+  });
+
+  it('throws when there is no active subscription (real mode)', async () => {
+    delete process.env.BILLING_SIMULATION;
+    await db.collection('users').doc('cand5').set({
+      role: 'candidate', subscription_status: 'free', credits: 0, created_at: '2026-01-01',
+    });
+    await expect(createBillingPortalSessionImpl('cand5'))
+      .rejects.toThrow(/no active subscription/i);
   });
 });
