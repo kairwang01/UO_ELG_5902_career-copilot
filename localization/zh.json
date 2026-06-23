@@ -3298,5 +3298,6 @@
   "account_web3_next_switch": "先切换到 Sepolia 后再使用凭据。",
   "account_web3_next_mint": "铸造你的能力证明凭据。",
   "account_web3_next_active": "凭据已准备好。想展示到人才库时再激活。",
-  "account_web3_next_improve": "提升简历评分后可解锁此凭据。"
+  "account_web3_next_improve": "提升简历评分后可解锁此凭据。",
+  "account_web3_preview_notice": "测试网预览：合约尚未部署，因此此凭据会在演示中模拟生成并保存到你的资料，不会真正上链铸造。"
 }

@@ -3298,5 +3298,6 @@
   "account_web3_next_switch": "Switch to Sepolia before using your credential.",
   "account_web3_next_mint": "Mint your Proof-of-Talent credential.",
   "account_web3_next_active": "Your credential is ready. Activate it when you want it visible in Talent Vault.",
-  "account_web3_next_improve": "Improve your resume score to unlock this credential."
+  "account_web3_next_improve": "Improve your resume score to unlock this credential.",
+  "account_web3_preview_notice": "Testnet preview: no contract is deployed yet, so this credential is simulated for the demo and saved to your profile. It is not minted on-chain."
 }
