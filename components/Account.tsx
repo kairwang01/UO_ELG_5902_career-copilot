@@ -5,6 +5,7 @@ import { firestoreDb } from '@/lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
 import Avatar from './Avatar';
 import { ethers } from 'ethers';
+import { ArrowLeft } from 'lucide-react';
 // TEMP HIDDEN: user-facing API keys + BYOA custom endpoint are hidden from the
 // settings page. Model/endpoint config is superadmin-only via the Admin Console.
 // To restore, re-enable these imports and the two JSX blocks below.
@@ -106,12 +107,14 @@ interface AccountProps {
     view: 'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs',
   ) => void;
   t: (key: string) => string;
+  onBack?: () => void;
 }
 
 const Account: React.FC<AccountProps> = ({
   session,
   onSetView,
   t,
+  onBack,
 }) => {
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -683,10 +686,12 @@ const Account: React.FC<AccountProps> = ({
           {t('account_title')}
         </h1>
         <button
-          onClick={() => onSetView('home')}
-          className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          type="button"
+          onClick={onBack ?? (() => onSetView('home'))}
+          className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
         >
-          &larr; {t('account_back_button')}
+          <ArrowLeft className="h-4 w-4" />
+          {t('account_back_button')}
         </button>
       </div>
 

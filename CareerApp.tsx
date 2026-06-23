@@ -1196,6 +1196,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                         refreshProfile={getProfile}
                         onApplyImprovements={handleApplyImprovements}
                         activeTool="website-builder"
+                        hideToolBackButton
                         // This view hardcodes the portfolio tool, so the tool's "back"
                         // (setActiveTool(null)) must LEAVE the portfolio view — otherwise
                         // the hardcoded prop keeps rendering it and the button does nothing.
@@ -1230,7 +1231,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
         {dashboardView === 'account' && session && (
             <div id="account-panel">
-                <Account key={session.user.id} session={session} onSetView={handleSetView} t={t} />
+                <Account key={session.user.id} session={session} onSetView={handleSetView} t={t} onBack={() => setWorkspaceView('dashboard')} />
             </div>
         )}
     </div>
@@ -1340,7 +1341,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       t,
       currentLang,
       onLanguageChange: changeLanguage,
-      onHome: () => { setIsMobileNavOpen(false); navigate('/?home=1'); },
+      onHome: () => {
+        setIsMobileNavOpen(false);
+        setActiveTool(null);
+        setAnalysisResult(null);
+        setIsUpdatingResume(false);
+        setWorkspaceView('dashboard');
+      },
     };
 
     return (

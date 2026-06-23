@@ -28,6 +28,7 @@ interface AnalysisDisplayProps {
   setActiveTool: (tool: string | null) => void;
   /** Leaves the report view and opens the toolkit gallery (result view only). */
   onContinueToToolkit?: () => void;
+  hideToolBackButton?: boolean;
 }
 
 const ScoreCircle: React.FC<{ score: number, t: (key: string) => string }> = ({ score, t }) => {
@@ -169,7 +170,7 @@ type ToolTransferInput = {
   input: string;
 };
 
-const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, resumeText, userPlan, market, navigateToPricing, session, profile, refreshProfile, onApplyImprovements, activeTool, setActiveTool, onContinueToToolkit }) => {
+const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, resumeText, userPlan, market, navigateToPricing, session, profile, refreshProfile, onApplyImprovements, activeTool, setActiveTool, onContinueToToolkit, hideToolBackButton = false }) => {
   const [toolInput, setToolInput] = useState<ToolTransferInput | null>(null);
   const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
   const [toolGroup, setToolGroup] = useState<ToolGroupId>('recommended');
@@ -237,13 +238,15 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                         {/* Top Bar for Tool */}
                         <div className="min-h-16 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-3 px-4 py-3 shrink-0 z-20 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                             <div className="flex min-w-0 items-center gap-3">
-                                <button 
-                                    onClick={() => setActiveTool(null)}
-                                    className="workspace-button-ghost inline-flex h-9 w-9 shrink-0 items-center justify-center"
-                                    aria-label={t('studio_back_to_library')}
-                                >
-                                    <ArrowLeft className="h-5 w-5" />
-                                </button>
+                                {!hideToolBackButton && (
+                                    <button
+                                        onClick={() => setActiveTool(null)}
+                                        className="workspace-button-ghost inline-flex h-9 w-9 shrink-0 items-center justify-center"
+                                        aria-label={t('studio_back_to_library')}
+                                    >
+                                        <ArrowLeft className="h-5 w-5" />
+                                    </button>
+                                )}
                                 <div className="min-w-0">
                                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
                                     {t('studio_assisted_tool')}
