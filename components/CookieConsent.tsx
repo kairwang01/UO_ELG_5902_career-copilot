@@ -42,7 +42,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
     };
 
     const positionClass = avoidSidebar
-        ? 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-4 sm:right-auto sm:w-[14.25rem] sm:max-w-[calc(100vw-2rem)]'
+        ? 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:bottom-auto sm:left-auto sm:right-4 sm:top-[calc(4.75rem+env(safe-area-inset-top))] sm:w-[23rem] sm:max-w-[calc(100vw-18rem)]'
         : 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-6 sm:right-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:w-[30rem]';
 
     return (
@@ -56,7 +56,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
             <div className={`pointer-events-none rounded-2xl border border-slate-700 bg-slate-950/95 text-gray-200 shadow-2xl shadow-slate-950/25 backdrop-blur ${
                 avoidSidebar ? 'p-3 sm:p-3.5' : 'p-3 sm:p-4'
             }`}>
-                <div className={`${avoidSidebar ? 'space-y-3' : ''}`}>
+                <div className={`${avoidSidebar ? 'space-y-3 sm:flex sm:items-start sm:gap-3 sm:space-y-0' : ''}`}>
                     <p className={`${avoidSidebar ? 'min-w-0 flex-1 text-xs leading-5' : 'text-xs leading-5 sm:text-sm'}`}>
                         {t('cookie_consent_message')}{' '}
                         <a
@@ -68,7 +68,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
                             {t('cookie_consent_learn_more')}
                         </a>
                     </p>
-                    <div className={`${avoidSidebar ? 'grid grid-cols-2 gap-2' : 'mt-3 grid grid-cols-2 gap-2 sm:flex sm:justify-end'}`}>
+                    <div className={`${avoidSidebar ? 'grid grid-cols-2 gap-2 sm:shrink-0' : 'mt-3 grid grid-cols-2 gap-2 sm:flex sm:justify-end'}`}>
                         <button
                             type="button"
                             onClick={() => decide('declined')}
