@@ -12,12 +12,10 @@ import {
 } from '../../services/apiPlatformClient';
 
 /**
- * API Platform tab — developer preview.
+ * API Platform tab.
  *
  * Manages third-party applications and their scoped keys against the
- * apiPlatformClient service contract. Currently mock-backed (clearly labelled
- * in the banner); the UI is final so wiring the Cloud Functions later is a
- * service-layer swap only. Backend contract:
+ * apiPlatformClient service contract. Backend contract:
  * functions/src/handlers/apiPlatform.contract.md
  */
 
@@ -187,7 +185,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
 
   return (
     <div className="space-y-6">
-      {/* Preview banner — honest about the mock backing */}
+      {/* Trust banner — clear about server-side secret handling */}
       <div className="flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         <span className="mt-0.5 shrink-0" aria-hidden="true">ⓘ</span>
         <p>

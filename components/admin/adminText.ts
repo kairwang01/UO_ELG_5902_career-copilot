@@ -8,9 +8,9 @@
  */
 const ADMIN_TEXT: Record<string, string> = {
   // ── API Platform panel ──
-  'api.banner.title': 'Developer preview.',
+  'api.banner.title': 'Live server-backed registry.',
   'api.banner.body':
-    'The console below runs against a local sample service while the platform callables are finalized — keys created here are not yet honored by production endpoints. Secrets follow the final contract: generated once, hashed at rest, never shown again.',
+    'Applications and keys are stored server-side. Secrets are generated once, hashed at rest, and never shown again after the creation dialog closes.',
   'api.stats.requests': 'Requests this month',
   'api.stats.errors': 'Errors this month',
   'api.stats.apps': 'Applications',
@@ -47,7 +47,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.keys.revoke': 'Revoke',
   'api.keys.never': 'Never',
   'api.logs.title': 'Recent requests',
-  'api.logs.subtitle': 'Sample feed — per-request logs land with the backend.',
+  'api.logs.subtitle': 'Recent partner API calls recorded by the server gateway.',
   'api.logs.empty': 'No requests recorded.',
   'api.logs.col_time': 'Time',
   'api.logs.col_key': 'Key',

@@ -97,6 +97,14 @@ export { adminPublishPromptFunction         as adminPublishPrompt        } from 
 export { adminRollbackPromptFunction        as adminRollbackPrompt       } from "./handlers/adminPrompts";
 export { adminListPromptVersionsFunction    as adminListPromptVersions   } from "./handlers/adminPrompts";
 export { adminTestModelFunction             as adminTestModel            } from "./handlers/adminTestModel";
+export { apiPlatformListApplicationsFunction as apiPlatformListApplications } from "./handlers/apiPlatform";
+export { apiPlatformCreateApplicationFunction as apiPlatformCreateApplication } from "./handlers/apiPlatform";
+export { apiPlatformListKeysFunction        as apiPlatformListKeys       } from "./handlers/apiPlatform";
+export { apiPlatformCreateKeyFunction       as apiPlatformCreateKey      } from "./handlers/apiPlatform";
+export { apiPlatformRevokeKeyFunction       as apiPlatformRevokeKey      } from "./handlers/apiPlatform";
+export { apiPlatformUpdateKeyStatusFunction as apiPlatformUpdateKeyStatus } from "./handlers/apiPlatform";
+export { apiPlatformGetUsageFunction        as apiPlatformGetUsage       } from "./handlers/apiPlatform";
+export { apiPlatformListUsageLogsFunction   as apiPlatformListUsageLogs  } from "./handlers/apiPlatform";
 export { createJobPostingFunction           as createJobPosting          } from "./handlers/jobPostings";
 export { updateJobPostingFunction           as updateJobPosting          } from "./handlers/jobPostings";
 export { setJobPostingActiveFunction        as setJobPostingActive       } from "./handlers/jobPostings";

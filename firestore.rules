@@ -668,6 +668,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // API Platform registry — partner applications, key metadata and request
+    // logs. Admin UI reads/mutates through Cloud Functions only so role checks,
+    // secret hashing, one-time key display and admin audit logging cannot be
+    // bypassed by direct Firestore access.
+    match /api_applications/{appId} {
+      allow read, write: if false;
+    }
+    match /api_keys/{keyId} {
+      allow read, write: if false;
+    }
+    match /api_usage_logs/{entryId} {
+      allow read, write: if false;
+    }
+
     // application_snapshots/{applicationId} — the frozen resume/Talent-Profile
     // snapshot taken at apply time (the version HR reviews). Holds candidate PII;
     // written by createJobApplication and read by the employer-resume callables,

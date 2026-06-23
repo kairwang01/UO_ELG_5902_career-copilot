@@ -209,6 +209,23 @@ describe('application_interviews access', () => {
   });
 });
 
+describe('API platform registry is server-only', () => {
+  it('clients CANNOT read or write API applications, keys, or usage logs directly', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'api_applications', 'app1'), { name: 'Partner', created_at: ts() });
+      await setDoc(doc(ctx.firestore(), 'api_keys', 'key1'), { prefix: 'cc_dev_abcd', secret_hash: 'x', created_at: ts() });
+      await setDoc(doc(ctx.firestore(), 'api_usage_logs', 'log1'), { endpoint: '/v1/jobs', timestamp: ts() });
+    });
+    const db = testEnv.authenticatedContext('adminish').firestore();
+    await assertFails(getDoc(doc(db, 'api_applications', 'app1')));
+    await assertFails(setDoc(doc(db, 'api_applications', 'app2'), { name: 'Forged' }));
+    await assertFails(getDoc(doc(db, 'api_keys', 'key1')));
+    await assertFails(updateDoc(doc(db, 'api_keys', 'key1'), { status: 'active' }));
+    await assertFails(getDoc(doc(db, 'api_usage_logs', 'log1')));
+    await assertFails(setDoc(doc(db, 'api_usage_logs', 'log2'), { endpoint: '/v1/users' }));
+  });
+});
+
 describe('application_scorecards access', () => {
   async function seedScorecard() {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

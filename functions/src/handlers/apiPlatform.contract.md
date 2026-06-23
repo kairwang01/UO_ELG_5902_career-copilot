@@ -1,9 +1,8 @@
 # API Platform — backend callable contract
 
-Status: **not implemented yet.** The admin console ships against a mock
-(`services/apiPlatformClient.ts`); this document is the contract the real
-callables must satisfy. Keep both files in sync — the client interface is
-already final, so implementing these signatures requires no UI changes.
+Status: **implemented.** The admin console calls the Cloud Functions listed
+below through `services/apiPlatformClient.ts`. Keep both files in sync when
+adding new platform capabilities.
 
 ## Callables
 
