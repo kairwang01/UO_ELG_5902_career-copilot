@@ -132,15 +132,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                             onToolSelect(null);
                         }}
                         aria-current={isActive ? 'page' : undefined}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium group ${
                         isActive
-                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50'
-                            : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800/50 hover:text-gray-900 dark:hover:text-slate-100'
+                            ? 'bg-slate-100 text-slate-950 shadow-sm dark:bg-slate-800 dark:text-white'
+                            : 'text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-950 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100'
                         }`}
                     >
-                        <item.icon className={`h-4.5 w-4.5 transition-transform group-hover:scale-110 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`} />
+                        <item.icon className={`h-4.5 w-4.5 ${isActive ? 'text-slate-900 dark:text-white' : 'text-gray-400 dark:text-slate-500'}`} />
                         <span className="flex-1 text-left">{item.label}</span>
-                        {isActive && <ChevronRight className="h-3.5 w-3.5 opacity-50" />}
+                        {isActive && <ChevronRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />}
                     </button>
                 );
             })}
@@ -168,15 +168,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                 data-tour="nav-toolkit"
                 onClick={() => { onViewChange('toolkit'); onToolSelect(null); }}
                 aria-current={activeView === 'toolkit' ? 'page' : undefined}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium group ${
                     activeView === 'toolkit'
-                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800/50 hover:text-gray-900 dark:hover:text-slate-100'
+                        ? 'bg-slate-100 text-slate-950 shadow-sm dark:bg-slate-800 dark:text-white'
+                        : 'text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-950 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100'
                 }`}
             >
-                <Wrench className={`h-4.5 w-4.5 transition-transform group-hover:scale-110 ${activeView === 'toolkit' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`} />
+                <Wrench className={`h-4.5 w-4.5 ${activeView === 'toolkit' ? 'text-slate-900 dark:text-white' : 'text-gray-400 dark:text-slate-500'}`} />
                 <span className="flex-1 text-left">{t('ws_browse_all_tools')}</span>
-                <ChevronRight className="h-3.5 w-3.5 opacity-50" />
+                {activeView === 'toolkit' && <ChevronRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />}
             </button>
 
             {isToolkitExpanded && (
@@ -193,13 +193,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     onToolSelect(tool.key);
                                 }}
                                 aria-current={isToolActive ? 'page' : undefined}
-                                className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl text-[11px] font-medium transition-all ${
+                                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-[11px] font-medium ${
                                     isToolActive
-                                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
-                                        : 'text-gray-500 dark:text-slate-500 hover:text-gray-800 dark:hover:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800/30'
+                                        ? 'bg-slate-100 text-slate-950 dark:bg-slate-800 dark:text-white'
+                                        : 'text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800 dark:text-slate-500 dark:hover:bg-slate-800/40 dark:hover:text-slate-300'
                                 }`}
                             >
-                                <div className={`flex-shrink-0 transition-transform duration-200 ${isToolActive ? 'scale-110' : 'group-hover:scale-110'}`}>
+                                <div className="flex-shrink-0">
                                     {React.cloneElement(tool.icon, { className: 'h-3.5 w-3.5' })}
                                 </div>
                                 <span className="truncate">{t(`tool_${tool.key.replace(/-/g, '_')}_title`)}</span>
@@ -236,10 +236,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                 data-qa="candidate-nav-account"
                 onClick={() => { onViewChange('account'); onToolSelect(null); }}
                 aria-current={activeView === 'account' ? 'page' : undefined}
-                className={`w-full flex items-center gap-3 rounded-lg p-1.5 text-left transition-colors ${
+                className={`w-full flex items-center gap-3 rounded-lg p-1.5 text-left ${
                     activeView === 'account'
-                        ? 'bg-blue-50 dark:bg-blue-900/20'
-                        : 'hover:bg-gray-100 dark:hover:bg-slate-800/50'
+                        ? 'bg-slate-100 shadow-sm dark:bg-slate-800'
+                        : 'transition-colors hover:bg-gray-100 dark:hover:bg-slate-800/50'
                 }`}
             >
                 {profile?.avatar_url ? (
