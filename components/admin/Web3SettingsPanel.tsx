@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Card, SectionHeading } from './adminUi';
 import { at } from './adminText';
-import { isWeb3Enabled, onWeb3FlagChange, setWeb3Enabled } from '../../config/featureFlags';
+import {
+  getWeb3Config,
+  isWeb3Enabled,
+  onWeb3FlagChange,
+  setWeb3Enabled,
+  type Web3Config,
+} from '../../config/featureFlags';
 
 /**
  * Web3 settings tab — experimental module control.
@@ -13,10 +19,46 @@ import { isWeb3Enabled, onWeb3FlagChange, setWeb3Enabled } from '../../config/fe
  */
 export const Web3SettingsPanel: React.FC = () => {
   const [enabled, setEnabled] = useState(isWeb3Enabled());
+  const [config, setConfig] = useState<Web3Config | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => onWeb3FlagChange(setEnabled), []);
+  useEffect(() => {
+    let mounted = true;
+    const unsubscribe = onWeb3FlagChange(setEnabled);
+    getWeb3Config()
+      .then((cfg) => {
+        if (!mounted) return;
+        setConfig(cfg);
+        setEnabled(cfg.enabled);
+      })
+      .catch((err) => {
+        if (mounted) setError(err instanceof Error ? err.message : at('web3.error.load'));
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
 
-  const toggle = () => setWeb3Enabled(!enabled);
+  const toggle = async () => {
+    const next = !enabled;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await setWeb3Enabled(next);
+      setConfig(updated);
+      setEnabled(updated.enabled);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : at('web3.error.save'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -41,7 +83,8 @@ export const Web3SettingsPanel: React.FC = () => {
             aria-checked={enabled}
             aria-label={at('web3.toggle.aria')}
             onClick={toggle}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+            disabled={loading || saving}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
@@ -52,6 +95,16 @@ export const Web3SettingsPanel: React.FC = () => {
         <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] leading-relaxed text-gray-500">
           {at('web3.toggle.scope_note')}
         </p>
+        {error && (
+          <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {error}
+          </p>
+        )}
+        {config?.updated_at && (
+          <p className="text-[11px] text-gray-500">
+            {at('web3.updated_prefix')} {config.updated_at.slice(0, 10)}
+          </p>
+        )}
       </Card>
 
       <Card className="p-5 space-y-4">

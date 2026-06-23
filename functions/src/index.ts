@@ -105,6 +105,9 @@ export { apiPlatformRevokeKeyFunction       as apiPlatformRevokeKey      } from 
 export { apiPlatformUpdateKeyStatusFunction as apiPlatformUpdateKeyStatus } from "./handlers/apiPlatform";
 export { apiPlatformGetUsageFunction        as apiPlatformGetUsage       } from "./handlers/apiPlatform";
 export { apiPlatformListUsageLogsFunction   as apiPlatformListUsageLogs  } from "./handlers/apiPlatform";
+export { getWeb3ConfigFunction              as getWeb3Config             } from "./handlers/web3Config";
+export { adminGetWeb3ConfigFunction         as adminGetWeb3Config        } from "./handlers/web3Config";
+export { adminUpdateWeb3ConfigFunction      as adminUpdateWeb3Config     } from "./handlers/web3Config";
 export { createJobPostingFunction           as createJobPosting          } from "./handlers/jobPostings";
 export { updateJobPostingFunction           as updateJobPosting          } from "./handlers/jobPostings";
 export { setJobPostingActiveFunction        as setJobPostingActive       } from "./handlers/jobPostings";

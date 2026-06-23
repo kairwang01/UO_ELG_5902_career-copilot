@@ -12,7 +12,7 @@ import { ArrowLeft } from 'lucide-react';
 // import ApiKeyManager from './ApiKeyManager';
 // import { BusinessCustomApi } from './BusinessCustomApi';
 import { listModels } from '../services/aiClient';
-import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
+import { isWeb3Enabled, onWeb3FlagChange, refreshWeb3Enabled } from '../config/featureFlags';
 import { loadBirthdayLocal, saveBirthdayLocal } from '../lib/onboarding';
 import type { UserProfile } from '../types';
 
@@ -203,7 +203,17 @@ const Account: React.FC<AccountProps> = ({
   // when disabled and nothing else on this page depends on wallet state.
   const [web3Enabled, setWeb3Enabled] = useState(isWeb3Enabled());
 
-  useEffect(() => onWeb3FlagChange(setWeb3Enabled), []);
+  useEffect(() => {
+    let cancelled = false;
+    const unsubscribe = onWeb3FlagChange(setWeb3Enabled);
+    refreshWeb3Enabled()
+      .then((enabled) => { if (!cancelled) setWeb3Enabled(enabled); })
+      .catch(() => { /* keep cached fallback */ });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     getProfile();

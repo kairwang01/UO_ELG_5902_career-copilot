@@ -8,6 +8,7 @@ export const PLATFORM_DOCS = {
   access: "access",
   models: "models",
   prompts: "prompts",
+  web3: "web3",
 } as const;
 
 /**

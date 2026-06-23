@@ -23,7 +23,7 @@ import {
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 import LanguageSwitcher from './LanguageSwitcher';
-import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
+import { isWeb3Enabled, onWeb3FlagChange, refreshWeb3Enabled } from '../config/featureFlags';
 import BrandLogo from './BrandLogo';
 
 type SidebarView = 'dashboard' | 'toolkit' | 'resume' | 'talent_profile' | 'jobs' | 'applications' | 'interview' | 'plan' | 'portfolio' | 'billing' | 'account' | 'credentials';
@@ -68,7 +68,17 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isToolkitExpanded, setIsToolkitExpanded] = React.useState(false);
   // Identity & Wallet is part of the experimental Web3 module — hidden when the flag is off.
   const [web3Enabled, setWeb3Enabled] = React.useState(isWeb3Enabled());
-  React.useEffect(() => onWeb3FlagChange(setWeb3Enabled), []);
+  React.useEffect(() => {
+    let cancelled = false;
+    const unsubscribe = onWeb3FlagChange(setWeb3Enabled);
+    refreshWeb3Enabled()
+      .then((enabled) => { if (!cancelled) setWeb3Enabled(enabled); })
+      .catch(() => { /* keep cached fallback */ });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   const allWorkspaceItems: { id: SidebarView; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: t('ws_nav_dashboard'), icon: LayoutDashboard },

@@ -226,6 +226,18 @@ describe('API platform registry is server-only', () => {
   });
 });
 
+describe('platform Web3 config is callable-only', () => {
+  it('clients CANNOT read or write platform_config/web3 directly', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_config', 'web3'), { enabled: true, updated_at: ts() });
+    });
+    const db = testEnv.authenticatedContext('super-looking-user').firestore();
+    await assertFails(getDoc(doc(db, 'platform_config', 'web3')));
+    await assertFails(setDoc(doc(db, 'platform_config', 'web3'), { enabled: false }));
+    await assertFails(updateDoc(doc(db, 'platform_config', 'web3'), { enabled: false }));
+  });
+});
+
 describe('application_scorecards access', () => {
   async function seedScorecard() {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

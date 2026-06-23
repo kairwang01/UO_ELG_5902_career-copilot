@@ -45,7 +45,7 @@ import CareerCoachBot from './components/CareerCoachBot';
 import VerifiedTalentSection from './components/VerifiedTalentSection';
 import ApiDocsViewer from './components/ApiDocsViewer';
 import { SiteLayout } from './marketing/components/SiteLayout';
-import { isWeb3Enabled, onWeb3FlagChange } from './config/featureFlags';
+import { isWeb3Enabled, onWeb3FlagChange, refreshWeb3Enabled } from './config/featureFlags';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import WorkspaceTour from './components/onboarding/WorkspaceTour';
 import { isOnboardingDue, isTourDone, loadBirthdayLocal, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
@@ -252,7 +252,17 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   // Keep the Web3 flag in sync and bounce off the credentials view if the
   // module is switched off while the user is on it.
-  useEffect(() => onWeb3FlagChange(setWeb3Enabled), []);
+  useEffect(() => {
+    let cancelled = false;
+    const unsubscribe = onWeb3FlagChange(setWeb3Enabled);
+    refreshWeb3Enabled()
+      .then((enabled) => { if (!cancelled) setWeb3Enabled(enabled); })
+      .catch(() => { /* keep cached fallback */ });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   // Open the guided setup once for freshly-registered candidates (the pending
   // marker is set by the sign-up form; completion clears it permanently).

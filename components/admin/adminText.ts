@@ -112,7 +112,10 @@ const ADMIN_TEXT: Record<string, string> = {
   'web3.toggle.on': 'Enabled — candidates can see the wallet and credential surfaces.',
   'web3.toggle.off': 'Disabled — all Web3 surfaces are hidden from the product.',
   'web3.toggle.scope_note':
-    'Scope note: this switch currently persists per browser (demo mode, default off). Platform-wide persistence moves to platform_config together with the API platform callables — config/featureFlags.ts is the single swap point.',
+    'Scope note: this switch is platform-wide. Candidate wallet and Identity & Wallet surfaces read the server config after mount; cached local state is used only as a first-paint fallback.',
+  'web3.error.load': 'Could not load Web3 settings.',
+  'web3.error.save': 'Could not save Web3 settings.',
+  'web3.updated_prefix': 'Last updated',
   'web3.usage.title': 'What Web3 is used for here',
   'web3.contract.title': 'Contract',
   'web3.contract.network': 'Network',
