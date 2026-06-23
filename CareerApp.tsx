@@ -914,6 +914,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       }
       setIsUpdatingResume(false);
 
+      // Resume analysis is metered server-side (meterToolRun). Re-fetch the
+      // profile so the credits badge updates to the post-charge balance right
+      // away instead of staying stale until the next load.
+      if (currentUserIdRef.current === uidAtStart) void getProfile();
+
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
