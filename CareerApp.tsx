@@ -1231,7 +1231,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
         {dashboardView === 'account' && session && (
             <div id="account-panel">
-                <Account key={session.user.id} session={session} onSetView={handleSetView} t={t} onBack={() => setWorkspaceView('dashboard')} />
+                <Account key={session.user.id} session={session} profile={profile} onSetView={handleSetView} t={t} onBack={() => setWorkspaceView('dashboard')} />
             </div>
         )}
     </div>
@@ -1452,7 +1452,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const renderContent = () => {
     if (view === 'auth') { return <Auth t={t} onClose={() => setView('home')} initialView={initialAuthView} mode={authMode} />; }
-    if (view === 'account' && session) { return <Account key={session.user.id} session={session} onSetView={handleSetView} t={t} />; }
+    if (view === 'account' && session) { return <Account key={session.user.id} session={session} profile={profile} onSetView={handleSetView} t={t} />; }
     if (view === 'api_docs') { return <ApiDocsViewer onClose={() => setView('account')} />; }
     if (view === 'business') {
         return (

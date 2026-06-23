@@ -14,6 +14,7 @@ import { ArrowLeft } from 'lucide-react';
 import { listModels } from '../services/aiClient';
 import { isWeb3Enabled, onWeb3FlagChange } from '../config/featureFlags';
 import { loadBirthdayLocal, saveBirthdayLocal } from '../lib/onboarding';
+import type { UserProfile } from '../types';
 
 // A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
 const TALENT_NFT_CONTRACT_ADDRESS =
@@ -42,6 +43,59 @@ const TARGET_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia Chain ID in Hex
 type AccountNotice = {
   type: 'success' | 'error' | 'info';
   text: string;
+};
+
+const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Request timed out.')), ms);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+const normalizeDateInput = (value: unknown): string => {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+  }
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof value.toDate === 'function') {
+    return normalizeDateInput(value.toDate());
+  }
+  return '';
+};
+
+const accountDraftKey = (uid: string) => `account_profile_draft_${uid}`;
+
+const loadAccountDraft = (uid: string): { fullName: string; birthDate: string } => {
+  try {
+    const raw = localStorage.getItem(accountDraftKey(uid));
+    if (!raw) return { fullName: '', birthDate: '' };
+    const draft = JSON.parse(raw) as { fullName?: unknown; birthDate?: unknown };
+    return {
+      fullName: typeof draft.fullName === 'string' ? draft.fullName : '',
+      birthDate: normalizeDateInput(draft.birthDate),
+    };
+  } catch {
+    return { fullName: '', birthDate: '' };
+  }
+};
+
+const saveAccountDraft = (uid: string, fullName: string, birthDate: string): void => {
+  try {
+    localStorage.setItem(accountDraftKey(uid), JSON.stringify({ fullName, birthDate }));
+  } catch {
+    // Local cache is best-effort; Firestore remains the source of truth.
+  }
 };
 
 const AccountNoticeBanner: React.FC<{ notice: AccountNotice | null; qa: string }> = ({ notice, qa }) => {
@@ -103,6 +157,7 @@ const ModelRoutingManagedNote: React.FC<{ t: (key: string) => string }> = ({
 
 interface AccountProps {
   session: Session;
+  profile?: UserProfile | null;
   onSetView: (
     view: 'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs',
   ) => void;
@@ -112,6 +167,7 @@ interface AccountProps {
 
 const Account: React.FC<AccountProps> = ({
   session,
+  profile,
   onSetView,
   t,
   onBack,
@@ -124,9 +180,9 @@ const Account: React.FC<AccountProps> = ({
   const mountedRef = useRef(true);
   const passwordSavingRef = useRef(false);
   const [web3Busy, setWeb3Busy] = useState(false);
-  const [fullName, setFullName] = useState<string>('');
-  const [birthDate, setBirthDate] = useState<string>('');
-  const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const [fullName, setFullName] = useState<string>(profile?.full_name || '');
+  const [birthDate, setBirthDate] = useState<string>(normalizeDateInput(profile?.birth_date));
+  const [avatarUrl, setAvatarUrl] = useState<string>(profile?.avatar_url || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [profileNotice, setProfileNotice] = useState<AccountNotice | null>(null);
@@ -153,7 +209,24 @@ const Account: React.FC<AccountProps> = ({
     getProfile();
   }, [session]);
 
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    if (!profile) return;
+    const resolvedBirthDate = normalizeDateInput(profile.birth_date);
+    setFullName(profile.full_name || '');
+    setBirthDate(resolvedBirthDate);
+    setAvatarUrl(profile.avatar_url || '');
+    setWalletAddress(profile.wallet_address || null);
+    setNftMinted(profile.nft_minted || false);
+    setNftStaked(profile.nft_staked || false);
+    setNftEarnings(profile.nft_earnings || 0);
+    setTokenId(profile.nft_token_id);
+    setResumeText(profile.resume_text || null);
+    saveAccountDraft(session.user.id, profile.full_name || '', resolvedBirthDate);
+  }, [profile, session.user.id]);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const syncWithBlockchain = useCallback(async () => {
     if (!walletAddress) return;
@@ -277,8 +350,13 @@ const Account: React.FC<AccountProps> = ({
     try {
       setProfileLoading(true);
       const { user } = session;
+      if (!profile) {
+        const localDraft = loadAccountDraft(user.id);
+        if (localDraft.fullName) setFullName(localDraft.fullName);
+        if (localDraft.birthDate) setBirthDate(localDraft.birthDate);
+      }
 
-      const { data: profileData, error } = await data.profiles.get(user.id);
+      const { data: profileData, error } = await withTimeout(data.profiles.get(user.id), 8_000);
       if (!mountedRef.current) return; // navigated away / remounted mid-load
 
       if (error && !error.message.includes('not found')) {
@@ -287,8 +365,9 @@ const Account: React.FC<AccountProps> = ({
 
       if (profileData) {
         setFullName(profileData.full_name || '');
-        const resolvedBirthDate = profileData.birth_date || loadBirthdayLocal(user.id);
+        const resolvedBirthDate = normalizeDateInput(profileData.birth_date) || normalizeDateInput(loadBirthdayLocal(user.id));
         setBirthDate(resolvedBirthDate);
+        saveAccountDraft(user.id, profileData.full_name || '', resolvedBirthDate);
         if (resolvedBirthDate && !profileData.birth_date) {
           data.profiles.update(user.id, {
             birth_date: resolvedBirthDate,
@@ -323,41 +402,37 @@ const Account: React.FC<AccountProps> = ({
     if (event) {
       event.preventDefault();
     }
-    try {
-      setProfileSaving(true);
-      setProfileNotice(null);
-      const { user } = session;
+    setProfileSaving(true);
+    setProfileNotice(null);
+    const { user } = session;
+    const normalizedBirthDate = normalizeDateInput(birthDate);
+    setFullName(fullName);
+    setBirthDate(normalizedBirthDate);
+    saveBirthdayLocal(user.id, normalizedBirthDate);
+    saveAccountDraft(user.id, fullName, normalizedBirthDate);
 
-      const updates = {
-        id: user.id,
-        full_name: fullName,
-        birth_date: birthDate || null,
-        avatar_url: avatarUrl,
-        updated_at: new Date().toISOString(),
-      };
+    const updates = {
+      id: user.id,
+      full_name: fullName,
+      birth_date: normalizedBirthDate || null,
+      avatar_url: avatarUrl,
+      updated_at: new Date().toISOString(),
+    };
 
-      const { error } = await data.profiles.upsert(updates);
-      if (error) throw new Error(error.message);
-      saveBirthdayLocal(user.id, birthDate);
-      if (mountedRef.current) {
-        setProfileNotice({
-          type: 'success',
-          text: t('account_profile_updated_success'),
-        });
-      }
-      return true;
-    } catch (error: any) {
-      console.error('Error updating profile:', error);
-      if (mountedRef.current) {
-        setProfileNotice({
-          type: 'error',
-          text: t('account_profile_updated_error'),
-        });
-      }
-      return false;
-    } finally {
-      if (mountedRef.current) setProfileSaving(false);
-    }
+    void data.profiles.upsert(updates).then(({ error }) => {
+      if (!mountedRef.current || !error) return;
+      setProfileNotice({
+        type: 'error',
+        text: t('account_profile_updated_error'),
+      });
+    });
+
+    setProfileSaving(false);
+    setProfileNotice({
+      type: 'success',
+      text: t('account_profile_updated_success'),
+    });
+    return true;
   };
 
   const handleUpdatePassword = async (event: React.FormEvent) => {
@@ -773,7 +848,7 @@ const Account: React.FC<AccountProps> = ({
           <button
             type="submit"
             className="w-full sm:w-auto px-4 py-2 bg-blue-700 text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-blue-400"
-            disabled={profileLoading || profileSaving}
+            disabled={profileSaving}
           >
             {profileSaving
               ? t('account_saving_button')
