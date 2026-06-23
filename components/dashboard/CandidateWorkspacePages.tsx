@@ -21,6 +21,7 @@ import { getApplicationStatusLabelKey } from '../../lib/applicationPipeline';
 import type { AppSession as Session } from '../../lib/data';
 import type { AnalysisResult, Improvement, UserProfile } from '../../types';
 import { ALL_PLANS, PLAN_HIERARCHY } from '../../config';
+import { createBillingPortalSession } from '../../services/subscriptionClient';
 
 type WorkspaceView = 'dashboard' | 'resume' | 'talent_profile' | 'jobs' | 'interview' | 'plan' | 'toolkit' | 'billing';
 
@@ -800,6 +801,19 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
   const currentPlan = ALL_PLANS[currentPlanKey] ?? ALL_PLANS.free;
   const currentLevel = PLAN_HIERARCHY[currentPlanKey] ?? 0;
   const isPending = currentStatus.startsWith('pending_');
+  const hasActivePaidPlan = currentLevel > 0 && !isPending;
+  const [openingPortal, setOpeningPortal] = useState(false);
+
+  const handleManageSubscription = async () => {
+    if (openingPortal) return;
+    setOpeningPortal(true);
+    try {
+      const { url } = await createBillingPortalSession();
+      window.location.assign(url);
+    } catch {
+      setOpeningPortal(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -838,6 +852,18 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
               <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-slate-100">{credits.toLocaleString()} CR</p>
             </div>
           </div>
+          {hasActivePaidPlan && (
+            <div className="mt-5">
+              <button
+                type="button"
+                onClick={handleManageSubscription}
+                disabled={openingPortal}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {openingPortal ? t('ws_billing_opening_portal') : t('ws_billing_manage_subscription')}
+              </button>
+            </div>
+          )}
           {isPending && (
             <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-200">
               {t('ws_billing_pending_notice')}
