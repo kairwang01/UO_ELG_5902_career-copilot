@@ -37,6 +37,7 @@ import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import * as crypto from "crypto";
 import { LLMProvider, LLMRequest, LLMResult } from "./LLMProvider";
+import { llmStubEnabled, makeStubProvider } from "./stubProvider";
 import { GeminiProvider } from "./providers/geminiProvider";
 import { OpenAICompatibleProvider } from "./providers/openAICompatibleProvider";
 import {
@@ -785,6 +786,10 @@ export async function resolveProvider(
   uid: string,
   requestedModelId?: string
 ): Promise<LLMProvider> {
+  // E2E happy-path harness (SCRUM-42): deterministic, free, schema-valid output.
+  // Gated on E2E_LLM_STUB so it can never short-circuit a real production request.
+  if (llmStubEnabled()) return makeStubProvider();
+
   // Warm the platform-config cache FIRST so the (sync) key/model getters used by
   // buildProvider() read admin-configured Firestore values instead of a cold cache.
   await ensurePlatformCaches();
