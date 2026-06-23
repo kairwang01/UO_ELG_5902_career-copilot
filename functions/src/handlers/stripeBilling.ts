@@ -332,13 +332,15 @@ export async function createBillingPortalSessionImpl(uid: string): Promise<{ url
   }
   const billingSnap = await db.collection(BILLING_COLLECTION).doc(uid).get();
   const customerId = billingSnap.get("stripe_customer_id");
+  const audience = billingSnap.get("audience");
   if (!billingSnap.exists || billingSnap.get("active") !== true || typeof customerId !== "string" || !customerId) {
     throw new HttpsError("failed-precondition", "No active subscription to manage.");
   }
+  const returnPath = audience === "business" ? "/portal?billing=return" : "/workspace/billing";
   const stripe = getStripe();
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${appBaseUrl()}/workspace/billing`,
+    return_url: `${appBaseUrl()}${returnPath}`,
   });
   if (!session.url) {
     throw new HttpsError("internal", "Stripe did not return a Billing Portal URL.");

@@ -8,13 +8,18 @@ import { cancelSubscriptionSimulated } from '../../services/subscriptionClient';
  * The in-app stand-in createBillingPortalSession redirects to when the backend has
  * BILLING_SIMULATION enabled. "Cancel subscription" calls cancelSubscriptionSimulated,
  * which runs the SAME downgrade path as the real subscription.deleted webhook, then
- * returns to the workspace billing page. Never reached in production (the flag is off,
- * so the portal call returns a real Stripe URL instead).
+ * returns to the right billing surface for the signed-in role. Never reached in
+ * production (the flag is off, so the portal call returns a real Stripe URL instead).
  */
 const PLAN_LABELS: Record<string, string> = {
   essentials: 'Career Essentials',
   accelerator: 'Career Accelerator',
   executive: 'Career Executive',
+  starter: 'Starter',
+  growth: 'Growth',
+  pro: 'Pro',
+  single_post: 'Single Post',
+  job_pack: 'Job Pack',
 };
 
 const SimulatedManagePage: React.FC = () => {
@@ -24,6 +29,8 @@ const SimulatedManagePage: React.FC = () => {
 
   const plan = profile?.subscription_status ?? 'free';
   const planLabel = PLAN_LABELS[plan] ?? plan;
+  const isBusiness = profile?.role === 'employer' || profile?.role === 'agency';
+  const billingPath = isBusiness ? '/portal?billing=return' : '/workspace/billing';
 
   const handleCancel = async () => {
     if (cancelling) return;
@@ -31,7 +38,7 @@ const SimulatedManagePage: React.FC = () => {
     setError(null);
     try {
       await cancelSubscriptionSimulated();
-      window.location.assign('/workspace/billing?cancelled=success');
+      window.location.assign(`${billingPath}${billingPath.includes('?') ? '&' : '?'}cancelled=success`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Cancellation failed. Please try again.');
       setCancelling(false);
@@ -51,7 +58,7 @@ const SimulatedManagePage: React.FC = () => {
       <div className="mx-auto max-w-md p-8 text-center">
         <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">You have no active subscription.</p>
         <p className="mt-2 text-slate-600 dark:text-slate-300">
-          <a className="text-blue-600 underline" href="/workspace/billing">Back to billing</a>
+          <a className="text-blue-600 underline" href={billingPath}>Back to billing</a>
         </p>
       </div>
     );
@@ -80,7 +87,7 @@ const SimulatedManagePage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => window.location.assign('/workspace/billing')}
+              onClick={() => window.location.assign(billingPath)}
               disabled={cancelling}
               className="w-full rounded-lg px-4 py-2 text-sm font-medium text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300"
             >

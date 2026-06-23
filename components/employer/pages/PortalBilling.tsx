@@ -10,6 +10,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { UserProfile } from '../../../types';
+import { createBillingPortalSession } from '../../../services/subscriptionClient';
 import { PortalTopBar } from '../PortalTopBar';
 
 interface PortalBillingProps {
@@ -113,6 +114,8 @@ export function PortalBilling({
 }: PortalBillingProps) {
   const dm = darkMode;
   const [requestedPlanKey, setRequestedPlanKey] = useState<string | null>(null);
+  const [openingPortal, setOpeningPortal] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const currentStatus = profile.subscription_status || 'free';
   const currentPlanKey = stripPendingPrefix(currentStatus);
   const currentPlan = resolvePlanDisplay(currentStatus);
@@ -133,6 +136,23 @@ export function PortalBilling({
   const handleSelectPlan = (planKey: string) => {
     setRequestedPlanKey(planKey);
     onSelectPlan(planKey);
+  };
+
+  const handleManageBilling = async () => {
+    if (!isActive) {
+      navigateToBusinessPricing();
+      return;
+    }
+    if (openingPortal) return;
+    setOpeningPortal(true);
+    setPortalError(null);
+    try {
+      const { url } = await createBillingPortalSession();
+      window.location.assign(url);
+    } catch {
+      setPortalError(t('portal_billing_portal_error'));
+      setOpeningPortal(false);
+    }
   };
 
   const card = `rounded-xl border ${dm ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`;
@@ -160,14 +180,19 @@ export function PortalBilling({
           </div>
           <button
             type="button"
-            onClick={navigateToBusinessPricing}
+            onClick={handleManageBilling}
+            disabled={openingPortal}
             className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
               dm ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
+            } disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            <CreditCard size={15} />
-            {t('portal_billing_manage')}
-            <ArrowUpRight size={15} />
+            {openingPortal ? (
+              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <CreditCard size={15} />
+            )}
+            {openingPortal ? t('portal_billing_opening_portal') : t('portal_billing_manage')}
+            {!isActive && !openingPortal && <ArrowUpRight size={15} />}
           </button>
         </div>
 
@@ -223,6 +248,19 @@ export function PortalBilling({
                   <div className="flex items-start gap-2">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>{t('portal_billing_pending_notice')}</span>
+                  </div>
+                </div>
+              )}
+
+              {portalError && (
+                <div className={`mt-5 animate-panel-expand rounded-lg border px-4 py-3 text-sm ${
+                  dm
+                    ? 'border-red-800 bg-red-950/20 text-red-200'
+                    : 'border-red-200 bg-red-50 text-red-700'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{portalError}</span>
                   </div>
                 </div>
               )}

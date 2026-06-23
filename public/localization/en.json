@@ -3279,5 +3279,7 @@
   "sourcing_accept_success": "Request accepted. The employer can now view your shared packet.",
   "sourcing_decline_success": "Request declined.",
   "sourcing_response_error": "Could not update the request. Please try again.",
-  "sourcing_recent_title": "Recent request history"
+  "sourcing_recent_title": "Recent request history",
+  "portal_billing_opening_portal": "Opening billing portal...",
+  "portal_billing_portal_error": "Could not open billing management. Please try again."
 }

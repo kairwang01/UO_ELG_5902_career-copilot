@@ -3279,5 +3279,7 @@
   "sourcing_accept_success": "已同意请求，雇主现在可以查看你授权分享的资料包。",
   "sourcing_decline_success": "已拒绝请求。",
   "sourcing_response_error": "无法更新请求，请稍后重试。",
-  "sourcing_recent_title": "近期请求记录"
+  "sourcing_recent_title": "近期请求记录",
+  "portal_billing_opening_portal": "正在打开账单管理...",
+  "portal_billing_portal_error": "暂时无法打开账单管理，请稍后重试。"
 }
