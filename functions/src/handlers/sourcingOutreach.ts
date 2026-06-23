@@ -124,31 +124,33 @@ export async function createSourcingOutreachImpl(uid: string, data: Record<strin
 
   const ref = db.collection("sourcing_outreach").doc(outreachIdFor(uid, candidateId, jobId));
   const now = FieldValue.serverTimestamp();
-  const existing = await ref.get();
-  const status = existing.exists ? str(existing.data()?.status, 40) : "";
+  return db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    const status = existing.exists ? str(existing.data()?.status, 40) : "";
 
-  if (status === "requested" || status === "accepted") {
-    return { outreachId: ref.id, status, duplicate: true };
-  }
-  if (status && !OUTREACH_STATUSES.has(status)) {
-    throw new HttpsError("failed-precondition", "Existing outreach record has an invalid status.");
-  }
+    if (status === "requested" || status === "accepted") {
+      return { outreachId: ref.id, status, duplicate: true };
+    }
+    if (status && !OUTREACH_STATUSES.has(status)) {
+      throw new HttpsError("failed-precondition", "Existing outreach record has an invalid status.");
+    }
 
-  await ref.set({
-    employer_id: uid,
-    candidate_id: candidateId,
-    job_id: jobId,
-    job_title: pickString(job ?? {}, ["title"], 240),
-    company_name: pickString(job ?? business, ["company_name", "company"], 240),
-    message,
-    status: "requested",
-    request_source: str(data.requestSource, 80) || "discover_talent",
-    previous_status: status || "",
-    created_at: now,
-    updated_at: now,
+    tx.set(ref, {
+      employer_id: uid,
+      candidate_id: candidateId,
+      job_id: jobId,
+      job_title: pickString(job ?? {}, ["title"], 240),
+      company_name: pickString(job ?? business, ["company_name", "company"], 240),
+      message,
+      status: "requested",
+      request_source: str(data.requestSource, 80) || "discover_talent",
+      previous_status: status || "",
+      created_at: now,
+      updated_at: now,
+    });
+
+    return { outreachId: ref.id, status: "requested", duplicate: false };
   });
-
-  return { outreachId: ref.id, status: "requested", duplicate: false };
 }
 
 export async function respondSourcingOutreachImpl(uid: string, data: Record<string, unknown>) {
@@ -158,23 +160,25 @@ export async function respondSourcingOutreachImpl(uid: string, data: Record<stri
   if (!RESPONSE_ACTIONS.has(action)) {
     throw new HttpsError("invalid-argument", "action must be accept or decline.");
   }
-  const ref = db.collection("sourcing_outreach").doc(outreachId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError("not-found", "Outreach request not found.");
-  const outreach = snap.data() ?? {};
-  if (outreach.candidate_id !== uid) {
-    throw new HttpsError("permission-denied", "Only the requested candidate can respond.");
-  }
-  if (outreach.status !== "requested") {
-    throw new HttpsError("failed-precondition", "This outreach request is no longer pending.");
-  }
-
   const status = action === "accept" ? "accepted" : "declined";
-  await ref.update({
-    status,
-    candidate_response_note: str(data.note, MAX_NOTE),
-    responded_at: FieldValue.serverTimestamp(),
-    updated_at: FieldValue.serverTimestamp(),
+  const ref = db.collection("sourcing_outreach").doc(outreachId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Outreach request not found.");
+    const outreach = snap.data() ?? {};
+    if (outreach.candidate_id !== uid) {
+      throw new HttpsError("permission-denied", "Only the requested candidate can respond.");
+    }
+    if (outreach.status !== "requested") {
+      throw new HttpsError("failed-precondition", "This outreach request is no longer pending.");
+    }
+
+    tx.update(ref, {
+      status,
+      candidate_response_note: str(data.note, MAX_NOTE),
+      responded_at: FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
+    });
   });
   return { outreachId, status };
 }
@@ -183,19 +187,21 @@ export async function cancelSourcingOutreachImpl(uid: string, data: Record<strin
   const outreachId = str(data.outreachId, 300);
   if (!outreachId) throw new HttpsError("invalid-argument", "outreachId is required.");
   const ref = db.collection("sourcing_outreach").doc(outreachId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError("not-found", "Outreach request not found.");
-  const outreach = snap.data() ?? {};
-  if (outreach.employer_id !== uid) {
-    throw new HttpsError("permission-denied", "Only the requesting employer can cancel.");
-  }
-  if (outreach.status !== "requested") {
-    throw new HttpsError("failed-precondition", "Only pending outreach requests can be cancelled.");
-  }
-  await ref.update({
-    status: "cancelled",
-    cancellation_note: str(data.note, MAX_NOTE),
-    updated_at: FieldValue.serverTimestamp(),
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Outreach request not found.");
+    const outreach = snap.data() ?? {};
+    if (outreach.employer_id !== uid) {
+      throw new HttpsError("permission-denied", "Only the requesting employer can cancel.");
+    }
+    if (outreach.status !== "requested") {
+      throw new HttpsError("failed-precondition", "Only pending outreach requests can be cancelled.");
+    }
+    tx.update(ref, {
+      status: "cancelled",
+      cancellation_note: str(data.note, MAX_NOTE),
+      updated_at: FieldValue.serverTimestamp(),
+    });
   });
   return { outreachId, status: "cancelled" };
 }

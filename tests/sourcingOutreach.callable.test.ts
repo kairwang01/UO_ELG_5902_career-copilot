@@ -126,4 +126,43 @@ describe('respond / cancel / unlock', () => {
     await cancelSourcingOutreachImpl('emp', { outreachId: recreated.outreachId, note: 'Role closed.' });
     await expect(respondSourcingOutreachImpl('cand', { outreachId: recreated.outreachId, action: 'accept' })).rejects.toThrow(/no longer pending/i);
   });
+
+  it('allows only one terminal consent action under concurrent candidate responses', async () => {
+    await seed();
+    const { outreachId } = await createSourcingOutreachImpl('emp', request());
+
+    const results = await Promise.allSettled([
+      respondSourcingOutreachImpl('cand', { outreachId, action: 'accept' }),
+      respondSourcingOutreachImpl('cand', { outreachId, action: 'decline' }),
+    ]);
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    const doc = (await db.collection('sourcing_outreach').doc(outreachId).get()).data()!;
+    expect(['accepted', 'declined']).toContain(doc.status);
+    if (doc.status === 'accepted') {
+      await expect(getSourcingCandidatePacketImpl('emp', { outreachId })).resolves.toMatchObject({ status: 'accepted' });
+    } else {
+      await expect(getSourcingCandidatePacketImpl('emp', { outreachId })).rejects.toThrow(/not accepted/i);
+    }
+  });
+
+  it('allows only one terminal action when candidate response and employer cancellation race', async () => {
+    await seed();
+    const { outreachId } = await createSourcingOutreachImpl('emp', request());
+
+    const results = await Promise.allSettled([
+      respondSourcingOutreachImpl('cand', { outreachId, action: 'accept' }),
+      cancelSourcingOutreachImpl('emp', { outreachId, note: 'Role paused.' }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+
+    const status = (await db.collection('sourcing_outreach').doc(outreachId).get()).get('status');
+    expect(['accepted', 'cancelled']).toContain(status);
+  });
 });

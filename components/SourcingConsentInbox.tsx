@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, CheckCircle2, Inbox, Loader2, MessageSquare, XCircle } from 'lucide-react';
 import {
   respondSourcingOutreach,
@@ -57,42 +57,72 @@ const SourcingConsentInbox: React.FC<SourcingConsentInboxProps> = ({ uid, t }) =
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const respondingRef = useRef<string | null>(null);
+  const responseRunRef = useRef(0);
   const { addToast } = useToast();
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    responseRunRef.current += 1;
+    respondingRef.current = null;
+    setRespondingId(null);
+
     if (!uid) {
       setRequests([]);
       setLoading(false);
       return undefined;
     }
+    let active = true;
     setLoading(true);
     setError(null);
-    return subscribeSourcingOutreachForCandidate(
+    const unsubscribe = subscribeSourcingOutreachForCandidate(
       uid,
       (next) => {
+        if (!mountedRef.current || !active) return;
         setRequests(next);
         setLoading(false);
       },
       () => {
+        if (!mountedRef.current || !active) return;
         setError(t('sourcing_inbox_error'));
         setLoading(false);
       },
     );
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [t, uid]);
 
   const pending = useMemo(() => requests.filter((request) => request.status === 'requested'), [requests]);
   const recent = useMemo(() => requests.filter((request) => request.status !== 'requested').slice(0, 3), [requests]);
 
   const respond = async (request: SourcingOutreach, action: 'accept' | 'decline') => {
-    if (respondingId) return;
+    if (respondingRef.current) return;
+    const runId = ++responseRunRef.current;
+    respondingRef.current = request.id;
     setRespondingId(request.id);
     try {
       await respondSourcingOutreach({ outreachId: request.id, action });
-      addToast(action === 'accept' ? t('sourcing_accept_success') : t('sourcing_decline_success'), 'success');
+      if (mountedRef.current && responseRunRef.current === runId) {
+        addToast(action === 'accept' ? t('sourcing_accept_success') : t('sourcing_decline_success'), 'success');
+      }
     } catch (err) {
-      addToast(err instanceof Error ? err.message : t('sourcing_response_error'), 'error');
+      if (mountedRef.current && responseRunRef.current === runId) {
+        addToast(err instanceof Error ? err.message : t('sourcing_response_error'), 'error');
+      }
     } finally {
-      setRespondingId(null);
+      if (mountedRef.current && responseRunRef.current === runId) {
+        respondingRef.current = null;
+        setRespondingId(null);
+      }
     }
   };
 
