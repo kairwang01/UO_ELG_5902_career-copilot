@@ -119,6 +119,22 @@ html.dark body {
   background-color: #030712;
 }
 
+html.dark :where(input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea, select) {
+  color: rgb(243 244 246);
+  caret-color: rgb(243 244 246);
+}
+
+html.dark :where(input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea)::placeholder {
+  color: rgb(148 163 184);
+  opacity: 1;
+}
+
+html.dark :where(input, textarea, select):-webkit-autofill,
+html.dark :where(input, textarea, select):-webkit-autofill:hover,
+html.dark :where(input, textarea, select):-webkit-autofill:focus {
+  -webkit-text-fill-color: rgb(243 244 246);
+}
+
 /* Prose styles for AI-generated content (was in index.html <style>) */
 .prose {
   --tw-prose-body: #374151;
