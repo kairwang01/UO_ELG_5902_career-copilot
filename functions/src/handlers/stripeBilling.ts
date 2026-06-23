@@ -352,7 +352,11 @@ export async function createBillingPortalSessionImpl(uid: string): Promise<{ url
   return { url: session.url };
 }
 
-export const createBillingPortalSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, (request) =>
+// No { secrets: [...] } declaration: in simulation mode this returns early and never
+// touches Stripe, and real mode reads STRIPE_SECRET_KEY via the process.env fallback in
+// getStripe()/secretOrEnv — so it deploys without requiring the secret to exist in
+// Secret Manager. Wire STRIPE_SECRET_KEY into the functions env when going live.
+export const createBillingPortalSessionFunction = onCall((request) =>
   createBillingPortalSessionImpl(requireAuth(request)));
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
