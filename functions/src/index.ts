@@ -112,3 +112,5 @@ export { getSourcingCandidatePacketFunction as getSourcingCandidatePacket } from
 export { createCheckoutSessionFunction      as createCheckoutSession     } from "./handlers/stripeBilling";
 export { stripeWebhookFunction              as stripeWebhook             } from "./handlers/stripeBilling";
 export { confirmSimulatedCheckoutFunction   as confirmSimulatedCheckout  } from "./handlers/stripeBilling";
+export { createBillingPortalSessionFunction  as createBillingPortalSession } from "./handlers/stripeBilling";
+export { cancelSubscriptionSimulatedFunction as cancelSubscriptionSimulated } from "./handlers/stripeBilling";

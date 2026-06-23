@@ -60,3 +60,25 @@ export async function confirmSimulatedCheckout(planKey: string): Promise<Subscri
   const result = await confirmSimulatedCheckoutCallable({ planKey });
   return result.data;
 }
+
+const createBillingPortalSessionCallable = httpsCallable<
+  Record<string, never>,
+  { url: string; simulated?: boolean }
+>(firebaseFunctions, 'createBillingPortalSession');
+
+const cancelSubscriptionSimulatedCallable = httpsCallable<
+  Record<string, never>,
+  { status: string; subscription_status: string }
+>(firebaseFunctions, 'cancelSubscriptionSimulated');
+
+/** Returns a URL to manage the subscription (Stripe Portal, or the in-app sim page). */
+export async function createBillingPortalSession(): Promise<{ url: string; simulated?: boolean }> {
+  const result = await createBillingPortalSessionCallable({});
+  return result.data;
+}
+
+/** Simulated cancel (demo/test only — backend must have BILLING_SIMULATION enabled). */
+export async function cancelSubscriptionSimulated(): Promise<{ status: string; subscription_status: string }> {
+  const result = await cancelSubscriptionSimulatedCallable({});
+  return result.data;
+}
