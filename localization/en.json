@@ -3281,5 +3281,22 @@
   "sourcing_response_error": "Could not update the request. Please try again.",
   "sourcing_recent_title": "Recent request history",
   "portal_billing_opening_portal": "Opening billing portal...",
-  "portal_billing_portal_error": "Could not open billing management. Please try again."
+  "portal_billing_portal_error": "Could not open billing management. Please try again.",
+  "account_web3_status_wallet": "Wallet",
+  "account_web3_status_network": "Network",
+  "account_web3_status_credential": "Credential",
+  "account_web3_status_connected": "Connected",
+  "account_web3_status_not_connected": "Not connected",
+  "account_web3_status_waiting": "Waiting",
+  "account_web3_status_ready": "Sepolia ready",
+  "account_web3_status_wrong_network": "Wrong network",
+  "account_web3_status_minted": "Minted",
+  "account_web3_status_eligible": "Eligible",
+  "account_web3_status_not_eligible": "Not eligible yet",
+  "account_web3_next_step_label": "Next step",
+  "account_web3_next_connect": "Connect your wallet to start.",
+  "account_web3_next_switch": "Switch to Sepolia before using your credential.",
+  "account_web3_next_mint": "Mint your Proof-of-Talent credential.",
+  "account_web3_next_active": "Your credential is ready. Activate it when you want it visible in Talent Vault.",
+  "account_web3_next_improve": "Improve your resume score to unlock this credential."
 }

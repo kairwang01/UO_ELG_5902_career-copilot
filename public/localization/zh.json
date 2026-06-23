@@ -3281,5 +3281,22 @@
   "sourcing_response_error": "无法更新请求，请稍后重试。",
   "sourcing_recent_title": "近期请求记录",
   "portal_billing_opening_portal": "正在打开账单管理...",
-  "portal_billing_portal_error": "暂时无法打开账单管理，请稍后重试。"
+  "portal_billing_portal_error": "暂时无法打开账单管理，请稍后重试。",
+  "account_web3_status_wallet": "钱包",
+  "account_web3_status_network": "网络",
+  "account_web3_status_credential": "凭据",
+  "account_web3_status_connected": "已连接",
+  "account_web3_status_not_connected": "未连接",
+  "account_web3_status_waiting": "等待连接",
+  "account_web3_status_ready": "Sepolia 已就绪",
+  "account_web3_status_wrong_network": "网络错误",
+  "account_web3_status_minted": "已铸造",
+  "account_web3_status_eligible": "符合条件",
+  "account_web3_status_not_eligible": "暂未符合",
+  "account_web3_next_step_label": "下一步",
+  "account_web3_next_connect": "先连接钱包开始。",
+  "account_web3_next_switch": "先切换到 Sepolia 后再使用凭据。",
+  "account_web3_next_mint": "铸造你的能力证明凭据。",
+  "account_web3_next_active": "凭据已准备好。想展示到人才库时再激活。",
+  "account_web3_next_improve": "提升简历评分后可解锁此凭据。"
 }

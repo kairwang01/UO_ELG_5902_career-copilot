@@ -892,6 +892,59 @@ const Account: React.FC<AccountProps> = ({
   };
 
   const web3ActionBusy = web3Busy || isSyncing;
+  const hasWallet = Boolean(walletAddress);
+  const hasCredential = Boolean(nftMinted);
+  const web3NextStep = isSyncing
+    ? t('account_web3_syncing')
+    : !hasWallet
+      ? t('account_web3_next_connect')
+      : isWrongNetwork
+        ? t('account_web3_next_switch')
+        : hasCredential
+          ? t('account_web3_next_active')
+          : isEligibleForNFT
+            ? t('account_web3_next_mint')
+            : t('account_web3_next_improve');
+  const web3StatusItems: Array<{
+    label: string;
+    value: string;
+    tone: 'done' | 'attention' | 'pending';
+  }> = [
+    {
+      label: t('account_web3_status_wallet'),
+      value: hasWallet
+        ? t('account_web3_status_connected')
+        : t('account_web3_status_not_connected'),
+      tone: hasWallet ? 'done' : 'pending',
+    },
+    {
+      label: t('account_web3_status_network'),
+      value: !hasWallet
+        ? t('account_web3_status_waiting')
+        : isWrongNetwork
+          ? t('account_web3_status_wrong_network')
+          : t('account_web3_status_ready'),
+      tone: !hasWallet ? 'pending' : isWrongNetwork ? 'attention' : 'done',
+    },
+    {
+      label: t('account_web3_status_credential'),
+      value: hasCredential
+        ? t('account_web3_status_minted')
+        : isEligibleForNFT
+          ? t('account_web3_status_eligible')
+          : t('account_web3_status_not_eligible'),
+      tone: hasCredential ? 'done' : isEligibleForNFT ? 'attention' : 'pending',
+    },
+  ];
+  const web3ToneClass = (tone: 'done' | 'attention' | 'pending') => {
+    if (tone === 'done') {
+      return 'border-green-200 bg-green-50 text-green-800 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-200';
+    }
+    if (tone === 'attention') {
+      return 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200';
+    }
+    return 'border-gray-200 bg-gray-50 text-gray-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
+  };
 
   return (
     <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 p-8 rounded-lg shadow-md border border-gray-200 dark:border-slate-700 animate-fade-in">
@@ -1033,79 +1086,99 @@ const Account: React.FC<AccountProps> = ({
             {t('account_web3_optional_note')}
           </p>
           <AccountNoticeBanner notice={web3Notice} qa="account-web3-notice" />
-          <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg space-y-4">
-            {isWrongNetwork && walletAddress ? (
-              <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-500/30 rounded-lg text-center">
-                <h3 className="font-bold text-lg text-yellow-800 dark:text-yellow-200">
-                  {t('account_web3_wrong_network_title')}
-                </h3>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                  {t('account_web3_wrong_network_desc')}
-                </p>
-                <button
-                  onClick={handleSwitchNetwork}
-                  disabled={web3ActionBusy}
-                  className="mt-4 px-4 py-2 bg-yellow-500 text-white font-semibold rounded-md shadow hover:bg-yellow-600 disabled:bg-yellow-300"
-                >
-                  {web3ActionBusy
-                    ? t('account_web3_switching_button')
-                    : t('account_web3_switch_network_button')}
-                </button>
-              </div>
-            ) : walletAddress ? (
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  {t('account_web3_desc_connected')}
-                </p>
-                <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-                  <a
-                    href={`https://sepolia.etherscan.io/address/${walletAddress}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
-                  >
-                    {walletAddress}
-                  </a>
-                  <button
-                    onClick={handleDisconnectWallet}
-                    className="text-sm text-red-600 dark:text-red-500 hover:underline font-semibold"
-                    disabled={web3ActionBusy}
-                  >
-                    {web3ActionBusy
-                      ? '...'
-                      : t('account_web3_disconnect_button')}
-                  </button>
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/70 space-y-4">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {hasWallet
+                      ? t('account_web3_desc_connected')
+                      : t('account_web3_desc_unconnected')}
+                  </p>
+                  {walletAddress && (
+                    <a
+                      href={`https://sepolia.etherscan.io/address/${walletAddress}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block break-all font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      {walletAddress}
+                    </a>
+                  )}
+                </div>
+
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {!hasWallet ? (
+                    <button
+                      type="button"
+                      onClick={handleConnectWallet}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-black disabled:bg-gray-400 sm:w-auto dark:bg-blue-600 dark:hover:bg-blue-500"
+                      disabled={web3ActionBusy}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                        />
+                      </svg>
+                      {t('account_web3_connect_button')}
+                    </button>
+                  ) : isWrongNetwork ? (
+                    <button
+                      type="button"
+                      onClick={handleSwitchNetwork}
+                      disabled={web3ActionBusy}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 disabled:bg-amber-300 sm:w-auto"
+                    >
+                      {web3ActionBusy
+                        ? t('account_web3_switching_button')
+                        : t('account_web3_switch_network_button')}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleDisconnectWallet}
+                      className="inline-flex w-full items-center justify-center rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60 sm:w-auto dark:border-red-900/60 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/30"
+                      disabled={web3ActionBusy}
+                    >
+                      {web3ActionBusy ? '...' : t('account_web3_disconnect_button')}
+                    </button>
+                  )}
                 </div>
               </div>
-            ) : (
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  {t('account_web3_desc_unconnected')}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleConnectWallet}
-                  className="w-full sm:w-auto px-4 py-2 bg-gray-800 text-white font-semibold rounded-md shadow-sm hover:bg-black flex items-center justify-center gap-2"
-                  disabled={web3ActionBusy}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                {web3StatusItems.map((item) => (
+                  <div
+                    key={item.label}
+                    className={`rounded-xl border px-3 py-2 ${web3ToneClass(item.tone)}`}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                    />
-                  </svg>
-                  {t('account_web3_connect_button')}
-                </button>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wide opacity-75">
+                        {item.label}
+                      </span>
+                      <span aria-hidden="true" className="text-sm font-bold">
+                        {item.tone === 'done' ? '✓' : item.tone === 'attention' ? '!' : '·'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold">{item.value}</p>
+                  </div>
+                ))}
               </div>
-            )}
+
+              <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
+                <span className="font-semibold">{t('account_web3_next_step_label')}:</span>{' '}
+                {web3NextStep}
+              </div>
+            </div>
 
             {isEligibleForNFT &&
               !nftMinted &&
