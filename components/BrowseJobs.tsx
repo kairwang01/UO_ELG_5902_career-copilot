@@ -658,8 +658,8 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
           />
         </div>
 
-        <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
-          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="basis-full text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 sm:basis-auto">
             {t('browse_jobs_popular_searches')}
           </span>
           {QUICK_SEARCHES.map(({ labelKey, aliases }) => {
@@ -676,7 +676,7 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                 disabled={loading}
                 aria-pressed={active}
                 aria-label={t('browse_jobs_quick_search_aria').replace('{label}', label)}
-                className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
                   active
                     ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300'
