@@ -145,7 +145,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 );
             })}
         </div>
-
         {/* AI Toolkit Section */}
         <div className="space-y-1">
             <div className="flex items-center justify-between px-4 mb-2">
@@ -210,8 +209,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
         </div>
 
-        {/* Language switcher — lets users change language after sign-in */}
-        <LanguageSwitcher onLanguageChange={onLanguageChange} currentLang={currentLang} />
       </nav>
 
       {/* Credits & Footer */}
@@ -227,6 +224,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </p>
             </div>
         </div>
+        <LanguageSwitcher onLanguageChange={onLanguageChange} currentLang={currentLang} variant="footer" />
 
         {/* My Profile — the single profile access point (the old top-right account
             menu was removed). Opens Account Settings; theme + sign-out sit below. */}
