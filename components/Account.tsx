@@ -669,6 +669,59 @@ const Account: React.FC<AccountProps> = ({
     }
   };
 
+  const getWeb3ActionErrorText = (error: unknown, fallbackKey: string): string => {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined;
+    if (code === 4001 || code === 'ACTION_REJECTED') {
+      return t('account_web3_connection_rejected');
+    }
+    return t(fallbackKey);
+  };
+
+  const getSignerForSavedWallet = async (): Promise<ethers.JsonRpcSigner | null> => {
+    if (!walletAddress) {
+      setWeb3Notice({ type: 'error', text: t('account_web3_connect_first') });
+      return null;
+    }
+
+    const ethereum = getEthereumProvider();
+    if (!ethereum) {
+      setWeb3Notice({ type: 'error', text: t('account_web3_no_wallet') });
+      return null;
+    }
+
+    try {
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+      const activeAddress = Array.isArray(accounts) && typeof accounts[0] === 'string'
+        ? accounts[0]
+        : '';
+
+      if (!mountedRef.current) return null;
+
+      if (!activeAddress) {
+        setWeb3Notice({ type: 'error', text: t('account_web3_connect_failed') });
+        return null;
+      }
+
+      if (normalizeWalletAddress(activeAddress) !== normalizeWalletAddress(walletAddress)) {
+        setWeb3Notice({ type: 'error', text: t('account_web3_connect_first') });
+        return null;
+      }
+
+      const provider = new ethers.BrowserProvider(ethereum);
+      return provider.getSigner();
+    } catch (error) {
+      if (mountedRef.current) {
+        setWeb3Notice({
+          type: 'error',
+          text: getWeb3ActionErrorText(error, 'account_web3_connect_failed'),
+        });
+      }
+      return null;
+    }
+  };
+
   const handleMintNFT = async () => {
     if (!walletAddress) {
       setWeb3Notice({ type: 'error', text: t('account_web3_connect_first') });
@@ -677,8 +730,8 @@ const Account: React.FC<AccountProps> = ({
     setWeb3Busy(true);
     setWeb3Notice({ type: 'info', text: t('account_web3_approve_transaction') });
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
+      const signer = await getSignerForSavedWallet();
+      if (!signer || !mountedRef.current) return;
       const contract = new ethers.Contract(
         TALENT_NFT_CONTRACT_ADDRESS,
         TALENT_NFT_ABI,
@@ -724,7 +777,7 @@ const Account: React.FC<AccountProps> = ({
       if (mountedRef.current) {
         setWeb3Notice({
           type: 'error',
-          text: error.message || t('account_web3_mint_failed'),
+          text: getWeb3ActionErrorText(error, 'account_web3_mint_failed'),
         });
       }
     } finally {
@@ -733,7 +786,7 @@ const Account: React.FC<AccountProps> = ({
   };
 
   const handleToggleStake = async () => {
-    if (!tokenId) return;
+    if (tokenId === null) return;
     setWeb3Busy(true);
     const action = nftStaked ? 'unstake' : 'stake';
     setWeb3Notice({
@@ -745,8 +798,8 @@ const Account: React.FC<AccountProps> = ({
       ),
     });
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
+      const signer = await getSignerForSavedWallet();
+      if (!signer || !mountedRef.current) return;
       const contract = new ethers.Contract(
         TALENT_NFT_CONTRACT_ADDRESS,
         TALENT_NFT_ABI,
@@ -781,13 +834,12 @@ const Account: React.FC<AccountProps> = ({
       if (mountedRef.current) {
         setWeb3Notice({
           type: 'error',
-          text:
-            error.message ||
-            t(
-              nftStaked
-                ? 'account_web3_unstake_failed'
-                : 'account_web3_stake_failed',
-            ),
+          text: getWeb3ActionErrorText(
+            error,
+            nftStaked
+              ? 'account_web3_unstake_failed'
+              : 'account_web3_stake_failed',
+          ),
         });
       }
     } finally {
@@ -796,12 +848,15 @@ const Account: React.FC<AccountProps> = ({
   };
 
   const handleClaimRewards = async () => {
-    if (!walletAddress) return;
+    if (!walletAddress) {
+      setWeb3Notice({ type: 'error', text: t('account_web3_connect_first') });
+      return;
+    }
     setWeb3Busy(true);
     setWeb3Notice({ type: 'info', text: t('account_web3_claim_approve') });
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
+      const signer = await getSignerForSavedWallet();
+      if (!signer || !mountedRef.current) return;
       const contract = new ethers.Contract(
         TALENT_NFT_CONTRACT_ADDRESS,
         TALENT_NFT_ABI,
@@ -828,7 +883,7 @@ const Account: React.FC<AccountProps> = ({
       if (mountedRef.current) {
         setWeb3Notice({
           type: 'error',
-          text: error.message || t('account_web3_claim_failed'),
+          text: getWeb3ActionErrorText(error, 'account_web3_claim_failed'),
         });
       }
     } finally {
