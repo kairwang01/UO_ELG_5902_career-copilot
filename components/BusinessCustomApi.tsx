@@ -30,8 +30,11 @@ export const BusinessCustomApi: React.FC<{ className?: string; t?: (key: string)
   const savingRef = useRef(false);
   const mountedRef = useRef(true);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   useEffect(() => {

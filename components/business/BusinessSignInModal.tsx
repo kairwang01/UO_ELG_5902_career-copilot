@@ -34,7 +34,10 @@ export default function BusinessSignInModal({
   // Ref latch (state lags a render → a double Enter could fire two sign-in calls).
   const submittingRef = useRef(false);
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -40,7 +40,10 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
   // setUserSubscription calls). mountedRef drops tail setState if the modal unmounts.
   const submittingRef = useRef(false);
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (isOpen) setSelectedPlan(initialPlan);

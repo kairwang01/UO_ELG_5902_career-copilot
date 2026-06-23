@@ -81,6 +81,21 @@ describe('user-doc trust boundary', () => {
     const db = testEnv.authenticatedContext('cand1').firestore();
     await assertSucceeds(updateDoc(doc(db, 'users', 'cand1'), { full_name: 'New Name', updated_at: ts() }));
   });
+  it('candidate CAN save account profile fields through merge upsert', async () => {
+    await seed('cand1', {
+      ...CANDIDATE,
+      created_at: ts(),
+      updated_at: ts(),
+      avatar_url: null,
+    });
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertSucceeds(setDoc(doc(db, 'users', 'cand1'), {
+      full_name: 'Runtime Saved Name',
+      birth_date: '1999-04-08',
+      avatar_url: null,
+      updated_at: ts(),
+    }, { merge: true }));
+  });
   // Decisive: a candidate write that goes through the heavy validUser path (NOT the
   // small legacy path) must still ALLOW — proves the rule stays under Firestore's
   // 1000-expression ceiling for legitimate writes after the role/company hardening.

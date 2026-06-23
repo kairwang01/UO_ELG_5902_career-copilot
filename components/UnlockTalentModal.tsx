@@ -46,8 +46,11 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
     typeof (window as any).ethereum !== 'undefined';
   const mountedRef = useRef(true);
 
-  React.useEffect(() => () => {
-    mountedRef.current = false;
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   React.useEffect(() => {

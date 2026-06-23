@@ -130,7 +130,10 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
   // False once unmounted — guards setState if the user clicks "Skip all" (or leaves)
   // while a resume parse/upload is still in flight.
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   useEffect(() => {
     if (phase === 'interest') {
       setSelectedFields((prev) => (prev.length === 0 ? suggestedRef.current : prev));

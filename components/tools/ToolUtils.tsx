@@ -197,9 +197,12 @@ export const DownloadButtons: React.FC<{ textContent: string; baseFilename: stri
   const printTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const safeBaseFilename = sanitizeFilename(baseFilename);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    if (printTimerRef.current) clearTimeout(printTimerRef.current);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (printTimerRef.current) clearTimeout(printTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {

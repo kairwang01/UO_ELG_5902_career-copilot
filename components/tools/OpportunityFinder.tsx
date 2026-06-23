@@ -90,11 +90,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   const whyFitRunRef = useRef<Record<string, number>>({});
   const introRunRef = useRef<Record<string, number>>({});
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    platformRunRef.current += 1;
-    whyFitRunRef.current = {};
-    introRunRef.current = {};
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      platformRunRef.current += 1;
+      whyFitRunRef.current = {};
+      introRunRef.current = {};
+    };
   }, []);
 
   // Pre-submit review: the candidate confirms what the employer will receive

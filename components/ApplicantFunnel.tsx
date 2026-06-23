@@ -443,8 +443,11 @@ const InterviewsSection: React.FC<{ applicationId: string; employerUid: string; 
     const scorecardSavingRef = useRef(false);
     const mountedRef = useRef(true);
 
-    useEffect(() => () => {
-        mountedRef.current = false;
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
     }, []);
 
     // Per-card busy flag so cancel / complete buttons disable only their own card.

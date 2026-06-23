@@ -86,8 +86,11 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   // Previous page before entering post-job/funnel views
   const [prevPage, setPrevPage] = useState<PortalPage>('dashboard');
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   // Keep page in sync when initialPage changes (deep-link from homepage)

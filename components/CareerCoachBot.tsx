@@ -137,7 +137,10 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
     // Drop a late reply if the assistant unmounted (e.g. the user signed out) while it
     // was in flight — otherwise a reply built from the pre-sign-out profile lands in state.
     const mountedRef = useRef(true);
-    useEffect(() => () => { mountedRef.current = false; }, []);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
 
     useEffect(() => {
         if (isOpen) {

@@ -725,8 +725,11 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     const roleBriefRef = useRef<HTMLTextAreaElement>(null);
     const mountedRef = useRef(true);
 
-    useEffect(() => () => {
-        mountedRef.current = false;
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
     }, []);
 
     const { addToast } = useSharedToast();

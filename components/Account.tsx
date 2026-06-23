@@ -178,6 +178,7 @@ const Account: React.FC<AccountProps> = ({
   // False once unmounted — Account loads/saves async and is remounted on session change,
   // so a late resolve must not setState. passwordSavingRef latches a synchronous double-Enter.
   const mountedRef = useRef(true);
+  const profileSavingRef = useRef(false);
   const passwordSavingRef = useRef(false);
   const [web3Busy, setWeb3Busy] = useState(false);
   const [fullName, setFullName] = useState<string>(profile?.full_name || '');
@@ -234,8 +235,11 @@ const Account: React.FC<AccountProps> = ({
     saveAccountDraft(session.user.id, profile.full_name || '', resolvedBirthDate);
   }, [profile, session.user.id]);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const syncWithBlockchain = useCallback(async () => {
@@ -412,6 +416,8 @@ const Account: React.FC<AccountProps> = ({
     if (event) {
       event.preventDefault();
     }
+    if (profileSavingRef.current) return false;
+    profileSavingRef.current = true;
     setProfileSaving(true);
     setProfileNotice(null);
     const { user } = session;
@@ -429,20 +435,28 @@ const Account: React.FC<AccountProps> = ({
       updated_at: new Date().toISOString(),
     };
 
-    void data.profiles.upsert(updates).then(({ error }) => {
-      if (!mountedRef.current || !error) return;
+    try {
+      const { error } = await withTimeout(data.profiles.upsert(updates), 8_000);
+      if (!mountedRef.current) return false;
+      if (error) throw new Error(error.message);
       setProfileNotice({
-        type: 'error',
-        text: t('account_profile_updated_error'),
+        type: 'success',
+        text: t('account_profile_updated_success'),
       });
-    });
-
-    setProfileSaving(false);
-    setProfileNotice({
-      type: 'success',
-      text: t('account_profile_updated_success'),
-    });
-    return true;
+      return true;
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      if (mountedRef.current) {
+        setProfileNotice({
+          type: 'error',
+          text: t('account_profile_updated_error'),
+        });
+      }
+      return false;
+    } finally {
+      profileSavingRef.current = false;
+      if (mountedRef.current) setProfileSaving(false);
+    }
   };
 
   const handleUpdatePassword = async (event: React.FormEvent) => {

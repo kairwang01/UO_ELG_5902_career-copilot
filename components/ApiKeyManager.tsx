@@ -19,7 +19,10 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
   const { addToast } = useToast();
   // Guards setState if the user leaves the Settings tab while a key call is in flight.
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);

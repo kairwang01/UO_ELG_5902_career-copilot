@@ -766,11 +766,14 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const lastSavedDraftRef = useRef('');
   const resumeFingerprint = useMemo(() => portfolioDraftResumeFingerprint(resumeText), [resumeText]);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    autoFillRunRef.current++;
-    headshotRunRef.current++;
-    if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      autoFillRunRef.current++;
+      headshotRunRef.current++;
+      if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {

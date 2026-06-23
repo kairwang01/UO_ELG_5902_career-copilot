@@ -436,8 +436,11 @@ const InterviewRow: React.FC<InterviewRowProps> = ({ interview, t, onInterviewCh
   const isCancelled = interview.interview_status === 'cancelled';
   const FormatIcon = INTERVIEW_FORMAT_ICONS[interview.format] ?? CalendarClock;
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const handleConfirm = async () => {
@@ -788,8 +791,11 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
   const [interviews, setInterviews] = useState<ApplicationInterview[]>([]);
   const mountedRef = useRef(true);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const reloadInterviews = useCallback(() => {

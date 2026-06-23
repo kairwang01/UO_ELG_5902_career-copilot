@@ -111,7 +111,10 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
     const submittingRef = useRef(false);
     // False once unmounted — guards AI-result setState if the user leaves mid-analyze.
     const mountedRef = useRef(true);
-    useEffect(() => () => { mountedRef.current = false; }, []);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
     const [error, setError] = useState('');
     const [aiLoading, setAiLoading] = useState<null | 'description' | 'salary' | 'inclusivity' | 'format'>(null);
     const [inclusivityResults, setInclusivityResults] = useState<InclusivitySuggestion[] | null>(null);

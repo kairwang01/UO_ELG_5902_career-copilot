@@ -1810,7 +1810,14 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   // the recruiter navigates away mid-batch.
   const cancelBulkRef = useRef(false);
   const isMountedRef = useRef(true);
-  useEffect(() => () => { isMountedRef.current = false; cancelBulkRef.current = true; }, []);
+  useEffect(() => {
+    isMountedRef.current = true;
+    cancelBulkRef.current = false;
+    return () => {
+      isMountedRef.current = false;
+      cancelBulkRef.current = true;
+    };
+  }, []);
   const [currentFilter, setCurrentFilter] = useState<AgencyFilter>("all");
   const [showDetailModal, setShowDetailModal] =
     useState<BulkAnalysisItem | null>(null);

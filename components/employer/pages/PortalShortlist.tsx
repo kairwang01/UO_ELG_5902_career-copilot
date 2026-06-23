@@ -521,8 +521,11 @@ export function PortalShortlist({
 
   const { addToast } = useSharedToast();
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const fetchEntries = useCallback(async () => {

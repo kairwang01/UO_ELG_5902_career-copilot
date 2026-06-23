@@ -91,7 +91,10 @@ const CompanyReviewModal: React.FC<CompanyReviewModalProps> = ({
   // two reviews. mountedRef drops the tail setState if the parent closes the modal mid-submit.
   const submittingRef = useRef(false);
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const charCount = text.trim().length;
   const canSubmit = rating >= 1 && charCount >= 20 && charCount <= 2000 && !submitting;

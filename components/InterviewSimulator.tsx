@@ -339,7 +339,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         );
     }, [sessionUserId]);
 
-    useEffect(() => () => { mountedRef.current = false; }, []);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
 
     const companyNameSuggestions = Array.from(
         new Set(postings.map((p) => p.company_name).filter((n): n is string => !!n)),

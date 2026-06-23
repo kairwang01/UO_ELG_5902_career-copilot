@@ -319,9 +319,12 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const prefillRunRef = useRef(0);
   const mountedRef = useRef(true);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    prefillRunRef.current += 1;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      prefillRunRef.current += 1;
+    };
   }, []);
 
   const markReviewPath = (path: string) => {

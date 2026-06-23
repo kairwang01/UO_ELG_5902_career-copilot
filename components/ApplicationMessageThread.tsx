@@ -37,7 +37,10 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
   const scrollRef = useRef<HTMLDivElement>(null);
   // Drops a send's tail setState if this thread closed / switched applicant mid-send.
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!applicationId) return;
