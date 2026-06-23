@@ -118,6 +118,7 @@ const DASHBOARD_PATH_ALIASES: Record<string, DashboardView> = {
   'talent-profile': 'talent_profile',
   profile: 'talent_profile',
   tools: 'toolkit',
+  showcase: 'portfolio',
 };
 
 const dashboardViewFromPath = (pathname: string): DashboardView | null => {
