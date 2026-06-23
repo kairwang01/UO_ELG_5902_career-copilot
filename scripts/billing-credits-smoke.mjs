@@ -8,7 +8,10 @@
  *   3. confirmSimulatedCheckout writes billing.active and activates the plan,
  *   4. credit_renewals records the paid high-water grant,
  *   5. repeated confirmation does not double-grant same-period credits,
- *   6. business checkout promotes/keeps employer role and grants business credits.
+ *   6. subscription management opens the simulated portal,
+ *   7. simulated cancel downgrades without wiping existing credits,
+ *   8. business checkout promotes/keeps employer role and grants business credits,
+ *   9. business cancel preserves the employer portal role.
  */
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -161,8 +164,12 @@ async function main() {
     const candidateSetSubscription = httpsCallable(candidateClient.functions, 'setSubscriptionStatus');
     const candidateCreateCheckout = httpsCallable(candidateClient.functions, 'createCheckoutSession');
     const candidateConfirmCheckout = httpsCallable(candidateClient.functions, 'confirmSimulatedCheckout');
+    const candidateCreatePortal = httpsCallable(candidateClient.functions, 'createBillingPortalSession');
+    const candidateCancelSubscription = httpsCallable(candidateClient.functions, 'cancelSubscriptionSimulated');
     const employerCreateCheckout = httpsCallable(employerClient.functions, 'createCheckoutSession');
     const employerConfirmCheckout = httpsCallable(employerClient.functions, 'confirmSimulatedCheckout');
+    const employerCreatePortal = httpsCallable(employerClient.functions, 'createBillingPortalSession');
+    const employerCancelSubscription = httpsCallable(employerClient.functions, 'cancelSubscriptionSimulated');
 
     const pending = await candidateSetSubscription({ planKey: 'pending_accelerator' });
     assert(pending.data.status === 'pending_payment', `Expected pending_payment: ${JSON.stringify(pending.data)}`);
@@ -192,6 +199,18 @@ async function main() {
     await assertUser(candidateUid, { credits: 850 });
     console.log('  ✓ repeated candidate confirmation does not double-grant credits');
 
+    const candidatePortal = await candidateCreatePortal({});
+    assert(candidatePortal.data.url === '/billing/manage', `Unexpected candidate portal URL: ${JSON.stringify(candidatePortal.data)}`);
+    assert(candidatePortal.data.simulated === true, `Expected simulated candidate portal: ${JSON.stringify(candidatePortal.data)}`);
+    console.log('  ✓ candidate billing management opens simulated portal');
+
+    const candidateCancel = await candidateCancelSubscription({});
+    assert(candidateCancel.data.status === 'cancelled', `Candidate cancel failed: ${JSON.stringify(candidateCancel.data)}`);
+    assert(candidateCancel.data.subscription_status === 'free', `Candidate cancel did not return free plan: ${JSON.stringify(candidateCancel.data)}`);
+    await assertUser(candidateUid, { role: 'candidate', subscription_status: 'free', credits: 850 });
+    await assertBilling(candidateUid, { active: false, status: 'cancelled_simulated' });
+    console.log('  ✓ candidate simulated cancel downgrades plan and preserves credits');
+
     const employerCheckout = await employerCreateCheckout({ planKey: 'pending_biz_pro' });
     assertSimulatedCheckout(employerCheckout, 'pro', 'business');
     console.log('  ✓ simulated business checkout session returned');
@@ -207,6 +226,18 @@ async function main() {
     assert(employerRenewal?.granted_amount === 20000, `Unexpected employer renewal grant: ${JSON.stringify(employerRenewal)}`);
     assert(employerRenewal?.grant_source === 'paid', `Unexpected employer renewal source: ${JSON.stringify(employerRenewal)}`);
     console.log('  ✓ simulated business payment activates entitlement + employer credits');
+
+    const employerPortal = await employerCreatePortal({});
+    assert(employerPortal.data.url === '/billing/manage', `Unexpected employer portal URL: ${JSON.stringify(employerPortal.data)}`);
+    assert(employerPortal.data.simulated === true, `Expected simulated employer portal: ${JSON.stringify(employerPortal.data)}`);
+    console.log('  ✓ employer billing management opens simulated portal');
+
+    const employerCancel = await employerCancelSubscription({});
+    assert(employerCancel.data.status === 'cancelled', `Employer cancel failed: ${JSON.stringify(employerCancel.data)}`);
+    assert(employerCancel.data.subscription_status === 'free', `Employer cancel did not return free plan: ${JSON.stringify(employerCancel.data)}`);
+    await assertUser(employerUid, { role: 'employer', subscription_status: 'free', credits: 20100 });
+    await assertBilling(employerUid, { active: false, status: 'cancelled_simulated' });
+    console.log('  ✓ employer simulated cancel preserves employer role and credits');
   } finally {
     await Promise.allSettled([deleteApp(candidateClient.app), deleteApp(employerClient.app)]);
   }
