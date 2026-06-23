@@ -13,25 +13,50 @@ interface AdminShellProps {
   tabs: AdminNavItem[];
   onTabChange: (id: string) => void;
   userEmail?: string | null;
+  userName?: string | null;
+  userAvatarUrl?: string | null;
+  adminRole?: string | null;
   lastRefreshed?: Date | null;
   loading?: boolean;
+  onAccountOpen: () => void;
   onRefresh: () => void;
   onSignOut: () => void;
   children: React.ReactNode;
 }
+
+const initialsFor = (value?: string | null) => (
+  (value ?? '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || 'A'
+);
+
+const UserAvatar: React.FC<{ src?: string | null; label: string; className?: string }> = ({ src, label, className = '' }) => (
+  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-100 text-xs font-semibold text-blue-800 ${className}`}>
+    {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initialsFor(label)}
+  </span>
+);
 
 const AdminShell: React.FC<AdminShellProps> = ({
   activeTab,
   tabs,
   onTabChange,
   userEmail,
+  userName,
+  userAvatarUrl,
+  adminRole,
   lastRefreshed,
   loading,
+  onAccountOpen,
   onRefresh,
   onSignOut,
   children,
 }) => {
   const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? 'Console';
+  const displayName = userName || userEmail || 'Admin';
+  const roleLabel = adminRole ? adminRole.replace(/^\w/, (c) => c.toUpperCase()) : 'Admin';
 
   return (
     <div className="h-screen overflow-hidden bg-[#f0f2f5] flex" data-qa-shell="admin" data-qa-admin-tab={activeTab}>
@@ -65,9 +90,19 @@ const AdminShell: React.FC<AdminShellProps> = ({
           })}
         </nav>
 
-        <div className="px-5 py-4 border-t border-white/10 text-[11px] text-blue-200/50">
-          Internal use only
-        </div>
+        <button
+          type="button"
+          onClick={onAccountOpen}
+          className="mx-3 mb-3 flex items-center gap-3 rounded-md border-t border-white/10 px-2 py-3 text-left text-blue-100/90 transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
+        >
+          <UserAvatar src={userAvatarUrl} label={displayName} />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-white">{displayName}</span>
+            <span className="mt-0.5 inline-flex rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-100">
+              {roleLabel}
+            </span>
+          </span>
+        </button>
       </aside>
 
       {/* Main column */}
@@ -124,12 +159,14 @@ const AdminShell: React.FC<AdminShellProps> = ({
                 </svg>
               </button>
 
-              <span
-                className="hidden sm:block text-xs text-gray-600 max-w-[160px] truncate border-l border-gray-200 pl-3"
+              <button
+                type="button"
+                onClick={onAccountOpen}
+                className="hidden border-l border-gray-200 pl-3 text-left text-xs text-gray-600 transition-colors hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 sm:block"
                 title={userEmail ?? ''}
               >
-                {userEmail}
-              </span>
+                <span className="block max-w-[min(48vw,24rem)] truncate">{userEmail}</span>
+              </button>
 
               <button
                 type="button"

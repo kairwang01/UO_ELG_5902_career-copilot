@@ -9,7 +9,7 @@
  *                adminUpdatePrompt, adminResetPrompt, adminListModels,
  *                adminUpsertModel, adminDeleteModel, adminTestModel
  *   super    : + adminSetAdmin (LEGACY, deprecated), adminInviteAdmin,
- *                adminSetAdminRole, adminRemoveAdmin, adminListAdmins
+ *                adminSetAdminRole, adminRemoveAdmin
  *
  * Security audit fixes applied (Sprint 3 Phase-0):
  *   A1  CRITICAL  Credit delta capped: |delta| ≤ 5000 per call; daily totals
@@ -18,7 +18,7 @@
  *   A3  HIGH      adminSetAdmin no longer returns admin_uids list.
  *   A4/A10 HIGH   reason: required, trimmed, minLength 10, maxLength 300.
  *   A6  MEDIUM    typeof uid === 'string' checks on all uid params.
- *   A7  MEDIUM    adminListAdmins now requires 'super' role (env UIDs hidden from admin).
+ *   A7  MEDIUM    env UIDs hidden from plain admin list visibility.
  *   A12 LOW       Dashboard recent_events: uid masked to first 6 chars + '…'.
  */
 
@@ -1054,13 +1054,29 @@ export const adminRemoveAdminFunction = onCall({ invoker: "public" }, async (req
   return { uid: targetUid, status: "disabled" };
 });
 
+type AdminListRow = {
+  uid: string;
+  email: string | null;
+  role: AdminRole;
+  status: string;
+  invited_at: string | null;
+  source: "rbac" | "legacy_doc" | "env";
+};
+
+export function filterAdminRowsForViewer(rows: AdminListRow[], viewerRole: AdminRole): AdminListRow[] {
+  if (viewerRole === "super") return rows;
+  if (viewerRole === "admin") {
+    return rows.filter((row) => row.role === "reviewer");
+  }
+  return [];
+}
+
 /**
- * List active admin/reviewer entries.
- * Super-only (A7: env UIDs must not be exposed to plain admins).
- * Returns minimal fields only (A3).
+ * List console-user entries visible to the caller.
+ * Admin sees reviewers; super sees admins and reviewers.
  */
 export const adminListAdminsFunction = onCall({ invoker: "public" }, async (request) => {
-  await requireRole(request, "super");
+  const { role: viewerRole } = await requireRole(request, "admin");
 
   const accessSnap = await db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.access).get();
   const adminsMap: Record<string, AdminEntry> = accessSnap.data()?.admins ?? {};
@@ -1071,7 +1087,7 @@ export const adminListAdminsFunction = onCall({ invoker: "public" }, async (requ
     .filter(Boolean);
 
   // New RBAC entries
-  const rbacAdmins = await Promise.all(
+  const rbacAdmins: AdminListRow[] = await Promise.all(
     Object.entries(adminsMap).map(async ([uid, entry]) => {
       return {
         uid,
@@ -1079,13 +1095,13 @@ export const adminListAdminsFunction = onCall({ invoker: "public" }, async (requ
         role: entry.role,
         status: entry.status,
         invited_at: entry.invited_at ?? null,
-        source: "rbac" as const,
+        source: "rbac",
       };
     })
   );
 
   // Legacy doc entries (not already in RBAC map)
-  const legacyAdmins = await Promise.all(
+  const legacyAdmins: AdminListRow[] = await Promise.all(
     legacyDocUids
       .filter((uid) => !adminsMap[uid])
       .map(async (uid) => {
@@ -1099,7 +1115,7 @@ export const adminListAdminsFunction = onCall({ invoker: "public" }, async (requ
   );
 
   // Env bootstrap entries (super-only visibility, A7)
-  const envAdmins = await Promise.all(
+  const envAdmins: AdminListRow[] = await Promise.all(
     envUids
       .filter((uid) => !adminsMap[uid] && !legacyDocUids.includes(uid))
       .map(async (uid) => {
@@ -1112,7 +1128,7 @@ export const adminListAdminsFunction = onCall({ invoker: "public" }, async (requ
       })
   );
 
-  return { admins: [...rbacAdmins, ...legacyAdmins, ...envAdmins] };
+  return { admins: filterAdminRowsForViewer([...rbacAdmins, ...legacyAdmins, ...envAdmins], viewerRole) };
 });
 
 // ---------------------------------------------------------------------------

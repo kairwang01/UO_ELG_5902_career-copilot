@@ -155,8 +155,8 @@ export interface AdminRow {
   uid: string;
   email: string | null;
   display_name?: string | null;
-  /** 'doc' = portal-managed (revocable); 'env' = server ADMIN_UIDS bootstrap. */
-  source?: 'doc' | 'env';
+  /** 'rbac' = portal-managed, 'legacy_doc' = old allowlist, 'env' = ADMIN_UIDS bootstrap. */
+  source?: 'rbac' | 'legacy_doc' | 'env';
   /** New: role for role-aware admin system */
   role?: 'super' | 'admin' | 'reviewer';
   status?: string;

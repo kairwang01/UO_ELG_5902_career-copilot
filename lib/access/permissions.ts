@@ -26,6 +26,7 @@ export type AdminPermission =
   | 'admin.users.read'
   | 'admin.users.credits.adjust'
   | 'admin.users.subscription.write'
+  | 'admin.admins.read'
   | 'admin.prompts.read'
   | 'admin.prompts.draft'
   | 'admin.prompts.publish'
@@ -50,6 +51,7 @@ const ADMIN_PERMISSIONS: AdminPermission[] = [
   'admin.users.read',
   'admin.users.credits.adjust',
   'admin.users.subscription.write',
+  'admin.admins.read',
   'admin.prompts.read',
   'admin.prompts.draft',
   'admin.quotas.read',
@@ -102,6 +104,7 @@ export const ADMIN_PERMISSION_MATRIX: { label: string; permission: AdminPermissi
   { label: 'Edit platform quotas', permission: 'admin.quotas.write' },
   { label: 'Manage models & routing', permission: 'admin.models.write' },
   { label: 'View / rotate provider keys', permission: 'admin.keys.rotate' },
+  { label: 'View console access', permission: 'admin.admins.read' },
   { label: 'Invite / remove admins', permission: 'admin.admins.manage' },
   { label: 'View API platform usage', permission: 'admin.apiplatform.read' },
   { label: 'Manage API platform', permission: 'admin.apiplatform.manage' },

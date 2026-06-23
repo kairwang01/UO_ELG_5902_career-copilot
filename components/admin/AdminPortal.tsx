@@ -66,6 +66,8 @@ import { PermissionMatrix, ProductRoleOverview } from './AccessControlSections';
 import { KeyPoolHealthSection } from './KeyPoolHealthSection';
 import { ApiPlatformPanel } from './ApiPlatformPanel';
 import { Web3SettingsPanel } from './Web3SettingsPanel';
+import Avatar from '../Avatar';
+import { ToastProvider } from '../Toast';
 
 // ─── minimal i18n stub — keys returned in StructuredOutput ───────────────────
 const STRINGS: Record<string, string> = {
@@ -124,6 +126,7 @@ const STRINGS: Record<string, string> = {
 const t = (key: string) => STRINGS[key] ?? key;
 
 type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'apiplatform' | 'web3' | 'audit';
+type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
 
 /** Per-key/model test result: key is a provider slug ('gemini'|'kairllm'|'deepseek') or a model id. */
 type TestStatus = { state: 'idle' } | { state: 'running' } | ({ state: 'done' } & TestModelResult);
@@ -160,6 +163,8 @@ const USER_CREATED_FILTERS = [
   { value: '30d', label: 'Last 30 days' },
   { value: '90d', label: 'Last 90 days' },
 ] as const;
+
+const USER_PAGE_SIZE = 10;
 
 const DEFAULT_PLAN_QUOTAS: Record<AdminPlanKey, AdminPlanQuota> = {
   free: { daily_run_limit: 25, daily_credit_limit: 0, monthly_credit_grant: 0, active_job_limit: 3 },
@@ -569,6 +574,7 @@ const AdminPortal: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [accessTab, setAccessTab] = useState<AccessControlTab>('console');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -580,6 +586,8 @@ const AdminPortal: React.FC = () => {
   const [quotasLoadedAt, setQuotasLoadedAt] = useState<number | null>(null);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [userCursor, setUserCursor] = useState<string | null>(null);
+  const [userPageIndex, setUserPageIndex] = useState(0);
+  const [userPageCursors, setUserPageCursors] = useState<(string | undefined)[]>([undefined]);
   const [userListLoading, setUserListLoading] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [debouncedUserSearch, setDebouncedUserSearch] = useState('');
@@ -665,6 +673,18 @@ const AdminPortal: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'reviewer'>('admin');
   const [inviteFeedback, setInviteFeedback] = useState<{ ok?: string; err?: string } | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [adminRoleFilters, setAdminRoleFilters] = useState<string[]>([]);
+
+  // Current admin account panel.
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountName, setAccountName] = useState('');
+  const [accountAvatarUrl, setAccountAvatarUrl] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [accountPasswordConfirm, setAccountPasswordConfirm] = useState('');
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountPasswordSaving, setAccountPasswordSaving] = useState(false);
+  const [accountMessage, setAccountMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Dashboard model routing inline selector state
   const [defaultModelChanging, setDefaultModelChanging] = useState(false);
@@ -798,6 +818,68 @@ const AdminPortal: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [userSearch]);
 
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    data.profiles.get(session.user.id).then(({ data: profileData }) => {
+      if (!active || !mountedRef.current) return;
+      setAccountName(profileData?.full_name || session.user.user_metadata?.full_name || session.user.displayName || '');
+      setAccountAvatarUrl(profileData?.avatar_url || session.user.user_metadata?.avatar_url || session.user.photoURL || '');
+    });
+    return () => {
+      active = false;
+    };
+  }, [session]);
+
+  const saveAccountProfile = async (avatarUrl = accountAvatarUrl) => {
+    if (!session) return false;
+    setAccountSaving(true);
+    setAccountMessage(null);
+    try {
+      const { error } = await data.profiles.upsert({
+        id: session.user.id,
+        full_name: accountName,
+        avatar_url: avatarUrl,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw new Error(error.message);
+      if (mountedRef.current) setAccountMessage({ type: 'success', text: 'Profile updated.' });
+      return true;
+    } catch (e) {
+      if (mountedRef.current) setAccountMessage({ type: 'error', text: e instanceof Error ? e.message : 'Profile update failed.' });
+      return false;
+    } finally {
+      if (mountedRef.current) setAccountSaving(false);
+    }
+  };
+
+  const updateAccountPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (accountPassword !== accountPasswordConfirm) {
+      setAccountMessage({ type: 'error', text: 'Passwords do not match.' });
+      return;
+    }
+    if (accountPassword.length < 6) {
+      setAccountMessage({ type: 'error', text: 'Password must be at least 6 characters.' });
+      return;
+    }
+    setAccountPasswordSaving(true);
+    setAccountMessage(null);
+    try {
+      const { error } = await data.auth.updatePassword(accountPassword);
+      if (error) throw new Error(error.message);
+      if (mountedRef.current) {
+        setAccountPassword('');
+        setAccountPasswordConfirm('');
+        setAccountMessage({ type: 'success', text: 'Password updated.' });
+      }
+    } catch (e) {
+      if (mountedRef.current) setAccountMessage({ type: 'error', text: e instanceof Error ? e.message : 'Password update failed.' });
+    } finally {
+      if (mountedRef.current) setAccountPasswordSaving(false);
+    }
+  };
+
   // ── data loaders ──────────────────────────────────────────────────────────
 
   const loadDashboard = useCallback(async () => {
@@ -845,14 +927,16 @@ const AdminPortal: React.FC = () => {
   // cursor-as-argument (NOT closed over userCursor) keeps this callback []-stable,
   // so the loader effect below doesn't re-fire when userCursor changes (would loop).
   const loadUsers = useCallback(
-    async (cursor?: string) => {
+    async (cursor?: string, pageIndex = 0) => {
       setError(null);
       setUserListLoading(true);
       try {
-        const res = await adminListUsers(50, cursor, userFilters);
+        const res = await adminListUsers(USER_PAGE_SIZE, cursor, userFilters);
         if (!mountedRef.current) return;
-        setUsers((prev) => (cursor ? [...prev, ...res.users] : res.users));
+        setUsers(res.users);
         setUserCursor(res.next_cursor);
+        setUserPageIndex(pageIndex);
+        if (pageIndex === 0) setUserPageCursors([undefined]);
       } catch (e) {
         if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load users');
       } finally {
@@ -861,6 +945,23 @@ const AdminPortal: React.FC = () => {
     },
     [userFilters],
   );
+
+  const loadNextUserPage = () => {
+    if (!userCursor) return;
+    const nextPage = userPageIndex + 1;
+    setUserPageCursors((prev) => {
+      const next = prev.slice(0, nextPage);
+      next[nextPage] = userCursor;
+      return next;
+    });
+    loadUsers(userCursor, nextPage);
+  };
+
+  const loadPreviousUserPage = () => {
+    if (userPageIndex === 0) return;
+    const previousPage = userPageIndex - 1;
+    loadUsers(userPageCursors[previousPage], previousPage);
+  };
 
   const loadAdmins = useCallback(async () => {
     setError(null);
@@ -942,9 +1043,9 @@ const AdminPortal: React.FC = () => {
     if (tab === 'quotas') loadQuotas();
     if (tab === 'users') {
       loadUsers();
-      if (adminRole === 'super') loadAdmins();
+      loadAdmins();
     }
-    if (tab === 'admins' && adminRole === 'super') loadAdmins();
+    if (tab === 'admins' && hasAdminPermission(adminRole, 'admin.admins.read')) loadAdmins();
     if (tab === 'audit') loadAuditLog();
   }, [isAdmin, adminRole, tab, loadDashboard, loadLlm, loadModels, loadPrompts, loadQuotas, loadUsers, loadAdmins, loadAuditLog]);
 
@@ -1098,7 +1199,7 @@ const AdminPortal: React.FC = () => {
         setUserReport(report);
         setCreditReason('');
       }
-      await loadUsers();
+      await loadUsers(userPageCursors[userPageIndex], userPageIndex);
     } catch (e) {
       if (selectedUidRef.current === uid) setError(e instanceof Error ? e.message : 'Failed to adjust credits');
     }
@@ -1112,7 +1213,7 @@ const AdminPortal: React.FC = () => {
       await adminSetSubscription(uid, subStatus);
       const report = await adminGetUserReport(uid);
       if (selectedUidRef.current === uid) setUserReport(report);
-      await loadUsers();
+      await loadUsers(userPageCursors[userPageIndex], userPageIndex);
     } catch (e) {
       if (selectedUidRef.current === uid) setError(e instanceof Error ? e.message : 'Failed to set subscription');
     }
@@ -1158,8 +1259,9 @@ const AdminPortal: React.FC = () => {
 
   const inviteAdmin = async () => {
     const email = inviteEmail.trim();
-    if (!email) return;
+    if (!email || inviteLoading) return;
     setInviteFeedback(null);
+    setInviteLoading(true);
     try {
       await adminInviteAdmin({ email, role: inviteRole });
       setInviteEmail('');
@@ -1167,6 +1269,8 @@ const AdminPortal: React.FC = () => {
       await loadAdmins();
     } catch (e) {
       setInviteFeedback({ err: e instanceof Error ? e.message : 'Invite failed' });
+    } finally {
+      setInviteLoading(false);
     }
   };
 
@@ -1299,6 +1403,22 @@ const AdminPortal: React.FC = () => {
     }
   };
 
+  const changeDashboardDefaultModel = async (newId: string) => {
+    if (!newId || newId === defaultModelId || defaultModelChanging) return;
+    if (!window.confirm(t('admin.set_default_confirm'))) return;
+    setDefaultModelChanging(true);
+    setDefaultModelToast(null);
+    try {
+      const res = await adminSetDefaultModel(newId);
+      setDefaultModelId(res.defaultModelId);
+      setDefaultModelToast({ ok: t('admin.model.set_default_ok') });
+    } catch (ex) {
+      setDefaultModelToast({ err: ex instanceof Error ? ex.message : 'Failed to set default model' });
+    } finally {
+      setDefaultModelChanging(false);
+    }
+  };
+
   // ── auth gates ────────────────────────────────────────────────────────────
 
   if (!session) {
@@ -1324,7 +1444,24 @@ const AdminPortal: React.FC = () => {
   // Derived capabilities — single source: lib/access/permissions.ts.
   const canWriteModels = hasAdminPermission(role, 'admin.models.write');
   const canPublishPrompts = hasAdminPermission(role, 'admin.prompts.publish');
+  const canReadAdmins = hasAdminPermission(role, 'admin.admins.read');
   const canManageAdmins = hasAdminPermission(role, 'admin.admins.manage');
+  const visibleAdminBase = canManageAdmins ? admins : admins.filter((entry) => entry.role === 'reviewer');
+  const visibleAdmins = adminRoleFilters.length === 0
+    ? visibleAdminBase
+    : visibleAdminBase.filter((entry) => entry.role && adminRoleFilters.includes(entry.role));
+  const adminByUid = new Map(visibleAdminBase.map((entry) => [entry.uid, entry]));
+  const accountDisplayName = accountName || session.user.email || 'Admin';
+  const accessTabs: { id: AccessControlTab; label: string }[] = canManageAdmins
+    ? [
+        { id: 'permissions', label: 'Permissions' },
+        { id: 'product', label: 'Product roles' },
+        { id: 'console', label: 'Console users' },
+      ]
+    : [{ id: 'reviewers', label: 'Reviewers' }];
+  const activeAccessTab = accessTabs.some((item) => item.id === accessTab)
+    ? accessTab
+    : accessTabs[0].id;
 
   // ── tab definitions ───────────────────────────────────────────────────────
   // Visibility is driven by the central registry (lib/access/permissions.ts);
@@ -1336,7 +1473,7 @@ const AdminPortal: React.FC = () => {
     { id: 'prompts', label: 'Prompts', visible: hasAdminPermission(role, 'admin.prompts.read') },
     { id: 'quotas', label: 'Quotas', visible: hasAdminPermission(role, 'admin.quotas.read') },
     { id: 'users', label: 'Users', visible: hasAdminPermission(role, 'admin.users.read') },
-    { id: 'admins', label: 'Access Control', visible: hasAdminPermission(role, 'admin.admins.manage') },
+    { id: 'admins', label: 'Access Control', visible: canReadAdmins },
     { id: 'apiplatform', label: 'API Platform', visible: hasAdminPermission(role, 'admin.apiplatform.read') },
     { id: 'web3', label: 'Web3', visible: hasAdminPermission(role, 'admin.web3.manage') },
     { id: 'audit', label: 'Audit Log', visible: hasAdminPermission(role, 'admin.audit.read') },
@@ -1351,25 +1488,154 @@ const AdminPortal: React.FC = () => {
     else if (tab === 'quotas') loadQuotas();
     else if (tab === 'users') {
       loadUsers();
-      if (canManageAdmins) loadAdmins();
+      loadAdmins();
     }
-    else if (tab === 'admins' && canManageAdmins) loadAdmins();
+    else if (tab === 'admins' && canReadAdmins) loadAdmins();
     else if (tab === 'audit') loadAuditLog();
   };
 
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <AdminShell
+    <ToastProvider>
+      <AdminShell
       activeTab={tab}
       tabs={tabs}
       onTabChange={(id) => setTab(id as Tab)}
       userEmail={session.user.email}
+      userName={accountDisplayName}
+      userAvatarUrl={accountAvatarUrl}
+      adminRole={role}
       lastRefreshed={lastRefreshed}
       loading={loading}
+      onAccountOpen={() => setAccountOpen(true)}
       onRefresh={refreshForTab}
       onSignOut={() => data.auth.signOut()}
     >
+        {accountOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4" role="dialog" aria-modal="true" aria-labelledby="admin-account-title">
+            <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+              <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+                <div>
+                  <h2 id="admin-account-title" className="text-base font-semibold text-gray-900">Account details</h2>
+                  <p className="mt-0.5 text-xs text-gray-500">Signed in to the admin console.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen(false)}
+                  className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  aria-label="Close account details"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="max-h-[80vh] space-y-5 overflow-y-auto px-5 py-4">
+                {accountMessage && (
+                  <div className={`rounded-md px-3 py-2 text-sm ${accountMessage.type === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`} role="alert">
+                    {accountMessage.text}
+                  </div>
+                )}
+
+                <div className="grid gap-3 text-sm">
+                  <div className="flex items-center gap-4">
+                    <Avatar
+                      url={accountAvatarUrl}
+                      size={88}
+                      onUpload={async (url) => {
+                        const prev = accountAvatarUrl;
+                        setAccountAvatarUrl(url);
+                        const ok = await saveAccountProfile(url);
+                        if (!ok && mountedRef.current) setAccountAvatarUrl(prev);
+                      }}
+                      altText="Admin avatar"
+                      uploadLabel="Upload"
+                      uploadingLabel="Uploading..."
+                      selectImageMessage="Select an image first."
+                      signInRequiredMessage="You must be signed in to upload an avatar."
+                      maxSizeMessage="Image must be 2MB or smaller."
+                      timeoutMessage="Upload timed out."
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900">{accountDisplayName}</p>
+                      <p className="truncate text-xs text-gray-500">{session.user.email}</p>
+                      <span className="mt-2 inline-flex rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">
+                        {role}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <FieldLabel>Email</FieldLabel>
+                    <input className={textInput} value={session.user.email ?? ''} disabled />
+                  </div>
+                  <div>
+                    <FieldLabel>UID</FieldLabel>
+                    <input className={`${textInput} font-mono text-xs`} value={session.user.id} disabled />
+                  </div>
+                </div>
+
+                <form
+                  className="space-y-3 border-t border-gray-200 pt-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    saveAccountProfile();
+                  }}
+                >
+                  <FieldLabel htmlFor="admin-account-name">Name</FieldLabel>
+                  <input
+                    id="admin-account-name"
+                    className={textInput}
+                    value={accountName}
+                    onChange={(e) => setAccountName(e.target.value)}
+                    maxLength={120}
+                    autoComplete="name"
+                  />
+                  <button
+                    type="submit"
+                    disabled={accountSaving}
+                    className="rounded-md bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {accountSaving ? 'Saving...' : 'Save profile'}
+                  </button>
+                </form>
+
+                <form className="space-y-3 border-t border-gray-200 pt-4" onSubmit={updateAccountPassword}>
+                  <SectionHeading>Change password</SectionHeading>
+                  <div>
+                    <FieldLabel htmlFor="admin-account-password">New password</FieldLabel>
+                    <input
+                      id="admin-account-password"
+                      type="password"
+                      className={textInput}
+                      value={accountPassword}
+                      onChange={(e) => setAccountPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="admin-account-password-confirm">Confirm password</FieldLabel>
+                    <input
+                      id="admin-account-password-confirm"
+                      type="password"
+                      className={textInput}
+                      value={accountPasswordConfirm}
+                      onChange={(e) => setAccountPasswordConfirm(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={accountPasswordSaving || !accountPassword}
+                    className="rounded-md bg-gray-800 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {accountPasswordSaving ? 'Saving...' : 'Update password'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Error banner */}
         {error && (
           <div
@@ -1452,6 +1718,15 @@ const AdminPortal: React.FC = () => {
                         </p>
                         {canWriteModels ? (
                           <div className="space-y-1.5">
+                            <UserSingleFilterDropdown
+                              label={t('admin.dashboard.model_routing_select')}
+                              options={[
+                                { value: '', label: t('admin.dashboard.model_routing_none') },
+                                ...models.filter((m) => m.enabled).map((m) => ({ value: m.id, label: m.label })),
+                              ]}
+                              value={defaultModelId ?? ''}
+                              onChange={changeDashboardDefaultModel}
+                            />
                             <select
                               value={defaultModelId ?? ''}
                               disabled={defaultModelChanging}
@@ -1477,7 +1752,7 @@ const AdminPortal: React.FC = () => {
                                   setDefaultModelChanging(false);
                                 }
                               }}
-                              className="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed min-w-[160px]"
+                              className="hidden"
                             >
                               {!defaultModelId && (
                                 <option value="" disabled>
@@ -3412,7 +3687,7 @@ const AdminPortal: React.FC = () => {
                 <div className="flex items-center justify-between gap-3">
                   <SectionHeading>Users</SectionHeading>
                   <span className="text-xs text-gray-500">
-                    {userListLoading ? 'Loading...' : `${users.length} loaded`}
+                    {userListLoading ? 'Loading...' : `Page ${userPageIndex + 1} · ${users.length} shown`}
                   </span>
                 </div>
                 <div className="grid gap-2.5 lg:grid-cols-[minmax(240px,1fr)_150px_190px_160px]">
@@ -3501,7 +3776,9 @@ const AdminPortal: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {users.map((u) => (
+                      {users.map((u) => {
+                        const consoleUser = adminByUid.get(u.uid);
+                        return (
                         <tr
                           key={u.uid}
                           className={`cursor-pointer transition-colors hover:bg-gray-50 ${
@@ -3517,7 +3794,14 @@ const AdminPortal: React.FC = () => {
                             )}
                           </td>
                           <td className="px-5 py-3 text-gray-600">
-                            {u.email || <span className="text-gray-400">-</span>}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {u.email || <span className="text-gray-400">-</span>}
+                              {consoleUser?.role && (
+                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                                  {consoleUser.role}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-5 py-3">
                             <PlanBadge plan={u.subscription_status} />
@@ -3526,19 +3810,30 @@ const AdminPortal: React.FC = () => {
                             {u.credits}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}
               </div>
-              {userCursor && (
-                <div className="px-5 py-3 border-t border-gray-200">
+              {(userPageIndex > 0 || userCursor) && (
+                <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => loadUsers(userCursor ?? undefined)}
-                    className="text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                    onClick={loadPreviousUserPage}
+                    disabled={userPageIndex === 0 || userListLoading}
+                    className="text-xs text-blue-600 transition-colors hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
                   >
-                    Load more users
+                    Previous
+                  </button>
+                  <span className="text-xs text-gray-500">Page {userPageIndex + 1}</span>
+                  <button
+                    type="button"
+                    onClick={loadNextUserPage}
+                    disabled={!userCursor || userListLoading}
+                    className="text-xs text-blue-600 transition-colors hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                  >
+                    Next
                   </button>
                 </div>
               )}
@@ -3546,8 +3841,8 @@ const AdminPortal: React.FC = () => {
 
             {/* User detail panel */}
             {selectedUid && userReport ? (
-              <Card className="p-5 space-y-5 md:sticky md:top-4 md:max-h-[calc(100vh-6rem)] md:overflow-y-auto">
-                <div>
+              <Card className="p-4 space-y-4 md:sticky md:top-4">
+                <div className="space-y-1">
                   <SectionHeading>User detail</SectionHeading>
                   <p className="mt-1 font-mono text-[11px] text-gray-500 break-all">{selectedUid}</p>
                 </div>
@@ -3573,34 +3868,40 @@ const AdminPortal: React.FC = () => {
                     { label: 'Last sign-in', value: (a && dateStr(a.last_sign_in)) ?? '—' },
                   ];
                   return (
-                    <div className="space-y-1.5 border-t border-gray-200 pt-3">
+                    <div className="space-y-1 border-t border-gray-200 pt-3">
                       {rows.map((r) => (
                         <div key={r.label} className="flex items-baseline justify-between gap-3">
                           <span className="text-[10px] text-gray-500 uppercase tracking-wide flex-shrink-0">{r.label}</span>
-                          <span className="text-sm text-gray-800 text-right break-all">{r.value}</span>
+                          <span className="text-xs text-gray-800 text-right break-all">{r.value}</span>
                         </div>
                       ))}
                     </div>
                   );
                 })()}
 
-                <div className={`grid ${canManageAdmins ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
-                  <div className="bg-gray-50 rounded-lg px-3 py-3">
+                <div className={`grid ${canManageAdmins ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-gray-500 uppercase tracking-wide">Runs (7d)</p>
-                    <p className="text-lg font-bold mt-0.5 tabular-nums">
+                    <p className="text-base font-bold mt-0.5 tabular-nums">
                       {String((userReport as { week_runs?: number }).week_runs ?? 0)}
                     </p>
                   </div>
                   {canManageAdmins && (
-                    <div className="bg-gray-50 rounded-lg px-3 py-3">
+                    <div className="bg-gray-50 rounded-lg px-3 py-2">
                       <p className="text-[10px] text-gray-500 uppercase tracking-wide">Admin</p>
-                      <p className={`text-lg font-bold mt-0.5 ${selectedIsAdmin ? 'text-emerald-700' : 'text-gray-500'}`}>
+                      <p className={`text-base font-bold mt-0.5 ${selectedIsAdmin ? 'text-emerald-700' : 'text-gray-500'}`}>
                         {selectedIsAdmin ? 'Yes' : 'No'}
                       </p>
                     </div>
                   )}
                 </div>
 
+                <details className="group rounded-lg border border-gray-200 bg-white">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50">
+                    <span>Manage account</span>
+                    <ChevronDown className="h-3.5 w-3.5 text-gray-400 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="space-y-4 border-t border-gray-100 p-3">
                 {/* Credit adjustment */}
                 <div className="space-y-2">
                   <FieldLabel>Adjust credits (+/-)</FieldLabel>
@@ -3645,11 +3946,23 @@ const AdminPortal: React.FC = () => {
                 <div className="space-y-2">
                   <FieldLabel htmlFor="sub-tier">Subscription tier</FieldLabel>
                   <div className="flex gap-2">
+                    <div className="flex-1">
+                      <UserSingleFilterDropdown
+                        label="Plan"
+                        options={[
+                          { value: '', label: 'Select plan' },
+                          ...SUBSCRIPTION_PLANS.map((p) => ({ value: p, label: p })),
+                        ]}
+                        value={subStatus}
+                        onChange={setSubStatus}
+                      />
+                    </div>
+                    <div className="hidden">
                     <select
                       id="sub-tier"
                       value={subStatus}
                       onChange={(e) => setSubStatus(e.target.value)}
-                      className={`${textInput} flex-1`}
+                      className={`${userFilterControl} appearance-none rounded-lg bg-white px-3 pr-9 shadow-sm`}
                     >
                       <option value="" disabled>
                         Select plan…
@@ -3660,6 +3973,8 @@ const AdminPortal: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    </div>
                     <button
                       type="button"
                       onClick={applySubscription}
@@ -3687,6 +4002,8 @@ const AdminPortal: React.FC = () => {
                     </button>
                   </div>
                 )}
+                  </div>
+                </details>
 
                 {/* Week breakdown */}
                 <details className="group">
@@ -3719,20 +4036,61 @@ const AdminPortal: React.FC = () => {
         )}
 
         {/* ── ADMINS ────────────────────────────────────────────────────── */}
-        {tab === 'admins' && canManageAdmins && (
+        {tab === 'admins' && canReadAdmins && (
           <div className="max-w-4xl space-y-5">
-            <PermissionMatrix />
-            <ProductRoleOverview />
+            <div className="flex rounded-full border border-gray-200 bg-white p-1 shadow-sm">
+              {accessTabs.map((item) => {
+                const active = item.id === activeAccessTab;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setAccessTab(item.id)}
+                    className={`flex-1 rounded-full px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+                      active ? 'bg-blue-700 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                    aria-pressed={active}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+            {activeAccessTab === 'permissions' && <PermissionMatrix />}
+            {activeAccessTab === 'product' && <ProductRoleOverview />}
+            {(activeAccessTab === 'console' || activeAccessTab === 'reviewers') && (
             <Card className="p-5 space-y-4">
               <div>
-                <SectionHeading>{t('admin.admins.title')}</SectionHeading>
+                <div className="flex items-center justify-between gap-3">
+                  <SectionHeading>{canManageAdmins ? t('admin.admins.title') : 'Reviewers'}</SectionHeading>
+                  <span className="text-xs text-gray-500">{visibleAdmins.length} / {visibleAdminBase.length} visible</span>
+                </div>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t('admin.admins.subtitle')}
+                  {canManageAdmins ? t('admin.admins.subtitle') : 'Reviewer accounts visible to admins.'}
                 </p>
               </div>
 
+              <div className="max-w-xs">
+                <UserFilterDropdown
+                  label="Role"
+                  options={[
+                    { value: 'reviewer', label: t('admin.role.reviewer') },
+                    { value: 'admin', label: t('admin.role.admin') },
+                    { value: 'super', label: t('admin.role.super') },
+                  ]}
+                  selected={adminRoleFilters}
+                  onChange={setAdminRoleFilters}
+                />
+              </div>
+
               {/* Invite form */}
-              <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+              {canManageAdmins && (
+              <details className="group rounded-lg border border-emerald-200 bg-emerald-50/40">
+                <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-50">
+                  <span>📮 Invite Admin or Reviewer</span>
+                  <ChevronDown className="h-4 w-4 text-emerald-700 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="space-y-3 border-t border-emerald-100 p-3">
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div>
                     <FieldLabel htmlFor="invite-email">{t('admin.admins.invite_label')}</FieldLabel>
@@ -3742,30 +4100,46 @@ const AdminPortal: React.FC = () => {
                       value={inviteEmail}
                       onChange={(e) => { setInviteEmail(e.target.value); setInviteFeedback(null); }}
                       onKeyDown={(e) => e.key === 'Enter' && inviteAdmin()}
+                      disabled={inviteLoading}
                       placeholder={t('admin.admins.invite_placeholder')}
                       className={textInput}
                     />
                   </div>
                   <div>
                     <FieldLabel htmlFor="invite-role">{t('admin.admins.invite_role')}</FieldLabel>
-                    <select
-                      id="invite-role"
+                    <UserSingleFilterDropdown
+                      label="Role"
+                      options={[
+                        { value: 'admin', label: t('admin.role.admin') },
+                        { value: 'reviewer', label: t('admin.role.reviewer') },
+                      ]}
                       value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as 'admin' | 'reviewer')}
-                      className={textInput}
-                    >
-                      <option value="admin">{t('admin.role.admin')}</option>
-                      <option value="reviewer">{t('admin.role.reviewer')}</option>
-                    </select>
+                      onChange={(next) => {
+                        if (!inviteLoading) setInviteRole(next as 'admin' | 'reviewer');
+                      }}
+                    />
+                    <div className="hidden">
+                      <select
+                        id="invite-role"
+                        value={inviteRole}
+                        onChange={(e) => setInviteRole(e.target.value as 'admin' | 'reviewer')}
+                        className={`${userFilterControl} appearance-none rounded-lg bg-white px-3 pr-9 shadow-sm`}
+                      >
+                        <option value="admin">{t('admin.role.admin')}</option>
+                        <option value="reviewer">{t('admin.role.reviewer')}</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    </div>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={inviteAdmin}
-                  disabled={!inviteEmail.trim()}
+                  disabled={!inviteEmail.trim() || inviteLoading}
                   className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 rounded-md text-sm font-medium text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
                 >
-                  {t('admin.admins.invite_btn')}
+                  {inviteLoading && <span className="h-3 w-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
+                  {inviteLoading ? 'Inviting...' : t('admin.admins.invite_btn')}
                 </button>
                 {inviteFeedback?.ok && (
                   <p className="text-xs text-emerald-700 flex items-center gap-1.5"><span>✓</span>{inviteFeedback.ok}</p>
@@ -3773,14 +4147,16 @@ const AdminPortal: React.FC = () => {
                 {inviteFeedback?.err && (
                   <p className="text-xs text-red-600 flex items-center gap-1.5"><span>✕</span>{inviteFeedback.err}</p>
                 )}
-              </div>
+                </div>
+              </details>
+              )}
 
               {/* Admin list */}
-              {admins.length === 0 ? (
-                <EmptyState message={t('admin.admins.empty')} />
+              {visibleAdmins.length === 0 ? (
+                <EmptyState message={canManageAdmins ? t('admin.admins.empty') : 'No reviewers visible.'} />
               ) : (
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-                  {admins.map((a) => (
+                  {visibleAdmins.map((a) => (
                     <li key={a.uid} className="flex items-center justify-between py-3 gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium flex items-center gap-2 flex-wrap">
@@ -3811,21 +4187,24 @@ const AdminPortal: React.FC = () => {
                           <p className="text-[10px] text-gray-400">{t('admin.admins.invited_at')}: {a.invited_at.slice(0, 10)}</p>
                         )}
                       </div>
-                      {a.source === 'env' ? (
+                      {canManageAdmins && (
+                      a.source === 'env' ? (
                         <span className="text-xs text-gray-400 shrink-0">env only</span>
                       ) : (
                         <div className="flex items-center gap-2 shrink-0">
                           {/* Role change dropdown (only for non-super non-env entries) */}
                           {a.role !== 'super' && (
-                            <select
-                              value={a.role ?? 'admin'}
-                              onChange={(e) => changeAdminRole(a.uid, e.target.value as 'admin' | 'reviewer')}
-                              className="text-xs border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              aria-label={t('admin.admins.change_role')}
-                            >
-                              <option value="admin">{t('admin.role.admin')}</option>
-                              <option value="reviewer">{t('admin.role.reviewer')}</option>
-                            </select>
+                            <div className="w-36">
+                              <UserSingleFilterDropdown
+                                label={t('admin.admins.change_role')}
+                                options={[
+                                  { value: 'admin', label: t('admin.role.admin') },
+                                  { value: 'reviewer', label: t('admin.role.reviewer') },
+                                ]}
+                                value={a.role ?? 'admin'}
+                                onChange={(next) => changeAdminRole(a.uid, next as 'admin' | 'reviewer')}
+                              />
+                            </div>
                           )}
                           {a.role !== 'super' && (
                             <button
@@ -3837,12 +4216,14 @@ const AdminPortal: React.FC = () => {
                             </button>
                           )}
                         </div>
+                      )
                       )}
                     </li>
                   ))}
                 </ul>
               )}
             </Card>
+            )}
           </div>
         )}
 
@@ -3935,7 +4316,8 @@ const AdminPortal: React.FC = () => {
             )}
           </Card>
         )}
-    </AdminShell>
+      </AdminShell>
+    </ToastProvider>
   );
 };
 
