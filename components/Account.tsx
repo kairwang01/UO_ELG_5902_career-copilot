@@ -40,6 +40,19 @@ const TALENT_NFT_ABI = [
 const TARGET_CHAIN_ID = 11155111; // Sepolia Testnet Chain ID
 const TARGET_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia Chain ID in Hex
 
+// The Talent NFT contract is not deployed yet (the address above is a
+// placeholder), so calling it would always fail. Until a real contract is wired
+// in, the credential runs in a clearly-labelled testnet PREVIEW: the wallet
+// state stays saved, but mint/stake/claim are simulated locally and persisted to
+// the user's nft_* profile fields instead of sending an on-chain transaction.
+// Flip to false once TALENT_NFT_CONTRACT_ADDRESS points at a deployed contract.
+const TALENT_NFT_PREVIEW_MODE = true;
+
+// Deterministic per-wallet token id for the preview credential, so re-opening
+// the page shows a stable id and re-mints don't churn.
+const previewTokenIdFor = (address: string): number =>
+  (parseInt(address.replace(/^0x/i, '').slice(0, 8) || '0', 16) % 90000) + 10000;
+
 type AccountNotice = {
   type: 'success' | 'error' | 'info';
   text: string;
@@ -304,6 +317,20 @@ const Account: React.FC<AccountProps> = ({
           setWeb3Notice({ type: 'error', text: t('account_web3_connect_first') });
         }
         if (isCurrentRun()) setIsSyncing(false);
+        return;
+      }
+
+      if (TALENT_NFT_PREVIEW_MODE) {
+        // No deployed contract yet: skip on-chain reads (they would throw and
+        // wrongly wipe the credential). The wallet is connected (checked above)
+        // and the nft_* values from the profile, already in local state, are the
+        // source of truth. Treat the network as ready so the preview flow works
+        // on any chain.
+        if (isCurrentRun()) {
+          setIsWrongNetwork(false);
+          if (options.interactive) setWeb3Notice(null);
+          setIsSyncing(false);
+        }
         return;
       }
 
@@ -728,6 +755,37 @@ const Account: React.FC<AccountProps> = ({
       return;
     }
     setWeb3Busy(true);
+    if (TALENT_NFT_PREVIEW_MODE) {
+      setWeb3Notice({ type: 'info', text: t('account_web3_minting_wait') });
+      const prevTokenId = tokenId;
+      const prevMinted = nftMinted;
+      try {
+        const newTokenId = previewTokenIdFor(walletAddress);
+        setTokenId(newTokenId);
+        setNftMinted(true);
+        await data.profiles.update(session.user.id, {
+          nft_minted: true,
+          nft_token_id: newTokenId,
+        });
+        if (!mountedRef.current) return;
+        setWeb3Notice({
+          type: 'success',
+          text: t('account_web3_mint_success').replace('{id}', String(newTokenId)),
+        });
+      } catch (error: any) {
+        if (mountedRef.current) {
+          setTokenId(prevTokenId);
+          setNftMinted(prevMinted);
+          setWeb3Notice({
+            type: 'error',
+            text: getWeb3ActionErrorText(error, 'account_web3_mint_failed'),
+          });
+        }
+      } finally {
+        if (mountedRef.current) setWeb3Busy(false);
+      }
+      return;
+    }
     setWeb3Notice({ type: 'info', text: t('account_web3_approve_transaction') });
     try {
       const signer = await getSignerForSavedWallet();
@@ -788,6 +846,46 @@ const Account: React.FC<AccountProps> = ({
   const handleToggleStake = async () => {
     if (tokenId === null) return;
     setWeb3Busy(true);
+    const newStakedStatus = !nftStaked;
+    if (TALENT_NFT_PREVIEW_MODE) {
+      const prevStaked = nftStaked;
+      const prevEarnings = nftEarnings;
+      setWeb3Notice({
+        type: 'info',
+        text: t(nftStaked ? 'account_web3_unstake_wait' : 'account_web3_stake_wait'),
+      });
+      try {
+        const updates: Record<string, unknown> = { nft_staked: newStakedStatus };
+        setNftStaked(newStakedStatus);
+        // Preview: activating in the talent pool accrues a sample reward so the
+        // claim step is demonstrable without waiting for real on-chain accrual.
+        if (newStakedStatus && (nftEarnings ?? 0) <= 0) {
+          updates.nft_earnings = 0.05;
+          setNftEarnings(0.05);
+        }
+        await data.profiles.update(session.user.id, updates);
+        if (!mountedRef.current) return;
+        setWeb3Notice({
+          type: 'success',
+          text: t(newStakedStatus ? 'account_web3_stake_success' : 'account_web3_unstake_success'),
+        });
+      } catch (error: any) {
+        if (mountedRef.current) {
+          setNftStaked(prevStaked);
+          setNftEarnings(prevEarnings);
+          setWeb3Notice({
+            type: 'error',
+            text: getWeb3ActionErrorText(
+              error,
+              nftStaked ? 'account_web3_unstake_failed' : 'account_web3_stake_failed',
+            ),
+          });
+        }
+      } finally {
+        if (mountedRef.current) setWeb3Busy(false);
+      }
+      return;
+    }
     const action = nftStaked ? 'unstake' : 'stake';
     setWeb3Notice({
       type: 'info',
@@ -816,7 +914,6 @@ const Account: React.FC<AccountProps> = ({
       await tx.wait();
       if (!mountedRef.current) return;
 
-      const newStakedStatus = !nftStaked;
       setNftStaked(newStakedStatus);
       await data.profiles.update(session.user.id, {
         nft_staked: newStakedStatus,
@@ -853,6 +950,30 @@ const Account: React.FC<AccountProps> = ({
       return;
     }
     setWeb3Busy(true);
+    if (TALENT_NFT_PREVIEW_MODE) {
+      setWeb3Notice({ type: 'info', text: t('account_web3_claim_wait') });
+      const prevEarnings = nftEarnings;
+      try {
+        // Preview rewards accrue only while the credential is staked.
+        const reward = nftStaked ? 0.05 : 0;
+        const newEarnings = Number(((nftEarnings ?? 0) + reward).toFixed(4));
+        setNftEarnings(newEarnings);
+        await data.profiles.update(session.user.id, { nft_earnings: newEarnings });
+        if (!mountedRef.current) return;
+        setWeb3Notice({ type: 'success', text: t('account_web3_claim_success') });
+      } catch (error: any) {
+        if (mountedRef.current) {
+          setNftEarnings(prevEarnings);
+          setWeb3Notice({
+            type: 'error',
+            text: getWeb3ActionErrorText(error, 'account_web3_claim_failed'),
+          });
+        }
+      } finally {
+        if (mountedRef.current) setWeb3Busy(false);
+      }
+      return;
+    }
     setWeb3Notice({ type: 'info', text: t('account_web3_claim_approve') });
     try {
       const signer = await getSignerForSavedWallet();
@@ -1085,6 +1206,20 @@ const Account: React.FC<AccountProps> = ({
           <p className="text-xs text-gray-500 dark:text-gray-400 -mt-3">
             {t('account_web3_optional_note')}
           </p>
+          {TALENT_NFT_PREVIEW_MODE && (
+            <div
+              className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200"
+              role="note"
+            >
+              <span
+                aria-hidden="true"
+                className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-amber-300 text-[10px] font-bold"
+              >
+                i
+              </span>
+              <span>{t('account_web3_preview_notice')}</span>
+            </div>
+          )}
           <AccountNoticeBanner notice={web3Notice} qa="account-web3-notice" />
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/70 space-y-4">
             <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
