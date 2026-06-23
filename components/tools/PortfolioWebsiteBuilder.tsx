@@ -1631,7 +1631,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 <span className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">02</span>
                 <h5 className="mt-2 font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_deploy_step2_title')}</h5>
                 <p className="text-sm mt-1 dark:text-slate-400">{t('tool_portfolio_deploy_step2_desc')}</p>
-                 <a href="https://iot.caiot.co/" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:underline dark:text-blue-300">
+                 <a href="https://hub.caiot.co/" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:underline dark:text-blue-300">
                   {resultLabels.openLab}
                   <ExternalLink className="h-3.5 w-3.5" />
                  </a>
