@@ -6,7 +6,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as admin from '../functions/node_modules/firebase-admin';
-import { cancelSubscriptionSimulatedImpl, confirmSimulatedCheckoutImpl, createBillingPortalSessionImpl } from '../functions/src/handlers/stripeBilling';
+import {
+  billingPortalReturnPathForAudience,
+  cancelSubscriptionSimulatedImpl,
+  confirmSimulatedCheckoutImpl,
+  createBillingPortalSessionImpl,
+} from '../functions/src/handlers/stripeBilling';
 
 const PROJECT = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const db = admin.firestore();
@@ -79,5 +84,11 @@ describe('createBillingPortalSession (simulation branch)', () => {
     });
     await expect(createBillingPortalSessionImpl('cand5'))
       .rejects.toThrow(/no active subscription/i);
+  });
+
+  it('routes Stripe Portal returns to the correct workspace shell', () => {
+    expect(billingPortalReturnPathForAudience('candidate')).toBe('/workspace/billing');
+    expect(billingPortalReturnPathForAudience('business')).toBe('/portal?billing=return');
+    expect(billingPortalReturnPathForAudience(undefined)).toBe('/workspace/billing');
   });
 });

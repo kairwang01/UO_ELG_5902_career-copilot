@@ -92,6 +92,10 @@ function appBaseUrl(): string {
   return value.replace(/\/$/, "");
 }
 
+export function billingPortalReturnPathForAudience(audience: unknown): string {
+  return audience === "business" ? "/portal?billing=return" : "/workspace/billing";
+}
+
 function normalizeCheckoutPlan(raw: unknown): CheckoutPlan {
   const key = typeof raw === "string" ? raw.trim().replace(/^pending_biz_/, "").replace(/^pending_/, "") : "";
   const plan = CHECKOUT_PLANS[key];
@@ -336,7 +340,7 @@ export async function createBillingPortalSessionImpl(uid: string): Promise<{ url
   if (!billingSnap.exists || billingSnap.get("active") !== true || typeof customerId !== "string" || !customerId) {
     throw new HttpsError("failed-precondition", "No active subscription to manage.");
   }
-  const returnPath = audience === "business" ? "/portal?billing=return" : "/workspace/billing";
+  const returnPath = billingPortalReturnPathForAudience(audience);
   const stripe = getStripe();
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
