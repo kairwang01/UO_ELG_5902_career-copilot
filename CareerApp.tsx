@@ -793,11 +793,15 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         const checkout = urlParams.get('checkout');
         const paid = urlParams.get('payment_success') === 'true' || checkout === 'success';
         const cancelled = urlParams.get('payment_cancelled') === 'true' || checkout === 'cancel';
+        const subCancelled = urlParams.get('cancelled') === 'success';
         if (paid) {
             addToast(latestTRef.current('payment_success_plan_upgraded'), 'success');
             window.history.replaceState({}, document.title, window.location.pathname);
         } else if (cancelled) {
             addToast(latestTRef.current('payment_cancelled_try_again'), 'info');
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (subCancelled) {
+            addToast(latestTRef.current('ws_billing_cancel_success'), 'success');
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     };
