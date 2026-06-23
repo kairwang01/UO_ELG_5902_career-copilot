@@ -290,6 +290,35 @@ export async function confirmSimulatedCheckoutImpl(uid: string, data: ConfirmSim
 export const confirmSimulatedCheckoutFunction = onCall((request) =>
   confirmSimulatedCheckoutImpl(requireAuth(request), (request.data ?? {}) as ConfirmSimulatedCheckoutRequest));
 
+/**
+ * Simulated subscription cancellation (demo/test only). Mirrors the Stripe
+ * customer.subscription.deleted webhook's downgrade path — clearing billing.active
+ * and resetting the user to free WITHOUT touching credits. Gated by
+ * BILLING_SIMULATION so it can never bypass Stripe in production.
+ */
+export async function cancelSubscriptionSimulatedImpl(uid: string) {
+  if (!billingSimulationEnabled()) {
+    throw new HttpsError("failed-precondition", "Billing simulation is not enabled.");
+  }
+  const billingSnap = await db.collection(BILLING_COLLECTION).doc(uid).get();
+  if (!billingSnap.exists || billingSnap.get("active") !== true) {
+    return { status: "inactive" as const, subscription_status: "free" };
+  }
+  const audience = billingSnap.get("audience");
+  const resolvedAudience: BillingAudience =
+    audience === "business" ? "business" : "candidate";
+  await deactivateStripeEntitlement({
+    uid,
+    audience: resolvedAudience,
+    stripeSubscriptionId: billingSnap.get("stripe_subscription_id") ?? null,
+    reason: "cancelled_simulated",
+  });
+  return { status: "cancelled" as const, subscription_status: "free" };
+}
+
+export const cancelSubscriptionSimulatedFunction = onCall((request) =>
+  cancelSubscriptionSimulatedImpl(requireAuth(request)));
+
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const uid = stringOrNull(session.metadata?.uid) ?? stringOrNull(session.client_reference_id);
   const plan = stringOrNull(session.metadata?.plan_key);
