@@ -42,7 +42,8 @@ beta/qa-screenshots/*.png
 # Local tooling / scratch / AI companions (not part of the app)
 .claude/
 .workbuddy/
-CLAUDE.mdfirestore-debug.log
+CLAUDE.md
+firestore-debug.log
 
 .agents/
 # Coverage reports (npm run test:coverage)
