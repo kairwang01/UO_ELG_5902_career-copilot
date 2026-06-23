@@ -45,6 +45,25 @@ type AccountNotice = {
   text: string;
 };
 
+type EthereumProviderLike = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
+
+const getEthereumProvider = (): EthereumProviderLike | null => {
+  const maybe = (window as unknown as { ethereum?: EthereumProviderLike }).ethereum;
+  return maybe && typeof maybe.request === 'function' ? maybe : null;
+};
+
+const normalizeWalletAddress = (address: string | null | undefined): string =>
+  typeof address === 'string' ? address.trim().toLowerCase() : '';
+
+const readConnectedWalletAccounts = async (ethereum: EthereumProviderLike): Promise<string[]> => {
+  const raw = await ethereum.request({ method: 'eth_accounts' });
+  return Array.isArray(raw)
+    ? raw.filter((item): item is string => typeof item === 'string')
+    : [];
+};
+
 const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   try {
@@ -180,6 +199,8 @@ const Account: React.FC<AccountProps> = ({
   const mountedRef = useRef(true);
   const profileSavingRef = useRef(false);
   const passwordSavingRef = useRef(false);
+  const web3SyncRunRef = useRef(0);
+  const walletAddressRef = useRef<string | null>(null);
   const [web3Busy, setWeb3Busy] = useState(false);
   const [fullName, setFullName] = useState<string>(profile?.full_name || '');
   const [birthDate, setBirthDate] = useState<string>(normalizeDateInput(profile?.birth_date));
@@ -236,33 +257,59 @@ const Account: React.FC<AccountProps> = ({
   }, [profile, session.user.id]);
 
   useEffect(() => {
+    walletAddressRef.current = walletAddress;
+  }, [walletAddress]);
+
+  useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
   }, []);
 
-  const syncWithBlockchain = useCallback(async () => {
+  const syncWithBlockchain = useCallback(async (options: { interactive?: boolean } = {}) => {
     if (!walletAddress) return;
+    const runId = ++web3SyncRunRef.current;
+    const savedAddress = walletAddress;
+    const isCurrentRun = () =>
+      mountedRef.current &&
+      web3SyncRunRef.current === runId &&
+      normalizeWalletAddress(walletAddressRef.current) === normalizeWalletAddress(savedAddress);
 
     setIsSyncing(true);
     setIsWrongNetwork(false);
-    setWeb3Notice({ type: 'info', text: t('account_web3_syncing') });
+    if (options.interactive) {
+      setWeb3Notice({ type: 'info', text: t('account_web3_syncing') });
+    }
 
     try {
-      if (!(window as any).ethereum) {
-        setWeb3Notice({ type: 'error', text: t('account_web3_no_wallet') });
-        setIsSyncing(false);
+      const ethereum = getEthereumProvider();
+      if (!ethereum) {
+        if (options.interactive) {
+          setWeb3Notice({ type: 'error', text: t('account_web3_no_wallet') });
+        }
+        if (isCurrentRun()) setIsSyncing(false);
         return;
       }
 
-      // Ensure wallet is unlocked and connected by requesting accounts. This prevents errors on subsequent calls.
-      await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
-      if (!mountedRef.current) return;
+      // Passive sync must never prompt the wallet. `eth_accounts` only returns
+      // already-authorized accounts; explicit user actions request access later.
+      const accounts = await readConnectedWalletAccounts(ethereum);
+      if (!isCurrentRun()) return;
+      const hasSavedWalletConnected = accounts.some(
+        (account) => normalizeWalletAddress(account) === normalizeWalletAddress(savedAddress),
+      );
+      if (!hasSavedWalletConnected) {
+        if (options.interactive) {
+          setWeb3Notice({ type: 'error', text: t('account_web3_connect_first') });
+        }
+        if (isCurrentRun()) setIsSyncing(false);
+        return;
+      }
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(ethereum);
       const network = await provider.getNetwork();
-      if (!mountedRef.current) return;
+      if (!isCurrentRun()) return;
 
       if (network.chainId !== BigInt(TARGET_CHAIN_ID)) {
         setIsWrongNetwork(true);
@@ -280,14 +327,14 @@ const Account: React.FC<AccountProps> = ({
         TALENT_NFT_ABI,
         provider,
       );
-      const balance = await contract.balanceOf(walletAddress);
-      if (!mountedRef.current) return;
+      const balance = await contract.balanceOf(savedAddress);
+      if (!isCurrentRun()) return;
 
       if (balance > 0) {
-        const userTokenId = await contract.getTokenIdOfOwner(walletAddress);
+        const userTokenId = await contract.getTokenIdOfOwner(savedAddress);
         const staked = await contract.isStaked(userTokenId);
-        const rewards = await contract.getRewards(walletAddress);
-        if (!mountedRef.current) return;
+        const rewards = await contract.getRewards(savedAddress);
+        if (!isCurrentRun()) return;
 
         const newValues = {
           nft_minted: true,
@@ -317,21 +364,25 @@ const Account: React.FC<AccountProps> = ({
 
         await data.profiles.update(session.user.id, newValues);
       }
-      if (!mountedRef.current) return;
+      if (!isCurrentRun()) return;
       setWeb3Notice(null); // Clear info message on successful sync
     } catch (err) {
       console.error('Error syncing with blockchain:', err);
-      if (mountedRef.current) {
+      if (isCurrentRun()) {
         setWeb3Notice({ type: 'error', text: t('account_web3_sync_failed') });
       }
     } finally {
-      if (mountedRef.current) setIsSyncing(false);
+      if (isCurrentRun()) setIsSyncing(false);
     }
   }, [walletAddress, session.user.id, t]);
 
   useEffect(() => {
     if (walletAddress) {
       syncWithBlockchain();
+    } else {
+      web3SyncRunRef.current += 1;
+      setIsSyncing(false);
+      setIsWrongNetwork(false);
     }
   }, [walletAddress, syncWithBlockchain]);
 
@@ -507,6 +558,8 @@ const Account: React.FC<AccountProps> = ({
       }
 
       if (!mountedRef.current) return;
+      web3SyncRunRef.current += 1; // cancel any passive sync tied to the previous wallet
+      walletAddressRef.current = address;
       setWalletAddress(address);
       setWeb3Notice({
         type: 'success',
@@ -530,16 +583,18 @@ const Account: React.FC<AccountProps> = ({
   };
 
   const handleConnectWallet = async () => {
-    if (typeof (window as any).ethereum !== 'undefined') {
+    const ethereum = getEthereumProvider();
+    if (ethereum) {
       setWeb3Busy(true);
       try {
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
-        const signer = await provider.getSigner();
-        const address = await signer.getAddress();
+        const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+        const address = Array.isArray(accounts) && typeof accounts[0] === 'string' ? accounts[0] : '';
         if (!mountedRef.current) return;
 
         if (address) {
           await updateWallet(address);
+        } else {
+          setWeb3Notice({ type: 'error', text: t('account_web3_connect_failed') });
         }
       } catch (error) {
         if (!mountedRef.current) return;
@@ -565,20 +620,25 @@ const Account: React.FC<AccountProps> = ({
   };
 
   const handleSwitchNetwork = async () => {
+    const ethereum = getEthereumProvider();
+    if (!ethereum) {
+      setWeb3Notice({ type: 'error', text: t('account_web3_no_wallet') });
+      return;
+    }
     setWeb3Busy(true);
     setWeb3Notice({ type: 'info', text: t('account_web3_switch_approve') });
     try {
-      await (window as any).ethereum.request({
+      await ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: TARGET_CHAIN_ID_HEX }],
       });
       if (!mountedRef.current) return;
-      syncWithBlockchain();
+      syncWithBlockchain({ interactive: true });
     } catch (switchError: any) {
       if (!mountedRef.current) return;
       if (switchError.code === 4902) {
         try {
-          await (window as any).ethereum.request({
+          await ethereum.request({
             method: 'wallet_addEthereumChain',
             params: [
               {
