@@ -1393,7 +1393,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         </div>
                     </details>
 
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                    <div className="grid gap-3">
                         <div>
                             <label htmlFor="mi-experience" className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{t('mi_experience_label')}</label>
                             <select
@@ -1416,7 +1416,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                         type="button"
                                         onClick={() => setDifficulty(opt.id)}
                                         aria-pressed={difficulty === opt.id}
-                                        className={`rounded-lg px-2 py-2 text-xs font-bold transition ${
+                                        className={`min-w-0 rounded-lg px-2 py-2 text-center text-xs font-bold whitespace-nowrap transition ${
                                             difficulty === opt.id ? 'bg-blue-700 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
                                         }`}
                                     >
