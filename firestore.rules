@@ -442,6 +442,32 @@ service cloud.firestore {
         optionalString(data, "updated_at", 40);
     }
 
+    function validSavedPortfolio(data, userId, portfolioId) {
+      return data.keys().hasOnly([
+          "version",
+          "name",
+          "theme",
+          "html_path",
+          "resume_fingerprint",
+          "created_at",
+          "updated_at"
+        ]) &&
+        data.keys().hasAll(["version", "name", "theme", "html_path", "created_at", "updated_at"]) &&
+        data.version == 1 &&
+        data.name is string &&
+        data.name.size() > 0 &&
+        data.name.size() <= 160 &&
+        data.theme is string &&
+        data.theme.size() > 0 &&
+        data.theme.size() <= 40 &&
+        data.html_path is string &&
+        portfolioId.matches("^[A-Za-z0-9_-]+$") &&
+        data.html_path == "portfolio-sites/" + userId + "/" + portfolioId + "/showcase.html" &&
+        optionalString(data, "resume_fingerprint", 80) &&
+        data.created_at is timestamp &&
+        data.updated_at is timestamp;
+    }
+
     // (validApplicationStatus / validJobApplication removed — job_applications
     // creates and updates are now server-only via Cloud Functions, so the
     // client-write validators are dead. Status values are validated in
@@ -571,6 +597,15 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/users/$(userId)).data.subscription_status in ["essentials", "accelerator", "executive"]
           && request.resource.data.tool_key is string
           && request.resource.data.tool_key.size() <= 80;
+        allow delete: if isOwner(userId);
+      }
+
+      // portfolios/{portfolioId} - saved Showcase websites. HTML is stored in
+      // Storage under portfolio-sites/{uid}/{portfolioId}/showcase.html.
+      match /portfolios/{portfolioId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && validSavedPortfolio(request.resource.data, userId, portfolioId);
+        allow update: if false;
         allow delete: if isOwner(userId);
       }
     }

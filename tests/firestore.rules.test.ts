@@ -170,6 +170,48 @@ describe('saved tool_results tier gate', () => {
   });
 });
 
+describe('saved Showcase portfolios access', () => {
+  const validPortfolio = (uid: string, id = 'portfolio_1') => ({
+    version: 1,
+    name: 'June Portfolio',
+    theme: 'sapphire',
+    html_path: `portfolio-sites/${uid}/${id}/showcase.html`,
+    resume_fingerprint: '12:abc',
+    created_at: ts(),
+    updated_at: ts(),
+  });
+
+  it('owner CAN save and read a portfolio metadata document', async () => {
+    await seed('cand1', CANDIDATE);
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertSucceeds(setDoc(doc(db, 'users', 'cand1', 'portfolios', 'portfolio_1'), validPortfolio('cand1')));
+    await assertSucceeds(getDoc(doc(db, 'users', 'cand1', 'portfolios', 'portfolio_1')));
+  });
+
+  it('another user CANNOT read or write your portfolio metadata', async () => {
+    await seed('cand1', CANDIDATE);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'cand1', 'portfolios', 'portfolio_1'), validPortfolio('cand1'));
+    });
+    const other = testEnv.authenticatedContext('other').firestore();
+    await assertFails(getDoc(doc(other, 'users', 'cand1', 'portfolios', 'portfolio_1')));
+    await assertFails(setDoc(doc(other, 'users', 'cand1', 'portfolios', 'portfolio_2'), validPortfolio('cand1', 'portfolio_2')));
+  });
+
+  it('owner CANNOT update or schema-pollute saved portfolio metadata', async () => {
+    await seed('cand1', CANDIDATE);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'cand1', 'portfolios', 'portfolio_1'), validPortfolio('cand1'));
+    });
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'cand1', 'portfolios', 'portfolio_1'), { name: 'Edited' }));
+    await assertFails(setDoc(doc(db, 'users', 'cand1', 'portfolios', 'portfolio_2'), {
+      ...validPortfolio('cand1', 'portfolio_2'),
+      extra: 'nope',
+    }));
+  });
+});
+
 describe('interview_sessions history access', () => {
   const validSession = {
     started_at: ts(),

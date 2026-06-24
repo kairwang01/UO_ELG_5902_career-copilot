@@ -55,6 +55,21 @@ service firebase.storage {
     // application_resumes/{applicationId}/… — frozen copy of the resume file taken
     // at apply time (the file HR reviews). Written by createJobApplication and
     // served via getApplicantResumeFile, both Admin SDK. Clients never touch it.
+    // portfolio-sites/{userId}/{portfolioId}/showcase.html
+    // Saved Showcase HTML. Owner-only because the generated page can include
+    // contact details and resume-derived content.
+    match /portfolio-sites/{userId}/{portfolioId}/showcase.html {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && (
+                     request.resource == null ||
+                     (
+                       request.resource.size < 10 * 1024 * 1024
+                       && request.resource.contentType.matches('text/html.*')
+                     )
+                   );
+    }
+
     match /application_resumes/{applicationId}/{fileName} {
       allow read, write: if false;
     }

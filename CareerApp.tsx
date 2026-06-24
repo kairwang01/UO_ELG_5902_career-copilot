@@ -33,6 +33,7 @@ import Auth from './components/Auth';
 // Lazy: Account pulls in ethers (Web3) and is only opened from settings, so it
 // shouldn't weigh down the initial workspace bundle.
 const Account = React.lazy(() => import('./components/Account'));
+const ShowcasePage = React.lazy(() => import('./components/ShowcasePage'));
 import Dashboard from './components/dashboard/Dashboard';
 import {
   CandidateBillingPage,
@@ -203,6 +204,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [dashboardView, setDashboardView] = useState<DashboardView>('dashboard');
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [showcaseHasUnsavedPortfolio, setShowcaseHasUnsavedPortfolio] = useState(false);
   const [candidatePlanSaving, setCandidatePlanSaving] = useState<CandidatePlanKey | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -245,14 +247,23 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
   useModalBehavior(closeMobileNav, isMobileNavOpen);
 
+  const confirmShowcaseLeave = useCallback(() => {
+    if (dashboardView !== 'portfolio' || !showcaseHasUnsavedPortfolio) return true;
+    if (!window.confirm(latestTRef.current('showcase_unsaved_leave_confirm'))) return false;
+    setShowcaseHasUnsavedPortfolio(false);
+    return true;
+  }, [dashboardView, showcaseHasUnsavedPortfolio]);
+
   const setWorkspaceView = useCallback((nextView: DashboardView, options: { replace?: boolean } = {}) => {
+    if (nextView !== 'portfolio' && !confirmShowcaseLeave()) return false;
     setDashboardView(nextView);
-    if (entry !== 'workspace') return;
+    if (entry !== 'workspace') return true;
     const nextPath = dashboardPathForView(nextView);
     if (location.pathname !== nextPath) {
       navigate(nextPath, { replace: options.replace ?? false });
     }
-  }, [entry, location.pathname, navigate]);
+    return true;
+  }, [confirmShowcaseLeave, entry, location.pathname, navigate]);
 
   // Keep the Web3 flag in sync and bounce off the credentials view if the
   // module is switched off while the user is on it.
@@ -366,6 +377,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     const pathView = dashboardViewFromPath(location.pathname);
     if (pathView) {
       if (pathView !== dashboardView) {
+        if (dashboardView === 'portfolio' && pathView !== 'portfolio' && showcaseHasUnsavedPortfolio) {
+          if (!window.confirm(latestTRef.current('showcase_unsaved_leave_confirm'))) {
+            navigate(dashboardPathForView('portfolio'), { replace: true });
+            return;
+          }
+          setShowcaseHasUnsavedPortfolio(false);
+        }
         setDashboardView(pathView);
         if (pathView !== 'toolkit') setActiveTool(null);
         setAnalysisResult(null);
@@ -384,7 +402,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     if (location.pathname.startsWith('/workspace/')) {
       navigate('/workspace', { replace: true });
     }
-  }, [entry, location.pathname, location.search, dashboardView, navigate]);
+  }, [entry, location.pathname, location.search, dashboardView, navigate, showcaseHasUnsavedPortfolio]);
 
   // Close the auth modal as soon as a session exists (login success or async restore).
   useEffect(() => {
@@ -1000,6 +1018,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   );
 
   const openWorkspaceTool = (tool: string) => {
+    if (!confirmShowcaseLeave()) return;
     if (!WORKSPACE_TOOL_KEYS.has(tool)) {
       setActiveTool(null);
       setDashboardView('toolkit');
@@ -1170,25 +1189,15 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                         action={{ label: t('ws_upload_resume'), onClick: () => { setWorkspaceView('resume'); setIsUpdatingResume(true); } }}
                     />
                  ) : (
-                    <AnalysisDisplay
-                        t={t}
-                        result={null}
-                        onReset={handleReset}
+                    <React.Suspense fallback={<LoadingSpinner market={market} />}>
+                      <ShowcasePage
                         resumeText={resumeText}
-                        userPlan={userPlan}
-                        market={market}
-                        navigateToPricing={navigateToPricing}
                         session={session}
                         profile={profile}
-                        refreshProfile={getProfile}
-                        onApplyImprovements={handleApplyImprovements}
-                        activeTool="website-builder"
-                        hideToolBackButton
-                        // This view hardcodes the portfolio tool, so the tool's "back"
-                        // (setActiveTool(null)) must LEAVE the portfolio view — otherwise
-                        // the hardcoded prop keeps rendering it and the button does nothing.
-                        setActiveTool={(tool) => { if (tool) { setActiveTool(tool); } else { setWorkspaceView('dashboard'); } }}
-                    />
+                        t={t}
+                        onUnsavedChange={setShowcaseHasUnsavedPortfolio}
+                      />
+                    </React.Suspense>
                  )}
             </div>
         )}
@@ -1303,7 +1312,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     const sidebarProps = {
       activeView: dashboardView,
       onViewChange: (v: DashboardView) => {
-        setWorkspaceView(v);
+        if (!setWorkspaceView(v)) return;
         setIsUpdatingResume(false);
         setIsMobileNavOpen(false);
         // Sidebar navigation must take over the main panel immediately. A lingering
@@ -1331,11 +1340,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       currentLang,
       onLanguageChange: changeLanguage,
       onHome: () => {
+        if (!setWorkspaceView('dashboard')) return;
         setIsMobileNavOpen(false);
         setActiveTool(null);
         setAnalysisResult(null);
         setIsUpdatingResume(false);
-        setWorkspaceView('dashboard');
       },
     };
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
-import { CheckCircle2, Code2, Download, ExternalLink, Eye, Globe, Rocket, Sparkles } from 'lucide-react';
+import { Globe, Sparkles } from 'lucide-react';
 import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -7,6 +7,7 @@ import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useToast } from '../Toast';
 import { ToolError } from './ToolUtils';
 import type { AppSession as Session } from '../../lib/data';
+import PortfolioPreviewViewer, { applyPortfolioTheme, PORTFOLIO_TEMPLATES } from '../showcase/PortfolioPreviewViewer';
 import {
   deletePortfolioDraft,
   loadPortfolioDraft,
@@ -16,6 +17,7 @@ import {
   type PortfolioDraftInput,
   type PortfolioDraftProject,
 } from '../../services/portfolioDraft';
+import { defaultPortfolioName, savePortfolio } from '../../services/savedPortfolios';
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -320,61 +322,9 @@ const HTML_TEMPLATE = `
 `;
 
 
-const PORTFOLIO_TEMPLATES = [
-  { key: 'sapphire', name: 'Sapphire', description: 'Professional & Corporate', colors: ['#2563eb', '#dbeafe', '#1e3a8a', '#93c5fd'] },
-  { key: 'onyx', name: 'Onyx', description: 'Modern & Sleek Dark', colors: ['#3b82f6', '#111827', '#f3f4f6', '#374151'] },
-  { key: 'quartz', name: 'Quartz', description: 'Clean & Minimalist Light', colors: ['#1f2937', '#ffffff', '#f9fafb', '#e5e7eb'] },
-  { key: 'emerald', name: 'Emerald', description: 'Creative & Natural', colors: ['#10b981', '#f0fdf4', '#14532d', '#a7f3d0'] },
-  { key: 'jasper', name: 'Jasper', description: 'Academic & Earthy', colors: ['#c2410c', '#fff7ed', '#7c2d12', '#fdba74'] },
-];
-
-const THEME_VARS: { [key: string]: { [key: string]: string } } = {
-    sapphire: { '--primary': '#2563eb', '--secondary': '#64748b', '--dark': '#1e293b', '--light': '#f8fafc', '--accent': '#f97316', '--surface-card': '#ffffff', '--header-bg': 'rgba(248, 250, 252, 0.9)' },
-    onyx: { '--primary': '#3b82f6', '--secondary': '#9ca3af', '--dark': '#f3f4f6', '--light': '#111827', '--accent': '#60a5fa', '--surface-card': '#1f2937', '--header-bg': 'rgba(17, 24, 39, 0.9)' },
-    quartz: { '--primary': '#1f2937', '--secondary': '#6b7280', '--dark': '#111827', '--light': '#ffffff', '--accent': '#4b5563', '--surface-card': '#f9fafb', '--header-bg': 'rgba(255, 255, 255, 0.9)' },
-    emerald: { '--primary': '#10b981', '--secondary': '#065f46', '--dark': '#064e3b', '--light': '#f0fdf4', '--accent': '#059669', '--surface-card': '#ffffff', '--header-bg': 'rgba(240, 253, 244, 0.9)' },
-    jasper: { '--primary': '#c2410c', '--secondary': '#7c2d12', '--dark': '#431407', '--light': '#fff7ed', '--accent': '#9a3412', '--surface-card': '#ffffff', '--header-bg': 'rgba(255, 247, 237, 0.9)' },
-};
-
-const PREVIEW_SIZES: { [key: string]: string } = { desktop: '100%', tablet: '768px', mobile: '375px' };
-
-interface ResultActionCardProps {
-    icon: React.ComponentType<{ className?: string }>;
-    title: string;
-    description: string;
-    onClick: () => void;
-    tone?: 'primary' | 'neutral';
-}
-
-const ResultActionCard: React.FC<ResultActionCardProps> = ({ icon: Icon, title, description, onClick, tone = 'neutral' }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        className={`group flex min-h-[112px] w-full items-start gap-3 rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
-            tone === 'primary'
-                ? 'border-blue-200 bg-blue-50 text-blue-950 hover:border-blue-300 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
-                : 'border-gray-200 bg-white text-gray-900 hover:border-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100 dark:hover:border-blue-800'
-        }`}
-    >
-        <span className={`mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-            tone === 'primary'
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                : 'bg-gray-100 text-blue-600 dark:bg-slate-800 dark:text-blue-300'
-        }`}>
-            <Icon className="h-5 w-5" />
-        </span>
-        <span className="min-w-0">
-            <span className="block text-sm font-bold">{title}</span>
-            <span className="mt-1 block text-xs leading-5 text-gray-600 group-hover:text-gray-700 dark:text-slate-400 dark:group-hover:text-slate-300">
-                {description}
-            </span>
-        </span>
-    </button>
-);
-
 interface HeadshotImage {
-    mimeType: string;
-    data: string;
+  mimeType: string;
+  data: string;
 }
 
 interface Project {
@@ -730,9 +680,11 @@ interface PortfolioWebsiteBuilderProps {
   profile?: UserProfile | null;
   session?: Session | null;
   t: (key: string) => string;
+  onSavedPortfolio?: () => void;
+  onUnsavedPortfolioChange?: (hasUnsaved: boolean) => void;
 }
 
-const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resumeText, initialInput, profile, session, t }) => {
+const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resumeText, initialInput, profile, session, t, onSavedPortfolio, onUnsavedPortfolioChange }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const formId = useId();
   const [error, setError] = useState<string | null>(null);
@@ -741,6 +693,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const [autoFillLoading, setAutoFillLoading] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [draftStatus, setDraftStatus] = useState<'idle' | 'loading' | 'saving' | 'saved' | 'error'>('idle');
+  const [portfolioName, setPortfolioName] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   
   const [currentStep, setCurrentStep] = useState<'template' | 'details' | 'result'>('template');
   const [details, setDetails] = useState({ tagline: '', bio: '', theme: 'sapphire' });
@@ -781,10 +735,13 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     setDetails(prev => ({ tagline: '', bio: '', theme: prev.theme }));
     setProjects([DEFAULT_PROJECT]);
     setResult(null);
+    setPortfolioName('');
+    setSaveStatus('idle');
+    onUnsavedPortfolioChange?.(false);
     setCurrentStep('template');
     setDraftHydrated(false);
     lastSavedDraftRef.current = '';
-  }, [resumeFingerprint]);
+  }, [onUnsavedPortfolioChange, resumeFingerprint]);
 
   useEffect(() => {
     let cancelled = false;
@@ -928,6 +885,9 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setResult({ htmlContent: finalHtml });
       setPreviewTheme(details.theme);
       setCurrentStep('result');
+      setPortfolioName(defaultPortfolioName());
+      setSaveStatus('idle');
+      onUnsavedPortfolioChange?.(true);
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -1092,8 +1052,6 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     runTool();
   };
   
-  const [resultTab, setResultTab] = useState<'preview' | 'code' | 'deploy'>('preview');
-  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [previewTheme, setPreviewTheme] = useState<string | null>(null);
   const isChineseUi = t('ws_nav_resume') === '简历';
   const stripStepNumber = (value: string) => value.replace(/^\s*\d+\.\s*/, '');
@@ -1161,6 +1119,38 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setDraftStatus('error');
       setError(err instanceof Error ? err.message : t('tool_portfolio_draft_save_failed'));
     }
+  };
+
+  const handleSavePortfolio = async () => {
+    const uid = session?.user?.id;
+    if (!uid || !result || saveStatus === 'saving') return;
+    setSaveStatus('saving');
+    try {
+      const theme = previewTheme || details.theme;
+      await savePortfolio(uid, {
+        name: portfolioName,
+        theme,
+        htmlContent: applyPortfolioTheme(result.htmlContent, theme),
+        resumeFingerprint,
+      });
+      if (!mountedRef.current) return;
+      setSaveStatus('saved');
+      onUnsavedPortfolioChange?.(false);
+      onSavedPortfolio?.();
+      addToast(t('showcase_save_success'), 'success');
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setSaveStatus('error');
+      setError(err instanceof Error ? err.message : t('showcase_save_failed'));
+    }
+  };
+
+  const discardGeneratedPortfolio = () => {
+    setResult(null);
+    setCurrentStep('details');
+    setSaveStatus('idle');
+    setPortfolioName('');
+    onUnsavedPortfolioChange?.(false);
   };
   
   const handleProjectImageUpload = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1490,10 +1480,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   }
 
   const getModifiedHtmlContent = (originalHtml: string, themeKey: string | null): string => {
-    if (!themeKey || !THEME_VARS[themeKey]) return originalHtml;
-    const variables = THEME_VARS[themeKey];
-    const rootStyle = `:root { ${Object.entries(variables).map(([key, value]) => `${key}: ${value};`).join(' ')} --transition: all 0.3s ease; }`;
-    return originalHtml.replace(/:root\s*{[^}]+}/s, rootStyle);
+    return applyPortfolioTheme(originalHtml, themeKey);
   };
 
   const renderResult = () => {
@@ -1521,146 +1508,54 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     }
     const completedProjectCount = projects.filter(project => !isBlankProject(project)).length;
     const themeName = PORTFOLIO_TEMPLATES.find(t_template => t_template.key === previewTheme)?.name ?? previewTheme;
-
-    const downloadHtml = () => {
-      const element = document.createElement("a");
-      const file = new Blob([themedHtmlContent], { type: 'text/html' });
-      const objectUrl = URL.createObjectURL(file);
-      element.href = objectUrl;
-      element.download = "showcase.html";
-      document.body.appendChild(element);
-      element.click();
-      element.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-    };
-    const copyToClipboard = () => navigator.clipboard.writeText(themedHtmlContent).then(() => addToast(t('tool_portfolio_copy_code_success'), 'success'), () => addToast(t('tool_portfolio_copy_code_fail'), 'error'));
-    const selectTabClass = (tab: 'preview' | 'deploy' | 'code') => `inline-flex min-h-11 items-center justify-center rounded-xl px-3 py-2 text-sm font-bold transition-colors ${
-      resultTab === tab
-        ? 'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:text-blue-300 dark:ring-slate-700'
-        : 'text-gray-600 hover:bg-white/70 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-900/70 dark:hover:text-slate-100'
-    }`;
-
-    return (
-      <div className="space-y-5">
-        <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-2xl">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">{resultLabels.nextActions}</p>
-              <h4 className="mt-2 text-2xl font-bold text-gray-950 dark:text-gray-100">{resultLabels.generated}</h4>
-              <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-slate-400">{resultLabels.generatedHint}</p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {checklistLabels.ready}
-                </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-700 dark:bg-slate-800 dark:text-slate-300">{themeName}</span>
-                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-700 dark:bg-slate-800 dark:text-slate-300">
-                  {isChineseUi ? `${completedProjectCount}${checklistLabels.selected}` : `${completedProjectCount} ${checklistLabels.selected}`}
-                </span>
-              </div>
-            </div>
-            <div className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-4">
-              <ResultActionCard icon={Eye} title={resultLabels.reviewTitle} description={resultLabels.reviewDesc} onClick={() => setResultTab('preview')} tone="primary" />
-              <ResultActionCard icon={Download} title={resultLabels.downloadTitle} description={resultLabels.downloadDesc} onClick={downloadHtml} />
-              <ResultActionCard icon={Rocket} title={resultLabels.deployTitle} description={resultLabels.deployDesc} onClick={() => setResultTab('deploy')} />
-              <ResultActionCard icon={Code2} title={resultLabels.codeTitle} description={resultLabels.codeDesc} onClick={() => setResultTab('code')} />
-            </div>
-          </div>
-        </section>
-
-        <div className="rounded-2xl border border-gray-200 bg-gray-100 p-1 dark:border-slate-700 dark:bg-slate-800/80">
-          <nav role="tablist" aria-label={t('tool_portfolio_results_title')} className="grid grid-cols-3 gap-1">
-            <button type="button" role="tab" aria-selected={resultTab === 'preview'} onClick={() => setResultTab('preview')} className={selectTabClass('preview')}>{t('tool_portfolio_tab_preview')}</button>
-            <button type="button" role="tab" aria-selected={resultTab === 'deploy'} onClick={() => setResultTab('deploy')} className={selectTabClass('deploy')}>{t('tool_portfolio_tab_deploy')}</button>
-            <button type="button" role="tab" aria-selected={resultTab === 'code'} onClick={() => setResultTab('code')} className={selectTabClass('code')}>{t('tool_portfolio_tab_code')}</button>
-          </nav>
+    const saveActions = (
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <label className="block">
+          <span className="text-sm font-bold text-gray-800 dark:text-slate-200">{t('showcase_save_name_label')}</span>
+          <input
+            type="text"
+            value={portfolioName}
+            onChange={(event) => setPortfolioName(event.target.value)}
+            placeholder={defaultPortfolioName()}
+            className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950/50"
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleSavePortfolio}
+            disabled={saveStatus === 'saving'}
+            className="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saveStatus === 'saving' ? t('showcase_saving') : t('showcase_save_button')}
+          </button>
+          <button
+            type="button"
+            onClick={discardGeneratedPortfolio}
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {t('showcase_discard_button')}
+          </button>
         </div>
-        {resultTab === 'preview' && (
-          <div className="space-y-3">
-            <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-              {(['desktop', 'tablet', 'mobile'] as const).map(d => (
-                <button key={d} type="button" aria-pressed={previewDevice === d} onClick={() => setPreviewDevice(d)} className={`p-2 rounded-md transition-colors ${previewDevice === d ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400'}`} title={t(`tool_portfolio_preview_device_${d}`)}>
-                  {d === 'desktop' && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
-                  {d === 'tablet' && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>}
-                  {d === 'mobile' && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2H7z" /></svg>}
-                </button>
-              ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-              {PORTFOLIO_TEMPLATES.map(t_template => (
-                <button key={t_template.key} type="button" aria-pressed={previewTheme === t_template.key} onClick={() => setPreviewTheme(t_template.key)} className={`p-1 border-2 rounded-md ${previewTheme === t_template.key ? 'border-blue-500' : 'border-transparent'}`} title={t_template.name}>
-                  <div className="flex -space-x-1">{t_template.colors.map(c => <div key={c} className="h-4 w-4 rounded-full border border-white dark:border-slate-800" style={{ backgroundColor: c }}></div>)}</div>
-                </button>
-              ))}
-              </div>
-            </div>
-            <div className="mx-auto overflow-x-auto rounded-xl bg-gray-900 p-3 shadow-inner sm:p-4">
-                 <iframe
-                    title="Showcase Preview"
-                    aria-label={t('tool_portfolio_tab_preview')}
-                    srcDoc={themedHtmlContent}
-                    sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
-                    referrerPolicy="no-referrer"
-                    className="block h-[60vh] min-h-[520px] w-full border-0 bg-white transition-all duration-500 ease-in-out"
-                    style={{ maxWidth: PREVIEW_SIZES[previewDevice], margin: '0 auto' }}
-                 />
-            </div>
-          </div>
-        )}
-        {resultTab === 'deploy' && (
-          <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">{resultLabels.deployChecklist}</p>
-                  <h5 className="mt-1 text-lg font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_tab_deploy')}</h5>
-                </div>
-                <button type="button" onClick={downloadHtml} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700">
-                  <Download className="h-4 w-4" />
-                  {t('tool_portfolio_deploy_download_button')}
-                </button>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
-                <span className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">01</span>
-                <h5 className="mt-2 font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_deploy_step1_title')}</h5>
-                <p className="text-sm mt-1 dark:text-slate-400">{t('tool_portfolio_deploy_step1_desc')}</p>
-                <a href="https://app.netlify.com/drop" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:underline dark:text-blue-300">
-                  {resultLabels.openNetlify}
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </div>
-               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
-                <span className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">02</span>
-                <h5 className="mt-2 font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_deploy_step2_title')}</h5>
-                <p className="text-sm mt-1 dark:text-slate-400">{t('tool_portfolio_deploy_step2_desc')}</p>
-                 <a href="https://hub.caiot.co/" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:underline dark:text-blue-300">
-                  {resultLabels.openLab}
-                  <ExternalLink className="h-3.5 w-3.5" />
-                 </a>
-              </div>
-               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
-                <span className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">03</span>
-                <h5 className="mt-2 font-bold text-gray-950 dark:text-gray-100">{t('tool_portfolio_deploy_step3_title')}</h5>
-                <p className="text-sm mt-1 dark:text-slate-400">{t('tool_portfolio_deploy_step3_desc')}</p>
-              </div>
-              </div>
-          </div>
-        )}
-        {resultTab === 'code' && (
-          <div className="space-y-3">
-            <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm leading-6 text-gray-600 dark:text-slate-400">{resultLabels.codeHint}</p>
-              <button type="button" onClick={copyToClipboard} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-gray-800 dark:bg-slate-700 dark:hover:bg-slate-600">
-                <Code2 className="h-4 w-4" />
-                {t('tool_portfolio_copy_code_button')}
-              </button>
-            </div>
-            <pre className="max-w-full p-4 bg-gray-800 text-white rounded-lg h-[60vh] overflow-auto text-xs scrollbar-thin scrollbar-thumb-gray-600"><code className="language-html">{themedHtmlContent}</code></pre>
-          </div>
-        )}
+        {saveStatus === 'saved' && <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t('showcase_saved_status')}</p>}
+        {saveStatus === 'error' && <p className="text-sm font-semibold text-red-700 dark:text-red-300">{t('showcase_save_failed')}</p>}
       </div>
     );
+
+    return (
+      <PortfolioPreviewViewer
+        htmlContent={htmlContent}
+        theme={previewTheme}
+        title={t('showcase_generated_title')}
+        hint={t('showcase_generated_hint')}
+        filename={portfolioName || 'showcase'}
+        badges={[`${completedProjectCount} ${t('showcase_projects_selected')}`]}
+        actionSlot={saveStatus === 'saved' ? undefined : saveActions}
+        onThemeChange={setPreviewTheme}
+        t={t}
+      />
+    );
+
   };
 
   return mainViewRenderer();
