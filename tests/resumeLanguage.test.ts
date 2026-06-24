@@ -20,4 +20,12 @@ describe('resumeLanguage', () => {
     expect(resolveOutputLanguageName('Japan', 'en')).toBe('English');
     expect(resolveOutputLanguageName('Canada', 'local')).toBe('English'); // no local language → English
   });
+
+  // Regression: China used to be missing here, so localizing to China stayed in
+  // English (reported: "company/school always English"). It must map to Chinese.
+  it('localizes China to Simplified Chinese', () => {
+    expect(getMarketLocalLanguage('China')).toEqual({ name: 'Simplified Chinese', labelKey: 'resume_lang_chinese' });
+    expect(resolveOutputLanguageName('China', 'local')).toBe('Simplified Chinese');
+    expect(resolveOutputLanguageName('China', 'en')).toBe('English');
+  });
 });

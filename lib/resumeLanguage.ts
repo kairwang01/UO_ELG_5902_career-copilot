@@ -5,6 +5,7 @@ const MARKET_LOCAL_LANGUAGE: Record<string, { name: string; labelKey: string }> 
   Germany:  { name: 'German',     labelKey: 'resume_lang_german' },
   France:   { name: 'French',     labelKey: 'resume_lang_french' },
   Japan:    { name: 'Japanese',   labelKey: 'resume_lang_japanese' },
+  China:    { name: 'Simplified Chinese', labelKey: 'resume_lang_chinese' },
   Vietnam:  { name: 'Vietnamese', labelKey: 'resume_lang_vietnamese' },
 };
 

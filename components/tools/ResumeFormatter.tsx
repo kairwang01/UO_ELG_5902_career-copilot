@@ -19,6 +19,7 @@ const MARKET_HINT_KEY: Record<string, string> = {
   'Germany':        'resume_market_hint_germany',
   'France':         'resume_market_hint_france',
   'Japan':          'resume_market_hint_japan',
+  'China':          'resume_market_hint_china',
   'Vietnam':        'resume_market_hint_vietnam',
   'Singapore':      'resume_market_hint_singapore',
   'Australia':      'resume_market_hint_australia',

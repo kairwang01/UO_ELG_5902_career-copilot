@@ -10,6 +10,7 @@ export const SUPPORTED_MARKETS = [
   'Germany',
   'France',
   'Japan',
+  'China',
   'Vietnam',
   'Singapore',
   'Australia',

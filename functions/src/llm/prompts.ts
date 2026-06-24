@@ -254,18 +254,11 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
 
         **Key Instructions:**
         1. **Formatting & Structure:** Reformat the entire resume to follow common professional standards and ATS best practices for **{{marketName}}**. This includes section order, date format, page density, and contact conventions.
-        2. **Language & Tone:** Write the ENTIRE resume in **{{outputLanguage}}**. If the source resume is in another language, translate all content faithfully into {{outputLanguage}}; keep proper nouns (personal names, company names, product names) in their original form where that is the professional norm. Adapt spelling, date conventions, and professional tone to **{{marketName}}**.
+        2. **Language & Tone:** Write the ENTIRE resume in **{{outputLanguage}}**, translating all content faithfully from the source. Localize organization and institution names too: render employers and schools/universities in their official or widely-used **{{outputLanguage}}** name, with the original name in parentheses on first mention so it stays verifiable (e.g. "北京大学 (Peking University)" or "Toyota Motor (トヨタ自動車)"). Keep PERSONAL names in their original script (add a transliteration only if **{{marketName}}** expects one); a globally well-known brand may stay in its common local form. Adapt spelling, date conventions, and professional register to **{{marketName}}**.
         3. **Content Optimization:** Rephrase bullets toward action + scope + impact. Quantify only where the source gives the number. Prefer concrete scope over inflated adjectives when no metric exists.
 
-        {{coverLetterBlock}}
-
-        **Original Resume:**
-        {{resumeText}}
-
-        Produce only the final, localized document text.
-
         --- COUNTRY FORMAT RULES ---
-        Apply the following country-specific conventions when {{marketName}} matches:
+        Apply the SINGLE rule whose market matches **{{marketName}}** — this drives the template (section order, length, date format, and photo/personal-data norms), so the layout must visibly differ by country, not reuse one default. If **{{marketName}}** is not listed below, apply that country's own prevailing professional resume conventions (do NOT fall back to a US layout).
 
         **United States / Canada:** 1–2 page reverse-chronological resume. Omit photo, age, marital status, and other protected personal details. Open bullets with strong action verbs. Quantify achievements only where source-supported. Include a dedicated Skills section. Use ATS-friendly plain section headers.
 
@@ -275,12 +268,21 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
 
         **France:** CV, 1 page preferred (2 max for senior profiles). Formal register, reverse-chronological. Do not invent a photo or "État civil" details; preserve source-supported personal details only. Hobbies/interests section is acceptable only if source-supported and professionally relevant.
 
+        **China (中国):** 1–2 page reverse-chronological 简历 in Simplified Chinese. Use concise local sections (e.g. 求职意向, 教育背景, 工作/实习经历, 项目经历, 专业技能, 荣誉证书). Render employer and school names in their official Chinese names with the original in parentheses on first mention. Use YYYY.MM dates. Include only source-supported personal details — do not fabricate a photo, age, gender, marital status, or political status.
+
         **Japan:** Produce a conservative 職務経歴書-style career-history document, not a fake 履歴書 form. Use Japanese professional register when translating, clear sections such as 職務要約, スキル, 職務経歴, 学歴, 資格. Do not fabricate a photo box, phonetic name reading, birth details, or family/personal fields. Do not use 履歴書 table headers like "年月 | 学校名 | 専攻 | 成績" unless the source already contains a completed table. Use YYYY/MM dates when possible.
 
         **Vietnam:** 1–2 pages, reverse-chronological. Emphasise certifications, technical skills, and English proficiency level only if present. Do not invent photo or personal details.
 
         **Singapore / Australia:** Western-style professional resume. No photo. 2–3 pages acceptable for experienced Australian candidates. Include a work-rights / visa status line only if the original resume provides it. Reverse-chronological, achievement-led, ATS-friendly formatting.
         --- END COUNTRY FORMAT RULES ---
+
+        {{coverLetterBlock}}
+
+        **Original Resume:**
+        {{resumeText}}
+
+        Produce only the final, localized document text — no commentary or notes.
       `,
 
   calculateCompatibility: "\n        You are a senior technical recruiter and ATS screening specialist with 15+ years matching candidates to roles. Your job: judge how well ONE resume fits ONE specific job description, the way a hiring manager deciding whether to interview would — grounded strictly in evidence in the two documents below, never on assumptions or invented facts.\n\n        Read both inputs first. Treat the job description as the source of truth for what the role needs. Separate its requirements into MUST-HAVES (hard requirements, years of experience, mandatory tools/credentials, degree/certs, location/clearance) and NICE-TO-HAVES (preferred or \"bonus\" skills). Then check each, in order, against concrete evidence in the resume (titles, dated experience, quantified achievements, named tools, certifications). A skill only \"counts\" if the resume actually shows it — a keyword with no supporting accomplishment is weak evidence, not a match.\n\n        Infer the role's region and language from the inputs (location, currency, spelling, phrasing) and apply the matching local ATS and resume norms; if unclear, default to a neutral, internationally-readable standard. Do not state the locale unless it affects the verdict.\n\n        Produce these fields, each to a high bar:\n\n        - candidateName: The candidate's full name exactly as written at the top of the resume. If no name is present, return \"Candidate\". Never guess or invent a name.\n\n        - compatibilityScore: An integer 0-100 measuring fit to THIS job description, weighting must-haves far more heavily than nice-to-haves. Calibrate against these anchors and interpolate — do not cluster everything near 75:\n          * ~90-100: Meets every must-have with strong, quantified, recent evidence plus most nice-to-haves; would be a clear shortlist/interview yes.\n          * ~70-85: Meets all or nearly all must-haves with solid evidence; a few gaps or thin spots; a likely interview.\n          * ~50-65: Meets roughly half the must-haves, or meets them with weak/indirect/dated evidence; borderline — would need a strong cover story.\n          * ~30-45: Adjacent background but several core must-haves missing or unproven; a stretch.\n          * ~0-25: Wrong domain, seniority, or fundamentals; not a realistic fit.\n          Penalize unmet must-haves (missing required years, mandatory tools/credentials, seniority or domain mismatch) much harder than missing nice-to-haves. Do not inflate for keyword overlap that lacks real accomplishment behind it. Be honest, not flattering.\n\n        - summary: A tight, recruiter-grade verdict of about 4-7 sentences (no filler, no restating the score number, no generic praise). Cover, grounded in specifics from the resume and JD: (1) the headline fit and why, in one line; (2) 2-3 strongest evidence-backed matches — cite the actual title, tool, metric, or achievement and which JD requirement it satisfies; (3) the most important must-have GAPS or unproven requirements, stated plainly and honestly; (4) the top ATS keyword/term misalignments — required terms from the JD that are absent or phrased differently in the resume; (5) one or two concrete, actionable next steps to close the gap (a specific skill to evidence with a metric, a missing keyword to surface, a STAR-style bullet to add, or a credential/learning path to pursue). Reference real details from the inputs — never fabricate experience, employers, dates, numbers, or links the resume does not contain.\n\n        Resume:\n        {{resumeText}}\n\n        Job Description:\n        {{jobDescription}}\n\n        Return JSON matching the required schema.\n      ",
