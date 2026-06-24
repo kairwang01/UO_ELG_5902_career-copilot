@@ -59,6 +59,94 @@ async function grantAdmin(uid) {
   await auth.setCustomUserClaims(uid, { admin: true });
 }
 
+/**
+ * ATS fixture: one active job owned by the employer plus two applicants, so the
+ * employer-side path (job listings → review candidates → applicant funnel →
+ * bulk selection) can be exercised end-to-end. Doc shapes mirror what
+ * createJobPosting / createJobApplication write (Admin SDK here bypasses rules,
+ * the same way the production callables do). Fixed ids keep it idempotent.
+ */
+async function seedAtsFixture({ employerUid, caseyUid }) {
+  const ts = admin.firestore.Timestamp.now();
+  const JOB_ID = 'seed-job-frontend';
+
+  await db.collection('job_postings').doc(JOB_ID).set({
+    title: 'Frontend Engineer',
+    location: 'Toronto, ON',
+    work_mode: 'hybrid',
+    employment_type: 'full_time',
+    experience_level: 'mid',
+    department: 'Engineering',
+    description:
+      'Build accessible, fast React interfaces for our hiring platform. You will own UI features end to end and partner closely with design and product.',
+    responsibilities:
+      'Ship candidate- and employer-facing UI; uphold accessibility and performance; collaborate across design and backend.',
+    required_qualifications:
+      '3+ years building production React/TypeScript apps; strong CSS and accessibility fundamentals.',
+    required_skills: ['React', 'TypeScript', 'Accessibility'],
+    preferred_skills: ['GraphQL', 'Testing'],
+    application_deadline: '2026-12-31',
+    headcount: 1,
+    salary_range: '$110k–140k CAD',
+    visa_sponsorship: false,
+    relocation: false,
+    screener_questions: [],
+    // Company identity snapshotted from the employer profile (as the callable does).
+    company_name: 'Seed Test Co',
+    company_size: '11-50',
+    industry: null,
+    founded_year: null,
+    company_logo_url: null,
+    company_website: null,
+    employer_id: employerUid,
+    is_active: true,
+    created_at: ts,
+    updated_at: ts,
+  }, { merge: true });
+
+  // A second applicant (distinct candidate) so the funnel shows "2 of 2".
+  const jordan = await ensureUser('jordan@careercopilot.test', 'Jordan Lee');
+  await writeProfile(jordan.uid, {
+    role: 'candidate',
+    full_name: 'Jordan Lee',
+    subscription_status: 'free',
+    resume_text:
+      'Jordan Lee — Frontend Engineer\n\nEXPERIENCE\nFrontend Engineer (2020–present): React, TypeScript, GraphQL, design systems.',
+  });
+
+  const applicants = [
+    { appId: 'seed-app-casey', uid: caseyUid, name: 'Casey Candidate', score: 82, resume: 'Casey Candidate — Frontend Engineer (React, TypeScript, accessibility).' },
+    { appId: 'seed-app-jordan', uid: jordan.uid, name: 'Jordan Lee', score: 74, resume: 'Jordan Lee — Frontend Engineer (React, TypeScript, GraphQL).' },
+  ];
+  for (const a of applicants) {
+    await db.collection('job_applications').doc(a.appId).set({
+      job_id: JOB_ID,
+      candidate_id: a.uid,
+      employer_id: employerUid,
+      job_title: 'Frontend Engineer',
+      candidate_name: a.name,
+      status: 'Applied',
+      compatibility_score: a.score,
+      screener_answers: [],
+      notes: null,
+      application_date: ts,
+    }, { merge: true });
+    await db.collection('application_snapshots').doc(a.appId).set({
+      application_id: a.appId,
+      candidate_id: a.uid,
+      employer_id: employerUid,
+      resume_text_snapshot: a.resume,
+      talent_profile_snapshot: null,
+      screener_answers_snapshot: [],
+      resume_file_snapshot_path: null,
+      resume_file_snapshot_name: null,
+      submitted_at: ts,
+    }, { merge: true });
+  }
+
+  return { jobId: JOB_ID, applicantCount: applicants.length, jordanUid: jordan.uid };
+}
+
 async function main() {
   // 1. Plain candidate
   const candidate = await ensureUser('candidate@careercopilot.test', 'Casey Candidate');
@@ -101,6 +189,10 @@ async function main() {
   });
   await grantAdmin(adminCandidate.uid);
 
+  // 5. ATS fixture: an active job + two applicants under the employer, so the
+  // employer applicant-funnel path can be exercised end-to-end.
+  const ats = await seedAtsFixture({ employerUid: employer.uid, caseyUid: candidate.uid });
+
   // Verify the seed (no browser needed).
   const checks = [
     ['candidate', candidate.uid, 'candidate'],
@@ -121,7 +213,19 @@ async function main() {
     throw new Error('Seed check failed: admin-candidate not in platform_config/access.admin_uids');
   }
   console.log(`  ✓ admin-candidate is in admin_uids (admin authority granted, role stays candidate)`);
-  console.log(`\nSeeded ${checks.length} QA accounts (password: ${PASSWORD}) against ${PROJECT_ID} emulators.`);
+
+  // ATS fixture checks: job is active + owned by the employer, with 2 applications.
+  const jobDoc = await db.collection('job_postings').doc(ats.jobId).get();
+  if (!jobDoc.exists || jobDoc.get('employer_id') !== employer.uid || jobDoc.get('is_active') !== true) {
+    throw new Error('Seed check failed: ATS job missing / not owned by employer / not active');
+  }
+  const appsSnap = await db.collection('job_applications').where('employer_id', '==', employer.uid).get();
+  if (appsSnap.size < ats.applicantCount) {
+    throw new Error(`Seed check failed: expected >= ${ats.applicantCount} applications, found ${appsSnap.size}`);
+  }
+  console.log(`  ✓ ATS fixture: job "${jobDoc.get('title')}" active with ${appsSnap.size} applicant(s) (Casey + Jordan)`);
+
+  console.log(`\nSeeded ${checks.length} QA accounts + ATS fixture (password: ${PASSWORD}) against ${PROJECT_ID} emulators.`);
 }
 
 main()
