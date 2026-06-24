@@ -1719,6 +1719,31 @@ const AdminPortal: React.FC = () => {
                   ))}
                 </div>
 
+                {/* AI provider health — visible to every admin so a "keys missing →
+                    all AI down" outage is obvious, even though editing keys is super-only. */}
+                {dashboard.ai_providers && (
+                  dashboard.ai_providers.any_configured ? (
+                    <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <span className="font-semibold text-gray-700 dark:text-gray-200">AI providers</span>
+                      {([['Gemini', 'gemini'], ['KAIRLLM', 'kairllm'], ['DeepSeek', 'deepseek']] as const).map(([label, key]) => (
+                        <span key={key} className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                          <span className={dashboard.ai_providers![key] ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500'}>
+                            {dashboard.ai_providers![key] ? '●' : '○'}
+                          </span>
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div role="alert" className="rounded-lg border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+                      <p className="font-semibold">⚠ No AI provider keys are configured — all AI tools are currently failing.</p>
+                      <p className="mt-1 text-red-700 dark:text-red-300">
+                        A super-admin must add a provider key under <span className="font-medium">Models &amp; Keys</span> (or set it in the functions environment). AI recovers within ~60s of saving.
+                      </p>
+                    </div>
+                  )
+                )}
+
                 {(dashboard.users_truncated || dashboard.week_usage_truncated) && (
                   <p className="text-xs text-amber-700 flex items-center gap-1.5">
                     <span>⚠</span>

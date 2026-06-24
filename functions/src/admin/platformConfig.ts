@@ -253,6 +253,29 @@ export async function getLlmConfigMasked(): Promise<MaskedLlmConfig> {
   };
 }
 
+export interface ProviderConfigStatus {
+  gemini: boolean;
+  kairllm: boolean;
+  deepseek: boolean;
+  any_configured: boolean;
+}
+
+/**
+ * Non-throwing "is each provider's API key present?" check (Firestore config OR
+ * env fallback). Returns booleans only — never key values — so an AI-availability
+ * signal can be surfaced to any admin without exposing secrets. When
+ * any_configured is false, ALL AI tools fail with "…API_KEY is not set"; this lets
+ * the dashboard make that otherwise-invisible outage obvious to operators.
+ */
+export async function getProviderConfigStatus(): Promise<ProviderConfigStatus> {
+  await ensurePlatformCaches();
+  const doc = llmCache ?? {};
+  const gemini = !!(doc.gemini_api_key || process.env.GEMINI_API_KEY);
+  const kairllm = !!(doc.kairllm_api_key || process.env.KAIRLLM_API_KEY);
+  const deepseek = !!(doc.deepseek_api_key || process.env.DEEPSEEK_API_KEY);
+  return { gemini, kairllm, deepseek, any_configured: gemini || kairllm || deepseek };
+}
+
 export async function getQuotasConfigForAdmin(): Promise<QuotasDoc> {
   await ensurePlatformCaches();
   return effectiveQuotasDoc(quotasCache ?? {});

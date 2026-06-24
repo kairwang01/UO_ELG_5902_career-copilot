@@ -8,7 +8,17 @@ import { firebaseFunctions } from '../lib/firebaseClient';
 const call = <Req, Res>(name: string) =>
   httpsCallable<Req, Res>(firebaseFunctions, name);
 
+export interface AdminProviderStatus {
+  gemini: boolean;
+  kairllm: boolean;
+  deepseek: boolean;
+  any_configured: boolean;
+}
+
 export interface AdminDashboard {
+  // Booleans only (no key values) — surfaces whether AI provider keys are set so
+  // any admin can spot an "all AI down because keys are missing" outage.
+  ai_providers?: AdminProviderStatus;
   user_count: number;
   users_truncated?: boolean;
   today_runs: number;
