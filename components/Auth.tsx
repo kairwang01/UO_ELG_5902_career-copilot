@@ -244,16 +244,22 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           role: mode === 'business' && subscriptionResult.status !== 'active' ? 'candidate' : mode === 'business' ? 'employer' : 'candidate',
           updated_at: new Date().toISOString(),
         });
+
+        // Paid plan → Stripe checkout. BEFORE the mount guard: the auth listener
+        // navigates the new session away (unmounting this modal), so a guard here
+        // would skip the redirect and strand a paid signup with an unpaid account.
+        // window.location.assign is a navigation — safe regardless of mount state.
+        if (!profileError && subscriptionResult.status === 'pending_payment') {
+          const checkout = await createSubscriptionCheckout(planKeyForServer);
+          window.location.assign(checkout.url);
+          return;
+        }
         if (!mountedRef.current) return;
 
         if (profileError) {
           setError(t('auth_profile_created_setup_failed').replace('{error}', profileError.message));
         } else {
-          if (subscriptionResult.status === 'pending_payment') {
-            const checkout = await createSubscriptionCheckout(planKeyForServer);
-            window.location.assign(checkout.url);
-            return;
-          }
+          // (pending_payment is handled above, before the mount guard.)
           // Best-effort: set Firebase Auth displayName (non-fatal if it fails).
           try {
             if (firebaseAuth.currentUser) {

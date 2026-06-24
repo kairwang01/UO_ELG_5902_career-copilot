@@ -97,16 +97,23 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
           ...(subscriptionResult.status === 'active' ? { role: 'employer' as const } : {}),
           updated_at: new Date().toISOString(),
         });
+
+        // Paid plan → Stripe checkout. Do this BEFORE the mount guard below: the
+        // auth listener routes the new session to /portal, unmounting this modal,
+        // so a `!mountedRef.current` return here would SKIP the redirect and strand
+        // a paid signup in the portal with an unpaid pending account.
+        // window.location.assign is a navigation — safe regardless of mount state.
+        if (!profileError && subscriptionResult.status === 'pending_payment') {
+          const checkout = await createSubscriptionCheckout(pendingPlanKey);
+          window.location.assign(checkout.url);
+          return;
+        }
         if (!mountedRef.current) return;
 
         if (profileError) {
           setError(`${t('auth_profile_setup_failed')} ${profileError.message}`);
         } else {
-          if (subscriptionResult.status === 'pending_payment') {
-            const checkout = await createSubscriptionCheckout(pendingPlanKey);
-            window.location.assign(checkout.url);
-            return;
-          }
+          // (pending_payment is handled above, before the mount guard.)
           // Send a verification email (non-blocking, production-readiness step).
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
