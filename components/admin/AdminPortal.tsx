@@ -4187,7 +4187,7 @@ const AdminPortal: React.FC = () => {
                       <UserAvatarThumb url={a.avatar_url} label={a.display_name || a.email || a.uid} size="sm" />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium flex items-center gap-2 flex-wrap">
-                          <span>{a.email || a.display_name || '(no email)'}</span>
+                          <span>{a.display_name || a.email || '(no email)'}</span>
                           {/* Role badge */}
                           {a.role && (
                             <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium ${
@@ -4209,7 +4209,10 @@ const AdminPortal: React.FC = () => {
                             <span className="text-[10px] text-gray-400">{a.status}</span>
                           )}
                         </p>
-                        <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate">{a.uid}</p>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                          {a.display_name && a.email ? <span>{a.email} · </span> : null}
+                          <span className="font-mono">{a.uid}</span>
+                        </p>
                         {a.invited_at && (
                           <p className="text-[10px] text-gray-400">{t('admin.admins.invited_at')}: {a.invited_at.slice(0, 10)}</p>
                         )}
