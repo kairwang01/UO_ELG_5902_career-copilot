@@ -1096,7 +1096,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                 onOpenShortlist={onOpenShortlist}
             />
 
-            {/* Verified Talent Section */}
+            {/* Verified Talent Section — hidden for now
             <div className="p-5 sm:p-6 bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-xl text-white shadow-lg mb-8" aria-live="polite">
                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-6">
                     <div>
@@ -1152,6 +1152,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
                  </div>
                  )}
             </div>
+            */}
 
             {savedIds.size > 0 && onOpenShortlist && (
                 <div className="mb-8 animate-panel-expand rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30">
