@@ -85,6 +85,19 @@ export function formatCallableError(err: unknown): string {
   if (code === 'functions/failed-precondition' && lower.includes('credit')) {
     return translateError('ai_error_no_credits', "You don't have enough credits for this feature. Please purchase more credits to continue.");
   }
+  // AI provider not configured (missing key) or otherwise unavailable. The raw
+  // server text can name operator concerns ("API key", "Admin Portal", "is not
+  // set") that candidates/recruiters must never see — surface neutral copy
+  // instead so an ops misconfiguration reads as a transient outage, not a leak.
+  if (
+    code === 'functions/unavailable' ||
+    lower.includes('is not set') ||
+    lower.includes('not configured') ||
+    lower.includes('admin portal') ||
+    lower.includes('api_key')
+  ) {
+    return translateError('ai_error_unavailable', 'AI features are temporarily unavailable. Please try again shortly, or contact support if this continues.');
+  }
   return message || translateError('ai_error_generic', 'Something went wrong with the AI service. Please try again.');
 }
 

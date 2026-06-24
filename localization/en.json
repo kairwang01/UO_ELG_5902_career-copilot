@@ -125,6 +125,7 @@
   "ai_error_failed": "That didn't go through. Give it another try in a moment.",
   "ai_error_no_credits": "You're out of credits for this one. Top up to keep going.",
   "ai_error_generic": "Something went wrong with the AI service. Please try again.",
+  "ai_error_unavailable": "AI features are temporarily unavailable. Please try again shortly, or contact support if this continues.",
   "ai_error_network": "Network connection issue. Please check your internet connection.",
   "ai_error_empty_response": "We didn't get a usable result back — please try again.",
   "nav_features": "What You Get",
