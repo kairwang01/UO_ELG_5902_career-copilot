@@ -28,6 +28,7 @@ export interface AdminUserRow {
   uid: string;
   email: string | null;
   full_name: string | null;
+  avatar_url?: string | null;
   role: string | null;
   subscription_status: string | null;
   credits: number;
@@ -155,6 +156,7 @@ export interface AdminRow {
   uid: string;
   email: string | null;
   display_name?: string | null;
+  avatar_url?: string | null;
   /** 'rbac' = portal-managed, 'legacy_doc' = old allowlist, 'env' = ADMIN_UIDS bootstrap. */
   source?: 'rbac' | 'legacy_doc' | 'env';
   /** New: role for role-aware admin system */

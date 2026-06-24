@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterAdminRowsForViewer } from '../functions/src/handlers/adminPortal';
+import { filterAdminRowsForViewer, profileAvatarUrl } from '../functions/src/handlers/adminPortal';
 
 type Rows = Parameters<typeof filterAdminRowsForViewer>[0];
 
@@ -26,5 +26,13 @@ describe('adminListAdmins visibility', () => {
 
   it('reviewer sees no console-user list', () => {
     expect(filterAdminRowsForViewer(rows, 'reviewer')).toEqual([]);
+  });
+
+  it('uses the profile avatar_url field used by the admin account page', () => {
+    expect(profileAvatarUrl({ avatar_url: 'https://cdn.example.com/avatar.png' })).toBe('https://cdn.example.com/avatar.png');
+  });
+
+  it('falls back to the Firebase Auth photo URL', () => {
+    expect(profileAvatarUrl({}, { photoURL: 'https://cdn.example.com/auth.png' } as any)).toBe('https://cdn.example.com/auth.png');
   });
 });

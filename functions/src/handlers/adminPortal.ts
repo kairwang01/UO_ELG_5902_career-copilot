@@ -124,6 +124,11 @@ function utcTodayKey(): string {
   return `${y}${m}${d}`;
 }
 
+export function profileAvatarUrl(profile: FirebaseFirestore.DocumentData | undefined, authUser?: admin.auth.UserRecord): string | null {
+  const value = profile?.[USER_FIELDS.avatarUrl] ?? profile?.avatarUrl ?? profile?.photo_url;
+  return typeof value === "string" && value.trim() ? value : authUser?.photoURL ?? null;
+}
+
 /** Collection for per-operator daily credit-adjustment totals (A1). */
 const ADMIN_DAILY_TOTALS_COLLECTION = "admin_daily_totals";
 
@@ -546,6 +551,7 @@ export const adminListUsersFunction = onCall({ invoker: "public" }, async (reque
       uid: doc.id,
       email: authUser?.email ?? (typeof d.email === "string" ? d.email : null),
       full_name: d.full_name ?? authUser?.displayName ?? null,
+      avatar_url: profileAvatarUrl(d, authUser),
       role: d.role ?? null,
       subscription_status: d.subscription_status ?? null,
       credits: d.credits ?? 0,
@@ -1057,6 +1063,8 @@ export const adminRemoveAdminFunction = onCall({ invoker: "public" }, async (req
 type AdminListRow = {
   uid: string;
   email: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
   role: AdminRole;
   status: string;
   invited_at: string | null;
@@ -1128,7 +1136,25 @@ export const adminListAdminsFunction = onCall({ invoker: "public" }, async (requ
       })
   );
 
-  return { admins: filterAdminRowsForViewer([...rbacAdmins, ...legacyAdmins, ...envAdmins], viewerRole) };
+  const rows = filterAdminRowsForViewer([...rbacAdmins, ...legacyAdmins, ...envAdmins], viewerRole);
+  if (rows.length === 0) return { admins: [] };
+  const [authByUid, profileSnaps] = await Promise.all([
+    authUsersByUid(rows.map((row) => row.uid)),
+    db.getAll(...rows.map((row) => db.collection(USERS_COLLECTION).doc(row.uid))),
+  ]);
+  const profileByUid = new Map(profileSnaps.map((snap) => [snap.id, snap.data() ?? {}]));
+  return {
+    admins: rows.map((row) => {
+      const authUser = authByUid.get(row.uid);
+      const profile = profileByUid.get(row.uid);
+      return {
+        ...row,
+        email: row.email ?? authUser?.email ?? (typeof profile?.email === "string" ? profile.email : null),
+        display_name: authUser?.displayName ?? (typeof profile?.full_name === "string" ? profile.full_name : null),
+        avatar_url: profileAvatarUrl(profile, authUser),
+      };
+    }),
+  };
 });
 
 // ---------------------------------------------------------------------------

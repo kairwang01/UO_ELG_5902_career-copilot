@@ -166,6 +166,28 @@ const USER_CREATED_FILTERS = [
 
 const USER_PAGE_SIZE = 10;
 
+const UserAvatarThumb: React.FC<{ url?: string | null; label?: string | null; size?: 'sm' | 'md' }> = ({ url, label, size = 'md' }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [url]);
+  const classes = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-9 w-9 text-sm';
+  const initial = (label?.trim()?.[0] || '?').toUpperCase();
+  const showImage = Boolean(url && !failed);
+  return (
+    <span className={`${classes} flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 font-semibold text-slate-600`}>
+      {showImage ? (
+        <img
+          src={url ?? ''}
+          alt={label ? `${label} avatar` : 'User avatar'}
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        initial
+      )}
+    </span>
+  );
+};
+
 const DEFAULT_PLAN_QUOTAS: Record<AdminPlanKey, AdminPlanQuota> = {
   free: { daily_run_limit: 25, daily_credit_limit: 0, monthly_credit_grant: 0, active_job_limit: 3 },
   essentials: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 200, active_job_limit: 0 },
@@ -3780,6 +3802,7 @@ const AdminPortal: React.FC = () => {
                     <tbody className="divide-y divide-gray-100">
                       {users.map((u) => {
                         const consoleUser = adminByUid.get(u.uid);
+                        const userLabel = u.full_name || u.email || u.uid;
                         return (
                         <tr
                           key={u.uid}
@@ -3797,6 +3820,7 @@ const AdminPortal: React.FC = () => {
                           </td>
                           <td className="px-5 py-3 text-gray-600">
                             <div className="flex flex-wrap items-center gap-2">
+                              <UserAvatarThumb url={u.avatar_url} label={userLabel} />
                               {u.email || <span className="text-gray-400">-</span>}
                               {consoleUser?.role && (
                                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
@@ -4160,6 +4184,7 @@ const AdminPortal: React.FC = () => {
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                   {visibleAdmins.map((a) => (
                     <li key={a.uid} className="flex items-center justify-between py-3 gap-3">
+                      <UserAvatarThumb url={a.avatar_url} label={a.display_name || a.email || a.uid} size="sm" />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium flex items-center gap-2 flex-wrap">
                           <span>{a.email || a.display_name || '(no email)'}</span>
