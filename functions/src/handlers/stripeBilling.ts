@@ -92,6 +92,64 @@ function appBaseUrl(): string {
   return value.replace(/\/$/, "");
 }
 
+/**
+ * Hosts we trust as Stripe redirect targets. Building this from config (not the
+ * raw request) is what keeps origin-based redirects from becoming an open
+ * redirect: the configured canonical domain, this project's Firebase hosting
+ * domains, and any extra custom domains in ALLOWED_REDIRECT_ORIGINS.
+ */
+function allowedRedirectHosts(): Set<string> {
+  const hosts = new Set<string>();
+  const canonical = process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || process.env.WEB_APP_URL;
+  if (canonical) {
+    try { hosts.add(new URL(canonical).host); } catch { /* ignore malformed config */ }
+  }
+  const project = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
+  if (project) {
+    hosts.add(`${project}.web.app`);
+    hosts.add(`${project}.firebaseapp.com`);
+  }
+  for (const extra of (process.env.ALLOWED_REDIRECT_ORIGINS || "").split(",")) {
+    const trimmed = extra.trim();
+    if (!trimmed) continue;
+    try { hosts.add(new URL(trimmed).host); } catch { hosts.add(trimmed); }
+  }
+  return hosts;
+}
+
+function originFromRequest(rawRequest?: { headers?: Record<string, string | string[] | undefined> }): string | null {
+  const headers = rawRequest?.headers ?? {};
+  const pick = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const origin = pick(headers.origin);
+  if (origin) return origin;
+  // Some callable transports omit Origin; recover it from Referer.
+  const referer = pick(headers.referer ?? headers.referrer);
+  if (referer) {
+    try { return new URL(referer).origin; } catch { /* ignore */ }
+  }
+  return null;
+}
+
+/**
+ * Base URL for Stripe success/cancel/return links. Prefer the origin the user
+ * actually started from — so they come back to *that* site, not a fixed domain —
+ * but only when it's an allow-listed host (or localhost in dev). Otherwise fall
+ * back to the configured canonical APP_BASE_URL.
+ */
+export function resolveAppBaseUrl(rawRequest?: { headers?: Record<string, string | string[] | undefined> }): string {
+  const origin = originFromRequest(rawRequest);
+  if (origin) {
+    try {
+      const url = new URL(origin);
+      const isLocalhost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+      if (isLocalhost || allowedRedirectHosts().has(url.host)) {
+        return origin.replace(/\/$/, "");
+      }
+    } catch { /* fall through to canonical */ }
+  }
+  return appBaseUrl();
+}
+
 export function billingPortalReturnPathForAudience(audience: unknown): string {
   return audience === "business" ? "/portal?billing=return" : "/workspace/billing";
 }
@@ -227,7 +285,7 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
     throw new HttpsError("failed-precondition", `${plan.priceEnv} is not configured.`);
   }
 
-  const baseUrl = appBaseUrl();
+  const baseUrl = resolveAppBaseUrl(request.rawRequest);
   const stripe = getStripe();
   const email = stringOrNull(request.auth?.token.email);
   const successPath = plan.audience === "business" ? "/portal?checkout=success" : "/workspace/billing?checkout=success";
@@ -330,7 +388,7 @@ export const cancelSubscriptionSimulatedFunction = onCall((request) =>
  *     invoices). The customer id is read ONLY from the user's own billing doc —
  *     never accepted from the client — to prevent managing another user's billing.
  */
-export async function createBillingPortalSessionImpl(uid: string): Promise<{ url: string; simulated?: boolean }> {
+export async function createBillingPortalSessionImpl(uid: string, baseUrl?: string): Promise<{ url: string; simulated?: boolean }> {
   if (billingSimulationEnabled()) {
     return { url: "/billing/manage", simulated: true };
   }
@@ -344,7 +402,7 @@ export async function createBillingPortalSessionImpl(uid: string): Promise<{ url
   const stripe = getStripe();
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${appBaseUrl()}${returnPath}`,
+    return_url: `${baseUrl ?? appBaseUrl()}${returnPath}`,
   });
   if (!session.url) {
     throw new HttpsError("internal", "Stripe did not return a Billing Portal URL.");
@@ -357,7 +415,7 @@ export async function createBillingPortalSessionImpl(uid: string): Promise<{ url
 // getStripe()/secretOrEnv — so it deploys without requiring the secret to exist in
 // Secret Manager. Wire STRIPE_SECRET_KEY into the functions env when going live.
 export const createBillingPortalSessionFunction = onCall((request) =>
-  createBillingPortalSessionImpl(requireAuth(request)));
+  createBillingPortalSessionImpl(requireAuth(request), resolveAppBaseUrl(request.rawRequest)));
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const uid = stringOrNull(session.metadata?.uid) ?? stringOrNull(session.client_reference_id);
