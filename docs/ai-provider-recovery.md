@@ -38,8 +38,17 @@ but cannot edit keys. Confirm/obtain super:
    re-entering keys. Deploy targeted (NEVER `deploy --only functions` wholesale):
 
    ```sh
-   firebase deploy --only functions:adminUpdateLlmConfig,functions:adminGetDashboard,functions:aiProxy
+   firebase deploy --only \
+     functions:adminUpdateLlmConfig,functions:adminGetDashboard,functions:aiProxy,\
+     functions:analyzeResume,functions:generateCoverLetter,functions:generateCareerPath,functions:mockInterview
    ```
+
+   The four extra handlers carry the **refund-on-failure fix** (`090813b`): they
+   charged credits *before* building the provider, and the provider build (which
+   reads the key) threw when no key was set — outside the refund path. So while AI
+   is down, every dedicated-tool run charges the user with no refund. Deploying
+   them alongside recovery ensures candidates aren't billed for failed runs during
+   the outage window (or any future key gap). `aiProxy` already refunded correctly.
 
 2. **Re-enter the key(s).** As a super admin: `/admin → Models & Keys`. In the
    **Provider** dropdown pick **Gemini** (free tier — the platform default), paste
