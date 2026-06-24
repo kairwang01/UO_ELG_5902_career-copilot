@@ -189,10 +189,10 @@ const UserAvatarThumb: React.FC<{ url?: string | null; label?: string | null; si
 };
 
 const DEFAULT_PLAN_QUOTAS: Record<AdminPlanKey, AdminPlanQuota> = {
-  free: { daily_run_limit: 25, daily_credit_limit: 0, monthly_credit_grant: 0, active_job_limit: 3 },
-  essentials: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 200, active_job_limit: 0 },
-  accelerator: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 750, active_job_limit: 0 },
-  executive: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 2000, active_job_limit: 0 },
+  free: { daily_run_limit: 10, daily_credit_limit: 0, monthly_credit_grant: 30, active_job_limit: 3 },
+  essentials: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 300, active_job_limit: 0 },
+  accelerator: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 1000, active_job_limit: 0 },
+  executive: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 3000, active_job_limit: 0 },
   starter: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 3000, active_job_limit: 8 },
   growth: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 8000, active_job_limit: 20 },
   pro: { daily_run_limit: 0, daily_credit_limit: 0, monthly_credit_grant: 20000, active_job_limit: 100 },
