@@ -517,6 +517,7 @@ export function PortalShortlist({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
+  const busyEntryRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
 
   const { addToast } = useSharedToast();
@@ -547,7 +548,8 @@ export function PortalShortlist({
   }, [fetchEntries]);
 
   const handleRemove = async (id: string) => {
-    if (busyEntryId) return;
+    if (busyEntryId || busyEntryRef.current) return;
+    busyEntryRef.current = id;
     setBusyEntryId(id);
     try {
       await removeFromShortlist(employerUid, id);
@@ -557,12 +559,14 @@ export function PortalShortlist({
     } catch {
       if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
     } finally {
+      busyEntryRef.current = null;
       if (mountedRef.current) setBusyEntryId(null);
     }
   };
 
   const handleMarkContacted = async (entry: ShortlistEntry) => {
-    if (entry.status === "contacted" || busyEntryId) return;
+    if (entry.status === "contacted" || busyEntryId || busyEntryRef.current) return;
+    busyEntryRef.current = entry.id;
     setBusyEntryId(entry.id);
     try {
       await updateShortlistEntry(employerUid, entry.id, {
@@ -578,6 +582,7 @@ export function PortalShortlist({
     } catch {
       if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
     } finally {
+      busyEntryRef.current = null;
       if (mountedRef.current) setBusyEntryId(null);
     }
   };
@@ -596,7 +601,8 @@ export function PortalShortlist({
   };
 
   const handleSaveNotes = async (id: string) => {
-    if (busyEntryId) return;
+    if (busyEntryId || busyEntryRef.current) return;
+    busyEntryRef.current = id;
     setBusyEntryId(id);
     try {
       await updateShortlistEntry(employerUid, id, { notes: editNotes });
@@ -612,6 +618,7 @@ export function PortalShortlist({
     } catch {
       if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
     } finally {
+      busyEntryRef.current = null;
       if (mountedRef.current) setBusyEntryId(null);
     }
   };

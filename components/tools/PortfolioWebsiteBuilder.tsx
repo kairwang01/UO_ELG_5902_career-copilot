@@ -716,6 +716,9 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const headshotRunRef = useRef(0);
   const imageUploadRunRef = useRef(0);
   const projectImageRunRef = useRef<Record<number, number>>({});
+  const autoFillInFlightRef = useRef(false);
+  const headshotGeneratingRef = useRef(false);
+  const savePortfolioRef = useRef(false);
   const saveDraftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDraftRef = useRef('');
   const resumeFingerprint = useMemo(() => portfolioDraftResumeFingerprint(resumeText), [resumeText]);
@@ -726,6 +729,9 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       mountedRef.current = false;
       autoFillRunRef.current++;
       headshotRunRef.current++;
+      autoFillInFlightRef.current = false;
+      headshotGeneratingRef.current = false;
+      savePortfolioRef.current = false;
       if (saveDraftTimerRef.current) clearTimeout(saveDraftTimerRef.current);
     };
   }, []);
@@ -737,6 +743,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     setResult(null);
     setPortfolioName('');
     setSaveStatus('idle');
+    savePortfolioRef.current = false;
     onUnsavedPortfolioChange?.(false);
     setCurrentStep('template');
     setDraftHydrated(false);
@@ -899,6 +906,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setError(t('tool_portfolio_auto_fill_no_resume'));
       return;
     }
+    if (autoFillInFlightRef.current) return;
+    autoFillInFlightRef.current = true;
     const runId = ++autoFillRunRef.current;
     // Snapshot the resume this run is for: if the resume changes mid-flight, the
     // cache-clearing effect fires but the run-id guard alone wouldn't catch it,
@@ -926,6 +935,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         setError(err instanceof Error ? err.message : t('tool_portfolio_auto_fill_error'));
       }
     } finally {
+      if (autoFillRunRef.current === runId) autoFillInFlightRef.current = false;
       if (mountedRef.current && autoFillRunRef.current === runId) setAutoFillLoading(false);
     }
   };
@@ -937,6 +947,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setHeadshotError(t('tool_portfolio_photo_required'));
       return;
     }
+    if (headshotGeneratingRef.current) return;
+    headshotGeneratingRef.current = true;
     const runId = ++headshotRunRef.current;
     setHeadshotStep('generating');
     setHeadshotError(null);
@@ -959,6 +971,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         if (!mountedRef.current || headshotRunRef.current !== runId) return;
         setHeadshotError(err instanceof Error ? err.message : t('tool_portfolio_headshot_failed'));
         setHeadshotStep('photo_uploaded');
+    } finally {
+        if (headshotRunRef.current === runId) headshotGeneratingRef.current = false;
     }
   };
 
@@ -1122,7 +1136,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
 
   const handleSavePortfolio = async () => {
     const uid = session?.user?.id;
-    if (!uid || !result || saveStatus === 'saving') return;
+    if (!uid || !result || saveStatus === 'saving' || savePortfolioRef.current) return;
+    savePortfolioRef.current = true;
     setSaveStatus('saving');
     try {
       const theme = previewTheme || details.theme;
@@ -1141,6 +1156,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       if (!mountedRef.current) return;
       setSaveStatus('error');
       setError(err instanceof Error ? err.message : t('showcase_save_failed'));
+    } finally {
+      savePortfolioRef.current = false;
     }
   };
 
@@ -1254,7 +1271,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                     <p className="text-xl text-gray-800 dark:text-gray-100 font-semibold mb-2">{t('tool_portfolio_generating_avatars_message') || 'Generating...'}</p>
                     <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">{t('tool_portfolio_generating_avatars_hint')}</p>
                     <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"></div>
-                    <button type="button" onClick={() => { headshotRunRef.current++; setHeadshotStep('photo_uploaded'); }} className="mt-6 text-sm text-gray-600 dark:text-slate-400 hover:underline">{t('tool_portfolio_cancel')}</button>
+                    <button type="button" onClick={() => { headshotRunRef.current++; headshotGeneratingRef.current = false; setHeadshotStep('photo_uploaded'); }} className="mt-6 text-sm text-gray-600 dark:text-slate-400 hover:underline">{t('tool_portfolio_cancel')}</button>
                  </div>
              );
         case 'generated':

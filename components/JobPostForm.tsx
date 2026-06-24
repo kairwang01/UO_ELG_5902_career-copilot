@@ -117,6 +117,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
     }, []);
     const [error, setError] = useState('');
     const [aiLoading, setAiLoading] = useState<null | 'description' | 'salary' | 'inclusivity' | 'format'>(null);
+    const aiLoadingRef = useRef<typeof aiLoading>(null);
     const [inclusivityResults, setInclusivityResults] = useState<InclusivitySuggestion[] | null>(null);
     const [salarySuggestion, setSalarySuggestion] = useState<{ yearly: string; monthly: string; } | null>(null);
     const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
@@ -124,6 +125,18 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
 
     const isEditing = !!existingJob;
     const isAiBusy = aiLoading !== null;
+    const startAiAction = (action: NonNullable<typeof aiLoading>) => {
+        if (aiLoadingRef.current) return false;
+        aiLoadingRef.current = action;
+        setAiLoading(action);
+        setError('');
+        return true;
+    };
+    const finishAiAction = (action: NonNullable<typeof aiLoading>) => {
+        if (aiLoadingRef.current !== action) return;
+        aiLoadingRef.current = null;
+        if (mountedRef.current) setAiLoading(null);
+    };
     const hasTitle = jobTitle.trim().length > 0;
     const hasLocation = location.trim().length > 0;
     const hasDescription = jobDescription.trim().length > 0;
@@ -233,8 +246,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setError(t('job_form_error_generate_required'));
             return;
         }
-        setAiLoading('description');
-        setError('');
+        if (!startAiAction('description')) return;
         try {
             const { company_name, company_description } = profile;
             const result = await generateJobDescription(jobTitle, keyResponsibilities, company_name || '', company_description || '');
@@ -242,9 +254,9 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setJobDescription(result.jobDescription);
             setEditorView('preview');
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('job_form_error_generate_failed'));
+            if (mountedRef.current) setError(err instanceof Error ? err.message : t('job_form_error_generate_failed'));
         } finally {
-            setAiLoading(null);
+            finishAiAction('description');
         }
     };
     
@@ -253,8 +265,7 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setError(t('job_form_error_format_required'));
             return;
         }
-        setAiLoading('format');
-        setError('');
+        if (!startAiAction('format')) return;
         try {
             const result = await formatJobDescription(jobDescription);
             if (!mountedRef.current) return;
@@ -267,9 +278,9 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             }
             setEditorView('preview');
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('job_form_error_format_failed'));
+            if (mountedRef.current) setError(err instanceof Error ? err.message : t('job_form_error_format_failed'));
         } finally {
-            setAiLoading(null);
+            finishAiAction('format');
         }
     };
 
@@ -278,17 +289,16 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setError(t('job_form_error_salary_required'));
             return;
         }
-        setAiLoading('salary');
-        setError('');
+        if (!startAiAction('salary')) return;
         setSalarySuggestion(null);
         try {
             const result = await analyzeSalary(jobTitle, location, jobDescription);
             if (!mountedRef.current) return;
             setSalarySuggestion({ yearly: result.yearlySalary, monthly: result.monthlySalary });
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('job_form_error_salary_failed'));
+            if (mountedRef.current) setError(err instanceof Error ? err.message : t('job_form_error_salary_failed'));
         } finally {
-            setAiLoading(null);
+            finishAiAction('salary');
         }
     };
     
@@ -297,16 +307,15 @@ const JobPostForm: React.FC<JobPostFormProps> = ({ session, profile, onClose, on
             setError(t('job_form_error_inclusivity_required'));
             return;
         }
-        setAiLoading('inclusivity');
-        setError('');
+        if (!startAiAction('inclusivity')) return;
         try {
             const result = await checkInclusivity(jobDescription);
             if (!mountedRef.current) return;
             setInclusivityResults(result.suggestions);
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('job_form_error_inclusivity_failed'));
+            if (mountedRef.current) setError(err instanceof Error ? err.message : t('job_form_error_inclusivity_failed'));
         } finally {
-            setAiLoading(null);
+            finishAiAction('inclusivity');
         }
     };
 
