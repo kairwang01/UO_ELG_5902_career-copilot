@@ -357,6 +357,8 @@
   "auth_unexpected_error": "Something went wrong. Please try again.",
   "auth_message_confirm_email": "Check your email for a confirmation link to finish setting up.",
   "auth_message_reset_link_sent": "Check your email — we sent a reset link!",
+  "billing_checkout_success": "Payment successful — your new plan is now active.",
+  "billing_checkout_cancel": "Checkout canceled — you can choose a plan whenever you're ready.",
   "plan_free_name": "Free",
   "plan_free_price_desc": "Always free",
   "plan_free_period_desc": "Always free",
