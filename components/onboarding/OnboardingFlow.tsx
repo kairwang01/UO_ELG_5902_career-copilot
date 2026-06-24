@@ -215,6 +215,11 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
       // 3) Optional birthday → also mirror locally for old-client compatibility.
       saveBirthdayLocal(uid, birthday);
 
+      // Onboarding is complete the moment the data is saved — mark it done now so
+      // closing the tab on the celebration screen (before "enter workspace") can't
+      // re-trigger onboarding next visit. enterWorkspace() also calls it (idempotent).
+      markOnboardingDone(uid);
+
       setPhase('done');
     } catch {
       setSaveError(true);
