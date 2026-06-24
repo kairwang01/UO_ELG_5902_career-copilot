@@ -1,22 +1,26 @@
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import { ToolResultsProvider } from '../contexts/ToolResultsContext';
-import AgileCoach from './tools/AgileCoach';
-import CareerPathPlanner from './tools/CareerPathPlanner';
-import CoverLetterGenerator from './tools/CoverLetterGenerator';
-import EmailCrafter from './tools/EmailCrafter';
-import EnglishPro from './tools/EnglishPro';
-import LinkedInOptimizer from './tools/LinkedInOptimizer';
-import OpportunityFinder from './tools/OpportunityFinder';
-import PortfolioWebsiteBuilder from './tools/PortfolioWebsiteBuilder';
-import ResumeFormatter from './tools/ResumeFormatter';
-import SalaryNegotiator from './tools/SalaryNegotiator';
-import NetworkingAssistant from './tools/NetworkingAssistant';
-import PerformanceReviewPrep from './tools/PerformanceReviewPrep';
-import SkillLearningPlanner from './tools/SkillLearningPlanner';
-import IndustryEventScout from './tools/IndustryEventScout';
+
+// Each tool is code-split into its own chunk (React.lazy) so the candidate
+// workspace shell stays small and a tool's code is fetched only when opened,
+// instead of all 14 tools bloating the main CareerApp bundle.
+const AgileCoach = React.lazy(() => import('./tools/AgileCoach'));
+const CareerPathPlanner = React.lazy(() => import('./tools/CareerPathPlanner'));
+const CoverLetterGenerator = React.lazy(() => import('./tools/CoverLetterGenerator'));
+const EmailCrafter = React.lazy(() => import('./tools/EmailCrafter'));
+const EnglishPro = React.lazy(() => import('./tools/EnglishPro'));
+const LinkedInOptimizer = React.lazy(() => import('./tools/LinkedInOptimizer'));
+const OpportunityFinder = React.lazy(() => import('./tools/OpportunityFinder'));
+const PortfolioWebsiteBuilder = React.lazy(() => import('./tools/PortfolioWebsiteBuilder'));
+const ResumeFormatter = React.lazy(() => import('./tools/ResumeFormatter'));
+const SalaryNegotiator = React.lazy(() => import('./tools/SalaryNegotiator'));
+const NetworkingAssistant = React.lazy(() => import('./tools/NetworkingAssistant'));
+const PerformanceReviewPrep = React.lazy(() => import('./tools/PerformanceReviewPrep'));
+const SkillLearningPlanner = React.lazy(() => import('./tools/SkillLearningPlanner'));
+const IndustryEventScout = React.lazy(() => import('./tools/IndustryEventScout'));
 
 interface ToolRunnerProps {
   tool: string;
@@ -48,6 +52,13 @@ const toolMap: { [key: string]: React.FC<any> } = {
   'industry-event-scout': IndustryEventScout,
 };
 
+/** Brief fallback while a lazily-loaded tool chunk is fetched. */
+const ToolChunkFallback: React.FC = () => (
+  <div className="flex items-center justify-center py-24" role="status" aria-label="Loading">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-slate-700 dark:border-t-blue-400" />
+  </div>
+);
+
 const ToolRunner: React.FC<ToolRunnerProps> = ({ tool, ...props }) => {
   const ActiveTool = toolMap[tool];
   const uid = props.session?.user?.id ?? null;
@@ -72,7 +83,9 @@ const ToolRunner: React.FC<ToolRunnerProps> = ({ tool, ...props }) => {
   return (
     <div className="h-full animate-fade-in">
         <ToolResultsProvider toolKey={tool} uid={uid} subscriptionStatus={subscriptionStatus}>
-          <ActiveTool {...props} tool={tool} />
+          <Suspense fallback={<ToolChunkFallback />}>
+            <ActiveTool {...props} tool={tool} />
+          </Suspense>
         </ToolResultsProvider>
     </div>
   );

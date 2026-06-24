@@ -16,6 +16,11 @@ export default defineConfig(() => {
         }
       },
       build: {
+        // The candidate workspace and its tools are code-split (React.lazy), so the
+        // only chunk over the default 500 kB is the firebase SDK vendor chunk below
+        // — unavoidable and deliberately isolated for caching. Lift the advisory
+        // warning to just above it so it stops flagging that known-good vendor chunk.
+        chunkSizeWarningLimit: 600,
         rollupOptions: {
           output: {
             // Split heavy vendor libs into their own cacheable chunks so the main

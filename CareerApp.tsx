@@ -24,11 +24,15 @@ import CookieConsent from './components/CookieConsent';
 import UploadSection from './components/UploadSection';
 import { uploadResumeFile, deleteResumeFile, MAX_RESUME_BYTES, isSupportedResumeFile } from './services/resumeStorage';
 import EmptyState from './components/EmptyState';
-import AnalysisDisplay from './components/AnalysisDisplay';
+// Lazy: the analysis result screen (with docx/pdf export) only mounts after a
+// run; the coach bot only mounts when opened.
+const AnalysisDisplay = React.lazy(() => import('./components/AnalysisDisplay'));
 import LoadingSpinner from './components/LoadingSpinner';
 import StagedLoader from './components/StagedLoader';
 import Auth from './components/Auth';
-import Account from './components/Account';
+// Lazy: Account pulls in ethers (Web3) and is only opened from settings, so it
+// shouldn't weigh down the initial workspace bundle.
+const Account = React.lazy(() => import('./components/Account'));
 import Dashboard from './components/dashboard/Dashboard';
 import {
   CandidateBillingPage,
@@ -41,7 +45,7 @@ import Sidebar from './components/Sidebar';
 import MyApplications from './components/MyApplications';
 import TalentProfileForm from './components/TalentProfileForm';
 import type { PortalPage } from './components/employer/EmployerPortal';
-import CareerCoachBot from './components/CareerCoachBot';
+const CareerCoachBot = React.lazy(() => import('./components/CareerCoachBot'));
 import VerifiedTalentSection from './components/VerifiedTalentSection';
 import ApiDocsViewer from './components/ApiDocsViewer';
 import { SiteLayout } from './marketing/components/SiteLayout';
@@ -1214,7 +1218,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
         {dashboardView === 'account' && session && (
             <div id="account-panel">
-                <Account key={session.user.id} session={session} profile={profile} onSetView={handleSetView} t={t} onBack={() => setWorkspaceView('dashboard')} />
+                <React.Suspense fallback={<LoadingSpinner market={market} />}>
+                    <Account key={session.user.id} session={session} profile={profile} onSetView={handleSetView} t={t} onBack={() => setWorkspaceView('dashboard')} />
+                </React.Suspense>
             </div>
         )}
     </div>
@@ -1435,7 +1441,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const renderContent = () => {
     if (view === 'auth') { return <Auth t={t} onClose={() => setView('home')} initialView={initialAuthView} mode={authMode} />; }
-    if (view === 'account' && session) { return <Account key={session.user.id} session={session} profile={profile} onSetView={handleSetView} t={t} />; }
+    if (view === 'account' && session) { return <React.Suspense fallback={<LoadingSpinner market={market} />}><Account key={session.user.id} session={session} profile={profile} onSetView={handleSetView} t={t} /></React.Suspense>; }
     if (view === 'api_docs') { return <ApiDocsViewer onClose={() => setView('account')} />; }
     if (view === 'business') {
         return (
@@ -1467,7 +1473,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         />
       );
     }
-    if (analysisResult) { return <AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} onContinueToToolkit={() => { setAnalysisResult(null); setActiveTool(null); setWorkspaceView('toolkit'); }} />; }
+    if (analysisResult) { return <React.Suspense fallback={<LoadingSpinner market={market} />}><AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} onContinueToToolkit={() => { setAnalysisResult(null); setActiveTool(null); setWorkspaceView('toolkit'); }} /></React.Suspense>; }
     if (session && !showHomePageOverride) {
         if (!isProfileLoaded || !isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600 dark:text-gray-400">{t('dashboard_loading')}</p></div>; }
         if (profile?.role === 'agency') {
@@ -1544,7 +1550,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             <svg className="h-6 w-6 sm:h-8 sm:w-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
         )}
-        {canUseCareerCoach && isChatOpen && <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} onLaunchTool={(target) => { setWorkspaceView(target); setIsChatOpen(false); }} />}
+        {canUseCareerCoach && isChatOpen && (
+          <React.Suspense fallback={null}>
+            <CareerCoachBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} session={session} profile={profile} resumeText={resumeText} t={t} onLaunchTool={(target) => { setWorkspaceView(target); setIsChatOpen(false); }} />
+          </React.Suspense>
+        )}
       </div>
   );
 };
