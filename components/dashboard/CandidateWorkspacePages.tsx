@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import {
   ArrowRight,
@@ -803,14 +803,17 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
   const isPending = currentStatus.startsWith('pending_');
   const hasActivePaidPlan = currentLevel > 0 && !isPending;
   const [openingPortal, setOpeningPortal] = useState(false);
+  const openingPortalRef = useRef(false);
 
   const handleManageSubscription = async () => {
-    if (openingPortal) return;
+    if (openingPortal || openingPortalRef.current) return;
+    openingPortalRef.current = true;
     setOpeningPortal(true);
     try {
       const { url } = await createBillingPortalSession();
       window.location.assign(url);
     } catch {
+      openingPortalRef.current = false;
       setOpeningPortal(false);
     }
   };

@@ -719,6 +719,10 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     // Candidates this employer has hidden from Talent Discovery (loaded on mount,
     // persisted in users/{uid}/hidden_candidates so they stay hidden across searches).
     const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+    const savingIdsRef = useRef<Set<string>>(new Set());
+    const hiddenIdsRef = useRef<Set<string>>(new Set());
+    const requestingCandidateRef = useRef<string | null>(null);
+    const packetCandidateRef = useRef<string | null>(null);
     const verifiedRequestIdRef = useRef(0);
     const appliedInitialJobIdRef = useRef<string | null>(null);
     const searchFormRef = useRef<HTMLFormElement>(null);
@@ -897,7 +901,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     };
 
     const handleSaveToShortlist = async (candidate: MatchedCandidate) => {
-        if (savedIds.has(candidate.id) || savingIds.has(candidate.id)) return;
+        if (savedIds.has(candidate.id) || savingIdsRef.current.has(candidate.id)) return;
+        savingIdsRef.current.add(candidate.id);
         setSavingIds(prev => new Set(prev).add(candidate.id));
         const { job_id, job_title } = getJobInfo();
         try {
@@ -923,6 +928,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         } catch (err) {
             addToast(err instanceof Error ? err.message : t('shortlist_save_error'), 'error');
         } finally {
+            savingIdsRef.current.delete(candidate.id);
             setSavingIds(prev => {
                 const next = new Set(prev);
                 next.delete(candidate.id);
@@ -946,6 +952,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     }, [profile?.id]);
 
     const handleHideCandidate = async (candidate: MatchedCandidate) => {
+        if (hiddenIds.has(candidate.id) || hiddenIdsRef.current.has(candidate.id)) return;
+        hiddenIdsRef.current.add(candidate.id);
         setHiddenIds(prev => new Set(prev).add(candidate.id));
         try {
             await hideCandidate(profile.id, candidate.id);
@@ -953,6 +961,8 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         } catch (err) {
             setHiddenIds(prev => { const next = new Set(prev); next.delete(candidate.id); return next; });
             addToast(err instanceof Error ? err.message : t('talent_hide_error'), 'error');
+        } finally {
+            hiddenIdsRef.current.delete(candidate.id);
         }
     };
 
@@ -984,9 +994,10 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
     }, [outreachCompanyName, outreachJobTitle, t]);
 
     const handleSubmitOutreachRequest = useCallback(async () => {
-        if (!candidateToRequest || requestingCandidateId) return;
+        if (!candidateToRequest || requestingCandidateRef.current) return;
         const message = requestMessage.trim();
         if (message.length < 20) return;
+        requestingCandidateRef.current = candidateToRequest.id;
         setRequestingCandidateId(candidateToRequest.id);
         try {
             const result = await createSourcingOutreach({
@@ -1019,6 +1030,7 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         } catch (err) {
             addToast(err instanceof Error ? err.message : t('sourcing_request_error'), 'error');
         } finally {
+            requestingCandidateRef.current = null;
             if (mountedRef.current) setRequestingCandidateId(null);
         }
     }, [
@@ -1029,14 +1041,14 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         profile.id,
         refreshOutreach,
         requestMessage,
-        requestingCandidateId,
         selectedJobId,
         t,
     ]);
 
     const handleOpenPacket = useCallback(async (candidate: MatchedCandidate, index: number) => {
         const outreach = outreachByCandidateId.get(candidate.id);
-        if (!outreach || outreach.status !== 'accepted' || packetCandidateId) return;
+        if (!outreach || outreach.status !== 'accepted' || packetCandidateRef.current) return;
+        packetCandidateRef.current = candidate.id;
         setPacketCandidateId(candidate.id);
         try {
             const packet = await getSourcingCandidatePacket(outreach.id);
@@ -1044,9 +1056,10 @@ const TalentDiscovery: React.FC<TalentDiscoveryProps> = ({
         } catch (err) {
             addToast(err instanceof Error ? err.message : t('sourcing_packet_error'), 'error');
         } finally {
+            packetCandidateRef.current = null;
             if (mountedRef.current) setPacketCandidateId(null);
         }
-    }, [addToast, outreachByCandidateId, packetCandidateId, t]);
+    }, [addToast, outreachByCandidateId, t]);
 
     const handleCommandPrimaryAction = () => {
         if (searchLoading) return;

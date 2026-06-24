@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowUpRight,
@@ -121,6 +121,7 @@ export function PortalBilling({
   const currentPlan = resolvePlanDisplay(currentStatus);
   const isPending = currentStatus.startsWith('pending');
   const isActive = currentStatus !== 'free' && !isPending;
+  const openingPortalRef = useRef(false);
   const isKnownAvailablePlan = AVAILABLE_PLANS.some((plan) => plan.key === currentPlanKey);
   const planLimit = currentPlan.jobLimit;
   const displayUsedPct = planLimit > 0 ? Math.min(100, Math.round((activeJobs / planLimit) * 100)) : 0;
@@ -143,13 +144,15 @@ export function PortalBilling({
       navigateToBusinessPricing();
       return;
     }
-    if (openingPortal) return;
+    if (openingPortal || openingPortalRef.current) return;
+    openingPortalRef.current = true;
     setOpeningPortal(true);
     setPortalError(null);
     try {
       const { url } = await createBillingPortalSession();
       window.location.assign(url);
     } catch {
+      openingPortalRef.current = false;
       setPortalError(t('portal_billing_portal_error'));
       setOpeningPortal(false);
     }

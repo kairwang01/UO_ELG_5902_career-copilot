@@ -432,6 +432,7 @@ interface InterviewRowProps {
 const InterviewRow: React.FC<InterviewRowProps> = ({ interview, t, onInterviewChange }) => {
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState(false);
+  const confirmingRef = useRef(false);
   const mountedRef = useRef(true);
   const isCancelled = interview.interview_status === 'cancelled';
   const FormatIcon = INTERVIEW_FORMAT_ICONS[interview.format] ?? CalendarClock;
@@ -444,6 +445,8 @@ const InterviewRow: React.FC<InterviewRowProps> = ({ interview, t, onInterviewCh
   }, []);
 
   const handleConfirm = async () => {
+    if (confirmingRef.current || interview.candidate_confirmed || isCancelled) return;
+    confirmingRef.current = true;
     setConfirming(true);
     setConfirmError(false);
     try {
@@ -451,6 +454,7 @@ const InterviewRow: React.FC<InterviewRowProps> = ({ interview, t, onInterviewCh
       if (!mountedRef.current) return;
       onInterviewChange();
     } catch {
+      confirmingRef.current = false;
       if (mountedRef.current) {
         setConfirmError(true);
         setConfirming(false);
