@@ -117,8 +117,13 @@ function reportStatusFromError(err: any): void {
     updateApiStatus('offline', friendly);
   } else if (code === 'functions/internal') {
     updateApiStatus('degraded', friendly);
-  } else if (code === 'functions/unavailable' || lower.includes('network') || lower.includes('failed to fetch')) {
+  } else if (lower.includes('network') || lower.includes('failed to fetch')) {
     updateApiStatus('offline', translateError('ai_error_network', 'Network connection issue. Please check your internet connection.'));
+  } else if (code === 'functions/unavailable') {
+    // Server reachable but the AI provider is down or unconfigured — not the
+    // user's connection. Surface neutral "temporarily unavailable" copy and mark
+    // AI degraded (the rest of the app still works) rather than blaming their network.
+    updateApiStatus('degraded', translateError('ai_error_unavailable', 'AI features are temporarily unavailable. Please try again shortly, or contact support if this continues.'));
   }
 }
 
