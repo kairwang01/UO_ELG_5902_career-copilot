@@ -1810,12 +1810,20 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   // the recruiter navigates away mid-batch.
   const cancelBulkRef = useRef(false);
   const isMountedRef = useRef(true);
+  const jdExtractingRef = useRef(false);
+  const anonymizingIdsRef = useRef(new Set<string>());
+  const pitchingIdsRef = useRef(new Set<string>());
+  const preppingIdsRef = useRef(new Set<string>());
   useEffect(() => {
     isMountedRef.current = true;
     cancelBulkRef.current = false;
     return () => {
       isMountedRef.current = false;
       cancelBulkRef.current = true;
+      jdExtractingRef.current = false;
+      anonymizingIdsRef.current.clear();
+      pitchingIdsRef.current.clear();
+      preppingIdsRef.current.clear();
     };
   }, []);
   const [currentFilter, setCurrentFilter] = useState<AgencyFilter>("all");
@@ -1873,10 +1881,12 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   }, [mode, fetchInternalJobs]);
 
   const handleJdUrlImport = async () => {
-    if (!jdUrl.trim()) return;
+    const sourceUrl = jdUrl.trim();
+    if (!sourceUrl || jdExtractingRef.current) return;
+    jdExtractingRef.current = true;
     setIsExtractingJd(true);
     try {
-      const result = await extractTextFromUrl(jdUrl);
+      const result = await extractTextFromUrl(sourceUrl);
       if (!isMountedRef.current) return;
       if (result.extractedText && result.extractedText.trim()) {
         setSelectedInternalJobId("");
@@ -1892,6 +1902,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       if (!isMountedRef.current) return;
       addToast(t("agency_jd_import_failed"), "error");
     } finally {
+      jdExtractingRef.current = false;
       if (isMountedRef.current) setIsExtractingJd(false);
     }
   };
@@ -2094,7 +2105,8 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
 
   const handleAnonymize = async (id: string) => {
     const file = files.find((f) => f.id === id);
-    if (!file || !file.text) return;
+    if (!file || !file.text || file.isAnonymizing || anonymizingIdsRef.current.has(id)) return;
+    anonymizingIdsRef.current.add(id);
 
     setFiles((prev) =>
       prev.map((f) => (f.id === id ? { ...f, isAnonymizing: true } : f)),
@@ -2105,6 +2117,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         file.text,
         profile.company_name || "Agency",
       );
+      if (!isMountedRef.current) return;
       setFiles((prev) =>
         prev.map((f) =>
           f.id === id
@@ -2118,6 +2131,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       );
       setViewBlindResumeId(id);
     } catch {
+      if (!isMountedRef.current) return;
       setFiles((prev) =>
         prev.map((f) =>
           f.id === id
@@ -2130,12 +2144,15 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         ),
       );
       addToast(t("agency_blind_resume_failed"), "error");
+    } finally {
+      anonymizingIdsRef.current.delete(id);
     }
   };
 
   const handleGeneratePitch = async (id: string) => {
     const file = files.find((f) => f.id === id);
-    if (!file || !file.text) return;
+    if (!file || !file.text || file.isPitching || pitchingIdsRef.current.has(id)) return;
+    pitchingIdsRef.current.add(id);
 
     setFiles((prev) =>
       prev.map((f) => (f.id === id ? { ...f, isPitching: true } : f)),
@@ -2145,6 +2162,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       const name = file.candidateName || file.fileName;
       const jd = mode === "matching" ? jobDescription : undefined;
       const result = await generateClientPitchEmail(file.text, name, jd);
+      if (!isMountedRef.current) return;
       setFiles((prev) =>
         prev.map((f) =>
           f.id === id ? { ...f, isPitching: false, pitchEmail: result } : f,
@@ -2152,6 +2170,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       );
       setViewPitchId(id);
     } catch {
+      if (!isMountedRef.current) return;
       setFiles((prev) =>
         prev.map((f) =>
           f.id === id
@@ -2160,16 +2179,19 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         ),
       );
       addToast(t("agency_pitch_failed"), "error");
+    } finally {
+      pitchingIdsRef.current.delete(id);
     }
   };
 
   const handleGeneratePrepKit = async (id: string) => {
     const file = files.find((f) => f.id === id);
-    if (!file || !file.text) return;
+    if (!file || !file.text || file.isPrepping || preppingIdsRef.current.has(id)) return;
     if (!jobDescription.trim()) {
       addToast(t("agency_jd_required"), "error");
       return;
     }
+    preppingIdsRef.current.add(id);
 
     setFiles((prev) =>
       prev.map((f) => (f.id === id ? { ...f, isPrepping: true } : f)),
@@ -2177,6 +2199,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
 
     try {
       const result = await generateCandidatePrepKit(file.text, jobDescription);
+      if (!isMountedRef.current) return;
       setFiles((prev) =>
         prev.map((f) =>
           f.id === id ? { ...f, isPrepping: false, prepKit: result } : f,
@@ -2184,6 +2207,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
       );
       setViewPrepKitId(id);
     } catch {
+      if (!isMountedRef.current) return;
       setFiles((prev) =>
         prev.map((f) =>
           f.id === id
@@ -2192,10 +2216,15 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         ),
       );
       addToast(t("agency_prep_kit_failed"), "error");
+    } finally {
+      preppingIdsRef.current.delete(id);
     }
   };
 
   const removeFile = (id: string) => {
+    anonymizingIdsRef.current.delete(id);
+    pitchingIdsRef.current.delete(id);
+    preppingIdsRef.current.delete(id);
     setFiles((prev) => prev.filter((f) => f.id !== id));
     if (viewPitchId === id) setViewPitchId(null);
     if (viewPrepKitId === id) setViewPrepKitId(null);

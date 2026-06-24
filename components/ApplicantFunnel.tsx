@@ -1373,6 +1373,21 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     // Run token for the resume-view fetch: opening another applicant's resume (or closing)
     // supersedes an in-flight load so applicant A's resume can't paint under applicant B.
     const resumeViewRunRef = useRef(0);
+    const mountedRef = useRef(true);
+    const downloadingResumeRef = useRef<string | null>(null);
+    const savingApplicantIdsRef = useRef(new Set<string>());
+    const bulkSavingRef = useRef(false);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            resumeViewRunRef.current += 1;
+            downloadingResumeRef.current = null;
+            savingApplicantIdsRef.current.clear();
+            bulkSavingRef.current = false;
+        };
+    }, []);
 
     // View an applicant's resume TEXT inline (server verifies the caller owns the
     // job the candidate applied to — same gate as the file download).
@@ -1403,10 +1418,12 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     // caller owns the job the candidate applied to). Applicants who only pasted
     // text — and pre-feature applicants — return { available:false } gracefully.
     const handleDownloadResume = async (applicant: Applicant) => {
-        if (downloadingResumeId) return;
+        if (downloadingResumeId || downloadingResumeRef.current) return;
+        downloadingResumeRef.current = applicant.id;
         setDownloadingResumeId(applicant.id);
         try {
             const res = await getApplicantResumeFile(applicant.id);
+            if (!mountedRef.current) return;
             if (!res.available) {
                 addToast(t('applicant_funnel_no_resume_file'), 'info');
                 return;
@@ -1441,16 +1458,18 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             }
             addToast(t('applicant_funnel_no_resume_file'), 'info');
         } catch (err) {
-            addToast(err instanceof Error ? err.message : t('applicant_funnel_resume_download_error'), 'error');
+            if (mountedRef.current) addToast(err instanceof Error ? err.message : t('applicant_funnel_resume_download_error'), 'error');
         } finally {
-            setDownloadingResumeId(null);
+            if (downloadingResumeRef.current === applicant.id) downloadingResumeRef.current = null;
+            if (mountedRef.current) setDownloadingResumeId(null);
         }
     };
 
     // Save an applicant to the recruiter's shortlist (Biz12) — bookmark candidates
     // of interest from the review page so they appear in the Shortlist section.
     const handleSaveCandidate = async (applicant: Applicant) => {
-        if (savedIds.has(applicant.id) || savingIds.has(applicant.id)) return;
+        if (savedIds.has(applicant.id) || savingIds.has(applicant.id) || savingApplicantIdsRef.current.has(applicant.id)) return;
+        savingApplicantIdsRef.current.add(applicant.id);
         setSavingIds((prev) => new Set(prev).add(applicant.id));
         try {
             await saveToShortlist(employerUid, {
@@ -1473,12 +1492,16 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                 status: 'saved',
                 saved_by: employerUid,
             });
+            if (!mountedRef.current) return;
             setSavedIds((prev) => new Set(prev).add(applicant.id));
             addToast(t('shortlist_saved_toast'), 'success');
         } catch (err) {
-            addToast(err instanceof Error ? err.message : t('shortlist_save_error'), 'error');
+            if (mountedRef.current) addToast(err instanceof Error ? err.message : t('shortlist_save_error'), 'error');
         } finally {
-            setSavingIds((prev) => { const n = new Set(prev); n.delete(applicant.id); return n; });
+            savingApplicantIdsRef.current.delete(applicant.id);
+            if (mountedRef.current) {
+                setSavingIds((prev) => { const n = new Set(prev); n.delete(applicant.id); return n; });
+            }
         }
     };
 
@@ -1507,6 +1530,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             // only (already sorted by match score). Resumes never reach the browser.
             const { applicants: result } = await listJobApplicants(job.id);
 
+            if (!mountedRef.current) return;
             setApplicants(result);
             setSelectedApplicantIds(new Set());
             // Don't auto-spotlight the top AI-scored applicant (result is score-sorted) —
@@ -1515,10 +1539,12 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             // automated-ranking compliance posture.
             setSelectedApplicant(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('applicant_funnel_load_error'));
+            if (mountedRef.current) setError(err instanceof Error ? err.message : t('applicant_funnel_load_error'));
         } finally {
-            setLoading(false);
-            setLoadingMessage('');
+            if (mountedRef.current) {
+                setLoading(false);
+                setLoadingMessage('');
+            }
         }
     }, [job.id, t]);
 
@@ -1699,6 +1725,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
     );
 
     const handleBulkSubmit = async () => {
+        if (bulkSaving || bulkSavingRef.current) return;
         const reason = bulkReason.trim();
         if (bulkAction === 'reject' && !reason) {
             setStatusUpdateError(t('applicant_funnel_bulk_reason_required'));
@@ -1720,6 +1747,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             return;
         }
 
+        bulkSavingRef.current = true;
         setBulkSaving(true);
         setStatusUpdateError(null);
         try {
@@ -1731,6 +1759,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                 templateKey: bulkAction === 'reject' ? 'rejection' : 'interview_invite',
             });
             await fetchApplicants();
+            if (!mountedRef.current) return;
             setSelectedApplicantIds(new Set());
             if (result.failed > 0) {
                 addToast(formatTranslation(t('applicant_funnel_bulk_partial_toast'), {
@@ -1741,9 +1770,10 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                 addToast(formatTranslation(t('applicant_funnel_bulk_success_toast'), { count: result.succeeded }), 'success');
             }
         } catch (err) {
-            setStatusUpdateError(err instanceof Error ? err.message : t('applicant_funnel_bulk_error'));
+            if (mountedRef.current) setStatusUpdateError(err instanceof Error ? err.message : t('applicant_funnel_bulk_error'));
         } finally {
-            setBulkSaving(false);
+            bulkSavingRef.current = false;
+            if (mountedRef.current) setBulkSaving(false);
         }
     };
 

@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, FileText, LockKeyhole, Search, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import type { AnalysisResult, UserProfile } from '../types';
 import ToolRunner from './ToolRunner';
@@ -181,6 +181,18 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizationError, setOptimizationError] = useState<string | null>(null);
   const [confirmingApply, setConfirmingApply] = useState(false);
+  const optimizingRef = useRef(false);
+  const optimizeRunRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      optimizeRunRef.current += 1;
+      optimizingRef.current = false;
+    };
+  }, []);
 
   const selectedToolGroup = TOOL_GROUPS.find((group) => group.id === toolGroup) ?? TOOL_GROUPS[0];
   const filteredTools = useMemo(() => {
@@ -207,20 +219,26 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
   const activeToolInitialInput = activeTool && toolInput?.tool === activeTool ? toolInput.input : '';
   
   const handleApplySuggestions = async () => {
-    if (!result) return;
+    if (!result || optimizingRef.current) return;
+    const runId = ++optimizeRunRef.current;
+    optimizingRef.current = true;
     setIsOptimizing(true);
     setOptimizationError(null);
     try {
       const { updatedResumeText } = await applyResumeImprovements(resumeText, result.improvements);
+      if (!mountedRef.current || optimizeRunRef.current !== runId) return;
       // Close the confirm UI BEFORE onApplyImprovements — the parent resets the
       // analysis (result → null), which re-renders this view to the studio branch.
       setConfirmingApply(false);
       onApplyImprovements(updatedResumeText);
     } catch (err) {
       console.error('applyResumeImprovements failed:', err);
-      setOptimizationError(t('ai_error_failed'));
+      if (mountedRef.current && optimizeRunRef.current === runId) setOptimizationError(t('ai_error_failed'));
     } finally {
-      setIsOptimizing(false);
+      if (mountedRef.current && optimizeRunRef.current === runId) {
+        optimizingRef.current = false;
+        setIsOptimizing(false);
+      }
     }
   };
   
