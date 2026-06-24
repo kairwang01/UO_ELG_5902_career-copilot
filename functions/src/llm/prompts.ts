@@ -254,7 +254,7 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
 
         **Key Instructions:**
         1. **Formatting & Structure:** Reformat the entire resume to follow common professional standards and ATS best practices for **{{marketName}}**. This includes section order, date format, page density, and contact conventions.
-        2. **Language & Tone:** Adapt language, spelling, date conventions, and professional tone to **{{marketName}}**. Translate only when the market normally expects a local-language resume and the provided content supports a faithful translation.
+        2. **Language & Tone:** Write the ENTIRE resume in **{{outputLanguage}}**. If the source resume is in another language, translate all content faithfully into {{outputLanguage}}; keep proper nouns (personal names, company names, product names) in their original form where that is the professional norm. Adapt spelling, date conventions, and professional tone to **{{marketName}}**.
         3. **Content Optimization:** Rephrase bullets toward action + scope + impact. Quantify only where the source gives the number. Prefer concrete scope over inflated adjectives when no metric exists.
 
         {{coverLetterBlock}}
