@@ -21,6 +21,8 @@ interface AvatarProps {
   signInRequiredMessage?: string;
   maxSizeMessage?: string;
   timeoutMessage?: string;
+  uploadControlClassName?: string;
+  uploadIconClassName?: string;
 }
 
 const Avatar: React.FC<AvatarProps> = ({
@@ -34,6 +36,8 @@ const Avatar: React.FC<AvatarProps> = ({
   signInRequiredMessage = 'You must be signed in to upload an avatar.',
   maxSizeMessage = 'Image must be smaller than 5 MB.',
   timeoutMessage = 'Upload timed out. Check your connection and try again.',
+  uploadControlClassName = 'p-2',
+  uploadIconClassName = 'h-5 w-5',
 }) => {
   const { addToast } = useToast();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -115,8 +119,8 @@ const Avatar: React.FC<AvatarProps> = ({
         )}
         {onUpload && (
           <span className="absolute bottom-0 right-0">
-            <label htmlFor="avatar-upload" className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 shadow-md inline-block">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <label htmlFor="avatar-upload" className={`cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-md inline-block ${uploadControlClassName}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className={uploadIconClassName} viewBox="0 0 20 20" fill="currentColor">
                 <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
               </svg>
             </label>
@@ -132,7 +136,7 @@ const Avatar: React.FC<AvatarProps> = ({
           </span>
         )}
       </span>
-      {onUpload && (
+      {onUpload && (uploading || uploadLabel) && (
         <p className="text-sm text-gray-500">{uploading ? uploadingLabel : uploadLabel}</p>
       )}
     </span>

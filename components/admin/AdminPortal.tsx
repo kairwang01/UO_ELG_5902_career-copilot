@@ -1454,9 +1454,9 @@ const AdminPortal: React.FC = () => {
   const accountDisplayName = accountName || session.user.email || 'Admin';
   const accessTabs: { id: AccessControlTab; label: string }[] = canManageAdmins
     ? [
+        { id: 'console', label: 'Console users' },
         { id: 'permissions', label: 'Permissions' },
         { id: 'product', label: 'Product roles' },
-        { id: 'console', label: 'Console users' },
       ]
     : [{ id: 'reviewers', label: 'Reviewers' }];
   const activeAccessTab = accessTabs.some((item) => item.id === accessTab)
@@ -1549,8 +1549,10 @@ const AdminPortal: React.FC = () => {
                         if (!ok && mountedRef.current) setAccountAvatarUrl(prev);
                       }}
                       altText="Admin avatar"
-                      uploadLabel="Upload"
+                      uploadLabel=""
                       uploadingLabel="Uploading..."
+                      uploadControlClassName="p-1.5"
+                      uploadIconClassName="h-3.5 w-3.5"
                       selectImageMessage="Select an image first."
                       signInRequiredMessage="You must be signed in to upload an avatar."
                       maxSizeMessage="Image must be 2MB or smaller."
