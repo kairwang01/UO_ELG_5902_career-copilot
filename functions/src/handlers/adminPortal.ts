@@ -308,6 +308,14 @@ export const adminUpdateLlmConfigFunction = onCall({ invoker: "public" }, async 
   if (data.kairllm_api_key?.trim()) patch.kairllm_api_key = data.kairllm_api_key.trim();
   if (data.deepseek_api_key?.trim()) patch.deepseek_api_key = data.deepseek_api_key.trim();
 
+  // Firestore rejects `undefined` field values (ignoreUndefinedProperties is not
+  // enabled), so a field that resolved to undefined — e.g. saving one provider
+  // with a blank fallback model / base URL and no prior value — would make
+  // ref.set() throw a 500 and block restoring keys. Drop undefined entries.
+  for (const key of Object.keys(patch) as (keyof LlmConfigDoc)[]) {
+    if (patch[key] === undefined) delete patch[key];
+  }
+
   await ref.set(patch, { merge: true });
   await refreshPlatformCaches();
   await logAdminAction({
