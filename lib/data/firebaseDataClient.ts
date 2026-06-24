@@ -1,6 +1,7 @@
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  getAdditionalUserInfo,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -190,11 +191,14 @@ export const firebaseDataClient: DataClient = {
         return { data: null, error: toError(error) };
       }
     },
-    async signInWithGoogle(): Promise<DataResult<void>> {
+    async signInWithGoogle(): Promise<DataResult<{ isNewUser: boolean }>> {
       try {
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(firebaseAuth, provider);
-        return { data: null, error: null };
+        const credential = await signInWithPopup(firebaseAuth, provider);
+        // isNewUser distinguishes a first-time Google sign-up (→ run onboarding)
+        // from a returning sign-in (→ skip it).
+        const isNewUser = getAdditionalUserInfo(credential)?.isNewUser ?? false;
+        return { data: { isNewUser }, error: null };
       } catch (error) {
         return { data: null, error: toError(error) };
       }

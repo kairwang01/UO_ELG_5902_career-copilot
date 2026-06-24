@@ -41,7 +41,7 @@ export interface AuthApi {
   onAuthStateChange(handler: (event: AppAuthEvent, session: AppSession | null) => void): Subscription;
   signInWithPassword(email: string, password: string): Promise<DataResult<AppSession>>;
   signUp(email: string, password: string): Promise<DataResult<AppUser>>;
-  signInWithGoogle(): Promise<DataResult<void>>;
+  signInWithGoogle(): Promise<DataResult<{ isNewUser: boolean }>>;
   signOut(scope?: 'local' | 'global'): Promise<DataResult<void>>;
   resetPassword(email: string): Promise<DataResult<void>>;
   updatePassword(password: string): Promise<DataResult<AppUser>>;

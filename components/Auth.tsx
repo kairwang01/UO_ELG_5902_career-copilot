@@ -222,6 +222,14 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
       }
 
       if (authData) {
+        // Mark the guided setup BEFORE the awaits below. The auth listener
+        // navigates away (unmounting this modal) the instant the account is
+        // created, so the `!mountedRef.current` guards further down can return
+        // early and skip the original (late) markOnboardingPending — leaving
+        // fresh candidates on the dashboard with no name step. This is a
+        // localStorage write, safe to do regardless of mount state.
+        if (mode !== 'business') markOnboardingPending(trimmedName);
+
         // Pass the name to the callable so it is written server-side at doc
         // creation (race-free). The client upsert below is a belt-and-suspenders
         // that only succeeds once the doc already exists.
@@ -263,9 +271,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           } catch {
             // non-fatal — the user can re-trigger verification later
           }
-          // Fresh candidate accounts go through the guided setup once the
-          // workspace mounts (employer signups land in the portal instead).
-          if (mode !== 'business') markOnboardingPending(trimmedName);
+          // (markOnboardingPending now runs above, before the unmount-prone awaits.)
           // The auth listener navigates away (unmounting this modal) the instant
           // the account is created, so the inline message would never be seen —
           // show the verify-your-email notice as a global toast that persists.
@@ -315,7 +321,15 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
     // with an error and, previously, loading was never reset — the button stayed
     // stuck on "Signing in…" until a full reload.
     try {
-      const { error } = await data.auth.signInWithGoogle();
+      const { data: googleResult, error } = await data.auth.signInWithGoogle();
+      // First-time Google candidate: run the SAME guided onboarding as email
+      // sign-up (the name step pre-fills from the Google display name). Set this
+      // BEFORE the mount guard — the auth listener may already have unmounted us,
+      // and it's a safe localStorage write. Without it the social-first Google
+      // button skipped onboarding entirely.
+      if (!error && googleResult?.isNewUser && mode !== 'business') {
+        markOnboardingPending(firebaseAuth.currentUser?.displayName ?? undefined);
+      }
       if (!mountedRef.current) return;
       if (error) {
         setError(getAuthErrorMessage(error.message, t));
