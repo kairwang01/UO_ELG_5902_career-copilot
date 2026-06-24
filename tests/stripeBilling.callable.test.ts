@@ -53,7 +53,8 @@ describe('Stripe entitlements activate billing-gated plans', () => {
     const user = (await db.collection('users').doc('cand-stripe').get()).data()!;
     expect(user.role).toBe('candidate');
     expect(user.subscription_status).toBe('accelerator');
-    expect(user.credits).toBe(850);
+    // 100 seeded + accelerator monthly grant (1000 after the 2026-06 pricing revamp; was 750).
+    expect(user.credits).toBe(1100);
 
     const billing = (await db.collection('billing').doc('cand-stripe').get()).data()!;
     expect(billing).toMatchObject({
