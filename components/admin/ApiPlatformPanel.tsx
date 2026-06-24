@@ -434,6 +434,24 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
         <Card className="p-5">
           <SectionHeading>{at('api.docs.title')}</SectionHeading>
           <p className="mt-2 text-xs leading-relaxed text-gray-600">{at('api.docs.body')}</p>
+          <div className="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{at('api.docs.endpoints')}</p>
+            <table className="mt-2 w-full text-xs">
+              <tbody>
+                {[
+                  { route: 'GET /v1/jobs', scope: 'jobs.read' },
+                  { route: 'POST /v1/resume/analyze', scope: 'resume.analyze' },
+                ].map((e) => (
+                  <tr key={e.route}>
+                    <td className="py-1 pr-3 font-mono text-gray-800">{e.route}</td>
+                    <td className="py-1 font-mono text-gray-500">{e.scope}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-[11px] text-gray-500">{at('api.docs.auth_hint')}</p>
+            <code className="mt-1 block overflow-x-auto rounded bg-gray-900 px-2 py-1 font-mono text-[11px] text-gray-100">Authorization: Bearer cc_live_…</code>
+          </div>
           <a
             href="/docs/api.md"
             target="_blank"

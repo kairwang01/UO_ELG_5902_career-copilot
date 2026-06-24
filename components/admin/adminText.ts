@@ -58,6 +58,8 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.docs.body':
     'Endpoint reference and request examples live with the user-facing API docs. End users issue personal keys from Account → API Access; the applications on this page are for partner-level integrations.',
   'api.docs.link': 'Open API reference',
+  'api.docs.endpoints': 'Gateway endpoints',
+  'api.docs.auth_hint': 'Partners authenticate every request with their key:',
   'api.modal.issue_title': 'Issue key',
   'api.modal.key_name': 'Key name',
   'api.modal.key_name_ph': 'e.g. Server-to-server',
