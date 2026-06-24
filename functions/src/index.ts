@@ -105,6 +105,7 @@ export { apiPlatformRevokeKeyFunction       as apiPlatformRevokeKey      } from 
 export { apiPlatformUpdateKeyStatusFunction as apiPlatformUpdateKeyStatus } from "./handlers/apiPlatform";
 export { apiPlatformGetUsageFunction        as apiPlatformGetUsage       } from "./handlers/apiPlatform";
 export { apiPlatformListUsageLogsFunction   as apiPlatformListUsageLogs  } from "./handlers/apiPlatform";
+export { publicApiFunction                  as publicApi                 } from "./handlers/apiGateway";
 export { getWeb3ConfigFunction              as getWeb3Config             } from "./handlers/web3Config";
 export { adminGetWeb3ConfigFunction         as adminGetWeb3Config        } from "./handlers/web3Config";
 export { adminUpdateWeb3ConfigFunction      as adminUpdateWeb3Config     } from "./handlers/web3Config";

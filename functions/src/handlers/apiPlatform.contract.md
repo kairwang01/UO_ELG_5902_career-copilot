@@ -24,6 +24,28 @@ super only. Enforce via the same role resolution used by `adminWhoAmI` /
 When org-scoped access lands, `owner_org_id` filters list responses and an
 `requireOrgAdmin(orgId)` check guards mutations on org-owned applications.
 
+## Public gateway (consumption) — `publicApi`
+
+The admin callables above *mint* keys; `functions/src/handlers/apiGateway.ts`
+(`publicApi`, an `onRequest` HTTP function) is where partners *use* them. Per
+request it authenticates the `Authorization: Bearer <secret>` by SHA-256 hash
+(same `secretHash`), rejects non-`active` keys, enforces the endpoint scope +
+per-minute rate limit + monthly quota (`api_key_usage/{keyId}` counters), runs
+the endpoint, then writes an `api_usage_logs` entry and advances `last_used_at`.
+
+| Endpoint | Method | Scope | Backed by |
+|---|---|---|---|
+| `/v1/jobs` | GET | `jobs.read` | active `job_postings` (public fields; no AI) |
+| `/v1/resume/analyze` | POST `{resume_text, market?}` | `resume.analyze` | `resolveProvider()` + `ANALYSIS_SCHEMA` |
+
+HTTP error contract (JSON `{ ok:false, error:{ code, message } }`):
+`401 missing_authorization|invalid_key`, `403 key_inactive|insufficient_scope`,
+`404 not_found`, `429 rate_limited|quota_exceeded`, `400 invalid_request`,
+`503 ai_unavailable` (no provider key), `502 ai_error`. Success is
+`{ ok:true, data:… }`. Only the key **prefix** is ever logged — never the secret.
+Partner AI traffic routes through `resolveProvider(key.created_by)` so tiering /
+key pooling apply (req #6); the gateway never reads `platform_config/llm`.
+
 ## Data model (Firestore)
 
 - `api_applications/{appId}`: name, description, environment

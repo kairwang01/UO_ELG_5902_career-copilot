@@ -64,7 +64,7 @@ interface AnalysisResult {
 // ---------------------------------------------------------------------------
 // Gemini response schema — mirrors the schema in the frontend geminiService.ts
 // ---------------------------------------------------------------------------
-const ANALYSIS_SCHEMA = {
+export const ANALYSIS_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     score: { type: Type.NUMBER },
