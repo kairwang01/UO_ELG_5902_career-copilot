@@ -96,13 +96,20 @@ describe('setSubscriptionStatus paid-entitlement gate', () => {
     expect(billing.exists && billing.data()!.active === true).toBe(false);
   });
 
-  it('lets a non-privileged FREE plan stay self-service', async () => {
+  it('lets a FREE plan with a monthly refill stay self-service', async () => {
     await seedUser('cand2', { subscription_status: 'accelerator' });
     const res = await applySubscriptionSelection('cand2', 'free');
     expect(res.status).toBe('active');
     expect(res.subscription_status).toBe('free');
     expect(res.role).toBe('candidate');
     expect(res.grant_source).toBe('self_service');
+
+    const user = (await db.collection('users').doc('cand2').get()).data()!;
+    expect(user.subscription_status).toBe('free');
+    expect(user.credits).toBe(100 + 30);
+
+    const billing = await db.collection('billing').doc('cand2').get();
+    expect(billing.exists).toBe(false);
   });
 
   it('grants the monthly allotment at most once per month even when entitled (high-water mark)', async () => {

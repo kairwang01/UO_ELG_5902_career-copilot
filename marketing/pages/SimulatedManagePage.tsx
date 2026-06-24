@@ -12,9 +12,9 @@ import { cancelSubscriptionSimulated } from '../../services/subscriptionClient';
  * production (the flag is off, so the portal call returns a real Stripe URL instead).
  */
 const PLAN_LABELS: Record<string, string> = {
-  essentials: 'Career Essentials',
-  accelerator: 'Career Accelerator',
-  executive: 'Career Executive',
+  essentials: 'Basic',
+  accelerator: 'Pro',
+  executive: 'Premium',
   starter: 'Starter',
   growth: 'Growth',
   pro: 'Pro',

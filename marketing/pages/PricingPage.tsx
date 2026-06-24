@@ -14,10 +14,10 @@ import { CREDIT_PACKS } from '../../config/credits';
  * locale gets readable English text instead of raw key fallbacks.
  */
 const PLAN_LLM_COPY: Record<string, string> = {
-  js_free:       'Standard AI model · 25 runs/day',
-  js_essentials: 'Premium models',
-  js_accelerator:'Premium models',
-  js_executive:  'Premium models',
+  js_free:       'Standard AI · 10 runs/day',
+  js_essentials: 'Full career toolkit · credits still meter usage',
+  js_accelerator:'Higher monthly credits · active-search workflow',
+  js_executive:  'Largest credit pool · priority support',
   emp_free:      'Standard AI model',
   emp_starter:   'Bring your own LLM API (custom endpoint)',
   emp_growth:    'Bring your own LLM API (custom endpoint)',

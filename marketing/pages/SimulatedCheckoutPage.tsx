@@ -16,9 +16,9 @@ import { confirmSimulatedCheckout } from '../../services/subscriptionClient';
 
 // Display-only amounts (the real charge is the Stripe Price in production).
 const PLAN_LABELS: Record<string, { name: string; amount: string; cadence: string }> = {
-  essentials: { name: 'Career Essentials', amount: '$15.00', cadence: 'per month' },
-  accelerator: { name: 'Career Accelerator', amount: '$30.00', cadence: 'per month' },
-  executive: { name: 'Career Executive', amount: '$50.00', cadence: 'per month' },
+  essentials: { name: 'Basic', amount: '$19.00 CAD', cadence: 'per month' },
+  accelerator: { name: 'Pro', amount: '$39.00 CAD', cadence: 'per month' },
+  executive: { name: 'Premium', amount: '$79.00 CAD', cadence: 'per month' },
   starter: { name: 'Business Starter', amount: '$79.00', cadence: 'per month' },
   growth: { name: 'Business Growth', amount: '$199.00', cadence: 'per month' },
   pro: { name: 'Business Pro', amount: '$499.00', cadence: 'per month' },

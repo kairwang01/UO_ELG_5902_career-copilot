@@ -18,11 +18,12 @@ import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 import { normalizePlanKey } from "./quotaDefaults";
 
 /**
- * Daily tool-run cap for free-tier users (次数限制).
+ * Default daily tool-run cap for free-tier users (次数限制).
  * Applies only to users whose tier resolves to "free" AND who are not
- * business users. Tune this constant to adjust the limit without touching logic.
+ * business users. Runtime enforcement uses the admin-configurable plan quota;
+ * this exported value is only the default used by tests and fallbacks.
  */
-export const FREE_TIER_DAILY_RUN_LIMIT = 25;
+export const FREE_TIER_DAILY_RUN_LIMIT = 10;
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -261,8 +262,8 @@ export async function checkQuotasOrThrow(uid: string, cost: number, tool: string
     }
   }
 
-  // Default-compatible behavior: the free candidate cap remains 25/day, while
-  // business users with role-based access keep their historical exemption unless
+  // Default-compatible behavior: the free candidate cap is plan-configured.
+  // Business users with role-based access keep their historical exemption unless
   // they hold a business subscription plan with its own configured cap.
   const planQuota = getPlanQuota(planKey);
   const shouldApplyPlanRunLimit = planKey !== "free" || (tier === "free" && !business);

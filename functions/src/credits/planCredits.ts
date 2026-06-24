@@ -15,11 +15,12 @@
  * The numbers mirror the frontend pricing copy (localization en.json + marketing/
  * config/pricingPlans.ts). If a plan's advertised credits change, update BOTH.
  *
- *   Candidate:  essentials 200 · accelerator 750 · executive 2000  ($15/$30/$50 mo)
+ *   Candidate:  free 30 · essentials 300 · accelerator 1000 · executive 3000
+ *               ($19/$39/$79 CAD mo for paid candidate plans)
  *   Business:   starter 3000 · growth 8000 · pro 20000             ($79/$199/$499 mo)
  *
- * `free` is intentionally 0 here: the free tier is a ONE-TIME 100-credit grant at
- * signup (onUserCreated), not a recurring monthly allotment. The one-time add-on
+ * `free` has a small monthly refill; signup still gets a larger one-time
+ * 150-credit grant at onUserCreated. The one-time add-on
  * SKUs (single_post, job_pack) are job-posting purchases, NOT AI credits, so they
  * grant nothing here.
  */

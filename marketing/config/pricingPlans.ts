@@ -6,7 +6,7 @@ export interface BetaPlanConfig {
 }
 
 export const jobseekerPlans: BetaPlanConfig[] = [
-  { id: 'js_free', featureCount: 3, recommended: false },
+  { id: 'js_free', featureCount: 4, recommended: false },
   { id: 'js_essentials', featureCount: 5, recommended: false },
   { id: 'js_accelerator', featureCount: 5, recommended: true },
   { id: 'js_executive', featureCount: 5, recommended: false },

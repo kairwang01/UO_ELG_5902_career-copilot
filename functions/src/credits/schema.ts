@@ -52,7 +52,7 @@ export const TOOL_CREDIT_COSTS: Record<string, number> = {
   "linkedin-optimizer": 20,
   "cover-letter": 20,
   // Pricing rule: every tool must be affordable on a fresh account's initial
-  // grant (INITIAL_CREDITS = 100), so new users can try the full toolbox.
+  // grant (INITIAL_CREDITS = 150), so new users can try the full toolbox.
   // mock-interview was 150 and website-builder 250 — new free users could
   // literally never use them (live audit 2026-06-10).
   "mock-interview": 50,

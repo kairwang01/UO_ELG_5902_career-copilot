@@ -17,27 +17,27 @@ const PLAN_KEY_SET = new Set<string>(PLAN_KEYS);
 
 export const DEFAULT_PLAN_QUOTAS: Record<PlanKey, PlanQuota> = {
   free: {
-    daily_run_limit: 25,
+    daily_run_limit: 10,
     daily_credit_limit: 0,
-    monthly_credit_grant: 0,
+    monthly_credit_grant: 30,
     active_job_limit: 3,
   },
   essentials: {
     daily_run_limit: 0,
     daily_credit_limit: 0,
-    monthly_credit_grant: 200,
+    monthly_credit_grant: 300,
     active_job_limit: 0,
   },
   accelerator: {
     daily_run_limit: 0,
     daily_credit_limit: 0,
-    monthly_credit_grant: 750,
+    monthly_credit_grant: 1000,
     active_job_limit: 0,
   },
   executive: {
     daily_run_limit: 0,
     daily_credit_limit: 0,
-    monthly_credit_grant: 2000,
+    monthly_credit_grant: 3000,
     active_job_limit: 0,
   },
   starter: {

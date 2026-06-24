@@ -50,7 +50,7 @@ const CANDIDATE_PLANS = new Set(["free", "essentials", "accelerator", "executive
 /** Business / employer plans (mirror of businessPlans.ts + legacy add-ons). */
 const BUSINESS_PLANS = new Set(["free", "starter", "growth", "pro", "single_post", "job_pack"]);
 
-const INITIAL_CREDITS = 100;
+const INITIAL_CREDITS = 150;
 
 interface SetSubscriptionStatusRequest {
   planKey: string;
@@ -126,7 +126,8 @@ export interface SubscriptionSelectionResult {
  * monthly credit allotment — only activates when the user has a real billing
  * entitlement (`billing/{uid}.active === true`) OR demo grants are enabled. Otherwise
  * the selection is parked as pending intent and NOTHING is granted (no role flip, no
- * credits). A plain free candidate plan is not privileged and stays self-service.
+ * paid credits). The free candidate plan is not privileged and stays self-service,
+ * even though it now has a small recurring refill.
  * The admin/manual path (adminSetSubscription) is unaffected.
  */
 export async function applySubscriptionSelection(
@@ -157,13 +158,13 @@ export async function applySubscriptionSelection(
   const renewalRef = db.collection(CREDIT_RENEWALS_COLLECTION).doc(uid);
   const billingRef = db.collection(BILLING_COLLECTION).doc(uid);
 
-  // This month's allotment for the selected plan (0 for free / add-ons / unknown).
+  // This month's allotment for the selected plan (0 for add-ons / unknown).
   const period = currentCreditPeriod();
   const monthlyGrant = monthlyCreditsFor(plan);
 
   // Privileged = grants paid entitlements (employer role and/or paid credits). These
-  // must be earned. A free candidate plan is not privileged and needs no entitlement.
-  const isPrivileged = audience === "business" || monthlyGrant > 0;
+  // must be earned. A free candidate refill is not privileged and needs no entitlement.
+  const isPrivileged = plan !== "free" && (audience === "business" || monthlyGrant > 0);
   const demo = demoGrantsEnabled();
 
   // Transaction so this can't race the onUserCreated trigger (which may create the

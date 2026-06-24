@@ -22,7 +22,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-const INITIAL_CREDITS = 100;
+const INITIAL_CREDITS = 150;
 
 export const onUserCreatedFunction = functions.auth.user().onCreate(async (user) => {
   const ref = db.collection(USERS_COLLECTION).doc(user.uid);
