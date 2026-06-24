@@ -441,6 +441,8 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                 {[
                   { route: 'GET /v1/jobs', scope: 'jobs.read' },
                   { route: 'POST /v1/resume/analyze', scope: 'resume.analyze' },
+                  { route: 'POST /v1/cover-letter', scope: 'tools.generate' },
+                  { route: 'GET /v1/usage', scope: 'usage.read' },
                 ].map((e) => (
                   <tr key={e.route}>
                     <td className="py-1 pr-3 font-mono text-gray-800">{e.route}</td>

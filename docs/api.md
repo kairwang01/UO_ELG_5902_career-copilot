@@ -77,6 +77,44 @@ curl -X POST \
 
 Returns `{ "ok": true, "data": { "analysis": { … } } }`.
 
+### `POST /v1/cover-letter` — scope `tools.generate`
+
+Generates a tailored cover letter from a resume + job description.
+
+Body:
+- `resume_text` (string, required) — full resume text (max 50,000 chars).
+- `job_description` (string, required) — target job description (max 50,000 chars).
+- `market` (string, optional) — target market. Defaults to `Canadian`.
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $CC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"resume_text":"Jane Doe…","job_description":"Senior React role…"}' \
+  https://<region>-<project-id>.cloudfunctions.net/publicApi/v1/cover-letter
+```
+
+Returns `{ "ok": true, "data": { "cover_letter": { … } } }`.
+
+### `GET /v1/usage` — scope `usage.read`
+
+Returns the calling key's own limits, current usage, and most recent requests.
+
+```json
+{
+  "ok": true,
+  "data": {
+    "rate_limit_per_min": 60,
+    "monthly_quota": 10000,
+    "minute_used": 2,
+    "month_used": 2,
+    "recent": [
+      { "timestamp": "2026-06-24T16:51:38.864Z", "endpoint": "GET /v1/jobs", "status": 200, "latency_ms": 84 }
+    ]
+  }
+}
+```
+
 ## Rate limits & quota
 
 Each key carries a per-minute rate limit and a monthly request quota (defaults

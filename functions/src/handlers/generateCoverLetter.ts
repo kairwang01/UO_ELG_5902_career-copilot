@@ -29,7 +29,7 @@ interface CoverLetter {
   letter: string;
 }
 
-const COVER_LETTER_SCHEMA = {
+export const COVER_LETTER_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     letter: { type: Type.STRING },

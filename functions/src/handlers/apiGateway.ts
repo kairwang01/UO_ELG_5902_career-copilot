@@ -26,6 +26,7 @@ import { createHash } from "crypto";
 import { resolveProvider } from "../llm/models";
 import { buildPrompt } from "../llm/prompts";
 import { ANALYSIS_SCHEMA } from "./analyzeResume";
+import { COVER_LETTER_SCHEMA } from "./generateCoverLetter";
 import { ensurePlatformCaches } from "../config/env";
 
 if (!admin.apps.length) {
@@ -216,6 +217,66 @@ async function handleResumeAnalyze(key: AuthedKey, body: unknown): Promise<unkno
   }
 }
 
+/** POST /v1/cover-letter — tailored cover letter from a resume + job description. */
+async function handleCoverLetter(key: AuthedKey, body: unknown): Promise<unknown> {
+  requireScope(key, "tools.generate");
+  const payload = (body ?? {}) as Record<string, unknown>;
+  const resumeText = typeof payload.resume_text === "string" ? payload.resume_text.trim() : "";
+  const jobDescription = typeof payload.job_description === "string" ? payload.job_description.trim() : "";
+  const marketName =
+    typeof payload.market === "string" && payload.market.trim() ? payload.market.trim() : "Canadian";
+  if (!resumeText || !jobDescription) {
+    throw fail(400, "invalid_request", "Request body must include 'resume_text' and 'job_description'.");
+  }
+  if (resumeText.length > 50000 || jobDescription.length > 50000) {
+    throw fail(400, "invalid_request", "'resume_text'/'job_description' exceed the 50000 character limit.");
+  }
+  await ensurePlatformCaches();
+  const prompt = buildPrompt("handler_cover_letter", { marketName, resumeText, jobDescription });
+  try {
+    const provider = await resolveProvider(key.created_by);
+    const result = await provider.generate({ prompt, responseSchema: COVER_LETTER_SCHEMA });
+    return { cover_letter: result.raw };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (/is not set|api_key/i.test(message)) {
+      throw fail(503, "ai_unavailable", "AI provider is not configured. Try again later.");
+    }
+    throw fail(502, "ai_error", "The generation provider failed. Please retry.");
+  }
+}
+
+/** GET /v1/usage — the calling key's own rate-limit/quota status + recent calls. */
+async function handleUsage(key: AuthedKey): Promise<unknown> {
+  requireScope(key, "usage.read");
+  const now = new Date();
+  const minuteKey = now.toISOString().slice(0, 16);
+  const monthKey = now.toISOString().slice(0, 7);
+  const counterSnap = await db.collection(API_KEY_USAGE).doc(key.id).get();
+  const c = counterSnap.exists ? counterSnap.data() ?? {} : {};
+  // Recent calls for this key — equality filter only (no composite index), sort in memory.
+  const logsSnap = await db.collection(API_USAGE_LOGS).where("key_id", "==", key.id).limit(100).get();
+  const recent = logsSnap.docs
+    .map((doc) => {
+      const d = doc.data();
+      return {
+        timestamp: isoOrNull(d.timestamp),
+        endpoint: String(d.endpoint ?? ""),
+        status: Number(d.status ?? 0),
+        latency_ms: Number(d.latency_ms ?? 0),
+      };
+    })
+    .sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? ""))
+    .slice(0, 20);
+  return {
+    rate_limit_per_min: key.rate_limit_per_min,
+    monthly_quota: key.monthly_quota,
+    minute_used: c.minute_key === minuteKey ? Number(c.minute_count ?? 0) : 0,
+    month_used: c.month_key === monthKey ? Number(c.month_count ?? 0) : 0,
+    recent,
+  };
+}
+
 function endpointLabel(method: string, path: string): string {
   return `${method} ${path}`;
 }
@@ -236,6 +297,10 @@ export const publicApiFunction = onRequest({ invoker: "public", cors: true }, as
       result = await handleListJobs(key);
     } else if (req.method === "POST" && /\/v1\/resume\/analyze$/.test(path)) {
       result = await handleResumeAnalyze(key, req.body);
+    } else if (req.method === "POST" && /\/v1\/cover-letter$/.test(path)) {
+      result = await handleCoverLetter(key, req.body);
+    } else if (req.method === "GET" && /\/v1\/usage$/.test(path)) {
+      result = await handleUsage(key);
     } else {
       throw fail(404, "not_found", `No endpoint matches ${req.method} ${path}.`);
     }

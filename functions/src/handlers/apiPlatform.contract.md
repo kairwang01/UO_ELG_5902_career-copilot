@@ -37,6 +37,10 @@ the endpoint, then writes an `api_usage_logs` entry and advances `last_used_at`.
 |---|---|---|---|
 | `/v1/jobs` | GET | `jobs.read` | active `job_postings` (public fields; no AI) |
 | `/v1/resume/analyze` | POST `{resume_text, market?}` | `resume.analyze` | `resolveProvider()` + `ANALYSIS_SCHEMA` |
+| `/v1/cover-letter` | POST `{resume_text, job_description, market?}` | `tools.generate` | `resolveProvider()` + `COVER_LETTER_SCHEMA` |
+| `/v1/usage` | GET | `usage.read` | `api_key_usage` counters + recent `api_usage_logs` (no AI) |
+
+Every scope in `ALLOWED_SCOPES` now maps to a live endpoint.
 
 HTTP error contract (JSON `{ ok:false, error:{ code, message } }`):
 `401 missing_authorization|invalid_key`, `403 key_inactive|insufficient_scope`,
