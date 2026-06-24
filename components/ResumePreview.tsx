@@ -176,7 +176,7 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ resumeText, market, t, he
       data-qa-resume-page-size={style.pageSize}
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-        <span data-qa="resume-preview-style-label">{style.label}</span>
+        <span data-qa="resume-preview-style-label">{t(style.labelKey)}</span>
         <span data-qa="resume-preview-style-meta">{style.pageSize.toUpperCase()} · {style.density}</span>
       </div>
       <div

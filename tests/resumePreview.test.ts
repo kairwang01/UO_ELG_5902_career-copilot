@@ -27,6 +27,20 @@ describe('ResumePreview parsing', () => {
     expect(getResumeMarketStyle('Germany').pageSize).toBe('a4');
     expect(getResumeMarketStyle('Japan').region).toBe('japan');
     expect(getResumeMarketStyle('Singapore').region).toBe('apac');
+    expect(getResumeMarketStyle('Australia').region).toBe('apac');
+    expect(getResumeMarketStyle('Vietnam').region).toBe('vietnam');
+  });
+
+  it('exposes i18n keys (not literals) for label and principles', () => {
+    const vn = getResumeMarketStyle('Vietnam');
+    expect(vn.labelKey).toBe('resume_market_label_vietnam');
+    expect(vn.principleKeys).toEqual([
+      'resume_market_principle_vietnam_1',
+      'resume_market_principle_vietnam_2',
+      'resume_market_principle_vietnam_3',
+    ]);
+    // Vietnam 不再共用 APAC 的 work-rights 原则
+    expect(vn.principleKeys).not.toContain('resume_market_principle_apac_3');
   });
 
   it('passes a clean sectioned resume (and does not mistake a pipe-separated skills line for a table)', () => {

@@ -157,6 +157,7 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
     build: (p) => ({
       prompt: buildPrompt("convertResumeFormat", {
         marketName: p.marketName,
+        outputLanguage: p.outputLanguage || "English",
         coverLetterBlock: p.coverLetterText
           ? `**Cover Letter:** If a cover letter is provided below, incorporate it seamlessly into the final document, either before or after the resume as is standard in ${p.marketName}.\n\nCover Letter:\n${p.coverLetterText}`
           : "",

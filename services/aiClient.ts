@@ -602,8 +602,8 @@ export interface ExtractedTalentProfile {
 export const extractTalentProfile = (resumeText: string, options?: { targetLanguage?: string }) =>
   callTool<ExtractedTalentProfile>('extractTalentProfile', { resumeText, targetLanguage: options?.targetLanguage ?? 'en' });
 
-export const convertResumeFormat = (resumeText: string, marketName: string, coverLetterText?: string) =>
-  callTool<FormattedResume>('convertResumeFormat', { resumeText, marketName, coverLetterText });
+export const convertResumeFormat = (resumeText: string, marketName: string, coverLetterText?: string, outputLanguage?: string) =>
+  callTool<FormattedResume>('convertResumeFormat', { resumeText, marketName, coverLetterText, outputLanguage });
 
 export const generateCoverLetter = async (resumeText: string, jobDescription: string, marketName: string): Promise<CoverLetter> =>
   callDedicated(async () => {

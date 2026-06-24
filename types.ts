@@ -20,6 +20,7 @@ export interface ResumeImage {
 export interface FormattedResume {
   formattedText: string;
   targetMarket?: string;
+  outputLanguage?: 'en' | 'local';
 }
 
 export interface Opportunity {

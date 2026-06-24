@@ -10,6 +10,7 @@ import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
 import ResumePreview from '../ResumePreview';
 import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle } from '../../lib/resumePreview';
+import { getMarketLocalLanguage, resolveOutputLanguageName, type OutputLanguageChoice } from '../../lib/resumeLanguage';
 
 const MARKET_HINT_KEY: Record<string, string> = {
   'Canada':         'resume_market_hint_canada',
@@ -72,13 +73,14 @@ const buildReadinessItems = (
   generatedMarket: string,
   targetMarket: string,
   marketStyle: ReturnType<typeof getResumeMarketStyle>,
+  t: (key: string) => string,
 ): ReadinessItem[] => {
   const blockingIssues = validation.issues.filter((issue) => issue !== 'sensitive_fields');
   return [
     {
       id: 'market-style',
       label: 'Market style',
-      description: `${marketStyle.label} · ${marketStyle.pageSize.toUpperCase()}`,
+      description: `${t(marketStyle.labelKey)} · ${marketStyle.pageSize.toUpperCase()}`,
       severity: 'pass',
     },
     {
@@ -140,11 +142,21 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [coverLetterForFormatting, setCoverLetterForFormatting] = useState('');
   const [targetMarket, setTargetMarket] = useState<string>(market);
+  const [outputLanguage, setOutputLanguage] = useState<OutputLanguageChoice>(
+    () => (getMarketLocalLanguage(market) ? 'local' : 'en'),
+  );
+
+  const changeTargetMarket = (next: string) => {
+    setTargetMarket(next);
+    setOutputLanguage(getMarketLocalLanguage(next) ? 'local' : 'en');
+  };
+
   const hasResume = resumeText.trim().length > 0;
 
   useEffect(() => {
     if (!saved || result) return;
     if (saved.result.targetMarket) setTargetMarket(saved.result.targetMarket);
+    if (saved.result.outputLanguage) setOutputLanguage(saved.result.outputLanguage);
     setResult(saved.result);
     setFromSaved(true);
   }, [saved, result]);
@@ -158,12 +170,14 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     setError(null);
     setResult(null);
     try {
-      const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter);
+      const languageName = resolveOutputLanguageName(targetMarket, outputLanguage);
+      const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter, languageName);
       if (!alive()) return;
       const normalizedResult = {
         ...apiResult,
         formattedText: cleanResumeDisplay(apiResult.formattedText),
         targetMarket,
+        outputLanguage,
       };
       setResult(normalizedResult);
       setFromSaved(false);
@@ -173,6 +187,29 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     } finally {
       if (alive()) end();
     }
+  };
+
+  const renderLanguageToggle = (idSuffix: string) => {
+    const localLang = getMarketLocalLanguage(targetMarket);
+    if (!localLang) return null;
+    return (
+      <div className="mt-3">
+        <label htmlFor={`output-language-${idSuffix}`} className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+          {t('resume_output_language_label')}
+        </label>
+        <select
+          id={`output-language-${idSuffix}`}
+          value={outputLanguage}
+          onChange={(e) => setOutputLanguage(e.target.value as OutputLanguageChoice)}
+          className="mt-2 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
+          data-qa="resume-formatter-output-language"
+          data-qa-output-language={outputLanguage}
+        >
+          <option value="local">{t(localLang.labelKey)}</option>
+          <option value="en">{t('resume_lang_english')}</option>
+        </select>
+      </div>
+    );
   };
 
   const renderInput = () => {
@@ -219,17 +256,18 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
                 <select
                   id="target-market"
                   value={targetMarket}
-                  onChange={(e) => setTargetMarket(e.target.value)}
+                  onChange={(e) => changeTargetMarket(e.target.value)}
                   className="mt-3 block min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
                 >
                   {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
+                {renderLanguageToggle('input')}
               </div>
             </div>
 
             <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/50 dark:bg-blue-950/30">
               <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-blue-700 dark:text-blue-300">
-                <span>{marketStyle.label}</span>
+                <span>{t(marketStyle.labelKey)}</span>
                 <span aria-hidden="true">·</span>
                 <span>{marketStyle.pageSize.toUpperCase()}</span>
               </div>
@@ -237,9 +275,9 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
                 <p className="mt-2 text-sm leading-6 text-blue-950 dark:text-blue-100">{t(MARKET_HINT_KEY[targetMarket])}</p>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
-                {marketStyle.principles.slice(0, 3).map((principle) => (
-                  <span key={principle} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                    {principle}
+                {marketStyle.principleKeys.slice(0, 3).map((key) => (
+                  <span key={key} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                    {t(key)}
                   </span>
                 ))}
               </div>
@@ -347,7 +385,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     const generatedMarket = result.targetMarket || targetMarket;
     const marketStyle = getResumeMarketStyle(generatedMarket);
     const validation = assessFormattedResume(formattedText);
-    const readinessItems = buildReadinessItems(validation, generatedMarket, targetMarket, marketStyle);
+    const readinessItems = buildReadinessItems(validation, generatedMarket, targetMarket, marketStyle, t);
     const readinessState = getReadinessState(readinessItems);
     const readinessHeadline = readinessState === 'ready'
       ? 'Ready to download'
@@ -452,7 +490,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-blue-700 dark:text-blue-300">
-              <span>{marketStyle.label}</span>
+              <span>{t(marketStyle.labelKey)}</span>
               <span aria-hidden="true">·</span>
               <span>{marketStyle.pageSize.toUpperCase()}</span>
             </div>
@@ -460,9 +498,9 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
               <p className="mt-1 text-sm leading-6 text-blue-900 dark:text-blue-100">{t(MARKET_HINT_KEY[generatedMarket])}</p>
             )}
             <div className="mt-2 flex flex-wrap gap-2">
-              {marketStyle.principles.map((principle) => (
-                <span key={principle} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                  {principle}
+              {marketStyle.principleKeys.map((key) => (
+                <span key={key} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                  {t(key)}
                 </span>
               ))}
             </div>
@@ -475,12 +513,13 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
             <select
               id="result-target-market"
               value={targetMarket}
-              onChange={(e) => setTargetMarket(e.target.value)}
+              onChange={(e) => changeTargetMarket(e.target.value)}
               className="mt-2 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
               data-qa="resume-formatter-result-market-select"
             >
               {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
+            {renderLanguageToggle('result')}
             <button
               type="button"
               onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
