@@ -62,7 +62,7 @@ export const ToolError: React.FC<{ message: string; onRetry?: () => void; retryL
       <button
         type="button"
         onClick={onRetry}
-        className="mt-2 text-sm font-semibold text-red-700 dark:text-red-300 underline underline-offset-2 hover:text-red-900 dark:hover:text-red-200"
+        className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/30"
       >
         {retryLabel}
       </button>
