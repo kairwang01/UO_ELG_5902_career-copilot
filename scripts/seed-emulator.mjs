@@ -147,6 +147,49 @@ async function seedAtsFixture({ employerUid, caseyUid }) {
   return { jobId: JOB_ID, applicantCount: applicants.length, jordanUid: jordan.uid };
 }
 
+/**
+ * Web3 fixture: turns on the experimental credential module platform-wide and
+ * gives Casey a qualifying resume analysis, so the wallet → mint → stake
+ * "testnet preview" credential loop can be exercised end to end. The contract is
+ * a placeholder, so the app runs the labelled preview path (no on-chain calls).
+ */
+async function seedWeb3Fixture() {
+  const ts = admin.firestore.Timestamp.now();
+  await db.collection('platform_config').doc('web3').set({
+    enabled: true,
+    network: 'sepolia',
+    chain_id: 11155111,
+    contract_address: '0x2A3b1A43842238321a22542a035921A362358189',
+    updated_at: now,
+    updated_by: 'seed',
+  }, { merge: true });
+
+  // Dedicated mint-eligible candidate, kept SEPARATE from Casey so the happy-path's
+  // "no prior resume analysis" assumption is not disturbed by this fixture.
+  const web3User = await ensureUser('web3@careercopilot.test', 'Wren Web3');
+  await writeProfile(web3User.uid, {
+    role: 'candidate',
+    full_name: 'Wren Web3',
+    subscription_status: 'free',
+    resume_text:
+      'Wren Web3 — Frontend Engineer\n\nEXPERIENCE\nFrontend Engineer (2019–present): React, TypeScript, Solidity, design systems.',
+  });
+  // Account gates minting on the latest resume_analyses.score >= 85.
+  await db
+    .collection('users').doc(web3User.uid)
+    .collection('resume_analyses').doc('seed-analysis')
+    .set({
+      score: 90,
+      market_name: 'Canada',
+      summary: 'Strong frontend profile with clear React/TypeScript depth.',
+      strengths: ['React', 'TypeScript', 'Accessibility'],
+      improvements: ['Quantify impact with metrics'],
+      keywords: ['React', 'TypeScript', 'a11y'],
+      created_at: ts,
+    }, { merge: true });
+  return { web3Uid: web3User.uid };
+}
+
 async function main() {
   // 1. Plain candidate
   const candidate = await ensureUser('candidate@careercopilot.test', 'Casey Candidate');
@@ -192,6 +235,9 @@ async function main() {
   // 5. ATS fixture: an active job + two applicants under the employer, so the
   // employer applicant-funnel path can be exercised end-to-end.
   const ats = await seedAtsFixture({ employerUid: employer.uid, caseyUid: candidate.uid });
+
+  // 6. Web3 fixture: enable the module + a dedicated mint-eligible candidate.
+  await seedWeb3Fixture();
 
   // Verify the seed (no browser needed).
   const checks = [
