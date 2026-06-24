@@ -186,7 +186,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // Session now comes from the shared SessionProvider (single auth subscription for
   // the whole app) — `authHydrated` is the provider's settled flag, `sessionResolved`
   // fires earlier (first session value known) and gates sign-in/out detection below.
-  const { session, ready: authHydrated, sessionResolved, refreshProfile } = useSession();
+  const { session, ready: authHydrated, sessionResolved } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs'>('home');
   const [initialAuthView, setInitialAuthView] = useState<'sign_in' | 'sign_up' | 'forgot_password'>('sign_in');
@@ -767,28 +767,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         setIsUpdatingResume(false);
     }
   }, [session, isProfileLoaded, isCandidate]);
-
-  // Returning from Stripe checkout (success_url/cancel_url carry ?checkout=...).
-  // The workspace profile/credits already live-update via the onSnapshot above, but
-  // the user got no confirmation and the routing profile (fetched once per login)
-  // could be stale. Show feedback, refresh routing state, then strip the param so a
-  // reload/re-render doesn't replay the toast.
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const checkout = params.get('checkout');
-    if (checkout !== 'success' && checkout !== 'cancel') return;
-    params.delete('checkout');
-    navigate(
-      { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' },
-      { replace: true },
-    );
-    if (checkout === 'success') {
-      addToast(latestTRef.current('billing_checkout_success'), 'success');
-      void refreshProfile();
-    } else {
-      addToast(latestTRef.current('billing_checkout_cancel'), 'info');
-    }
-  }, [location.search, location.pathname, navigate, addToast, refreshProfile]);
 
   useEffect(() => {
     const roleKey = `${session?.user?.id ?? 'signed-out'}:${profile?.role ?? 'no-role'}:${normalizedSubscriptionStatus}`;

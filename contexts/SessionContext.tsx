@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { data } from '../lib/data';
 import type { AppSession } from '../lib/data';
 import type { UserProfile } from '../types';
@@ -22,14 +22,6 @@ export interface SiteSessionState {
   isAdmin: boolean;
   /** Employer role OR a business subscription plan. */
   isBusiness: boolean;
-  /**
-   * Re-fetch the signed-in user's profile (subscription / credits). The profile is
-   * otherwise only loaded once per login, so callers must invoke this after an
-   * out-of-band change to it — e.g. returning from Stripe checkout, where the
-   * webhook provisions the new plan server-side and the UI would otherwise stay
-   * stale until a full reload.
-   */
-  refreshProfile: () => Promise<void>;
 }
 
 const SessionContext = createContext<SiteSessionState | undefined>(undefined);
@@ -123,23 +115,11 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
   }, [session?.user?.id]);
 
-  const refreshProfile = useCallback(async (): Promise<void> => {
-    const uid = session?.user?.id;
-    if (!uid) return;
-    try {
-      const r = await data.profiles.get(uid);
-      // Guard against a logout/user-switch landing a stale fetch onto the new state.
-      setProfile((prev) => (uid === session?.user?.id ? (r.data ?? null) : prev));
-    } catch {
-      /* keep the existing profile on a transient failure */
-    }
-  }, [session?.user?.id]);
-
   const isBusiness = hasBusinessPortalAccess(profile?.role, profile?.subscription_status);
   const ready = sessionResolved && profileSettled && adminSettled;
 
   return (
-    <SessionContext.Provider value={{ session, profile, ready, sessionResolved, isAdmin, isBusiness, refreshProfile }}>
+    <SessionContext.Provider value={{ session, profile, ready, sessionResolved, isAdmin, isBusiness }}>
       {children}
     </SessionContext.Provider>
   );
