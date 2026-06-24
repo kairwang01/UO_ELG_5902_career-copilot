@@ -1743,6 +1743,15 @@ const AdminPortal: React.FC = () => {
                       <p className="mt-1 text-red-700 dark:text-red-300">
                         A super-admin must add a provider key under <span className="font-medium">Models &amp; Keys</span> (or set it in the functions environment). AI recovers within ~60s of saving.
                       </p>
+                      {hasAdminPermission(role, 'admin.models.read') && (
+                        <button
+                          type="button"
+                          onClick={() => setTab('ai')}
+                          className="mt-2 inline-flex items-center gap-1 rounded-md bg-red-700 hover:bg-red-800 px-3 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-offset-red-950"
+                        >
+                          Go to Models &amp; Keys →
+                        </button>
+                      )}
                     </div>
                   )
                 )}
