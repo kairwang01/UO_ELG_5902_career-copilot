@@ -231,8 +231,10 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       jobDescription: data.jobDescription,
     });
 
-    const provider = await resolveProvider(uid, modelId);
     try {
+      // resolveProvider builds the provider (and reads the API key) — keep it inside
+      // the try so a missing-key/build failure also triggers the refund below.
+      const provider = await resolveProvider(uid, modelId);
       const result = await provider.generate({
         prompt,
         responseSchema: GENERATE_SCHEMA,

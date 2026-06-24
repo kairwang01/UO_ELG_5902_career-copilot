@@ -139,8 +139,10 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
 
   // Step 5: Call the LLM through the router
   // Router returns GeminiProvider in Phase A; Phase B upgrades this to cascade routing.
-  const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
   try {
+    // resolveProvider builds the provider (and reads the API key) — keep it inside
+    // the try so a missing-key/build failure also triggers the refund below.
+    const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
     const result = await provider.generate({
       prompt,
       parts,
