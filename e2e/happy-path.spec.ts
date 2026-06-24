@@ -30,24 +30,35 @@ test('candidate can sign in, run a tool, and reach My Applications', async ({ pa
   // 2) Authenticated workspace loads (credits badge "… CR" appears post-login).
   await expect(page.getByText(/\bCR\b/).first()).toBeVisible({ timeout: 30_000 });
 
-  // 3) Tool run - resume readiness. The seeded candidate already has resume_text, so
-  //    the dashboard's primary readiness action runs resume analysis (stubbed LLM).
-  await page.goto('/workspace');
-  const readinessBtn = page.getByRole('button', { name: /run readiness pass/i }).first();
-  await readinessBtn.waitFor({ state: 'visible', timeout: 30_000 });
-  await readinessBtn.click();
+  // 3) Tool run - the Resume view runs resume analysis on the seeded resume_text.
+  //    (The dashboard "Run readiness pass" only navigates here; the real run is here.)
+  await page.getByRole('button', { name: 'Resume', exact: true }).click();
 
-  // A credit-confirmation dialog may appear - confirm via its primary action.
-  const dialog = page.getByRole('dialog');
-  if (await dialog.isVisible().catch(() => false)) {
-    await dialog.getByRole('button').last().click();
+  // Dismiss any onboarding/coach prompt that could intercept the click.
+  for (const label of ['No thanks', 'Got it']) {
+    const b = page.getByRole('button', { name: label, exact: true }).first();
+    if (await b.isVisible().catch(() => false)) await b.click().catch(() => {});
   }
 
-  // Meaningful signal: the pre-analysis "first score" empty-state hint is only
-  // replaced once the analysis actually completes (avoids matching pre-existing copy).
-  await expect(
-    page.getByText(/run a readiness pass to create the first score/i),
-  ).toBeHidden({ timeout: 60_000 });
+  // "Run resume analysis" opens the resume workspace; the real metered run is the
+  // "Score My Resume" submit on the seeded resume_text.
+  const openWorkspace = page.getByRole('button', { name: /run resume analysis/i }).first();
+  await openWorkspace.waitFor({ state: 'visible', timeout: 30_000 });
+  await openWorkspace.click();
+
+  const scoreBtn = page.getByRole('button', { name: /score my resume/i }).first();
+  await scoreBtn.waitFor({ state: 'visible', timeout: 30_000 });
+  await scoreBtn.click();
+
+  // Credit confirmation dialog ("Use 10 credits?") -> confirm with "Run it".
+  const runIt = page.getByRole('button', { name: /run it/i });
+  await runIt.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  if (await runIt.isVisible().catch(() => false)) await runIt.click();
+
+  // Proof the metered tool actually ran end-to-end (auth -> callable -> meterToolRun
+  // -> stub): resume-analysis costs 10 credits, so the seeded 100 CR balance drops
+  // once the analysis commits server-side. A no-op/navigation would leave it at 100.
+  await expect(page.getByText('100 CR')).toBeHidden({ timeout: 60_000 });
 
   // 4) My Applications renders via the sidebar nav (exact label avoids "Applied pipeline").
   await page.getByRole('button', { name: 'Applications', exact: true }).click();

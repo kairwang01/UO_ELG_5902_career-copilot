@@ -100,7 +100,9 @@ const RECOMMENDATION_TONE_CLASS: Record<RecommendationTone, string> = {
 
 function formatTranslation(template: string, values: Record<string, string | number>): string {
     return Object.entries(values).reduce(
-        (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
+        (text, [key, value]) => text
+            .replaceAll(`{{${key}}}`, String(value))
+            .replaceAll(`{${key}}`, String(value)),
         template,
     );
 }
@@ -2564,7 +2566,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                         </div>
                     )}
 
-                    {selectedApplicant.screener_answers.length > 0 && (
+                    {selectedApplicant && selectedApplicant.screener_answers.length > 0 && (
                         <div className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                             <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t('applicant_funnel_screener_title')}</h4>
                             <dl className="mt-2 space-y-2.5">
@@ -2590,9 +2592,11 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                         </div>
                     )}
 
-                    <div className="mt-5">
-                        <ApplicationMessageThread key={selectedApplicant.id} applicationId={selectedApplicant.id} viewerRole="employer" t={t} />
-                    </div>
+                    {selectedApplicant && (
+                        <div className="mt-5">
+                            <ApplicationMessageThread key={selectedApplicant.id} applicationId={selectedApplicant.id} viewerRole="employer" t={t} />
+                        </div>
+                    )}
                 </section>
             </div>
 

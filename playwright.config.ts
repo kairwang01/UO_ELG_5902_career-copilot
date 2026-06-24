@@ -9,7 +9,7 @@ import { defineConfig, devices } from '@playwright/test';
  * dev server, pointed at the emulator via env (existing process.env VITE_* vars take
  * priority over .env.local in Vite, so this overrides the prod Firebase config).
  */
-const PORT = 5176;
+const PORT = Number(process.env.E2E_WEB_PORT || 5176);
 
 const EMULATOR_ENV: Record<string, string> = {
   VITE_FIREBASE_USE_EMULATOR: 'true',
@@ -19,6 +19,16 @@ const EMULATOR_ENV: Record<string, string> = {
   VITE_FIREBASE_STORAGE_BUCKET: 'demo-careercopilot.appspot.com',
   VITE_FIREBASE_MESSAGING_SENDER_ID: '000000000000',
   VITE_FIREBASE_APP_ID: '1:000000000000:web:demoe2e',
+  VITE_FIREBASE_AUTH_EMULATOR_URL:
+    process.env.VITE_FIREBASE_AUTH_EMULATOR_URL || 'http://127.0.0.1:9199',
+  VITE_FIRESTORE_EMULATOR_HOST:
+    process.env.VITE_FIRESTORE_EMULATOR_HOST || '127.0.0.1',
+  VITE_FIRESTORE_EMULATOR_PORT:
+    process.env.VITE_FIRESTORE_EMULATOR_PORT || '8080',
+  VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST:
+    process.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST || '127.0.0.1',
+  VITE_FIREBASE_FUNCTIONS_EMULATOR_PORT:
+    process.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_PORT || '5001',
 };
 
 export default defineConfig({
