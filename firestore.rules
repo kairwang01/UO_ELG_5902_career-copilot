@@ -703,10 +703,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // API Platform registry — partner applications, key metadata and request
-    // logs. Admin UI reads/mutates through Cloud Functions only so role checks,
-    // secret hashing, one-time key display and admin audit logging cannot be
-    // bypassed by direct Firestore access.
+    // API Platform registry — partner applications, key metadata, request logs
+    // and per-key rate-limit/quota counters. Admin UI reads/mutates through Cloud
+    // Functions only; the public gateway (publicApi) authenticates + meters via
+    // the Admin SDK. So role checks, secret hashing, one-time key display, quota
+    // enforcement and audit logging cannot be bypassed by direct Firestore access.
     match /api_applications/{appId} {
       allow read, write: if false;
     }
@@ -714,6 +715,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /api_usage_logs/{entryId} {
+      allow read, write: if false;
+    }
+    // Per-key usage counters (minute/month windows) the gateway increments to
+    // enforce rate limits + quota. Client access would let a partner reset their
+    // own counters and bypass limits — server-only.
+    match /api_key_usage/{keyId} {
       allow read, write: if false;
     }
 
