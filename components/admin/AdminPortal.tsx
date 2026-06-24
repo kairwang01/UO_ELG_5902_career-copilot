@@ -675,6 +675,9 @@ const AdminPortal: React.FC = () => {
   const [kairllmUrl, setKairllmUrl] = useState('');
   const [deepseekKey, setDeepseekKey] = useState('');
   const [deepseekUrl, setDeepseekUrl] = useState('');
+  // Which provider's credentials are shown — single-select, like mainstream API
+  // consoles, so only the chosen provider's config renders (no 3-card clutter).
+  const [providerTab, setProviderTab] = useState<'gemini' | 'kairllm' | 'deepseek'>('gemini');
 
   const [creditDelta, setCreditDelta] = useState('100');
   const [creditReason, setCreditReason] = useState('');
@@ -2019,361 +2022,131 @@ const AdminPortal: React.FC = () => {
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-4">
-
-                {/* ── Gemini ─────────────────────────────────────────────── */}
-                {(() => {
-                  const ts = testStatus['gemini'] ?? { state: 'idle' };
-                  const runTest = async () => {
-                    setTest('gemini', { state: 'running' });
-                    try {
-                      const res = await adminTestModel({
-                        config: {
-                          provider: 'gemini',
-                          // pass typed key only if the admin has entered one
-                          ...(geminiKey ? { api_key: geminiKey } : {}),
-                        },
-                      });
-                      setTest('gemini', { state: 'done', ...res });
-                    } catch (e) {
-                      setTest('gemini', { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
-                    }
-                  };
-                  return (
-                    <Card className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <SectionHeading>Gemini</SectionHeading>
-                        <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded font-medium">
-                          free tier
-                        </span>
-                      </div>
-
-                      {/* Masked current key */}
-                      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                        <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 shrink-0">
-                          Active key
-                        </span>
-                        <span className="font-mono text-xs text-gray-700 truncate flex-1">
-                          {llm.gemini_api_key_masked || <em className="not-italic text-gray-400">not set</em>}
-                        </span>
-                      </div>
-
-                      {/* Rotate key */}
-                      <div>
-                        <FieldLabel htmlFor="gemini-key">New API key</FieldLabel>
-                        <input
-                          id="gemini-key"
-                          type="password"
-                          value={geminiKey}
-                          onChange={(e) => { setGeminiKey(e.target.value); setTest('gemini', { state: 'idle' }); }}
-                          placeholder="AIza… (leave blank to keep current)"
-                          className={textInput}
-                          autoComplete="off"
-                        />
-                      </div>
-
-                      {/* Model name */}
-                      <div>
-                        <FieldLabel htmlFor="gemini-model">Model</FieldLabel>
-                        <input
-                          id="gemini-model"
-                          value={geminiModel}
-                          onChange={(e) => setGeminiModel(e.target.value)}
-                          placeholder="gemini-2.0-flash"
-                          className={textInput}
-                        />
-                      </div>
-
-                      <div>
-                        <FieldLabel htmlFor="gemini-fallback-model">Fallback model</FieldLabel>
-                        <input
-                          id="gemini-fallback-model"
-                          value={geminiFallbackModel}
-                          onChange={(e) => setGeminiFallbackModel(e.target.value)}
-                          placeholder="gemini-flash-latest"
-                          className={textInput}
-                        />
-                      </div>
-
-                      {/* Test + Save row */}
-                      <div className="flex items-center gap-2 pt-1 flex-wrap">
-                        <button
-                          type="button"
-                          disabled={ts.state === 'running'}
-                          onClick={runTest}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {ts.state === 'running' ? (
-                            <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                          ) : (
-                            <span aria-hidden="true">⚡</span>
-                          )}
-                          Test connection
-                        </button>
-                        <SaveButton
-                          onClick={async () => {
-                            setLoading(true); setError(null);
-                            try {
-                              const updated = await adminUpdateLlmConfig({
-                                gemini_api_key: geminiKey || undefined,
-                                gemini_model: geminiModel || undefined,
-                                gemini_fallback_model: geminiFallbackModel || undefined,
-                              });
-                              setLlm(updated); setGeminiKey('');
-                            } catch (e) { setError(e instanceof Error ? e.message : 'Save failed'); }
-                            finally { setLoading(false); }
-                          }}
-                          loading={loading}
-                          label="Save"
-                        />
-                      </div>
-
-                      {/* Inline test result */}
-                      {ts.state === 'done' && (
-                        <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${ts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                          <span className="font-medium">
-                            {ts.ok ? `✓ Connected` : `✗ Failed`}
-                            {ts.ok && ts.latencyMs !== undefined ? ` · ${ts.latencyMs}ms` : ''}
-                          </span>
-                          {ts.ok && ts.text && (
-                            <span className="text-emerald-700 font-mono text-[11px] truncate" title={ts.text}>
-                              reply: {ts.text}
-                            </span>
-                          )}
-                          {!ts.ok && ts.error && (
-                            <span className="text-red-700 font-mono text-[11px] break-all">{ts.error}</span>
-                          )}
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })()}
-
-                {/* ── KairLLM ────────────────────────────────────────────── */}
-                {(() => {
-                  const ts = testStatus['kairllm'] ?? { state: 'idle' };
-                  const runTest = async () => {
-                    setTest('kairllm', { state: 'running' });
-                    try {
-                      const res = await adminTestModel({
-                        config: {
-                          provider: 'openai-compatible',
-                          builtin: 'kairllm',
-                          ...(kairllmKey ? { api_key: kairllmKey } : {}),
-                          ...(kairllmUrl ? { base_url: kairllmUrl } : {}),
-                        },
-                      });
-                      setTest('kairllm', { state: 'done', ...res });
-                    } catch (e) {
-                      setTest('kairllm', { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
-                    }
-                  };
-                  return (
-                    <Card className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <SectionHeading>KairLLM</SectionHeading>
-                        <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded font-medium">
-                          paid tier
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                        <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 shrink-0">
-                          Active key
-                        </span>
-                        <span className="font-mono text-xs text-gray-700 truncate flex-1">
-                          {llm.kairllm_api_key_masked || <em className="not-italic text-gray-400">not set</em>}
-                        </span>
-                      </div>
-
-                      <div>
-                        <FieldLabel htmlFor="kairllm-key">New API key</FieldLabel>
-                        <input
-                          id="kairllm-key"
-                          type="password"
-                          value={kairllmKey}
-                          onChange={(e) => { setKairllmKey(e.target.value); setTest('kairllm', { state: 'idle' }); }}
-                          placeholder="leave blank to keep current"
-                          className={textInput}
-                          autoComplete="off"
-                        />
-                      </div>
-
-                      <div>
-                        <FieldLabel htmlFor="kairllm-url">Base URL</FieldLabel>
-                        <input
-                          id="kairllm-url"
-                          value={kairllmUrl}
-                          onChange={(e) => setKairllmUrl(e.target.value)}
-                          placeholder="https://ai.gogosling.ca/v1"
-                          className={textInput}
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-1 flex-wrap">
-                        <button
-                          type="button"
-                          disabled={ts.state === 'running'}
-                          onClick={runTest}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {ts.state === 'running' ? (
-                            <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                          ) : (
-                            <span aria-hidden="true">⚡</span>
-                          )}
-                          Test connection
-                        </button>
-                        <SaveButton
-                          onClick={async () => {
-                            setLoading(true); setError(null);
-                            try {
-                              const updated = await adminUpdateLlmConfig({
-                                kairllm_api_key: kairllmKey || undefined,
-                                kairllm_base_url: kairllmUrl || undefined,
-                              });
-                              setLlm(updated); setKairllmKey('');
-                            } catch (e) { setError(e instanceof Error ? e.message : 'Save failed'); }
-                            finally { setLoading(false); }
-                          }}
-                          loading={loading}
-                          label="Save"
-                        />
-                      </div>
-
-                      {ts.state === 'done' && (
-                        <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${ts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                          <span className="font-medium">
-                            {ts.ok ? `✓ Connected` : `✗ Failed`}
-                            {ts.ok && ts.latencyMs !== undefined ? ` · ${ts.latencyMs}ms` : ''}
-                          </span>
-                          {ts.ok && ts.text && (
-                            <span className="text-emerald-700 font-mono text-[11px] truncate" title={ts.text}>
-                              reply: {ts.text}
-                            </span>
-                          )}
-                          {!ts.ok && ts.error && (
-                            <span className="text-red-700 font-mono text-[11px] break-all">{ts.error}</span>
-                          )}
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })()}
-
-                {/* ── DeepSeek ───────────────────────────────────────────── */}
-                {(() => {
-                  const ts = testStatus['deepseek'] ?? { state: 'idle' };
-                  const runTest = async () => {
-                    setTest('deepseek', { state: 'running' });
-                    try {
-                      const res = await adminTestModel({
-                        config: {
-                          provider: 'openai-compatible',
-                          builtin: 'deepseek',
-                          ...(deepseekKey ? { api_key: deepseekKey } : {}),
-                          ...(deepseekUrl ? { base_url: deepseekUrl } : {}),
-                        },
-                      });
-                      setTest('deepseek', { state: 'done', ...res });
-                    } catch (e) {
-                      setTest('deepseek', { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
-                    }
-                  };
-                  return (
-                    <Card className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <SectionHeading>DeepSeek</SectionHeading>
-                        <span className="text-[10px] bg-violet-50 text-violet-700 border border-violet-100 px-2 py-0.5 rounded font-medium">
-                          business tier
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                        <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 shrink-0">
-                          Active key
-                        </span>
-                        <span className="font-mono text-xs text-gray-700 truncate flex-1">
-                          {llm.deepseek_api_key_masked || <em className="not-italic text-gray-400">not set</em>}
-                        </span>
-                      </div>
-
-                      <div>
-                        <FieldLabel htmlFor="deepseek-key">New API key</FieldLabel>
-                        <input
-                          id="deepseek-key"
-                          type="password"
-                          value={deepseekKey}
-                          onChange={(e) => { setDeepseekKey(e.target.value); setTest('deepseek', { state: 'idle' }); }}
-                          placeholder="leave blank to keep current"
-                          className={textInput}
-                          autoComplete="off"
-                        />
-                      </div>
-
-                      <div>
-                        <FieldLabel htmlFor="deepseek-url">Base URL</FieldLabel>
-                        <input
-                          id="deepseek-url"
-                          value={deepseekUrl}
-                          onChange={(e) => setDeepseekUrl(e.target.value)}
-                          placeholder="https://api.deepseek.com/v1"
-                          className={textInput}
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-1 flex-wrap">
-                        <button
-                          type="button"
-                          disabled={ts.state === 'running'}
-                          onClick={runTest}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {ts.state === 'running' ? (
-                            <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                          ) : (
-                            <span aria-hidden="true">⚡</span>
-                          )}
-                          Test connection
-                        </button>
-                        <SaveButton
-                          onClick={async () => {
-                            setLoading(true); setError(null);
-                            try {
-                              const updated = await adminUpdateLlmConfig({
-                                deepseek_api_key: deepseekKey || undefined,
-                                deepseek_base_url: deepseekUrl || undefined,
-                              });
-                              setLlm(updated); setDeepseekKey('');
-                            } catch (e) { setError(e instanceof Error ? e.message : 'Save failed'); }
-                            finally { setLoading(false); }
-                          }}
-                          loading={loading}
-                          label="Save"
-                        />
-                      </div>
-
-                      {ts.state === 'done' && (
-                        <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${ts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                          <span className="font-medium">
-                            {ts.ok ? `✓ Connected` : `✗ Failed`}
-                            {ts.ok && ts.latencyMs !== undefined ? ` · ${ts.latencyMs}ms` : ''}
-                          </span>
-                          {ts.ok && ts.text && (
-                            <span className="text-emerald-700 font-mono text-[11px] truncate" title={ts.text}>
-                              reply: {ts.text}
-                            </span>
-                          )}
-                          {!ts.ok && ts.error && (
-                            <span className="text-red-700 font-mono text-[11px] break-all">{ts.error}</span>
-                          )}
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })()}
-
+              {/* Provider selector — single-select dropdown (mainstream API-console
+                  style) so only the chosen provider's config renders, no 3-card clutter. */}
+              <div className="mb-5 max-w-xs">
+                <FieldLabel htmlFor="provider-select">Provider</FieldLabel>
+                <select
+                  id="provider-select"
+                  value={providerTab}
+                  onChange={(e) => setProviderTab(e.target.value as 'gemini' | 'kairllm' | 'deepseek')}
+                  className={textInput}
+                >
+                  <option value="gemini">Gemini — free tier</option>
+                  <option value="kairllm">KairLLM — paid tier</option>
+                  <option value="deepseek">DeepSeek — business tier</option>
+                </select>
               </div>
+
+              {(() => {
+                const meta = {
+                  gemini: { label: 'Gemini', tier: 'free tier', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza… (leave blank to keep current)' },
+                  kairllm: { label: 'KairLLM', tier: 'paid tier', tierClass: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/50', masked: llm.kairllm_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
+                  deepseek: { label: 'DeepSeek', tier: 'business tier', tierClass: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', masked: llm.deepseek_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
+                }[providerTab];
+
+                const newKey = providerTab === 'gemini' ? geminiKey : providerTab === 'kairllm' ? kairllmKey : deepseekKey;
+                const onKeyChange = (v: string) => {
+                  if (providerTab === 'gemini') setGeminiKey(v);
+                  else if (providerTab === 'kairllm') setKairllmKey(v);
+                  else setDeepseekKey(v);
+                  setTest(providerTab, { state: 'idle' });
+                };
+
+                const ts = testStatus[providerTab] ?? { state: 'idle' };
+                const runTest = async () => {
+                  setTest(providerTab, { state: 'running' });
+                  try {
+                    let res;
+                    if (providerTab === 'gemini') {
+                      res = await adminTestModel({ config: { provider: 'gemini', ...(geminiKey ? { api_key: geminiKey } : {}) } });
+                    } else if (providerTab === 'kairllm') {
+                      res = await adminTestModel({ config: { provider: 'openai-compatible', builtin: 'kairllm', ...(kairllmKey ? { api_key: kairllmKey } : {}), ...(kairllmUrl ? { base_url: kairllmUrl } : {}) } });
+                    } else {
+                      res = await adminTestModel({ config: { provider: 'openai-compatible', builtin: 'deepseek', ...(deepseekKey ? { api_key: deepseekKey } : {}), ...(deepseekUrl ? { base_url: deepseekUrl } : {}) } });
+                    }
+                    setTest(providerTab, { state: 'done', ...res });
+                  } catch (e) {
+                    setTest(providerTab, { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
+                  }
+                };
+                const save = async () => {
+                  setLoading(true); setError(null);
+                  try {
+                    let updated;
+                    if (providerTab === 'gemini') {
+                      updated = await adminUpdateLlmConfig({ gemini_api_key: geminiKey || undefined, gemini_model: geminiModel || undefined, gemini_fallback_model: geminiFallbackModel || undefined });
+                    } else if (providerTab === 'kairllm') {
+                      updated = await adminUpdateLlmConfig({ kairllm_api_key: kairllmKey || undefined, kairllm_base_url: kairllmUrl || undefined });
+                    } else {
+                      updated = await adminUpdateLlmConfig({ deepseek_api_key: deepseekKey || undefined, deepseek_base_url: deepseekUrl || undefined });
+                    }
+                    setLlm(updated);
+                    if (providerTab === 'gemini') setGeminiKey('');
+                    else if (providerTab === 'kairllm') setKairllmKey('');
+                    else setDeepseekKey('');
+                  } catch (e) { setError(e instanceof Error ? e.message : 'Save failed'); }
+                  finally { setLoading(false); }
+                };
+
+                return (
+                  <Card className="p-5 space-y-4 max-w-2xl">
+                    <div className="flex items-start justify-between gap-2">
+                      <SectionHeading>{meta.label}</SectionHeading>
+                      <span className={`text-[10px] border px-2 py-0.5 rounded font-medium ${meta.tierClass}`}>{meta.tier}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md px-3 py-2">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 shrink-0">Active key</span>
+                      <span className="font-mono text-xs text-gray-700 dark:text-gray-200 truncate flex-1">
+                        {meta.masked || <em className="not-italic text-gray-400">not set</em>}
+                      </span>
+                    </div>
+
+                    <div>
+                      <FieldLabel htmlFor="provider-key">New API key</FieldLabel>
+                      <input id="provider-key" type="password" value={newKey} onChange={(e) => onKeyChange(e.target.value)} placeholder={meta.keyPlaceholder} className={textInput} autoComplete="off" />
+                    </div>
+
+                    {providerTab === 'gemini' ? (
+                      <>
+                        <div>
+                          <FieldLabel htmlFor="gemini-model">Model</FieldLabel>
+                          <input id="gemini-model" value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} placeholder="gemini-2.0-flash" className={textInput} />
+                        </div>
+                        <div>
+                          <FieldLabel htmlFor="gemini-fallback-model">Fallback model</FieldLabel>
+                          <input id="gemini-fallback-model" value={geminiFallbackModel} onChange={(e) => setGeminiFallbackModel(e.target.value)} placeholder="gemini-flash-latest" className={textInput} />
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <FieldLabel htmlFor="provider-url">Base URL</FieldLabel>
+                        <input id="provider-url" value={providerTab === 'kairllm' ? kairllmUrl : deepseekUrl} onChange={(e) => (providerTab === 'kairllm' ? setKairllmUrl(e.target.value) : setDeepseekUrl(e.target.value))} placeholder={providerTab === 'kairllm' ? 'https://ai.gogosling.ca/v1' : 'https://api.deepseek.com/v1'} className={textInput} />
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                      <button type="button" disabled={ts.state === 'running'} onClick={runTest} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-xs font-medium text-gray-700 dark:text-gray-200 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {ts.state === 'running' ? (<span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />) : (<span aria-hidden="true">⚡</span>)}
+                        Test connection
+                      </button>
+                      <SaveButton onClick={save} loading={loading} label="Save" />
+                    </div>
+
+                    {ts.state === 'done' && (
+                      <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${ts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800/50' : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800/50'}`}>
+                        <span className="font-medium">
+                          {ts.ok ? `✓ Connected` : `✗ Failed`}
+                          {ts.ok && ts.latencyMs !== undefined ? ` · ${ts.latencyMs}ms` : ''}
+                        </span>
+                        {ts.ok && ts.text && (<span className="text-emerald-700 dark:text-emerald-300 font-mono text-[11px] truncate" title={ts.text}>reply: {ts.text}</span>)}
+                        {!ts.ok && ts.error && (<span className="text-red-700 dark:text-red-300 font-mono text-[11px] break-all">{ts.error}</span>)}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })()}
 
               {llm.updated_at && (
                 <p className="mt-3 text-xs text-gray-400">

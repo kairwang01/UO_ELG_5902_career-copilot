@@ -190,6 +190,28 @@ async function seedWeb3Fixture() {
   return { web3Uid: web3User.uid };
 }
 
+/**
+ * A SUPER admin (via the RBAC admins map), so the super-only surfaces — Models &
+ * Keys / provider credentials — can be exercised. The legacy grantAdmin() path
+ * only yields role 'admin', which can't see those tabs.
+ */
+async function seedSuperAdmin() {
+  const superUser = await ensureUser('super@careercopilot.test', 'Sasha Super');
+  await writeProfile(superUser.uid, { role: 'candidate', full_name: 'Sasha Super', subscription_status: 'free' });
+  const ref = db.collection('platform_config').doc('access');
+  const snap = await ref.get();
+  const admins = snap.exists ? { ...(snap.data().admins || {}) } : {};
+  admins[superUser.uid] = {
+    role: 'super',
+    status: 'active',
+    email: 'super@careercopilot.test',
+    invited_by: 'seed',
+    invited_at: now,
+  };
+  await ref.set({ admins, updated_at: now }, { merge: true });
+  return { superUid: superUser.uid };
+}
+
 async function main() {
   // 1. Plain candidate
   const candidate = await ensureUser('candidate@careercopilot.test', 'Casey Candidate');
@@ -238,6 +260,10 @@ async function main() {
 
   // 6. Web3 fixture: enable the module + a dedicated mint-eligible candidate.
   await seedWeb3Fixture();
+
+  // 7. A super admin so super-only surfaces (Models & Keys) are reachable in QA.
+  const superAdmin = await seedSuperAdmin();
+  console.log(`  ✓ super-admin       ${superAdmin.superUid}  (super@careercopilot.test, role=super via admins map)`);
 
   // Verify the seed (no browser needed).
   const checks = [
