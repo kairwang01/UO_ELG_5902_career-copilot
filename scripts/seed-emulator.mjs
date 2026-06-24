@@ -1,9 +1,10 @@
 /**
- * seed-emulator.mjs — provision the three QA accounts the auth/routing acceptance
+ * seed-emulator.mjs — provision the QA accounts the auth/routing acceptance
  * criteria need, against the LOCAL Firebase emulators (never prod).
  *
  *   candidate         → role 'candidate'              → must land on /workspace (candidate shell)
  *   employer          → role 'employer' + biz plan    → must land on /portal (employer shell)
+ *   pending-business  → role 'candidate' + pending biz plan → must land on /portal, NOT auto checkout
  *   admin-candidate   → role 'candidate' + admin auth → must land on /workspace, NOT /admin
  *
  * The last account is the regression guard for "admin authority must not hijack a
@@ -79,7 +80,18 @@ async function main() {
     company_size: '11-50',
   });
 
-  // 3. Admin who is ALSO a product candidate — must reach /workspace, never auto /admin.
+  // 3. Candidate-role account with a pending business plan — must reach /portal
+  // without the app auto-opening checkout just because the profile is pending.
+  const pendingBusiness = await ensureUser('pending-business@careercopilot.test', 'Parker Pending');
+  await writeProfile(pendingBusiness.uid, {
+    role: 'candidate',
+    full_name: 'Parker Pending',
+    subscription_status: 'pending_biz_starter',
+    company_name: 'Pending Seed Co',
+    company_size: '1-10',
+  });
+
+  // 4. Admin who is ALSO a product candidate — must reach /workspace, never auto /admin.
   const adminCandidate = await ensureUser('admin-candidate@careercopilot.test', 'Avery Admin');
   await writeProfile(adminCandidate.uid, {
     role: 'candidate',
@@ -93,6 +105,7 @@ async function main() {
   const checks = [
     ['candidate', candidate.uid, 'candidate'],
     ['employer', employer.uid, 'employer'],
+    ['pending-business', pendingBusiness.uid, 'candidate'],
     ['admin-candidate', adminCandidate.uid, 'candidate'],
   ];
   for (const [label, uid, expectedRole] of checks) {
@@ -108,7 +121,7 @@ async function main() {
     throw new Error('Seed check failed: admin-candidate not in platform_config/access.admin_uids');
   }
   console.log(`  ✓ admin-candidate is in admin_uids (admin authority granted, role stays candidate)`);
-  console.log(`\nSeeded 3 QA accounts (password: ${PASSWORD}) against ${PROJECT_ID} emulators.`);
+  console.log(`\nSeeded ${checks.length} QA accounts (password: ${PASSWORD}) against ${PROJECT_ID} emulators.`);
 }
 
 main()

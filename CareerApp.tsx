@@ -194,7 +194,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [market, setMarket] = useState<string>(DEFAULT_MARKET);
-  const [isRedirecting, setIsRedirecting] = useState<boolean>(false);
   const [isUpdatingResume, setIsUpdatingResume] = useState(false);
   const [showHomePageOverride, setShowHomePageOverride] = useState(false);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
@@ -634,32 +633,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     }
   }, [session, profile?.resume_file_path, addToast, t]);
 
-  // Employers render in their own dashboard shell (see the employer branch in the
-  // main layout), so no default-view redirect is needed here.
-  
-  const handleSubscriptionRedirect = useCallback(async (planKey: string) => {
-    if (!session) {
-      setView('auth');
-      return;
-    }
-
-    setIsRedirecting(true);
-
-    try {
-        const isPendingPlan = planKey.startsWith('pending_biz_') || planKey.startsWith('pending_');
-        if (!isPendingPlan) {
-            throw new Error(`Invalid pending plan key format: ${planKey}`);
-        }
-
-        const checkout = await createSubscriptionCheckout(planKey);
-        window.location.assign(checkout.url);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setError(latestTRef.current('checkout_prepare_error').replace('{error}', message));
-        setIsRedirecting(false);
-    }
-  }, [session, getProfile]);
-
   const handleBusinessPlanSelection = async (planKey: string) => {
     if (!session) return;
     try {
@@ -820,16 +793,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     handleCheckoutReturn();
   }, [session, getProfile]);
   
-  useEffect(() => {
-    if (profile?.subscription_status && (profile.subscription_status.startsWith('pending_') || profile.subscription_status.startsWith('pending_biz_'))) {
-      const hasRedirected = sessionStorage.getItem(`${profile.subscription_status}_redirect_triggered`);
-      if (!hasRedirected) {
-        sessionStorage.setItem(`${profile.subscription_status}_redirect_triggered`, 'true');
-        handleSubscriptionRedirect(profile.subscription_status);
-      }
-    }
-  }, [profile, handleSubscriptionRedirect]);
-
   const navigateToPricing = () => {
     // The app only ever mounts inside the marketing shell (SiteRouter), so pricing
     // lives on its own route — no in-page scroll target anymore.
@@ -1546,7 +1509,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   return (
       <div className={rootClass} data-qa-shell={workspaceShell} data-qa-auth={session ? 'signed-in' : 'signed-out'}>
-        {isRedirecting && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4 animate-fade-in"><div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-8 text-center flex flex-col items-center"><h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Finalizing Your Upgrade!</h3><p className="mt-2 text-gray-600 dark:text-gray-300">To activate your new plan, we're opening our secure payment page.</p><div className="mt-6 w-12 h-12 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div></div></div>}
         <CreditModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} onConfirm={() => { setIsCreditModalOpen(false); performAnalysis(); }} onNavigateToPricing={navigateToPricing} cost={analysisCost} currentCredits={credits} />
         
         {isWorkspaceSessionLoading ? (

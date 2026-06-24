@@ -135,6 +135,13 @@ async function main() {
         expectedShell: 'employer',
       });
       await signInAndAssertShell(browser, {
+        name: 'pending-business',
+        email: 'pending-business@careercopilot.test',
+        loginShell: 'candidate',
+        targetPath: '/portal',
+        expectedShell: 'employer',
+      });
+      await signInAndAssertShell(browser, {
         name: 'admin-candidate',
         email: 'admin-candidate@careercopilot.test',
         loginShell: 'candidate',
