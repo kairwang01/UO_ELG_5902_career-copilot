@@ -66,7 +66,10 @@ interface PortfolioPreviewViewerProps {
   filename?: string;
   badges?: string[];
   actionSlot?: React.ReactNode;
+  headerActionSlot?: React.ReactNode;
   onThemeChange?: (theme: string) => void;
+  showActionCards?: boolean;
+  showThemePicker?: boolean;
   t: (key: string) => string;
 }
 
@@ -78,7 +81,10 @@ const PortfolioPreviewViewer: React.FC<PortfolioPreviewViewerProps> = ({
   filename = 'showcase',
   badges = [],
   actionSlot,
+  headerActionSlot,
   onThemeChange,
+  showActionCards = true,
+  showThemePicker = true,
   t,
 }) => {
   const { addToast } = useToast();
@@ -126,12 +132,15 @@ const PortfolioPreviewViewer: React.FC<PortfolioPreviewViewerProps> = ({
               ))}
             </div>
           </div>
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-4">
-            <ResultActionCard icon={Eye} title={t('showcase_review_title')} description={t('showcase_review_desc')} onClick={() => setResultTab('preview')} tone="primary" />
-            <ResultActionCard icon={Download} title={t('showcase_download_title')} description={t('showcase_download_desc')} onClick={downloadHtml} />
-            <ResultActionCard icon={Rocket} title={t('tool_portfolio_tab_deploy')} description={t('showcase_deploy_desc')} onClick={() => setResultTab('deploy')} />
-            <ResultActionCard icon={Code2} title={t('tool_portfolio_tab_code')} description={t('showcase_code_desc')} onClick={() => setResultTab('code')} />
-          </div>
+          {headerActionSlot && <div className="shrink-0 self-start">{headerActionSlot}</div>}
+          {showActionCards && (
+            <div className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-4">
+              <ResultActionCard icon={Eye} title={t('showcase_review_title')} description={t('showcase_review_desc')} onClick={() => setResultTab('preview')} tone="primary" />
+              <ResultActionCard icon={Download} title={t('showcase_download_title')} description={t('showcase_download_desc')} onClick={downloadHtml} />
+              <ResultActionCard icon={Rocket} title={t('tool_portfolio_tab_deploy')} description={t('showcase_deploy_desc')} onClick={() => setResultTab('deploy')} />
+              <ResultActionCard icon={Code2} title={t('tool_portfolio_tab_code')} description={t('showcase_code_desc')} onClick={() => setResultTab('code')} />
+            </div>
+          )}
         </div>
         {actionSlot && <div className="mt-5 border-t border-gray-200 pt-5 dark:border-slate-700">{actionSlot}</div>}
       </section>
@@ -155,13 +164,15 @@ const PortfolioPreviewViewer: React.FC<PortfolioPreviewViewerProps> = ({
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {PORTFOLIO_TEMPLATES.map((template) => (
-                <button key={template.key} type="button" aria-pressed={previewTheme === template.key} onClick={() => { setPreviewTheme(template.key); onThemeChange?.(template.key); }} className={`rounded-md border-2 p-1 ${previewTheme === template.key ? 'border-blue-500' : 'border-transparent'}`} title={template.name}>
-                  <div className="flex -space-x-1">{template.colors.map((color) => <div key={color} className="h-4 w-4 rounded-full border border-white dark:border-slate-800" style={{ backgroundColor: color }} />)}</div>
-                </button>
-              ))}
-            </div>
+            {showThemePicker && (
+              <div className="flex flex-wrap items-center gap-2">
+                {PORTFOLIO_TEMPLATES.map((template) => (
+                  <button key={template.key} type="button" aria-pressed={previewTheme === template.key} onClick={() => { setPreviewTheme(template.key); onThemeChange?.(template.key); }} className={`rounded-md border-2 p-1 ${previewTheme === template.key ? 'border-blue-500' : 'border-transparent'}`} title={template.name}>
+                    <div className="flex -space-x-1">{template.colors.map((color) => <div key={color} className="h-4 w-4 rounded-full border border-white dark:border-slate-800" style={{ backgroundColor: color }} />)}</div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="mx-auto overflow-x-auto rounded-xl bg-gray-900 p-3 shadow-inner sm:p-4">
             <iframe

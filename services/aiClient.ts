@@ -142,6 +142,7 @@ type AiProxyPayload = {
 };
 
 const inFlightAiProxyCalls = new Map<string, Promise<unknown>>();
+const PLATFORM_SAFE_DEFAULT_MODEL_ID = 'deepseek-v4-flash';
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -163,13 +164,14 @@ async function callAiProxy<TResponse, TResult>(
   payload: Record<string, unknown>,
   mapResult: (data: TResponse) => TResult
 ): Promise<TResult> {
-  const key = `${mode}:${currentModelId ?? ''}:${tool}:${stableStringify(payload)}`;
+  const model = getEffectiveAiModelId();
+  const key = `${mode}:${model}:${tool}:${stableStringify(payload)}`;
   const existing = inFlightAiProxyCalls.get(key);
   if (existing) return existing as Promise<TResult>;
 
   const promise = (async () => {
     const fn = httpsCallable<AiProxyPayload, TResponse>(firebaseFunctions, 'aiProxy', { timeout: 190_000 });
-    const res = await fn({ tool, payload, model: currentModelId, requestId: makeCallableRequestId('ai') });
+    const res = await fn({ tool, payload, model, requestId: makeCallableRequestId('ai') });
     updateApiStatus('online');
     return mapResult(res.data);
   })();
@@ -291,6 +293,10 @@ const MODEL_STORAGE_KEY = 'preferred_ai_model';
 const _stored = typeof localStorage !== 'undefined' ? localStorage.getItem(MODEL_STORAGE_KEY) : null;
 let currentModelId: string | undefined = _stored === 'custom' ? 'custom' : undefined;
 
+function getEffectiveAiModelId(): string {
+  return currentModelId ?? PLATFORM_SAFE_DEFAULT_MODEL_ID;
+}
+
 export const setAiModel = (id: string | undefined): void => {
   currentModelId = id === 'custom' ? 'custom' : undefined;
   try {
@@ -310,7 +316,7 @@ export interface ListModelsResult {
 }
 
 const DEFAULT_MODEL_OPTIONS: ModelOption[] = [
-  { id: 'gemini', label: 'Gemini (default)', minTier: 'free' },
+  { id: PLATFORM_SAFE_DEFAULT_MODEL_ID, label: 'DeepSeek V4 Flash', minTier: 'free' },
 ];
 
 /** Returns the models the current user is allowed to select, plus the default. */
@@ -321,7 +327,7 @@ export const listModels = async (): Promise<ListModelsResult> => {
     return res.data;
   } catch {
     // listModels is a new callable whose Cloud Run invoker may not be set yet.
-    return { tier: 'free', defaultModelId: 'gemini', models: DEFAULT_MODEL_OPTIONS, isBusiness: false };
+    return { tier: 'free', defaultModelId: PLATFORM_SAFE_DEFAULT_MODEL_ID, models: DEFAULT_MODEL_OPTIONS, isBusiness: false };
   }
 };
 

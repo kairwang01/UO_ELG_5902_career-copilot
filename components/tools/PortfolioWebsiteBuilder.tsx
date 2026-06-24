@@ -764,7 +764,6 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
           setPortfolioContent(draft.content);
           setDetails(draft.details);
           setProjects(draft.projects.length > 0 ? draft.projects.map(fromDraftProject) : [DEFAULT_PROJECT]);
-          setCurrentStep('details');
           lastSavedDraftRef.current = serializeDraftSnapshot({
             resume_fingerprint: draft.resume_fingerprint,
             content: draft.content,
@@ -1552,6 +1551,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         badges={[`${completedProjectCount} ${t('showcase_projects_selected')}`]}
         actionSlot={saveStatus === 'saved' ? undefined : saveActions}
         onThemeChange={setPreviewTheme}
+        showActionCards={false}
+        showThemePicker={false}
         t={t}
       />
     );

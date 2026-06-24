@@ -1,13 +1,16 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, CalendarDays, Globe, Plus, Sparkles } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Globe, Plus, Sparkles, Trash2 } from 'lucide-react';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import {
+  deleteSavedPortfolio,
   listSavedPortfolios,
   loadPortfolioHtml,
   type SavedPortfolio,
 } from '../services/savedPortfolios';
 import PortfolioPreviewViewer, { PORTFOLIO_TEMPLATES } from './showcase/PortfolioPreviewViewer';
+import { useToast } from './Toast';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 const PortfolioWebsiteBuilder = React.lazy(() => import('./tools/PortfolioWebsiteBuilder'));
 
@@ -48,6 +51,7 @@ const TemplateCover: React.FC<{ theme: string; title: string }> = ({ theme, titl
 };
 
 const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profile, t, onUnsavedChange }) => {
+  const { addToast } = useToast();
   const uid = session?.user?.id ?? null;
   const [tab, setTab] = useState<ShowcaseTab | null>(null);
   const [portfolios, setPortfolios] = useState<SavedPortfolio[]>([]);
@@ -57,6 +61,9 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
   const [selected, setSelected] = useState<SavedPortfolio | null>(null);
   const [selectedHtml, setSelectedHtml] = useState('');
   const [selectedLoading, setSelectedLoading] = useState(false);
+  const [revealedDeleteId, setRevealedDeleteId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SavedPortfolio | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const initialTabRef = useRef<string | null>(null);
 
   const setUnsaved = useCallback((next: boolean) => {
@@ -115,6 +122,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
 
   const openPortfolio = async (portfolio: SavedPortfolio) => {
     setSelected(portfolio);
+    setRevealedDeleteId(null);
     setSelectedHtml('');
     setSelectedLoading(true);
     try {
@@ -125,6 +133,94 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
       setSelectedLoading(false);
     }
   };
+
+  const requestDelete = (portfolio: SavedPortfolio) => {
+    setRevealedDeleteId(null);
+    setDeleteTarget(portfolio);
+  };
+
+  const confirmDelete = async () => {
+    if (!uid || !deleteTarget || deletingId) return;
+    const target = deleteTarget;
+    setDeletingId(target.id);
+    try {
+      await deleteSavedPortfolio(uid, target);
+      setPortfolios((items) => items.filter((item) => item.id !== target.id));
+      if (selected?.id === target.id) {
+        setSelected(null);
+        setSelectedHtml('');
+      }
+      setDeleteTarget(null);
+      addToast(t('showcase_delete_success'), 'success');
+      void refreshPortfolios();
+    } catch {
+      addToast(t('showcase_delete_failed'), 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const deleteButton = (portfolio: SavedPortfolio, className = '') => (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        requestDelete(portfolio);
+      }}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 shadow-sm transition hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-900/40 ${className}`}
+      aria-label={t('showcase_delete_button')}
+    >
+      <Trash2 className="h-4 w-4" />
+      <span>{t('showcase_delete_button')}</span>
+    </button>
+  );
+
+  const deleteConfirmDialog = (
+    <ViewportAwareDialog
+      open={Boolean(deleteTarget)}
+      onClose={() => {
+        if (!deletingId) setDeleteTarget(null);
+      }}
+      closeOnBackdrop
+      labelledBy="showcase-delete-title"
+      describedBy="showcase-delete-desc"
+      maxWidth={448}
+      zIndex={100}
+    >
+      <div className="rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+        <div className="flex items-start gap-4">
+          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300">
+            <Trash2 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h3 id="showcase-delete-title" className="text-lg font-bold text-gray-950 dark:text-gray-100">{t('showcase_delete_confirm_title')}</h3>
+            <p id="showcase-delete-desc" className="mt-2 text-sm leading-6 text-gray-600 dark:text-slate-400">
+              {t('showcase_delete_confirm_desc').replace('{name}', deleteTarget?.name ?? '')}
+            </p>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setDeleteTarget(null)}
+            disabled={Boolean(deletingId)}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {t('showcase_delete_cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void confirmDelete()}
+            disabled={Boolean(deletingId)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-600/20 transition hover:bg-red-700 disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" />
+            {deletingId ? t('showcase_deleting') : t('showcase_delete_confirm_button')}
+          </button>
+        </div>
+      </div>
+    </ViewportAwareDialog>
+  );
 
   if (selected) {
     return (
@@ -149,6 +245,9 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
             hint={t('showcase_saved_hint').replace('{date}', formatDate(selected.created_at))}
             filename={selected.name}
             badges={[formatDate(selected.created_at)]}
+            showActionCards={false}
+            showThemePicker={false}
+            headerActionSlot={deleteButton(selected)}
             t={t}
           />
         ) : (
@@ -156,6 +255,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
             {t('showcase_detail_load_failed')}
           </div>
         )}
+        {deleteConfirmDialog}
       </div>
     );
   }
@@ -204,21 +304,30 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
         ) : portfolios.length > 0 ? (
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {portfolios.map((portfolio) => (
-              <button
+              <div
                 key={portfolio.id}
-                type="button"
-                onClick={() => void openPortfolio(portfolio)}
-                className="group overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setRevealedDeleteId(portfolio.id);
+                }}
+                className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
               >
-                <TemplateCover theme={portfolio.theme} title={portfolio.name} />
-                <div className="p-4">
-                  <h3 className="truncate text-base font-bold text-gray-950 dark:text-gray-100">{portfolio.name}</h3>
-                  <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-slate-400">
-                    <CalendarDays className="h-4 w-4" />
-                    {t('showcase_saved_on').replace('{date}', formatDate(portfolio.created_at))}
-                  </p>
-                </div>
-              </button>
+                {revealedDeleteId === portfolio.id && deleteButton(portfolio, 'absolute right-3 top-3 z-10')}
+                <button
+                  type="button"
+                  onClick={() => void openPortfolio(portfolio)}
+                  className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  <TemplateCover theme={portfolio.theme} title={portfolio.name} />
+                  <div className="p-4">
+                    <h3 className="truncate text-base font-bold text-gray-950 dark:text-gray-100">{portfolio.name}</h3>
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-slate-400">
+                      <CalendarDays className="h-4 w-4" />
+                      {t('showcase_saved_on').replace('{date}', formatDate(portfolio.created_at))}
+                    </p>
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
         ) : (
@@ -250,6 +359,8 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
           />
         </Suspense>
       )}
+
+      {deleteConfirmDialog}
     </div>
   );
 };
