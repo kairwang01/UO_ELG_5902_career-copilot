@@ -3332,5 +3332,13 @@
   "showcase_tab_build": "Build Your Portfolio",
   "showcase_empty_title": "还没有保存的 Portfolio",
   "showcase_empty_desc": "生成 Showcase，检查后保存，就会出现在这里。",
-  "showcase_saved_on": "保存于 {date}"
+  "showcase_saved_on": "保存于 {date}",
+  "showcase_delete_button": "删除",
+  "showcase_delete_confirm_title": "删除 Portfolio？",
+  "showcase_delete_confirm_desc": "这会从我的 Portfolio 中永久删除“{name}”。",
+  "showcase_delete_cancel": "取消",
+  "showcase_delete_confirm_button": "删除 Portfolio",
+  "showcase_deleting": "正在删除...",
+  "showcase_delete_success": "Portfolio 已删除。",
+  "showcase_delete_failed": "无法删除此 Portfolio，请重试。"
 }

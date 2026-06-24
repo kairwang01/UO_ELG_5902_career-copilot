@@ -3327,10 +3327,18 @@
   "showcase_loading": "Loading...",
   "showcase_saved_hint": "Saved on {date}. You can preview, download, or copy the HTML.",
   "showcase_title": "Showcase",
-  "showcase_subtitle": "Build new portfolio pages and revisit the ones you saved.",
+  "showcase_subtitle": "Generate a professional Showcase or blog from your resume, deploy it, and revisit saved versions.",
   "showcase_tab_mine": "My Portfolio",
   "showcase_tab_build": "Build Your Portfolio",
   "showcase_empty_title": "No saved portfolios yet",
   "showcase_empty_desc": "Generate a Showcase, review it, then save it here for later browsing.",
-  "showcase_saved_on": "Saved on {date}"
+  "showcase_saved_on": "Saved on {date}",
+  "showcase_delete_button": "Delete",
+  "showcase_delete_confirm_title": "Delete portfolio?",
+  "showcase_delete_confirm_desc": "This will permanently delete \"{name}\" from My Portfolio.",
+  "showcase_delete_cancel": "Cancel",
+  "showcase_delete_confirm_button": "Delete portfolio",
+  "showcase_deleting": "Deleting...",
+  "showcase_delete_success": "Portfolio deleted.",
+  "showcase_delete_failed": "Could not delete this portfolio. Please try again."
 }
