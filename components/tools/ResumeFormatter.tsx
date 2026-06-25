@@ -5,12 +5,13 @@ import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
+import { SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
 import ResumePreview from '../ResumePreview';
 import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle } from '../../lib/resumePreview';
 import { getMarketLocalLanguage, resolveOutputLanguageName, type OutputLanguageChoice } from '../../lib/resumeLanguage';
+import { ResumeFormatterDownloadGate } from './ResumeFormatterActions';
 
 const MARKET_HINT_KEY: Record<string, string> = {
   'Canada':         'resume_market_hint_canada',
@@ -439,19 +440,14 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
               </p>
             )}
           </div>
-          {validation.status === 'needs_regen' ? (
-            <button
-              type="button"
-              onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
-              disabled={loading}
-              className="inline-flex min-h-10 items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
-              data-qa="resume-formatter-download-blocked-regenerate"
-            >
-              {t('tool_resume_formatter_regen_cta')}
-            </button>
-          ) : (
-            <DownloadButtons textContent={formattedText} baseFilename={`${generatedMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
-          )}
+          <ResumeFormatterDownloadGate
+            validation={validation}
+            formattedText={formattedText}
+            generatedMarket={generatedMarket}
+            loading={loading}
+            onRegenerate={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
+            t={t}
+          />
         </div>
 
         <section
