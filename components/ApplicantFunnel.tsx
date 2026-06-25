@@ -36,6 +36,7 @@ import {
     type ApplicationStatusHistoryEvent,
     type JobApplicant,
 } from '../services/aiClient';
+import { normalizeApplicantForFunnel } from '../lib/applicantFunnelNormalize';
 import { saveToShortlist } from '../lib/shortlistData';
 import { listInterviewsForApplication, scheduleInterview, updateInterview, type ApplicationInterview, type InterviewFormat } from '../lib/interviewData';
 import {
@@ -1531,7 +1532,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
             const { applicants: result } = await listJobApplicants(job.id);
 
             if (!mountedRef.current) return;
-            setApplicants(result);
+            setApplicants((Array.isArray(result) ? result : []).map(normalizeApplicantForFunnel));
             setSelectedApplicantIds(new Set());
             // Don't auto-spotlight the top AI-scored applicant (result is score-sorted) —
             // let the selection effect pick filteredApplicants[0], i.e. the chronologically
@@ -2601,7 +2602,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onB
                             <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t('applicant_funnel_screener_title')}</h4>
                             <dl className="mt-2 space-y-2.5">
                                 {selectedApplicant.screener_answers.map((sa) => {
-                                    const q = job.screener_questions.find((x) => x.id === sa.question_id);
+                                    const q = (job.screener_questions ?? []).find((x) => x.id === sa.question_id);
                                     // 'expected' is a SCREENING SIGNAL, never an auto-reject — flag a mismatch only.
                                     const isSignal = !!q?.expected && q.type === 'yes_no' && sa.answer.trim().toLowerCase() !== q.expected;
                                     return (
