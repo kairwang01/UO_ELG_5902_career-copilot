@@ -2,9 +2,13 @@ import type { ApplicationStatusHistoryEvent, JobApplicant } from '../services/ai
 
 type ScreenerAnswer = JobApplicant['screener_answers'][number];
 
+function cleanString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export function stringArray(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    ? value.map(cleanString).filter((item) => item.length > 0)
     : [];
 }
 
@@ -38,18 +42,23 @@ function normalizeStatusHistory(value: unknown): ApplicationStatusHistoryEvent[]
 
 export function normalizeApplicantForFunnel(applicant: JobApplicant): JobApplicant {
   const raw = applicant as unknown as Record<string, unknown>;
+  const id = cleanString(raw.id) || cleanString(raw.application_id) || cleanString(raw.applicationId);
   return {
     ...applicant,
-    candidate_name: typeof raw.candidate_name === 'string' ? raw.candidate_name : '',
-    application_date: typeof raw.application_date === 'string' ? raw.application_date : null,
-    status: typeof raw.status === 'string' ? raw.status : 'Submitted',
+    id,
+    candidate_name: cleanString(raw.candidate_name),
+    application_date: cleanString(raw.application_date) || null,
+    status: cleanString(raw.status) || 'Submitted',
     compatibility_score: typeof raw.compatibility_score === 'number' && Number.isFinite(raw.compatibility_score)
       ? raw.compatibility_score
       : 0,
-    summary: typeof raw.summary === 'string' ? raw.summary : '',
+    summary: cleanString(raw.summary),
     strengths: stringArray(raw.strengths),
     potentialGaps: stringArray(raw.potentialGaps),
     suggestedQuestions: stringArray(raw.suggestedQuestions),
+    talent_profile: raw.talent_profile && typeof raw.talent_profile === 'object' && !Array.isArray(raw.talent_profile)
+      ? applicant.talent_profile
+      : null,
     status_history: normalizeStatusHistory(raw.status_history),
     screener_answers: normalizeScreenerAnswers(raw.screener_answers),
   };

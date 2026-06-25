@@ -17,6 +17,17 @@ describe('collectCandidateSkills', () => {
     expect(collectCandidateSkills(null)).toEqual([]);
     expect(collectCandidateSkills(profile({}))).toEqual([]);
   });
+  it('ignores malformed skill groups from legacy profile data', () => {
+    const dirty = {
+      skills: {
+        technical: ['React', { label: 'bad' }, ' SQL '],
+        tools: { primary: 'Jira' },
+        languages: 'English',
+      },
+    } as unknown as TalentProfile;
+
+    expect(collectCandidateSkills(dirty)).toEqual(['React', 'SQL']);
+  });
 });
 
 describe('matchSkills', () => {

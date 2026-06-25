@@ -25,7 +25,8 @@ describe('applicant funnel normalization', () => {
 
   it('drops malformed status-history and screener values while keeping valid data', () => {
     const dirty = {
-      id: 'app-dirty',
+      id: '  ',
+      applicationId: ' app-fallback ',
       candidate_name: 123,
       application_date: 456,
       status: null,
@@ -34,7 +35,7 @@ describe('applicant funnel normalization', () => {
       strengths: ['React', '', 42],
       potentialGaps: 'none',
       suggestedQuestions: [null, 'Ask about systems design'],
-      talent_profile: null,
+      talent_profile: ['bad'],
       status_history: [
         {
           id: 'ev1',
@@ -54,6 +55,7 @@ describe('applicant funnel normalization', () => {
 
     const applicant = normalizeApplicantForFunnel(dirty);
 
+    expect(applicant.id).toBe('app-fallback');
     expect(applicant.candidate_name).toBe('');
     expect(applicant.application_date).toBeNull();
     expect(applicant.status).toBe('Submitted');
@@ -62,6 +64,7 @@ describe('applicant funnel normalization', () => {
     expect(applicant.strengths).toEqual(['React']);
     expect(applicant.potentialGaps).toEqual([]);
     expect(applicant.suggestedQuestions).toEqual(['Ask about systems design']);
+    expect(applicant.talent_profile).toBeNull();
     expect(applicant.status_history).toEqual([
       {
         id: 'ev1',

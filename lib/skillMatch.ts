@@ -15,7 +15,8 @@ export function collectCandidateSkills(profile: TalentProfile | null | undefined
   if (!profile?.skills) return [];
   const out: string[] = [];
   for (const group of Object.values(profile.skills)) {
-    for (const raw of group ?? []) {
+    if (!Array.isArray(group)) continue;
+    for (const raw of group) {
       const v = typeof raw === 'string' ? raw.trim() : '';
       if (v && !out.some((x) => x.toLowerCase() === v.toLowerCase())) out.push(v);
     }

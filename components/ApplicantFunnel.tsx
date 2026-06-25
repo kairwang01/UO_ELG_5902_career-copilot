@@ -137,7 +137,7 @@ function talentProfileHasData(profile: TalentProfile | null | undefined): boolea
     return TALENT_PROFILE_SCHEMA.some((section) => {
         const sectionData = data[section.id];
         if (section.kind === 'skills') {
-            return Object.values(profile.skills ?? {}).some((values) => values.length > 0);
+            return collectCandidateSkills(profile).length > 0;
         }
         if (section.kind === 'list') {
             return Array.isArray(sectionData) && sectionData.some((item) => hasMeaningfulEntry(item as Record<string, string | string[]>));
@@ -153,7 +153,7 @@ function talentProfileSearchTokens(profile: TalentProfile | null | undefined): s
     for (const section of TALENT_PROFILE_SCHEMA) {
         const sectionData = data[section.id];
         if (section.kind === 'skills') {
-            Object.values(profile.skills ?? {}).forEach((values) => tokens.push(...values));
+            tokens.push(...collectCandidateSkills(profile));
         } else if (section.kind === 'list' && Array.isArray(sectionData)) {
             sectionData.forEach((entry) => talentEntries(entry).forEach(([, value]) => tokens.push(value)));
         } else {
@@ -164,8 +164,7 @@ function talentProfileSearchTokens(profile: TalentProfile | null | undefined): s
 }
 
 function collectTalentSkills(profile: TalentProfile | null | undefined): string[] {
-    if (!profile?.skills) return [];
-    return Object.values(profile.skills).flat().filter(Boolean).slice(0, 10);
+    return collectCandidateSkills(profile).slice(0, 10);
 }
 
 function getTalentCurrentRole(profile: TalentProfile | null | undefined): string | undefined {
