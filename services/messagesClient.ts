@@ -26,12 +26,15 @@ export async function sendApplicationMessage(
 /** Live subscription to an application's message thread (oldest → newest). */
 export function subscribeApplicationMessages(
   applicationId: string,
+  viewer: { role: 'employer' | 'candidate'; uid: string },
   onMessages: (messages: ApplicationMessage[]) => void,
   onError?: (error: unknown) => void,
 ): () => void {
+  const participantField = viewer.role === 'employer' ? 'employer_id' : 'candidate_id';
   const q = query(
     collection(firestoreDb, 'application_messages'),
     where('application_id', '==', applicationId),
+    where(participantField, '==', viewer.uid),
     orderBy('created_at', 'asc'),
   );
   return onSnapshot(

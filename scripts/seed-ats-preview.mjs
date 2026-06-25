@@ -144,6 +144,63 @@ for (const a of applicants) {
   });
 }
 
+// Detail-surface hardening fixture: these records intentionally include a few
+// malformed display fields. The UI should normalize them and keep the applicant
+// detail panel usable instead of tripping the section/root error boundary.
+await db.collection('application_interviews').doc('qa-iv-malformed-casey').set({
+  application_id: 'qa-app-1',
+  job_id: jobId,
+  employer_id: employer.uid,
+  candidate_id: candidate.uid,
+  stage: { label: 'Malformed stage object' },
+  scheduled_at: { toDate: 'not a timestamp method' },
+  timezone: 'America/Toronto',
+  format: 'carrier-pigeon',
+  location_or_link: ['https://meet.example.test/casey'],
+  interviewer: null,
+  notes: { body: 'This old payload shape should not render directly.' },
+  candidate_confirmed: 'yes',
+  interview_status: 'mystery',
+  created_at: now,
+  updated_at: now,
+});
+
+await db.collection('application_scorecards').doc('qa-scorecard-malformed-casey').set({
+  application_id: 'qa-app-1',
+  interview_id: 'qa-iv-malformed-casey',
+  job_id: jobId,
+  employer_id: employer.uid,
+  candidate_id: candidate.uid,
+  stage: {},
+  recommendation: 'maybe',
+  overall_score: 9,
+  ratings: {
+    role_fit: -1,
+    technical_skill: Number.NaN,
+    problem_solving: 4.6,
+    communication: '5',
+    evidence_depth: 2,
+  },
+  evidence: { text: 'Malformed evidence object' },
+  concerns: ['array value'],
+  next_steps: 'Follow up with panel.',
+  private_notes: { note: 'private malformed object' },
+  created_at: now,
+  updated_at: now,
+});
+
+await db.collection('application_messages').doc('qa-msg-malformed-casey').set({
+  application_id: 'qa-app-1',
+  job_id: jobId,
+  employer_id: employer.uid,
+  candidate_id: candidate.uid,
+  sender_uid: employer.uid,
+  sender_role: 'employer',
+  body: { text: 'Malformed message body object' },
+  template_key: 'unknown',
+  created_at: now,
+});
+
 await db.collection('application_status_events').doc('qa-status-app-2-first-interview').set({
   application_id: 'qa-app-2',
   job_id: jobId,

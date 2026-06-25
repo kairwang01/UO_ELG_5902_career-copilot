@@ -144,6 +144,60 @@ async function seedAtsFixture({ employerUid, caseyUid }) {
     }, { merge: true });
   }
 
+  await db.collection('application_interviews').doc('seed-iv-malformed-casey').set({
+    application_id: 'seed-app-casey',
+    job_id: JOB_ID,
+    employer_id: employerUid,
+    candidate_id: caseyUid,
+    stage: { label: 'Malformed stage object' },
+    scheduled_at: { toDate: 'not a timestamp method' },
+    timezone: 'America/Toronto',
+    format: 'carrier-pigeon',
+    location_or_link: ['https://meet.example.test/casey'],
+    interviewer: null,
+    notes: { body: 'This old payload shape should not render directly.' },
+    candidate_confirmed: 'yes',
+    interview_status: 'mystery',
+    created_at: ts,
+    updated_at: ts,
+  }, { merge: true });
+
+  await db.collection('application_scorecards').doc('seed-scorecard-malformed-casey').set({
+    application_id: 'seed-app-casey',
+    interview_id: 'seed-iv-malformed-casey',
+    job_id: JOB_ID,
+    employer_id: employerUid,
+    candidate_id: caseyUid,
+    stage: {},
+    recommendation: 'maybe',
+    overall_score: 9,
+    ratings: {
+      role_fit: -1,
+      technical_skill: Number.NaN,
+      problem_solving: 4.6,
+      communication: '5',
+      evidence_depth: 2,
+    },
+    evidence: { text: 'Malformed evidence object' },
+    concerns: ['array value'],
+    next_steps: 'Follow up with panel.',
+    private_notes: { note: 'private malformed object' },
+    created_at: ts,
+    updated_at: ts,
+  }, { merge: true });
+
+  await db.collection('application_messages').doc('seed-msg-malformed-casey').set({
+    application_id: 'seed-app-casey',
+    job_id: JOB_ID,
+    employer_id: employerUid,
+    candidate_id: caseyUid,
+    sender_uid: employerUid,
+    sender_role: 'employer',
+    body: { text: 'Malformed message body object' },
+    template_key: 'unknown',
+    created_at: ts,
+  }, { merge: true });
+
   return { jobId: JOB_ID, applicantCount: applicants.length, jordanUid: jordan.uid };
 }
 

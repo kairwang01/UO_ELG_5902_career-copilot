@@ -567,13 +567,14 @@ const InterviewRow: React.FC<InterviewRowProps> = ({ interview, t, onInterviewCh
 
 interface CardProps {
   app: ApplicationRow;
+  viewerUid: string;
   t: (k: string) => string;
   onFindSimilar: () => void;
   interviews: ApplicationInterview[];
   onInterviewChange: () => void;
 }
 
-const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interviews, onInterviewChange }) => {
+const ApplicationCard: React.FC<CardProps> = ({ app, viewerUid, t, onFindSimilar, interviews, onInterviewChange }) => {
   const statusGroup = getApplicationStatusGroup(app.status);
   const isRejected = isApplicationRejectedStatus(app.status);
   const canReview = isApplicationReviewEligible(app.status);
@@ -753,7 +754,7 @@ const ApplicationCard: React.FC<CardProps> = ({ app, t, onFindSimilar, interview
         </button>
         {messagesOpen && (
           <div className="mt-2">
-            <ApplicationMessageThread applicationId={app.id} viewerRole="candidate" t={t} />
+            <ApplicationMessageThread applicationId={app.id} viewerRole="candidate" viewerUid={viewerUid} t={t} />
           </div>
         )}
       </div>
@@ -1242,6 +1243,7 @@ const MyApplications: React.FC<MyApplicationsProps> = ({ session, t, onFindSimil
             <ApplicationCard
               key={app.id}
               app={app}
+              viewerUid={uid ?? ''}
               t={t}
               onFindSimilar={onFindSimilar}
               interviews={interviewsByApp.get(app.id) ?? []}

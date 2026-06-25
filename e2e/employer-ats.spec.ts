@@ -42,6 +42,17 @@ test('employer can open applicant funnel for a seeded job', async ({ page }) => 
   await expect(page.locator('button').filter({ hasText: 'Jordan Lee' }).first()).toBeVisible();
   await expect(page.getByText(/2 of 2 applicants shown/i).first()).toBeVisible();
 
+  const caseyCard = page
+    .locator('[data-qa="applicant-card"][data-qa-applicant-id="qa-app-1"], [data-qa="applicant-card"][data-qa-applicant-id="seed-app-casey"]')
+    .first();
+  await expect(caseyCard).toBeVisible({ timeout: 20_000 });
+  await caseyCard.click();
+  await expect(page.locator('[data-qa="applicant-interviews-section"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-qa="application-message-thread"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-qa="scorecard-summary"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Applicant details could not be shown/i)).toHaveCount(0);
+  await expect(page.getByText(/Something went wrong/i)).toHaveCount(0);
+
   await page.getByLabel(/select visible/i).check();
   await expect(page.getByText(/2 selected/i).first()).toBeVisible();
   await expect(page.getByLabel(/batch action/i).first()).toBeVisible();

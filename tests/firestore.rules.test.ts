@@ -17,7 +17,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, orderBy, query, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 const PROJECT_ID = 'demo-careercopilot';
 let testEnv: RulesTestEnvironment;
@@ -254,6 +254,23 @@ describe('application_interviews access', () => {
     await seedInterview();
     await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('emp1').firestore(), 'application_interviews', 'iv1')));
   });
+  it('the owning employer can list interviews when the query is scoped to their uid', async () => {
+    await seedInterview();
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertSucceeds(getDocs(query(
+      collection(db, 'application_interviews'),
+      where('application_id', '==', 'app1'),
+      where('employer_id', '==', 'emp1'),
+    )));
+  });
+  it('clients CANNOT list application interviews without participant scoping', async () => {
+    await seedInterview();
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertFails(getDocs(query(
+      collection(db, 'application_interviews'),
+      where('application_id', '==', 'app1'),
+    )));
+  });
   it('an unrelated user CANNOT read it', async () => {
     await seedInterview();
     await assertFails(getDoc(doc(testEnv.authenticatedContext('other').firestore(), 'application_interviews', 'iv1')));
@@ -342,7 +359,7 @@ describe('application_messages access', () => {
   async function seedMessage() {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'application_messages', 'msg1'),
-        { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1', sender_role: 'employer', body: 'Hello' });
+        { application_id: 'app1', employer_id: 'emp1', candidate_id: 'cand1', sender_role: 'employer', body: 'Hello', created_at: ts() });
     });
   }
   it('the candidate on the application can read the message', async () => {
@@ -352,6 +369,35 @@ describe('application_messages access', () => {
   it('the owning employer can read the message', async () => {
     await seedMessage();
     await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('emp1').firestore(), 'application_messages', 'msg1')));
+  });
+  it('the owning employer can list a thread when the query is scoped to their uid', async () => {
+    await seedMessage();
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertSucceeds(getDocs(query(
+      collection(db, 'application_messages'),
+      where('application_id', '==', 'app1'),
+      where('employer_id', '==', 'emp1'),
+      orderBy('created_at', 'asc'),
+    )));
+  });
+  it('the candidate can list a thread when the query is scoped to their uid', async () => {
+    await seedMessage();
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertSucceeds(getDocs(query(
+      collection(db, 'application_messages'),
+      where('application_id', '==', 'app1'),
+      where('candidate_id', '==', 'cand1'),
+      orderBy('created_at', 'asc'),
+    )));
+  });
+  it('clients CANNOT list application messages without participant scoping', async () => {
+    await seedMessage();
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertFails(getDocs(query(
+      collection(db, 'application_messages'),
+      where('application_id', '==', 'app1'),
+      orderBy('created_at', 'asc'),
+    )));
   });
   it('an unrelated user CANNOT read the thread', async () => {
     await seedMessage();

@@ -83,8 +83,12 @@ const byScheduled = (a: ApplicationInterview, b: ApplicationInterview): number =
   return a.scheduled_at.localeCompare(b.scheduled_at);
 };
 
-export async function listInterviewsForApplication(applicationId: string): Promise<ApplicationInterview[]> {
-  const snap = await getDocs(query(collection(firestoreDb, 'application_interviews'), where('application_id', '==', applicationId)));
+export async function listInterviewsForApplication(applicationId: string, employerId: string): Promise<ApplicationInterview[]> {
+  const snap = await getDocs(query(
+    collection(firestoreDb, 'application_interviews'),
+    where('application_id', '==', applicationId),
+    where('employer_id', '==', employerId),
+  ));
   return snap.docs.map((d) => normalizeApplicationInterview(d.id, d.data())).sort(byScheduled);
 }
 

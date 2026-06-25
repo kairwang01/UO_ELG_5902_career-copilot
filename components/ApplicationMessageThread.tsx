@@ -11,6 +11,8 @@ interface ApplicationMessageThreadProps {
   applicationId: string;
   /** The signed-in viewer's role on this application — controls bubble alignment + templates. */
   viewerRole: 'employer' | 'candidate';
+  /** The signed-in viewer uid, used to scope the Firestore read query to rules. */
+  viewerUid: string;
   t: (key: string) => string;
 }
 
@@ -27,7 +29,7 @@ const EMPLOYER_TEMPLATES: { key: Exclude<MessageTemplateKey, 'custom'>; labelKey
  * and the candidate (My Applications). Reads live via Firestore; sends through the
  * server-only sendApplicationMessage callable.
  */
-const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ applicationId, viewerRole, t }) => {
+const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ applicationId, viewerRole, viewerUid, t }) => {
   const [messages, setMessages] = useState<ApplicationMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [template, setTemplate] = useState<MessageTemplateKey>('custom');
@@ -55,10 +57,11 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
   }, [applicationId]);
 
   useEffect(() => {
-    if (!applicationId) return;
+    if (!applicationId || !viewerUid) return;
     const targetId = applicationId;
     const unsub = subscribeApplicationMessages(
       targetId,
+      { role: viewerRole, uid: viewerUid },
       (nextMessages) => {
         if (mountedRef.current && applicationId === targetId) setMessages(nextMessages);
       },
@@ -67,7 +70,7 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
       },
     );
     return () => unsub();
-  }, [applicationId, t]);
+  }, [applicationId, viewerRole, viewerUid, t]);
 
   useEffect(() => {
     // Only auto-scroll if the reader is already near the bottom — don't yank the
@@ -110,7 +113,7 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
   };
 
   return (
-    <div className="flex flex-col rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+    <div data-qa="application-message-thread" className="flex flex-col rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
       <div className="border-b border-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-800 dark:border-slate-700 dark:text-slate-100">
         {t('msg_thread_title')}
       </div>
