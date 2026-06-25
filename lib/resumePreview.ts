@@ -202,6 +202,40 @@ const EN_SECTION_KEYWORDS = [
 // runs of stray whitespace. Collapse those for the on-screen PREVIEW only (the
 // stored resume_text is untouched) so a Chinese/Japanese resume reads cleanly.
 const CJKISH = '\\u3000-\\u303f\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef';
+const CJK_SENTENCE_REGEX = new RegExp(`[${CJKISH}]`);
+const MAX_PREVIEW_PARAGRAPH_CHARS = 220;
+
+const splitLongPreviewLine = (line: string): string[] => {
+  if (line.length <= MAX_PREVIEW_PARAGRAPH_CHARS) return [line];
+
+  const cjkLine = CJK_SENTENCE_REGEX.test(line);
+  const parts = cjkLine
+    ? (line.match(/[^。！？；]+[。！？；]?/g) ?? [line])
+    : line.split(/(?<=[.!?])\s+/);
+
+  return parts.reduce<string[]>((acc, part) => {
+    const sentence = part.trim();
+    if (!sentence) return acc;
+
+    const last = acc[acc.length - 1] ?? '';
+    const joiner = cjkLine ? '' : ' ';
+    const candidate = last ? `${last}${joiner}${sentence}` : sentence;
+    if (!last || candidate.length > MAX_PREVIEW_PARAGRAPH_CHARS) {
+      acc.push(sentence);
+    } else {
+      acc[acc.length - 1] = candidate;
+    }
+    return acc;
+  }, []);
+};
+
+export const splitResumePreviewParagraphs = (content: string): string[] =>
+  content
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .flatMap(splitLongPreviewLine)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
 const cleanHeaderValue = (value: string): string =>
   value
@@ -345,7 +379,7 @@ export const cleanResumeDisplay = (text: string): string => {
   // can recover a resume structure without mutating the stored resume text.
   for (const label of CJK_SECTION_LABELS) {
     cleaned = cleaned.replace(
-      new RegExp(`\\s*(${escapeRegex(label)})(?:\\s*[:：])?\\s*`, 'g'),
+      new RegExp(`[\\s•·\\-–—]*(${escapeRegex(label)})(?:\\s*[:：])?\\s*`, 'g'),
       '\n$1\n',
     );
   }
@@ -392,7 +426,7 @@ export const parseResumeSections = (text: string): ResumeSection[] => {
       if (currentSection.content.join('').trim()) {
         sections.push({ ...currentSection, content: currentSection.content.join('\n').trim() });
       }
-      currentSection = { title: trimmedLine.replace(/[:]/g, '').trim(), content: [] };
+      currentSection = { title: trimmedLine.replace(/^[\s•·\-–—]+/, '').replace(/[:：]/g, '').trim(), content: [] };
     } else {
       if (!contentStarted && trimmedLine) {
         currentSection.title = 'Header';

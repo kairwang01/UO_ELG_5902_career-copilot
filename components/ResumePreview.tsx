@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanResumeDisplay, getResumeMarketStyle, parseResumeHeader, parseResumeSections } from '../lib/resumePreview';
+import { cleanResumeDisplay, getResumeMarketStyle, parseResumeHeader, parseResumeSections, splitResumePreviewParagraphs } from '../lib/resumePreview';
 import type { ResumeMarketStyle } from '../lib/resumePreview';
 
 interface ResumePreviewProps {
@@ -8,24 +8,6 @@ interface ResumePreviewProps {
   t: (key: string) => string;
   heightClassName?: string;
 }
-
-const splitParagraphs = (content: string): string[] =>
-    content
-        .split(/\n+/)
-        .map((line) => line.trim())
-        .flatMap((line) => {
-            if (line.length <= 220) return [line];
-            return line
-                .split(/(?<=[。.!?])\s+/)
-                .reduce<string[]>((acc, sentence) => {
-                    const last = acc[acc.length - 1] ?? '';
-                    if (!last || `${last} ${sentence}`.length > 220) acc.push(sentence);
-                    else acc[acc.length - 1] = `${last} ${sentence}`.trim();
-                    return acc;
-                }, []);
-        })
-        .map((line) => line.trim())
-        .filter(Boolean);
 
 const splitBullets = (line: string): string[] => {
     const trimmed = line.trim();
@@ -53,7 +35,7 @@ const renderResumeBody = (content: string, style: ResumeMarketStyle) => {
         bullets = [];
     };
 
-    splitParagraphs(content).forEach((paragraph, index) => {
+    splitResumePreviewParagraphs(content).forEach((paragraph, index) => {
         const bulletItems = splitBullets(paragraph);
         if (bulletItems.length) {
             bullets.push(...bulletItems);

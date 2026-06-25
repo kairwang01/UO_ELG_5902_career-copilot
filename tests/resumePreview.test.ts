@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle, parseResumeHeader, parseResumeSections } from '../lib/resumePreview';
+import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle, parseResumeHeader, parseResumeSections, splitResumePreviewParagraphs } from '../lib/resumePreview';
 
 describe('ResumePreview parsing', () => {
   it('recovers CJK section breaks from a one-line extracted resume', () => {
@@ -79,9 +79,18 @@ describe('ResumePreview parsing', () => {
 
     expect(cleaned).not.toContain('写真');
     expect(cleaned).not.toContain('ここに証明写真');
+    expect(cleaned.split('\n')).not.toContain('•');
     expect(cleaned).toContain('\n電話番号: 130-2254-7015');
     expect(sections.map((section) => section.title)).toContain('志望動機');
     expect(sections.map((section) => section.title)).toContain('学歴');
+  });
+
+  it('splits long Japanese preview paragraphs without requiring spaces after punctuation', () => {
+    const longParagraph = 'プロジェクトマネジメント候補者として、技術チームの進行管理と品質改善に貢献したいです。顧客フィードバックを整理し、要件変換とリスク識別を行いました。'.repeat(4);
+    const paragraphs = splitResumePreviewParagraphs(longParagraph);
+
+    expect(paragraphs.length).toBeGreaterThan(1);
+    expect(paragraphs.every((paragraph) => paragraph.length <= 260)).toBe(true);
   });
 
   it('keeps Japanese inline contact fields out of the rendered name', () => {
