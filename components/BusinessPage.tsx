@@ -3,9 +3,18 @@ import React, { useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
+import { hasBusinessPortalAccess } from '../lib/access/businessAccess';
+import { decideBusinessPortalAction } from '../lib/access/businessEntryDecisions';
 import BusinessSignInModal from './business/BusinessSignInModal';
 import BusinessSignUpModal from './business/BusinessSignUpModal';
 import BusinessForgotPasswordModal from './business/BusinessForgotPasswordModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 import type { PortalPage } from './employer/EmployerPortal';
 import { businessPlanDefs, type BusinessPlanId } from './business/businessPlans';
 import { ArrowRight, BookmarkCheck, BriefcaseBusiness, CheckCircle2, Globe2, PlusCircle, SlidersHorizontal, Users } from 'lucide-react';
@@ -25,7 +34,7 @@ interface BusinessPageProps {
   authHydrated?: boolean;
 }
 
-type ModalState = 'none' | 'signin' | 'signup' | 'forgot';
+type ModalState = 'none' | 'signin' | 'signup' | 'forgot' | 'business_access';
 
 const BusinessPage: React.FC<BusinessPageProps> = ({
   session,
@@ -42,28 +51,36 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   const navigate = useNavigate();
   const [modal, setModal] = React.useState<ModalState>('none');
   const [signupPlan, setSignupPlan] = React.useState<BusinessPlanId>('starter');
+  const canEnterBusinessPortal = hasBusinessPortalAccess(profile?.role, profile?.subscription_status);
 
-  const handlePostJob = () => {
-    if (session && onEnterPortal) {
-      onEnterPortal('post-job');
-    } else if (session) {
-      onBack();
-    } else {
-      setSignupPlan('starter');
-      setModal('signup');
-    }
-  };
+  const handlePortalAction = React.useCallback((page: PortalPage) => {
+    const decision = decideBusinessPortalAction({
+      hasSession: Boolean(session),
+      canEnterBusinessPortal,
+      hasPortalHandler: Boolean(onEnterPortal),
+    });
 
-  const handleDiscoverTalent = () => {
-    if (session && onEnterPortal) {
-      onEnterPortal('talent-pool');
-    } else if (session) {
-      onBack();
-    } else {
-      setSignupPlan('starter');
-      setModal('signup');
+    switch (decision) {
+      case 'enter_portal':
+        onEnterPortal?.(page);
+        break;
+      case 'go_back':
+        onBack();
+        break;
+      case 'open_signup':
+        setSignupPlan('starter');
+        setModal('signup');
+        break;
+      case 'open_business_access_prompt':
+        setSignupPlan('starter');
+        setModal('business_access');
+        break;
     }
-  };
+  }, [canEnterBusinessPortal, onBack, onEnterPortal, session]);
+
+  const handlePostJob = () => handlePortalAction('post-job');
+
+  const handleDiscoverTalent = () => handlePortalAction('talent-pool');
 
   const handleViewPricing = () => {
     pricingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -144,20 +161,14 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
       if (auth === 'signup') setModal('signup');
     }
 
-    // ?start=post-job is NOT gated on !session — a signed-in employer must still
-    // land in the portal. onEnterPortal's own session check handles the redirect.
     if (start === 'post-job') {
-      if (session && onEnterPortal) {
-        onEnterPortal('post-job');
-      } else {
-        setModal('signup');
-      }
+      handlePortalAction('post-job');
     }
 
     // Strip the query via react-router so location.search stays in sync; the
     // effect re-runs once more and no-ops (no params).
     navigate(location.pathname, { replace: true });
-  }, [location.search, location.pathname, navigate, session, onEnterPortal, authHydrated]);
+  }, [location.search, location.pathname, navigate, authHydrated, handlePortalAction, session]);
 
   return (
     <div className="min-h-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
@@ -381,6 +392,35 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         onSwitchToSignIn={() => setModal('signin')}
         t={t}
       />
+      <Dialog open={modal === 'business_access'} onOpenChange={(open) => setModal(open ? 'business_access' : 'none')}>
+        <DialogContent maxWidth="sm" className="p-6 sm:p-7">
+          <DialogHeader className="text-left">
+            <DialogTitle>{t('site_cta_enter_portal')}</DialogTitle>
+            <DialogDescription className="not-sr-only pt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+              {t('site_pricing_business_upsell_banner')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setModal('none')}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              {t('dashboard_cancel_update')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setModal('none');
+                window.requestAnimationFrame(handleViewPricing);
+              }}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#1D4ED8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e40af] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40"
+            >
+              {t('business_page_pricing_title')}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
