@@ -30,21 +30,49 @@ export interface ApplicationInterview {
   interview_status: string;
 }
 
-const mapInterview = (id: string, d: DocumentData): ApplicationInterview => ({
-  id,
-  application_id: String(d.application_id ?? ''),
-  job_id: String(d.job_id ?? ''),
-  employer_id: String(d.employer_id ?? ''),
-  candidate_id: String(d.candidate_id ?? ''),
-  stage: String(d.stage ?? 'Interview'),
-  scheduled_at: String(d.scheduled_at ?? ''),
-  timezone: String(d.timezone ?? ''),
-  format: String(d.format ?? ''),
-  location_or_link: String(d.location_or_link ?? ''),
-  interviewer: String(d.interviewer ?? ''),
-  notes: String(d.notes ?? ''),
+const INTERVIEW_FORMATS = new Set<InterviewFormat>(['phone', 'video', 'onsite']);
+const INTERVIEW_STATUSES = new Set<InterviewStatus>(['scheduled', 'rescheduled', 'cancelled', 'completed']);
+
+const cleanString = (value: unknown, fallback = '', max = 2000): string => (
+  typeof value === 'string' ? value.trim().slice(0, max) : fallback
+);
+
+const cleanTimestampString = (value: unknown): string => {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    const date = (value as { toDate: () => Date }).toDate();
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+  }
+  return '';
+};
+
+const cleanFormat = (value: unknown): InterviewFormat => (
+  typeof value === 'string' && INTERVIEW_FORMATS.has(value as InterviewFormat)
+    ? value as InterviewFormat
+    : 'video'
+);
+
+const cleanStatus = (value: unknown): InterviewStatus => (
+  typeof value === 'string' && INTERVIEW_STATUSES.has(value as InterviewStatus)
+    ? value as InterviewStatus
+    : 'scheduled'
+);
+
+export const normalizeApplicationInterview = (id: string, d: DocumentData): ApplicationInterview => ({
+  id: cleanString(id, '', 160),
+  application_id: cleanString(d.application_id, '', 160),
+  job_id: cleanString(d.job_id, '', 160),
+  employer_id: cleanString(d.employer_id, '', 160),
+  candidate_id: cleanString(d.candidate_id, '', 160),
+  stage: cleanString(d.stage, 'Interview', 120),
+  scheduled_at: cleanTimestampString(d.scheduled_at),
+  timezone: cleanString(d.timezone, '', 80),
+  format: cleanFormat(d.format),
+  location_or_link: cleanString(d.location_or_link, '', 1000),
+  interviewer: cleanString(d.interviewer, '', 240),
+  notes: cleanString(d.notes, '', 4000),
   candidate_confirmed: d.candidate_confirmed === true,
-  interview_status: String(d.interview_status ?? 'scheduled'),
+  interview_status: cleanStatus(d.interview_status),
 });
 
 // Cancelled last; otherwise soonest scheduled first.
@@ -57,12 +85,12 @@ const byScheduled = (a: ApplicationInterview, b: ApplicationInterview): number =
 
 export async function listInterviewsForApplication(applicationId: string): Promise<ApplicationInterview[]> {
   const snap = await getDocs(query(collection(firestoreDb, 'application_interviews'), where('application_id', '==', applicationId)));
-  return snap.docs.map((d) => mapInterview(d.id, d.data())).sort(byScheduled);
+  return snap.docs.map((d) => normalizeApplicationInterview(d.id, d.data())).sort(byScheduled);
 }
 
 export async function listInterviewsForCandidate(uid: string): Promise<ApplicationInterview[]> {
   const snap = await getDocs(query(collection(firestoreDb, 'application_interviews'), where('candidate_id', '==', uid)));
-  return snap.docs.map((d) => mapInterview(d.id, d.data())).sort(byScheduled);
+  return snap.docs.map((d) => normalizeApplicationInterview(d.id, d.data())).sort(byScheduled);
 }
 
 /** Live subscription to a candidate's interviews — keeps the timeline fresh across
@@ -74,7 +102,7 @@ export function subscribeInterviewsForCandidate(
 ): () => void {
   return onSnapshot(
     query(collection(firestoreDb, 'application_interviews'), where('candidate_id', '==', uid)),
-    (snap) => onChange(snap.docs.map((d) => mapInterview(d.id, d.data())).sort(byScheduled)),
+    (snap) => onChange(snap.docs.map((d) => normalizeApplicationInterview(d.id, d.data())).sort(byScheduled)),
     (error) => onError?.(error),
   );
 }

@@ -5,7 +5,7 @@
  * request status. All writes/unlocks are callables so the client cannot forge
  * acceptance or access candidate PII before consent.
  */
-import { collection, getDocs, onSnapshot, query, where, type DocumentData, type Timestamp } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where, type DocumentData } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from './firebaseClient';
 
@@ -39,28 +39,39 @@ export interface ConsentedCandidatePacket {
   talent_profile: unknown;
 }
 
+const OUTREACH_STATUSES = new Set<SourcingOutreachStatus>(['requested', 'accepted', 'declined', 'cancelled']);
+
+const cleanString = (value: unknown, max = 4000): string => (
+  typeof value === 'string' ? value.trim().slice(0, max) : ''
+);
+
 const toIsoString = (value: unknown): string => {
   if (!value) return '';
-  if (typeof value === 'object' && value !== null && 'toDate' in value) {
-    return (value as Timestamp).toDate().toISOString();
+  if (typeof value === 'object' && value !== null && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    const date = (value as { toDate: () => Date }).toDate();
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString();
   }
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') return value.trim();
   return '';
 };
 
-const mapOutreach = (id: string, data: DocumentData): SourcingOutreach => ({
-  id,
-  employer_id: String(data.employer_id ?? ''),
-  candidate_id: String(data.candidate_id ?? ''),
-  job_id: String(data.job_id ?? ''),
-  job_title: String(data.job_title ?? ''),
-  company_name: String(data.company_name ?? ''),
-  message: String(data.message ?? ''),
+const cleanStatus = (value: unknown): SourcingOutreachStatus => (
+  typeof value === 'string' && OUTREACH_STATUSES.has(value as SourcingOutreachStatus)
+    ? value as SourcingOutreachStatus
+    : 'requested'
+);
+
+export const normalizeSourcingOutreach = (id: string, data: DocumentData): SourcingOutreach => ({
+  id: cleanString(id, 160),
+  employer_id: cleanString(data.employer_id, 160),
+  candidate_id: cleanString(data.candidate_id, 160),
+  job_id: cleanString(data.job_id, 160),
+  job_title: cleanString(data.job_title, 240),
+  company_name: cleanString(data.company_name, 240),
+  message: cleanString(data.message, 4000),
   // Whitelist-validate so an unexpected stored value can't drive the UI into an
   // undefined status branch (defaults to 'requested').
-  status: (['requested', 'accepted', 'declined', 'cancelled'].includes(String(data.status))
-    ? (data.status as SourcingOutreachStatus)
-    : 'requested'),
+  status: cleanStatus(data.status),
   created_at: toIsoString(data.created_at),
   updated_at: toIsoString(data.updated_at),
   responded_at: toIsoString(data.responded_at),
@@ -70,12 +81,12 @@ const byNewest = (a: SourcingOutreach, b: SourcingOutreach) => b.created_at.loca
 
 export async function listSourcingOutreachForCandidate(uid: string): Promise<SourcingOutreach[]> {
   const snap = await getDocs(query(collection(firestoreDb, 'sourcing_outreach'), where('candidate_id', '==', uid)));
-  return snap.docs.map((d) => mapOutreach(d.id, d.data())).sort(byNewest);
+  return snap.docs.map((d) => normalizeSourcingOutreach(d.id, d.data())).sort(byNewest);
 }
 
 export async function listSourcingOutreachForEmployer(uid: string): Promise<SourcingOutreach[]> {
   const snap = await getDocs(query(collection(firestoreDb, 'sourcing_outreach'), where('employer_id', '==', uid)));
-  return snap.docs.map((d) => mapOutreach(d.id, d.data())).sort(byNewest);
+  return snap.docs.map((d) => normalizeSourcingOutreach(d.id, d.data())).sort(byNewest);
 }
 
 export function subscribeSourcingOutreachForCandidate(
@@ -85,7 +96,7 @@ export function subscribeSourcingOutreachForCandidate(
 ): () => void {
   return onSnapshot(
     query(collection(firestoreDb, 'sourcing_outreach'), where('candidate_id', '==', uid)),
-    (snap) => onChange(snap.docs.map((d) => mapOutreach(d.id, d.data())).sort(byNewest)),
+    (snap) => onChange(snap.docs.map((d) => normalizeSourcingOutreach(d.id, d.data())).sort(byNewest)),
     (error) => onError?.(error),
   );
 }
@@ -126,5 +137,27 @@ export async function getSourcingCandidatePacket(outreachId: string): Promise<Co
     firebaseFunctions,
     'getSourcingCandidatePacket',
   )({ outreachId });
-  return res.data.candidate;
+  return normalizeConsentedCandidatePacket(res.data.candidate);
+}
+
+export function normalizeConsentedCandidatePacket(data: unknown): ConsentedCandidatePacket {
+  const raw = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+
+  return {
+    id: cleanString(raw.id, 160),
+    full_name: cleanString(raw.full_name, 240),
+    email: cleanString(raw.email, 320),
+    phone: cleanString(raw.phone, 120),
+    location: cleanString(raw.location, 240),
+    headline: cleanString(raw.headline, 500),
+    website: cleanString(raw.website, 1000),
+    linkedin: cleanString(raw.linkedin, 1000),
+    github: cleanString(raw.github, 1000),
+    resume_text: cleanString(raw.resume_text, 60000),
+    talent_profile: raw.talent_profile && typeof raw.talent_profile === 'object' && !Array.isArray(raw.talent_profile)
+      ? raw.talent_profile
+      : null,
+  };
 }

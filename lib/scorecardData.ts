@@ -47,6 +47,15 @@ const toIso = (v: unknown): string | null => (
     : null
 );
 
+const cleanString = (v: unknown, max = 4000): string => (
+  typeof v === 'string' ? v.trim().slice(0, max) : ''
+);
+
+const cleanScore = (v: unknown, fallback = 3): number => {
+  const value = typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+  return Math.max(1, Math.min(5, Math.round(value)));
+};
+
 const cleanRecommendation = (v: unknown): ScorecardRecommendation => {
   const value = String(v ?? '');
   return value === 'strong_hire' || value === 'hire' || value === 'hold' || value === 'no_hire'
@@ -57,27 +66,26 @@ const cleanRecommendation = (v: unknown): ScorecardRecommendation => {
 const cleanRatings = (v: unknown): Record<ScorecardRatingKey, number> => {
   const raw = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
   return SCORECARD_RATING_KEYS.reduce((acc, key) => {
-    const n = typeof raw[key] === 'number' ? raw[key] : 0;
-    acc[key] = Math.max(0, Math.min(5, Math.round(n)));
+    acc[key] = cleanScore(raw[key]);
     return acc;
   }, {} as Record<ScorecardRatingKey, number>);
 };
 
-const mapScorecard = (id: string, d: DocumentData): ApplicationScorecard => ({
-  id,
-  application_id: String(d.application_id ?? ''),
-  interview_id: String(d.interview_id ?? ''),
-  job_id: String(d.job_id ?? ''),
-  employer_id: String(d.employer_id ?? ''),
-  candidate_id: String(d.candidate_id ?? ''),
-  stage: String(d.stage ?? 'Interview'),
+export const normalizeApplicationScorecard = (id: string, d: DocumentData): ApplicationScorecard => ({
+  id: cleanString(id, 160),
+  application_id: cleanString(d.application_id, 160),
+  interview_id: cleanString(d.interview_id, 160),
+  job_id: cleanString(d.job_id, 160),
+  employer_id: cleanString(d.employer_id, 160),
+  candidate_id: cleanString(d.candidate_id, 160),
+  stage: cleanString(d.stage, 120) || 'Interview',
   recommendation: cleanRecommendation(d.recommendation),
-  overall_score: typeof d.overall_score === 'number' ? d.overall_score : 0,
+  overall_score: cleanScore(d.overall_score),
   ratings: cleanRatings(d.ratings),
-  evidence: String(d.evidence ?? ''),
-  concerns: String(d.concerns ?? ''),
-  next_steps: String(d.next_steps ?? ''),
-  private_notes: String(d.private_notes ?? ''),
+  evidence: cleanString(d.evidence),
+  concerns: cleanString(d.concerns),
+  next_steps: cleanString(d.next_steps),
+  private_notes: cleanString(d.private_notes),
   created_at: toIso(d.created_at),
   updated_at: toIso(d.updated_at),
 });
@@ -88,7 +96,7 @@ export async function listScorecardsForApplication(applicationId: string, employ
     where('employer_id', '==', employerId),
   ));
   return snap.docs
-    .map((d) => mapScorecard(d.id, d.data()))
+    .map((d) => normalizeApplicationScorecard(d.id, d.data()))
     .filter((scorecard) => scorecard.application_id === applicationId)
     .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
 }
