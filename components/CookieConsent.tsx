@@ -7,6 +7,24 @@ interface CookieConsentProps {
 
 const CONSENT_COOKIE = 'cookie_consent';
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+const MOBILE_BOTTOM_OFFSET_PX = 12; // bottom-3
+const DESKTOP_BOTTOM_OFFSET_PX = 24; // sm:bottom-6
+const RESERVED_GAP_PX = 12;
+
+export function getCookieConsentBottomSpaceCss({
+    height,
+    bottomPositioned,
+    bottomOffsetPx,
+    gapPx = RESERVED_GAP_PX,
+}: {
+    height: number;
+    bottomPositioned: boolean;
+    bottomOffsetPx: number;
+    gapPx?: number;
+}): string {
+    if (!bottomPositioned || height <= 0) return '0px';
+    return `calc(${Math.ceil(height) + bottomOffsetPx + gapPx}px + env(safe-area-inset-bottom))`;
+}
 
 const writeConsent = (value: 'accepted' | 'declined') => {
     try {
@@ -38,28 +56,49 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
     useEffect(() => {
         if (!visible) return undefined;
 
-        const setReservedSpace = () => {
-            const isSmUp = typeof window !== 'undefined'
-                ? window.matchMedia('(min-width: 640px)').matches
-                : false;
+        const media = window.matchMedia('(min-width: 640px)');
+        let animationFrame = 0;
+
+        const updateReservedSpace = () => {
+            const isSmUp = media.matches;
             // In the workspace/portal shell the banner moves to the top-right from
             // sm upward, so bottom sticky bars only need reserved space on mobile.
             const bottomPositioned = !avoidSidebar || !isSmUp;
+            const bottomOffsetPx = isSmUp && !avoidSidebar ? DESKTOP_BOTTOM_OFFSET_PX : MOBILE_BOTTOM_OFFSET_PX;
             const height = bottomPositioned ? (bannerRef.current?.offsetHeight ?? 0) : 0;
-            const next = height > 0 ? `${height + 16}px` : '0px';
+            const next = getCookieConsentBottomSpaceCss({ height, bottomPositioned, bottomOffsetPx });
             document.documentElement.style.setProperty('--cookie-consent-bottom-space', next);
         };
 
-        setReservedSpace();
+        const scheduleReservedSpace = () => {
+            if (animationFrame) window.cancelAnimationFrame(animationFrame);
+            animationFrame = window.requestAnimationFrame(() => {
+                animationFrame = 0;
+                updateReservedSpace();
+            });
+        };
+
+        scheduleReservedSpace();
         const resizeObserver = typeof ResizeObserver !== 'undefined' && bannerRef.current
-            ? new ResizeObserver(setReservedSpace)
+            ? new ResizeObserver(scheduleReservedSpace)
             : null;
         resizeObserver?.observe(bannerRef.current as Element);
-        window.addEventListener('resize', setReservedSpace);
+        window.addEventListener('resize', scheduleReservedSpace, { passive: true });
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', scheduleReservedSpace);
+        } else if (typeof media.addListener === 'function') {
+            media.addListener(scheduleReservedSpace);
+        }
 
         return () => {
+            if (animationFrame) window.cancelAnimationFrame(animationFrame);
             resizeObserver?.disconnect();
-            window.removeEventListener('resize', setReservedSpace);
+            window.removeEventListener('resize', scheduleReservedSpace);
+            if (typeof media.removeEventListener === 'function') {
+                media.removeEventListener('change', scheduleReservedSpace);
+            } else if (typeof media.removeListener === 'function') {
+                media.removeListener(scheduleReservedSpace);
+            }
             document.documentElement.style.removeProperty('--cookie-consent-bottom-space');
         };
     }, [avoidSidebar, visible]);
