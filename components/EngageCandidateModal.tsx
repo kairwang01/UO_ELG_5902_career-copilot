@@ -3,6 +3,7 @@ import type { UserProfile } from '../types';
 import ResumePreview from './ResumePreview';
 import OutreachModal from './OutreachModal';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import { getSepoliaAddressUrl, normalizeWalletAddressForDisplay } from '../lib/web3Links';
 
 interface MatchedCandidate extends UserProfile {
     compatibilityScore: number;
@@ -19,6 +20,8 @@ interface EngageCandidateModalProps {
 
 const EngageCandidateModal: React.FC<EngageCandidateModalProps> = ({ candidate, jobDescription, employerProfile, onClose, t }) => {
     const [isOutreachModalOpen, setIsOutreachModalOpen] = useState(false);
+    const walletAddress = normalizeWalletAddressForDisplay(candidate.wallet_address);
+    const walletUrl = getSepoliaAddressUrl(walletAddress);
 
     return (
         <ViewportAwareDialog
@@ -45,15 +48,15 @@ const EngageCandidateModal: React.FC<EngageCandidateModalProps> = ({ candidate, 
                         <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">{t('engage_match_score')}</p>
                         <p className="text-gray-700 dark:text-gray-300 mt-3">{candidate.summary}</p>
                     </div>
-                     {candidate.wallet_address && (
+                     {walletAddress && walletUrl && (
                         <div>
                             <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">{t('engage_web3_title')}</h4>
                             <div className="p-3 bg-gray-50 dark:bg-slate-700 rounded-lg border dark:border-slate-600 flex items-center gap-3">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
                                 <div>
                                     <p className="text-xs text-gray-500">{t('engage_wallet_address')}</p>
-                                    <a href={`https://etherscan.io/address/${candidate.wallet_address}`} target="_blank" rel="noopener noreferrer" className="font-mono text-sm text-blue-600 hover:underline break-all">
-                                        {candidate.wallet_address}
+                                    <a href={walletUrl} target="_blank" rel="noopener noreferrer" className="font-mono text-sm text-blue-600 hover:underline break-all">
+                                        {walletAddress}
                                     </a>
                                 </div>
                             </div>

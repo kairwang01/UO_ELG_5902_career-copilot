@@ -23,6 +23,11 @@ import { isWeb3Enabled, onWeb3FlagChange, refreshWeb3Enabled } from '../config/f
 import { loadBirthdayLocal, saveBirthdayLocal } from '../lib/onboarding';
 import type { UserProfile } from '../types';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import {
+  SEPOLIA_CHAIN_ID,
+  SEPOLIA_EXPLORER_ORIGIN,
+  getSepoliaAddressUrl,
+} from '../lib/web3Links';
 
 // A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
 const TALENT_NFT_CONTRACT_ADDRESS =
@@ -45,7 +50,7 @@ const TALENT_NFT_ABI = [
   'function getUnlockFee() external view returns (uint256)',
 ];
 
-const TARGET_CHAIN_ID = 11155111; // Sepolia Testnet Chain ID
+const TARGET_CHAIN_ID = SEPOLIA_CHAIN_ID; // Sepolia Testnet Chain ID
 const TARGET_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia Chain ID in Hex
 
 // The Talent NFT contract is not deployed yet (the address above is a
@@ -688,7 +693,7 @@ const Account: React.FC<AccountProps> = ({
                   symbol: 'ETH',
                   decimals: 18,
                 },
-                blockExplorerUrls: ['https://sepolia.etherscan.io'],
+                blockExplorerUrls: [SEPOLIA_EXPLORER_ORIGIN],
               },
             ],
           });
@@ -1322,7 +1327,7 @@ const Account: React.FC<AccountProps> = ({
                     </p>
                     {walletAddress && (
                       <a
-                        href={`https://sepolia.etherscan.io/address/${walletAddress}`}
+                        href={getSepoliaAddressUrl(walletAddress) ?? '#'}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-2 block break-all font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
