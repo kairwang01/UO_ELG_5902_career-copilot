@@ -19,7 +19,6 @@ interface PortalBillingProps {
   activeJobs: number;
   onSelectPlan: (planKey: string) => void;
   planSaving?: boolean;
-  navigateToBusinessPricing: () => void;
   t: (key: string) => string;
 }
 
@@ -109,7 +108,6 @@ export function PortalBilling({
   activeJobs,
   onSelectPlan,
   planSaving = false,
-  navigateToBusinessPricing,
   t,
 }: PortalBillingProps) {
   const dm = darkMode;

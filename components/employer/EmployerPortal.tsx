@@ -448,7 +448,6 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
               activeJobs={kpiData.activeJobs}
               onSelectPlan={handleSelectPlan}
               planSaving={planSaving}
-              navigateToBusinessPricing={navigateToBusinessPricing}
               t={t}
             />
           )}
