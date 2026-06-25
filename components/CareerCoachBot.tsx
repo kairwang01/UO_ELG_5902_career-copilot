@@ -208,6 +208,7 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
                 role="dialog"
                 aria-modal="false"
                 aria-label={t('coach_title')}
+                data-qa="career-coach-panel"
             >
                 <div className="relative flex shrink-0 items-center justify-between px-5 pb-4 pt-5">
                     <div className="flex min-w-0 items-center gap-3">

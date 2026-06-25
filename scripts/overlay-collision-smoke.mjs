@@ -116,6 +116,7 @@ async function collectMetrics(page) {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       cookie: rect('[data-qa="cookie-consent-banner"]'),
       coach: rect('[data-qa="career-coach-launcher"]'),
+      coachPanel: rect('[data-qa="career-coach-panel"]'),
       saveBar: rect('[data-qa="talent-profile-save-bar"]'),
       saveButton: toRect(saveButton),
       overflowX: Math.max(0, root.scrollWidth - root.clientWidth),
@@ -147,6 +148,12 @@ function assertOverlayState(metrics, label) {
   assertNoOverlap(metrics.cookie, metrics.saveButton, `${label} cookie/save button`);
   assertNoOverlap(metrics.coach, metrics.saveBar, `${label} coach/save bar`);
   assertNoOverlap(metrics.coach, metrics.saveButton, `${label} coach/save button`);
+}
+
+function assertCoachPanelState(metrics, label) {
+  assert(metrics.overflowX === 0, `${label}: horizontal overflow ${metrics.overflowX}px`);
+  assert(!metrics.cookie, `${label}: cookie banner should be hidden while coach panel is open`);
+  assertInsideViewport(metrics.coachPanel, metrics.viewport, `${label} coach panel`);
 }
 
 async function screenshot(page, name) {
@@ -190,6 +197,15 @@ async function assertCandidateOverlays(browser) {
       const metrics = await collectMetrics(page);
       assertOverlayState(metrics, `candidate overlays ${size.width}x${size.height}`);
       console.log(`  ✓ candidate overlays ${size.width}x${size.height}`);
+
+      await page.locator('[data-qa="career-coach-launcher"]').click();
+      await page.locator('[data-qa="career-coach-panel"]').waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(200);
+      const openMetrics = await collectMetrics(page);
+      assertCoachPanelState(openMetrics, `candidate coach open ${size.width}x${size.height}`);
+      console.log(`  ✓ candidate coach open ${size.width}x${size.height}`);
+      await page.locator('[data-qa="career-coach-panel"] button').first().click();
+      await page.locator('[data-qa="career-coach-panel"]').waitFor({ state: 'detached', timeout: 20_000 });
     }
     if (consoleErrors.length) {
       throw new Error(`Console errors during overlay smoke:\n${consoleErrors.join('\n')}`);
