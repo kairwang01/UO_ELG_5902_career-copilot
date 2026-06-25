@@ -1,5 +1,7 @@
 export type ResumeSection = { title: string; content: string };
 
+export type ParsedResumeHeader = { name: string; contacts: string[]; summary: string };
+
 export type ResumeMarketRegion = 'north-america' | 'europe' | 'apac' | 'japan' | 'vietnam';
 
 export type ResumeMarketStyle = {
@@ -151,6 +153,29 @@ const INLINE_FIELD_LABELS = [
   '姓名', '电话', '手机', '邮箱', '个人网站', '网站',
 ];
 
+const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const CONTACT_REGEX = /(?:电话|手机|Phone|Mobile|Tel|電話番号|電話)\s*[:：]?\s*[+\d][+\d\s().-]{6,}|(?:Email|邮箱|E-mail|メールアドレス|メール)\s*[:：]?\s*[\w.+-]+@[\w.-]+\.\w+|(?:个人网站|网站|Website|Portfolio|LinkedIn|GitHub|ウェブサイト|Webサイト)\s*[:：]?\s*(?:https?:\/\/)?[^\s•|，,]+/gi;
+const CONTACT_LABEL_REGEX = /^(?:电话|手机|Phone|Mobile|Tel|電話番号|電話|Email|邮箱|E-mail|メールアドレス|メール|个人网站|网站|Website|Portfolio|LinkedIn|GitHub|ウェブサイト|Webサイト)\s*[:：]?\s*/i;
+const NAME_LABEL_REGEX = /^(?:氏名|名前|Name|Full Name|姓名)\s*[:：]\s*/i;
+const LOCATION_LABEL_REGEX = /^(?:所在地|住所|Location|Address)\s*[:：]?\s*/i;
+const PHOTO_PLACEHOLDER_REGEX = /^(?:写真|Photo|顔写真)\s*[:：]?\s*(?:\[.*?\]|［.*?］|（.*?）|\(.*?\)|ここに.*?(?:貼付|貼る)|証明写真.*?)/i;
+
+const CONTACT_FIELD_LABELS = [
+  '电话', '手机', 'Phone', 'Mobile', 'Tel', '電話番号', '電話',
+  'Email', '邮箱', 'E-mail', 'メールアドレス', 'メール',
+  '个人网站', '网站', 'Website', 'Portfolio', 'LinkedIn', 'GitHub', 'ウェブサイト', 'Webサイト',
+];
+const LOCATION_FIELD_LABELS = ['所在地', '住所', 'Location', 'Address'];
+const PHOTO_FIELD_LABELS = ['写真', 'Photo', '顔写真'];
+const HEADER_STOP_FIELD_LABELS = [...CONTACT_FIELD_LABELS, ...LOCATION_FIELD_LABELS, ...PHOTO_FIELD_LABELS]
+  .sort((a, b) => b.length - a.length);
+const HEADER_STOP_FIELD_REGEX = new RegExp(`(?:${HEADER_STOP_FIELD_LABELS.map(escapeRegex).join('|')})\\s*[:：]`, 'i');
+const LOCATION_VALUE_REGEX = new RegExp(
+  `(?:${LOCATION_FIELD_LABELS.map(escapeRegex).join('|')})\\s*[:：]?\\s*(.*?)(?=(?:${HEADER_STOP_FIELD_LABELS.map(escapeRegex).join('|')})\\s*[:：]|$)`,
+  'gi',
+);
+
 const EN_SECTION_KEYWORDS = [
   'summary', 'objective', 'profile',
   'personal statement', 'professional summary', 'career profile',
@@ -165,12 +190,110 @@ const EN_SECTION_KEYWORDS = [
   'languages', 'interests', 'additional information',
 ];
 
-const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 // PDF text extraction often inserts a space between every CJK glyph and leaves
 // runs of stray whitespace. Collapse those for the on-screen PREVIEW only (the
 // stored resume_text is untouched) so a Chinese/Japanese resume reads cleanly.
 const CJKISH = '\\u3000-\\u303f\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef';
+
+const cleanHeaderValue = (value: string): string =>
+  value
+    .replace(/\s+/g, ' ')
+    .replace(/^[•|｜，,\s]+|[•|｜，,\s]+$/g, '')
+    .trim();
+
+const cutAtNextHeaderField = (value: string): string => {
+  const match = HEADER_STOP_FIELD_REGEX.exec(value);
+  return cleanHeaderValue(match && match.index > 0 ? value.slice(0, match.index) : value);
+};
+
+const hasContactField = (value: string): boolean => {
+  CONTACT_REGEX.lastIndex = 0;
+  const result = CONTACT_REGEX.test(value);
+  CONTACT_REGEX.lastIndex = 0;
+  return result;
+};
+
+export const parseResumeHeader = (content: string): ParsedResumeHeader => {
+  const lines = content.split('\n').map((line) => line.trim()).filter(Boolean);
+  const compact = content.replace(/\s+/g, ' ').trim();
+  if (!compact) return { name: '', contacts: [], summary: '' };
+
+  const contactSet = new Set<string>();
+  const consumedLines = new Set<number>();
+
+  lines.forEach((line, index) => {
+    if (PHOTO_PLACEHOLDER_REGEX.test(line)) {
+      consumedLines.add(index);
+      return;
+    }
+
+    CONTACT_REGEX.lastIndex = 0;
+    const matches = Array.from(line.matchAll(CONTACT_REGEX));
+    if (matches.length) {
+      matches
+        .map((match) => cleanHeaderValue(match[0].replace(CONTACT_LABEL_REGEX, '')))
+        .filter(Boolean)
+        .forEach((match) => contactSet.add(match));
+      consumedLines.add(index);
+    }
+
+    LOCATION_VALUE_REGEX.lastIndex = 0;
+    const locationMatches = Array.from(line.matchAll(LOCATION_VALUE_REGEX));
+    if (locationMatches.length) {
+      locationMatches
+        .map((match) => cleanHeaderValue(match[1] ?? ''))
+        .filter(Boolean)
+        .forEach((location) => contactSet.add(location));
+      consumedLines.add(index);
+    }
+  });
+
+  let name = '';
+  const labelledNameIndex = lines.findIndex((line) => NAME_LABEL_REGEX.test(line));
+  if (labelledNameIndex >= 0) {
+    name = cutAtNextHeaderField(lines[labelledNameIndex].replace(NAME_LABEL_REGEX, ''));
+    consumedLines.add(labelledNameIndex);
+  }
+
+  CONTACT_REGEX.lastIndex = 0;
+  const contactMatches = Array.from(compact.matchAll(CONTACT_REGEX));
+  const firstContactIndex = contactMatches[0]?.index ?? -1;
+  const firstLine = lines.find((line, index) => !consumedLines.has(index)) ?? '';
+
+  if (!name && firstContactIndex > 0) {
+    name = cutAtNextHeaderField(compact.slice(0, firstContactIndex).replace(NAME_LABEL_REGEX, ''));
+  } else if (!name && firstLine.length <= 42) {
+    CONTACT_REGEX.lastIndex = 0;
+    if (!CONTACT_REGEX.test(firstLine) && !LOCATION_LABEL_REGEX.test(firstLine) && !PHOTO_PLACEHOLDER_REGEX.test(firstLine)) {
+      name = cutAtNextHeaderField(firstLine.replace(NAME_LABEL_REGEX, ''));
+      const firstLineIndex = lines.indexOf(firstLine);
+      if (firstLineIndex >= 0) consumedLines.add(firstLineIndex);
+    }
+  }
+  CONTACT_REGEX.lastIndex = 0;
+
+  contactMatches
+    .map((match) => cleanHeaderValue(match[0].replace(CONTACT_LABEL_REGEX, '')))
+    .filter(Boolean)
+    .forEach((contact) => contactSet.add(contact));
+
+  LOCATION_VALUE_REGEX.lastIndex = 0;
+  Array.from(compact.matchAll(LOCATION_VALUE_REGEX))
+    .map((match) => cleanHeaderValue(match[1] ?? ''))
+    .filter(Boolean)
+    .forEach((location) => contactSet.add(location));
+  LOCATION_VALUE_REGEX.lastIndex = 0;
+
+  const contacts = Array.from(contactSet);
+  const summary = lines
+    .filter((line, index) => !consumedLines.has(index) && !PHOTO_PLACEHOLDER_REGEX.test(line) && !hasContactField(line) && !LOCATION_LABEL_REGEX.test(line))
+    .join(' ')
+    .replace(/^[•|，,\s]+|[•|，,\s]+$/g, '')
+    .replace(/\s*•\s*/g, ' • ')
+    .trim();
+
+  return { name, contacts, summary };
+};
 
 export const cleanResumeDisplay = (text: string): string => {
   let cleaned = text

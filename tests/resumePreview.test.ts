@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle, parseResumeSections } from '../lib/resumePreview';
+import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle, parseResumeHeader, parseResumeSections } from '../lib/resumePreview';
 
 describe('ResumePreview parsing', () => {
   it('recovers CJK section breaks from a one-line extracted resume', () => {
@@ -73,6 +73,29 @@ describe('ResumePreview parsing', () => {
     expect(cleaned).not.toContain('写真');
     expect(cleaned).not.toContain('ここに証明写真');
     expect(cleaned).toContain('\n電話番号: 130-2254-7015');
+    expect(sections.map((section) => section.title)).toContain('志望動機');
+    expect(sections.map((section) => section.title)).toContain('学歴');
+  });
+
+  it('keeps Japanese inline contact fields out of the rendered name', () => {
+    const header = parseResumeHeader('氏名: 王鉑凯（おうはくがい） 電話番号: 130-2254-7015 メールアドレス: jacksonkai0408@gmail.com 所在地: カナダ、オタワ ウェブサイト: https://kairwang.cloud 写真: [ここに証明写真を貼付]');
+
+    expect(header.name).toBe('王鉑凯（おうはくがい）');
+    expect(header.contacts).toContain('130-2254-7015');
+    expect(header.contacts).toContain('jacksonkai0408@gmail.com');
+    expect(header.contacts).toContain('カナダ、オタワ');
+    expect(header.contacts).toContain('https://kairwang.cloud');
+    expect(header.summary).toBe('');
+  });
+
+  it('recovers Japanese inline header fields with ASCII colons before parsing sections', () => {
+    const raw = '氏名: Kai Wang 電話番号: 130-2254-7015 メールアドレス: jackson@example.com 所在地: カナダ、オタワ ウェブサイト: https://kairwang.cloud 志望動機 プロジェクトマネジメント候補者として貢献したいです。 学歴 2025年09月〜2027年06月 オタワ大学';
+    const cleaned = cleanResumeDisplay(raw);
+    const sections = parseResumeSections(cleaned);
+
+    expect(cleaned).toContain('\n電話番号: 130-2254-7015');
+    expect(cleaned).toContain('\nメールアドレス: jackson@example.com');
+    expect(sections.find((section) => section.title === 'Header')?.content).toContain('氏名: Kai Wang');
     expect(sections.map((section) => section.title)).toContain('志望動機');
     expect(sections.map((section) => section.title)).toContain('学歴');
   });
