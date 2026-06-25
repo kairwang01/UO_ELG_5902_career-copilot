@@ -4,9 +4,17 @@ import { generateNetworkingStrategy } from '../../services/aiClient';
 import type { NetworkingStrategyResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { CopyButton, DownloadButtons, SavedResultBar } from './ToolUtils';
+import { SavedResultBar } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
+import {
+  assessNetworkingStrategy,
+  buildNetworkingDownloadText,
+  canExportNetworkingStrategy,
+  NetworkingCopyGate,
+  NetworkingExportGate,
+  NetworkingQualityNotice,
+} from './NetworkingActions';
 
 interface NetworkingAssistantProps {
   resumeText: string;
@@ -53,7 +61,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
 
   useEffect(() => {
-    if (saved && !result) {
+    if (saved && !result && canExportNetworkingStrategy(assessNetworkingStrategy(saved.result))) {
       setResult(saved.result);
       setFromSaved(true);
       if (saved.result.targetCompany) setTargetCompany(saved.result.targetCompany);
@@ -99,9 +107,12 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
         targetRole: role,
         targetLocation: location,
       };
+      const validation = assessNetworkingStrategy(nextResult);
       setResult(nextResult);
       setFromSaved(false);
-      persist(nextResult);
+      if (canExportNetworkingStrategy(validation)) {
+        persist(nextResult);
+      }
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -115,18 +126,20 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
   };
 
   const formatForDownload = (res: SavedNetworkingStrategyResult): string => {
-    const company = res.targetCompany || targetCompany || t('tool_networking_assistant_company_label');
-    const role = res.targetRole || targetRole || t('tool_networking_assistant_role_label');
-    const location = res.targetLocation || targetLocation || t('tool_networking_assistant_location_label');
-    let content = `# Networking Strategy: ${role} at ${company} (${location})\n\n`;
-    content += `## Strategy Summary\n${res.strategySummary}\n\n`;
-    content += `## Contact Suggestions\n`;
-    (res.contactSuggestions ?? []).forEach((suggestion, index) => {
-      content += `### Contact ${index + 1}: ${suggestion.contactType}\n`;
-      content += `**Why:** ${suggestion.reason}\n\n`;
-      content += `**Outreach Message:**\n${suggestion.outreachMessage}\n\n`;
-    });
-    return content;
+    return buildNetworkingDownloadText(
+      res,
+      {
+        strategy: 'Strategy Summary',
+        contacts: 'Contact Suggestions',
+        why: t('tool_networking_assistant_why_contact_label'),
+        outreach: t('tool_networking_assistant_draft_label'),
+      },
+      {
+        company: targetCompany || t('tool_networking_assistant_company_label'),
+        role: targetRole || t('tool_networking_assistant_role_label'),
+        location: targetLocation || t('tool_networking_assistant_location_label'),
+      },
+    );
   };
 
   const renderInput = () => (
@@ -279,15 +292,19 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
     const company = result.targetCompany || targetCompany || t('tool_networking_assistant_company_label');
     const role = result.targetRole || targetRole || t('tool_networking_assistant_role_label');
     const location = result.targetLocation || targetLocation || t('tool_networking_assistant_location_label');
-    const contacts = result.contactSuggestions ?? [];
+    const contacts = Array.isArray(result.contactSuggestions) ? result.contactSuggestions : [];
     const title = t('tool_networking_assistant_results_title')
       .replace('{company}', company)
       .replace('{location}', location);
     const downloadTitle = company.replace(/\s/g, '_');
+    const validation = assessNetworkingStrategy(result);
 
     return (
       <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
-        <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={resetResult} />
+        {canExportNetworkingStrategy(validation) && (
+          <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={resetResult} />
+        )}
+        <NetworkingQualityNotice validation={validation} />
 
         <CardShell className="overflow-hidden">
           <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -308,7 +325,13 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
                 <MetricTile label={t('tool_networking_assistant_contact_label')} value={contacts.length} icon={MessageSquareText} />
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <DownloadButtons textContent={formatForDownload(result)} baseFilename={`networking_strategy_${downloadTitle}`} />
+                <NetworkingExportGate
+                  validation={validation}
+                  text={formatForDownload(result)}
+                  baseFilename={`networking_strategy_${downloadTitle}`}
+                  regenerateLabel={t('tool_networking_assistant_generate_button')}
+                  onRegenerate={() => void runTool(company, role, location)}
+                />
                 <button
                   type="button"
                   onClick={resetResult}
@@ -342,7 +365,11 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
               <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-100">{t('tool_networking_assistant_draft_label')}</h4>
-                  <CopyButton text={suggestion.outreachMessage} label={t('tool_networking_assistant_copy_button')} />
+                  <NetworkingCopyGate
+                    validation={validation}
+                    text={suggestion.outreachMessage || ''}
+                    label={t('tool_networking_assistant_copy_button')}
+                  />
                 </div>
                 <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                   {suggestion.outreachMessage}
