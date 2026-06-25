@@ -34,7 +34,7 @@ interface BusinessPageProps {
   authHydrated?: boolean;
 }
 
-type ModalState = 'none' | 'signin' | 'signup' | 'forgot' | 'business_access';
+type ModalState = 'none' | 'signin' | 'signup' | 'forgot' | 'business_access' | 'confirm_plan';
 
 const BusinessPage: React.FC<BusinessPageProps> = ({
   session,
@@ -84,6 +84,22 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
 
   const handleViewPricing = () => {
     pricingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handlePlanCta = (planId: BusinessPlanId) => {
+    if (!session) {
+      setSignupPlan(planId);
+      setModal('signup');
+      return;
+    }
+
+    if (canEnterBusinessPortal && onEnterPortal) {
+      onEnterPortal('billing');
+      return;
+    }
+
+    setSignupPlan(planId);
+    setModal('confirm_plan');
   };
 
   const featureCards = [
@@ -348,14 +364,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => {
-                    if (session) {
-                      onSelectBusinessPlan(plan.id);
-                    } else {
-                      setSignupPlan(plan.id);
-                      setModal('signup');
-                    }
-                  }}
+                  onClick={() => handlePlanCta(plan.id)}
                   className={`min-h-11 w-full rounded-lg py-2.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40 ${
                     plan.featured
                       ? 'bg-[#1D4ED8] text-white hover:bg-[#1e40af]'
@@ -417,6 +426,36 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
               className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#1D4ED8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e40af] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40"
             >
               {t('business_page_pricing_title')}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={modal === 'confirm_plan'} onOpenChange={(open) => setModal(open ? 'confirm_plan' : 'none')}>
+        <DialogContent maxWidth="sm" className="p-6 sm:p-7">
+          <DialogHeader className="text-left">
+            <DialogTitle>{t('business_page_pricing_title')}</DialogTitle>
+            <DialogDescription className="not-sr-only pt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+              {t(businessPlanDefs.find((plan) => plan.id === signupPlan)?.nameKey ?? 'site_plan_emp_starter_name')} · {t('site_pricing_business_upsell_banner')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setModal('none')}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              {t('dashboard_cancel_update')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const planId = signupPlan;
+                setModal('none');
+                onSelectBusinessPlan(planId);
+              }}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#1D4ED8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e40af] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40"
+            >
+              {t('business_page_plan_cta')}
             </button>
           </div>
         </DialogContent>

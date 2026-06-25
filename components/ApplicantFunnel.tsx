@@ -124,6 +124,20 @@ function formatTalentValue(value: unknown): string {
     return typeof value === 'string' ? value.trim() : '';
 }
 
+function isTalentRecord(value: unknown): value is Record<string, string | string[]> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function talentRecordList(value: unknown): Record<string, string | string[]>[] {
+    return Array.isArray(value) ? value.filter(isTalentRecord) : [];
+}
+
+function talentStringList(value: unknown): string[] {
+    return Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())
+        : [];
+}
+
 function talentEntries(record: unknown): Array<[string, string]> {
     if (!record || typeof record !== 'object' || Array.isArray(record)) return [];
     return Object.entries(record as Record<string, unknown>)
@@ -140,7 +154,7 @@ function talentProfileHasData(profile: TalentProfile | null | undefined): boolea
             return collectCandidateSkills(profile).length > 0;
         }
         if (section.kind === 'list') {
-            return Array.isArray(sectionData) && sectionData.some((item) => hasMeaningfulEntry(item as Record<string, string | string[]>));
+            return talentRecordList(sectionData).some(hasMeaningfulEntry);
         }
         return talentEntries(sectionData).length > 0;
     });
@@ -155,7 +169,7 @@ function talentProfileSearchTokens(profile: TalentProfile | null | undefined): s
         if (section.kind === 'skills') {
             tokens.push(...collectCandidateSkills(profile));
         } else if (section.kind === 'list' && Array.isArray(sectionData)) {
-            sectionData.forEach((entry) => talentEntries(entry).forEach(([, value]) => tokens.push(value)));
+            talentRecordList(sectionData).forEach((entry) => talentEntries(entry).forEach(([, value]) => tokens.push(value)));
         } else {
             talentEntries(sectionData).forEach(([, value]) => tokens.push(value));
         }
@@ -172,7 +186,8 @@ function getTalentCurrentRole(profile: TalentProfile | null | undefined): string
     // Experience entries are stored in the order the candidate added them (not
     // date-sorted), so experience[0] is NOT necessarily the current role. Prefer
     // an ongoing role (no end date), else the most recent by end/start date.
-    const exp = (profile?.experience ?? []).filter((e) => typeof e?.role === 'string' && e.role.trim());
+    const rawExperience = Array.isArray(profile?.experience) ? profile.experience : [];
+    const exp = rawExperience.filter((e) => typeof e?.role === 'string' && e.role.trim());
     const dateKey = (e: Record<string, string | string[]>) => String(e?.endDate || e?.startDate || '');
     const ongoing = exp.find((e) => !String(e?.endDate ?? '').trim());
     const byDate = [...exp].sort((a, b) => dateKey(b).localeCompare(dateKey(a)));
@@ -206,7 +221,7 @@ const TalentProfileSummary: React.FC<{ profile: TalentProfile | null | undefined
         { label: t('applicant_funnel_talent_profile_location'), value: [safeProfile.basic?.city, safeProfile.basic?.country].map(formatTalentValue).filter(Boolean).join(', ') },
         {
             label: t('applicant_funnel_talent_profile_history'),
-            value: String((safeProfile.education?.length ?? 0) + (safeProfile.experience?.length ?? 0)),
+            value: String((Array.isArray(safeProfile.education) ? safeProfile.education.length : 0) + (Array.isArray(safeProfile.experience) ? safeProfile.experience.length : 0)),
         },
         { label: t('applicant_funnel_talent_profile_skills'), value: String(collectTalentSkills(safeProfile).length) },
     ].filter((signal) => signal.value && signal.value !== '0');
@@ -215,7 +230,7 @@ const TalentProfileSummary: React.FC<{ profile: TalentProfile | null | undefined
         const Icon = TALENT_SECTION_ICONS[section.id] ?? FileWarning;
         if (section.kind === 'skills') {
             const groups = section.groups
-                .map((group) => ({ ...group, values: safeProfile.skills?.[group.key] ?? [] }))
+                .map((group) => ({ ...group, values: talentStringList(safeProfile.skills?.[group.key]) }))
                 .filter((group) => group.values.length > 0);
             if (groups.length === 0) return null;
             return (
@@ -243,7 +258,7 @@ const TalentProfileSummary: React.FC<{ profile: TalentProfile | null | undefined
         }
 
         if (section.kind === 'list') {
-            const items = Array.isArray(data[section.id]) ? data[section.id] as Record<string, string | string[]>[] : [];
+            const items = talentRecordList(data[section.id]);
             const meaningful = items.filter(hasMeaningfulEntry);
             if (meaningful.length === 0) return null;
             return (
@@ -353,7 +368,7 @@ function toApplicationTime(dateValue: string | null): number {
  * time), plus the role's experience level + required qualifications for context.
  */
 const JobFitChecklist: React.FC<{ job: JobPosting; profile: TalentProfile | null | undefined; t: (key: string) => string }> = ({ job, profile, t }) => {
-    const required = job.required_skills ?? [];
+    const required = Array.isArray(job.required_skills) ? job.required_skills : [];
     const hasContext = required.length > 0 || !!job.required_qualifications || !!job.experience_level;
     if (!hasContext) return null;
     const fit = matchSkills(collectCandidateSkills(profile), required);
