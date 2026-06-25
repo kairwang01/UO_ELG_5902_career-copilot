@@ -4,8 +4,16 @@ import { generateSalaryNegotiationStrategy } from '../../services/aiClient';
 import type { SalaryNegotiationResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { CopyButton, DownloadButtons, SavedResultBar } from './ToolUtils';
+import { SavedResultBar } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
+import {
+  assessSalaryNegotiation,
+  buildSalaryDownloadText,
+  canExportSalaryNegotiation,
+  SalaryCopyGate,
+  SalaryExportGate,
+  SalaryQualityNotice,
+} from './SalaryActions';
 
 type GroundingChunk = { web?: { uri?: string; title?: string } };
 type SalaryResult = SalaryNegotiationResult & {
@@ -76,7 +84,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
   const [currency, setCurrency] = useState(CURRENCIES[1]);
 
   useEffect(() => {
-    if (saved && !result && hasMeaningfulSalaryResult(saved.result)) {
+    if (saved && !result && hasMeaningfulSalaryResult(saved.result) && canExportSalaryNegotiation(assessSalaryNegotiation(saved.result))) {
       setResult(saved.result);
       setFromSaved(true);
       if (saved.result.jobTitle) setJobTitle(saved.result.jobTitle);
@@ -131,9 +139,12 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
         currency: nextCurrency,
         market,
       };
+      const validation = assessSalaryNegotiation(nextResult);
       setResult(nextResult);
       setFromSaved(false);
-      persist(nextResult);
+      if (canExportSalaryNegotiation(validation)) {
+        persist(nextResult);
+      }
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -303,6 +314,9 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       objectionHandlers = [],
       groundingChunks,
     } = result;
+    const strengths = Array.isArray(keyStrengths) ? keyStrengths : [];
+    const strategySteps = Array.isArray(negotiationStrategy) ? negotiationStrategy : [];
+    const objections = Array.isArray(objectionHandlers) ? objectionHandlers : [];
 
     const resultCurrency = result.currency || recommendedRange?.currency || currency;
     const resultOffer = result.offer || offer;
@@ -315,28 +329,35 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       : '-';
     const job = result.jobTitle || jobTitle || t('tool_salary_negotiator_job_title_label');
     const employer = result.company || company || t('tool_salary_negotiator_company_label');
+    const validation = assessSalaryNegotiation(result);
 
-    const downloadText = [
-      `${t('tool_salary_negotiator_results_title')}: ${job} at ${employer}`,
-      `${t('tool_salary_negotiator_offer_label')}: ${offerLabel}`,
-      `${t('tool_salary_negotiator_market_analysis')}\n${marketAnalysisSummary}`,
-      ...(recommendedRange
-        ? [`\n${t('tool_salary_negotiator_recommended_range')}\n${rangeLabel}\n${recommendedRange.explanation}`]
-        : []),
-      `\n${t('tool_salary_negotiator_key_strengths')}\n${keyStrengths.map((strength) => `- ${strength}`).join('\n')}`,
-      `\n${t('tool_salary_negotiator_strategy')}\n${negotiationStrategy.map((step, index) => `${index + 1}. ${step}`).join('\n')}`,
-      `\n${t('tool_salary_negotiator_email_draft')}\n${counterOfferEmailDraft}`,
-    ].join('\n\n');
+    const downloadText = buildSalaryDownloadText(
+      result,
+      {
+        title: t('tool_salary_negotiator_results_title'),
+        offer: t('tool_salary_negotiator_offer_label'),
+        marketAnalysis: t('tool_salary_negotiator_market_analysis'),
+        recommendedRange: t('tool_salary_negotiator_recommended_range'),
+        keyStrengths: t('tool_salary_negotiator_key_strengths'),
+        strategy: t('tool_salary_negotiator_strategy'),
+        emailDraft: t('tool_salary_negotiator_email_draft'),
+        objections: t('tool_salary_negotiator_objections'),
+      },
+      { job, employer, offerLabel, rangeLabel },
+    );
 
     return (
       <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
-        <SavedResultBar
-          t={t}
-          canSave={canSave}
-          isSaved={fromSaved}
-          savedAt={saved?.savedAt ?? null}
-          onTryNext={resetResult}
-        />
+        {canExportSalaryNegotiation(validation) && (
+          <SavedResultBar
+            t={t}
+            canSave={canSave}
+            isSaved={fromSaved}
+            savedAt={saved?.savedAt ?? null}
+            onTryNext={resetResult}
+          />
+        )}
+        <SalaryQualityNotice validation={validation} />
 
         <CardShell className="overflow-hidden">
           <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -355,10 +376,16 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
               <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
                 <MetricTile label={t('tool_salary_negotiator_offer_label')} value={offerLabel} icon={CircleDollarSign} />
                 <MetricTile label={t('tool_salary_negotiator_recommended_range')} value={rangeLabel} icon={TrendingUp} />
-                <MetricTile label={t('tool_salary_negotiator_strategy')} value={negotiationStrategy.length} icon={ShieldCheck} />
+                <MetricTile label={t('tool_salary_negotiator_strategy')} value={strategySteps.length} icon={ShieldCheck} />
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <DownloadButtons textContent={downloadText} baseFilename={`salary_negotiation_${employer.replace(/\s/g, '_')}`} />
+                <SalaryExportGate
+                  validation={validation}
+                  text={downloadText}
+                  baseFilename={`salary_negotiation_${employer.replace(/\s/g, '_')}`}
+                  regenerateLabel={t('tool_salary_negotiator_generate_button')}
+                  onRegenerate={() => void runTool({ jobTitle: job, company: employer, offer: resultOffer, currency: resultCurrency })}
+                />
                 <button
                   type="button"
                   onClick={resetResult}
@@ -390,7 +417,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                 <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_strategy')}</h3>
               </div>
               <div className="mt-4 space-y-3">
-                {negotiationStrategy.map((step, index) => (
+                {strategySteps.map((step, index) => (
                   <div key={index} className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-xs font-semibold text-white">
                       {index + 1}
@@ -407,7 +434,11 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                   <MessageSquareText className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
                   <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_email_draft')}</h3>
                 </div>
-                <CopyButton text={counterOfferEmailDraft} label={t('tool_networking_assistant_copy_button')} />
+                <SalaryCopyGate
+                  validation={validation}
+                  text={counterOfferEmailDraft}
+                  label={t('tool_networking_assistant_copy_button')}
+                />
               </div>
               <div className="mt-4 whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
                 {counterOfferEmailDraft}
@@ -422,7 +453,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                 <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_key_strengths')}</h3>
               </div>
               <ul className="mt-4 space-y-3">
-                {keyStrengths.map((strength, index) => (
+                {strengths.map((strength, index) => (
                   <li key={index} className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
                     <span>{strength}</span>
@@ -434,7 +465,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
             <CardShell className="p-5">
               <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_objections')}</h3>
               <div className="mt-4 space-y-3">
-                {objectionHandlers.map((item, index) => (
+                {objections.map((item, index) => (
                   <details key={index} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60" open={index === 0}>
                     <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-100">{item.objection}</summary>
                     <p className="mt-3 border-l-2 border-emerald-300 pl-3 text-sm leading-relaxed text-slate-600 dark:border-emerald-700 dark:text-slate-300">{item.response}</p>
