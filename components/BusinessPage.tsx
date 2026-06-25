@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
+import PlanChangeConfirmDialog from './billing/PlanChangeConfirmDialog';
 import type { PortalPage } from './employer/EmployerPortal';
 import { businessPlanDefs, type BusinessPlanId } from './business/businessPlans';
 import { ArrowRight, BookmarkCheck, BriefcaseBusiness, CheckCircle2, Globe2, PlusCircle, SlidersHorizontal, Users } from 'lucide-react';
@@ -52,6 +53,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   const [modal, setModal] = React.useState<ModalState>('none');
   const [signupPlan, setSignupPlan] = React.useState<BusinessPlanId>('starter');
   const canEnterBusinessPortal = hasBusinessPortalAccess(profile?.role, profile?.subscription_status);
+  const selectedBusinessPlan = businessPlanDefs.find((plan) => plan.id === signupPlan) ?? businessPlanDefs[0];
 
   const handlePortalAction = React.useCallback((page: PortalPage) => {
     const decision = decideBusinessPortalAction({
@@ -430,36 +432,22 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={modal === 'confirm_plan'} onOpenChange={(open) => setModal(open ? 'confirm_plan' : 'none')}>
-        <DialogContent maxWidth="sm" className="p-6 sm:p-7">
-          <DialogHeader className="text-left">
-            <DialogTitle>{t('business_page_pricing_title')}</DialogTitle>
-            <DialogDescription className="not-sr-only pt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
-              {t(businessPlanDefs.find((plan) => plan.id === signupPlan)?.nameKey ?? 'site_plan_emp_starter_name')} · {t('site_pricing_business_upsell_banner')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={() => setModal('none')}
-              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              {t('dashboard_cancel_update')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const planId = signupPlan;
-                setModal('none');
-                onSelectBusinessPlan(planId);
-              }}
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#1D4ED8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e40af] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40"
-            >
-              {t('business_page_plan_cta')}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PlanChangeConfirmDialog
+        open={modal === 'confirm_plan'}
+        onOpenChange={(open) => setModal(open ? 'confirm_plan' : 'none')}
+        title={t('business_page_pricing_title')}
+        planLabel={`${t(selectedBusinessPlan.nameKey)} · $${selectedBusinessPlan.price}${t('site_pricing_per_month')}`}
+        description={t('site_pricing_business_upsell_banner')}
+        cancelLabel={t('dashboard_cancel_update')}
+        confirmLabel={t('business_page_plan_cta')}
+        loadingLabel={t('portal_billing_updating')}
+        onCancel={() => setModal('none')}
+        onConfirm={() => {
+          const planId = signupPlan;
+          setModal('none');
+          onSelectBusinessPlan(planId);
+        }}
+      />
     </div>
   );
 };

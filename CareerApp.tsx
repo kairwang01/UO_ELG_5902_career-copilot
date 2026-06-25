@@ -314,6 +314,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // Latches a resume analysis as in-flight so a double-click / repeat keypress on the
   // confirm control can't fire a second charged run before the first resolves.
   const analysisInFlightRef = useRef(false);
+  // Business plan changes may redirect to checkout. Keep this synchronous so a
+  // double-confirm cannot create two checkout sessions before React disables UI.
+  const businessPlanSelectionRef = useRef(false);
   // Tracks the signed-in user so token refreshes / tab refocus don't reset the view.
   const currentUserIdRef = useRef<string | null>(null);
   // Guards the provider's first resolved session as a no-side-effect baseline (a
@@ -656,7 +659,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   }, [session, profile?.resume_file_path, addToast, t]);
 
   const handleBusinessPlanSelection = async (planKey: string) => {
-    if (!session) return;
+    if (!session || businessPlanSelectionRef.current) return;
+    businessPlanSelectionRef.current = true;
     try {
       const pendingPlanKey = `pending_biz_${planKey}`;
       const result = await setUserSubscription(pendingPlanKey);
@@ -669,6 +673,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       addToast(t('business_plan_set_failed').replace('{error}', message), 'error');
+    } finally {
+      businessPlanSelectionRef.current = false;
     }
   };
 
