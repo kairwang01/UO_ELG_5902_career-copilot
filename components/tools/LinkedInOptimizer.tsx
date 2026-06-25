@@ -4,8 +4,15 @@ import { optimizeLinkedInProfile, optimizeLinkedInProfileFromText } from '../../
 import type { LinkedInOptimization } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
+import { SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
+import {
+  assessLinkedInOptimization,
+  buildLinkedInDownloadText,
+  canExportLinkedInOptimization,
+  LinkedInExportGate,
+  LinkedInQualityNotice,
+} from './LinkedInActions';
 
 // (b) sample constant — profile-text tab only (never touches resumeText)
 const SAMPLE_PROFILE_TEXT =
@@ -34,7 +41,12 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
   const hasResume = resumeText.trim().length > 0;
   const profileTextReady = linkedinProfileText.trim().length > 0;
 
-  useEffect(() => { if (saved && !result) { setResult(saved.result); setFromSaved(true); } }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (saved && !result && canExportLinkedInOptimization(assessLinkedInOptimization(saved.result))) {
+      setResult(saved.result);
+      setFromSaved(true);
+    }
+  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTool = async (options: {
     mode?: 'resume' | 'profile';
@@ -65,9 +77,12 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
         apiResult = await optimizeLinkedInProfile(resumeText, market);
       }
       if (!alive()) return;
+      const validation = assessLinkedInOptimization(apiResult);
       setResult(apiResult);
       setFromSaved(false);
-      persist(apiResult);
+      if (canExportLinkedInOptimization(validation)) {
+        persist(apiResult);
+      }
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -269,30 +284,40 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
 
     if (!result) return null;
 
-    const { headline, summary, experienceSuggestions } = result;
+    const headline = result.headline || '';
+    const summary = result.summary || '';
+    const experienceSuggestions = Array.isArray(result.experienceSuggestions) ? result.experienceSuggestions : [];
 
     // Build downloadable text
-    const downloadText = [
-      `## ${t('tool_linkedin_optimizer_headline_label')}\n${headline}`,
-      `\n## ${t('tool_linkedin_optimizer_summary_label')}\n${summary}`,
-      `\n## ${t('tool_linkedin_optimizer_experience_label')}`,
-      ...experienceSuggestions.map(item => `\n**${item.title}**\n${item.suggestion}`),
-    ].join('\n');
+    const downloadText = buildLinkedInDownloadText(result, {
+      headline: t('tool_linkedin_optimizer_headline_label'),
+      summary: t('tool_linkedin_optimizer_summary_label'),
+      experience: t('tool_linkedin_optimizer_experience_label'),
+    });
+    const validation = assessLinkedInOptimization(result);
 
     return (
       <div className="space-y-6 animate-fade-in">
-        <SavedResultBar
-          t={t}
-          canSave={canSave}
-          isSaved={fromSaved}
-          savedAt={saved?.savedAt ?? null}
-          onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
-        />
+        {canExportLinkedInOptimization(validation) && (
+          <SavedResultBar
+            t={t}
+            canSave={canSave}
+            isSaved={fromSaved}
+            savedAt={saved?.savedAt ?? null}
+            onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+          />
+        )}
+        <LinkedInQualityNotice validation={validation} />
         {/* (d) RESULT ACTIONS — download + start-over */}
         <div className="flex flex-wrap justify-between items-center gap-3">
           <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_linkedin_optimizer_results_title')}</h4>
           <div className="flex items-center gap-2">
-            <DownloadButtons textContent={downloadText} baseFilename="linkedin_optimization" />
+            <LinkedInExportGate
+              validation={validation}
+              text={downloadText}
+              regenerateLabel={t('tool_linkedin_optimizer_generate_button')}
+              onRegenerate={handleRetry}
+            />
             <button
               type="button"
               onClick={() => setResult(null)}
