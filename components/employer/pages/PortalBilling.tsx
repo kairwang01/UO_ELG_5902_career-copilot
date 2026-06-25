@@ -12,13 +12,7 @@ import {
 import type { UserProfile } from '../../../types';
 import { createBillingPortalSession } from '../../../services/subscriptionClient';
 import { PortalTopBar } from '../PortalTopBar';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../../ui/dialog';
+import PlanChangeConfirmDialog from '../../billing/PlanChangeConfirmDialog';
 
 interface PortalBillingProps {
   profile: UserProfile;
@@ -422,51 +416,25 @@ export function PortalBilling({
           </div>
         </section>
       </div>
-      <Dialog
+      <PlanChangeConfirmDialog
         open={Boolean(planToConfirm)}
         onOpenChange={(open) => {
           if (!open && !planSaving) setPlanToConfirm(null);
         }}
-      >
-        <DialogContent maxWidth="sm" className="p-6 sm:p-7">
-          <DialogHeader className="text-left">
-            <DialogTitle>{t('portal_billing_available_plans')}</DialogTitle>
-            <DialogDescription className="not-sr-only pt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
-              {planToConfirm
-                ? `${t(planToConfirm.nameKey)} · ${planToConfirm.price}${planToConfirm.period}`
-                : t('portal_billing_available_desc')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className={`mt-5 rounded-lg border px-4 py-3 text-sm leading-6 ${
-            dm
-              ? 'border-amber-900/60 bg-amber-950/20 text-amber-100'
-              : 'border-amber-200 bg-amber-50 text-amber-900'
-          }`}>
-            {t('portal_billing_available_desc')}
-          </div>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={() => setPlanToConfirm(null)}
-              disabled={planSaving}
-              className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
-                dm ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {t('dashboard_cancel_update')}
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmPlanChange}
-              disabled={!planToConfirm || planSaving}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#1d4ed8] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1e40af] focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {planSaving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {planSaving ? t('portal_billing_updating') : t('business_page_plan_cta')}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        title={t('portal_billing_available_plans')}
+        planLabel={
+          planToConfirm
+            ? `${t(planToConfirm.nameKey)} · ${planToConfirm.price}${planToConfirm.period}`
+            : t('portal_billing_available_desc')
+        }
+        description={t('portal_billing_available_desc')}
+        cancelLabel={t('dashboard_cancel_update')}
+        confirmLabel={t('business_page_plan_cta')}
+        loadingLabel={t('portal_billing_updating')}
+        loading={planSaving}
+        onCancel={() => setPlanToConfirm(null)}
+        onConfirm={handleConfirmPlanChange}
+      />
     </>
   );
 }
