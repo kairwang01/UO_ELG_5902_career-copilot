@@ -318,25 +318,25 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
             className="flex-1 overflow-y-auto pb-[var(--cookie-consent-bottom-space,0px)] transition-[padding-bottom] duration-200"
             data-qa-employer-page="applicant-funnel"
           >
-            <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
-            <div className="mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8">
-              <RecoverableSectionBoundary
-                resetKey={`applicant-funnel:${jobForFunnel.id}:${jobForFunnel.updated_at ?? ''}`}
-                title={t('applicant_funnel_error_title')}
-                description={t('applicant_funnel_load_error')}
-                retryLabel={t('applicant_funnel_retry')}
-                onRetry={fetchData}
-                secondaryLabel={t('applicant_funnel_back')}
-                onSecondaryAction={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
-              >
+            <RecoverableSectionBoundary
+              resetKey={`applicant-funnel:${jobForFunnel.id}:${jobForFunnel.updated_at ?? ''}`}
+              title={t('applicant_funnel_error_title')}
+              description={t('applicant_funnel_load_error')}
+              retryLabel={t('applicant_funnel_retry')}
+              onRetry={fetchData}
+              secondaryLabel={t('applicant_funnel_back')}
+              onSecondaryAction={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
+            >
+              <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
+              <div className="mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8">
                 <ApplicantFunnel
                   job={jobForFunnel}
                   employerUid={session.user.id}
                   onBack={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
                   t={t}
                 />
-              </RecoverableSectionBoundary>
-            </div>
+              </div>
+            </RecoverableSectionBoundary>
           </main>
         </div>
       </PortalAccountMenuProvider>

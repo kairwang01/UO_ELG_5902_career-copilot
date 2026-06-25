@@ -52,6 +52,7 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
   const navigate = useNavigate();
   const [modal, setModal] = React.useState<ModalState>('none');
   const [signupPlan, setSignupPlan] = React.useState<BusinessPlanId>('starter');
+  const [accessPromptPlan, setAccessPromptPlan] = React.useState<BusinessPlanId | null>(null);
   const canEnterBusinessPortal = hasBusinessPortalAccess(profile?.role, profile?.subscription_status);
   const selectedBusinessPlan = businessPlanDefs.find((plan) => plan.id === signupPlan) ?? businessPlanDefs[0];
 
@@ -71,10 +72,12 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         break;
       case 'open_signup':
         setSignupPlan('starter');
+        setAccessPromptPlan(null);
         setModal('signup');
         break;
       case 'open_business_access_prompt':
         setSignupPlan('starter');
+        setAccessPromptPlan(null);
         setModal('business_access');
         break;
     }
@@ -101,7 +104,8 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
     }
 
     setSignupPlan(planId);
-    setModal('confirm_plan');
+    setAccessPromptPlan(planId);
+    setModal('business_access');
   };
 
   const featureCards = [
@@ -403,7 +407,13 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         onSwitchToSignIn={() => setModal('signin')}
         t={t}
       />
-      <Dialog open={modal === 'business_access'} onOpenChange={(open) => setModal(open ? 'business_access' : 'none')}>
+      <Dialog
+        open={modal === 'business_access'}
+        onOpenChange={(open) => {
+          setModal(open ? 'business_access' : 'none');
+          if (!open) setAccessPromptPlan(null);
+        }}
+      >
         <DialogContent maxWidth="sm" className="p-6 sm:p-7">
           <DialogHeader className="text-left">
             <DialogTitle>{t('site_cta_enter_portal')}</DialogTitle>
@@ -414,7 +424,10 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={() => setModal('none')}
+              onClick={() => {
+                setAccessPromptPlan(null);
+                setModal('none');
+              }}
               className="inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
             >
               {t('dashboard_cancel_update')}
@@ -422,12 +435,18 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
             <button
               type="button"
               onClick={() => {
+                if (accessPromptPlan) {
+                  setSignupPlan(accessPromptPlan);
+                  setAccessPromptPlan(null);
+                  setModal('confirm_plan');
+                  return;
+                }
                 setModal('none');
                 window.requestAnimationFrame(handleViewPricing);
               }}
               className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#1D4ED8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e40af] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40"
             >
-              {t('business_page_pricing_title')}
+              {accessPromptPlan ? t('business_page_plan_cta') : t('business_page_pricing_title')}
             </button>
           </div>
         </DialogContent>
