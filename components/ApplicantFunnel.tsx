@@ -54,6 +54,7 @@ import FunnelChart from './FunnelChart';
 import ApplicationMessageThread from './ApplicationMessageThread';
 import RecoverableSectionBoundary from './RecoverableSectionBoundary';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import ConfirmActionDialog from './ConfirmActionDialog';
 import { normalizeJobPostingForClient } from '../lib/jobPostingNormalize';
 import {
     APPLICATION_PIPELINE_STAGES,
@@ -1387,6 +1388,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
     const [bulkNotify, setBulkNotify] = useState(false);
     const [bulkMessageBody, setBulkMessageBody] = useState('');
     const [bulkSaving, setBulkSaving] = useState(false);
+    const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
     const detailRef = useRef<HTMLElement | null>(null);
     // Run token for the resume-view fetch: opening another applicant's resume (or closing)
     // supersedes an in-flight load so applicant A's resume can't paint under applicant B.
@@ -1742,26 +1744,52 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
         [bulkAction, t],
     );
 
-    const handleBulkSubmit = async () => {
-        if (bulkSaving || bulkSavingRef.current) return;
-        const reason = bulkReason.trim();
-        if (bulkAction === 'reject' && !reason) {
-            setStatusUpdateError(t('applicant_funnel_bulk_reason_required'));
-            return;
-        }
+    const getEligibleBulkApplicationIds = useCallback(() => {
         // Drop candidates the action can't apply to — advancing/rejecting a Rejected
         // or Signed applicant is a server no-op, which would otherwise inflate the
         // "advanced N" success count with untouched rows.
         const statusById = new Map(applicants.map((a) => [a.id, a.status]));
-        const applicationIds = [...selectedApplicantIds].filter((id) => {
+        return [...selectedApplicantIds].filter((id) => {
             const s = statusById.get(id);
             if (s === undefined) return false;
             if (bulkAction === 'advance') return !isApplicationRejectedStatus(s) && s !== 'Signed';
             if (bulkAction === 'reject') return !isApplicationRejectedStatus(s);
             return true;
         });
+    }, [applicants, bulkAction, selectedApplicantIds]);
+    const eligibleBulkCount = useMemo(
+        () => getEligibleBulkApplicationIds().length,
+        [getEligibleBulkApplicationIds],
+    );
+
+    const requestBulkSubmit = () => {
+        if (bulkSaving || bulkSavingRef.current) return;
+        const reason = bulkReason.trim();
+        if (bulkAction === 'reject' && !reason) {
+            setStatusUpdateError(t('applicant_funnel_bulk_reason_required'));
+            return;
+        }
+        const applicationIds = getEligibleBulkApplicationIds();
         if (applicationIds.length === 0) {
             setStatusUpdateError(t('applicant_funnel_bulk_select_one'));
+            return;
+        }
+        setStatusUpdateError(null);
+        setBulkConfirmOpen(true);
+    };
+
+    const handleBulkSubmit = async () => {
+        if (bulkSaving || bulkSavingRef.current) return;
+        const reason = bulkReason.trim();
+        if (bulkAction === 'reject' && !reason) {
+            setStatusUpdateError(t('applicant_funnel_bulk_reason_required'));
+            setBulkConfirmOpen(false);
+            return;
+        }
+        const applicationIds = getEligibleBulkApplicationIds();
+        if (applicationIds.length === 0) {
+            setStatusUpdateError(t('applicant_funnel_bulk_select_one'));
+            setBulkConfirmOpen(false);
             return;
         }
 
@@ -1779,6 +1807,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
             await fetchApplicants();
             if (!mountedRef.current) return;
             setSelectedApplicantIds(new Set());
+            setBulkConfirmOpen(false);
             if (result.failed > 0) {
                 addToast(formatTranslation(t('applicant_funnel_bulk_partial_toast'), {
                     succeeded: result.succeeded,
@@ -2329,7 +2358,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
 	                                <div className="flex flex-wrap items-center gap-2">
 	                                    <button
 	                                        type="button"
-	                                        onClick={handleBulkSubmit}
+	                                        onClick={requestBulkSubmit}
 	                                        disabled={bulkSaving}
 	                                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
 	                                    >
@@ -2659,6 +2688,27 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                     </RecoverableSectionBoundary>
                 </section>
             </div>
+
+            <ConfirmActionDialog
+                open={bulkConfirmOpen}
+                title={bulkAction === 'reject'
+                    ? t('applicant_funnel_bulk_action_reject')
+                    : t('applicant_funnel_bulk_action_advance')}
+                description={formatTranslation(t('applicant_funnel_bulk_selected'), { count: eligibleBulkCount })}
+                detail={bulkNotify ? t('applicant_funnel_bulk_notify_label') : undefined}
+                cancelLabel={t('dashboard_cancel_update')}
+                confirmLabel={t('applicant_funnel_bulk_apply')}
+                loadingLabel={t('applicant_funnel_bulk_working')}
+                loading={bulkSaving}
+                tone={bulkAction === 'reject' ? 'danger' : 'primary'}
+                onOpenChange={(open) => {
+                    if (!open && !bulkSaving) setBulkConfirmOpen(false);
+                }}
+                onCancel={() => {
+                    if (!bulkSaving) setBulkConfirmOpen(false);
+                }}
+                onConfirm={handleBulkSubmit}
+            />
 
             {viewingApplicant && (
                 <ViewportAwareDialog open onClose={closeResumeView} closeOnBackdrop labelledBy="applicant-resume-view-title" maxWidth={672} zIndex={70}>

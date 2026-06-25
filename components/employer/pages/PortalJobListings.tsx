@@ -16,6 +16,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { PortalTopBar } from '../PortalTopBar';
+import ConfirmActionDialog from '../../ConfirmActionDialog';
 import type { JobPostingWithCount } from '../../../lib/recruitingData';
 import type { PortalPage } from '../PortalSidebar';
 
@@ -28,7 +29,7 @@ interface PortalJobListingsProps {
   onEditJob: (job: JobPostingWithCount) => void;
   onViewApplicants: (job: JobPostingWithCount) => void;
   onSourceCandidates: (job: JobPostingWithCount) => void;
-  onSetJobActive: (job: JobPostingWithCount, isActive: boolean) => void;
+  onSetJobActive: (job: JobPostingWithCount, isActive: boolean) => Promise<void> | void;
   onNavigate: (page: PortalPage) => void;
   t?: (key: string) => string;
 }
@@ -80,6 +81,8 @@ export function PortalJobListings({
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'closed'>('all');
+  const [statusConfirm, setStatusConfirm] = useState<{ job: JobPostingWithCount; isActive: boolean } | null>(null);
+  const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
 
   const normalizedQuery = query.trim().toLowerCase();
   const activeJobs = jobPostings.filter((j) => j.is_active);
@@ -114,6 +117,24 @@ export function PortalJobListings({
     setQuery('');
     setStatusFilter('all');
     setShowAllActive(false);
+  };
+  const requestJobStatusChange = (job: JobPostingWithCount, isActive: boolean) => {
+    if (statusSavingId) return;
+    setStatusConfirm({ job, isActive });
+  };
+  const closeStatusConfirm = () => {
+    if (!statusSavingId) setStatusConfirm(null);
+  };
+  const confirmJobStatusChange = async () => {
+    if (!statusConfirm || statusSavingId) return;
+    const { job, isActive } = statusConfirm;
+    setStatusSavingId(job.id);
+    try {
+      await onSetJobActive(job, isActive);
+      setStatusConfirm(null);
+    } finally {
+      setStatusSavingId(null);
+    }
   };
   const getNextAction = (job: JobPostingWithCount) => {
     if (!job.is_active) {
@@ -238,13 +259,8 @@ export function PortalJobListings({
                 {t('employer_dashboard_edit_button')}
               </button>
               <button
-                onClick={() => {
-                  if (job.is_active) {
-                    if (window.confirm(t('portal_listings_close_confirm').replace('{title}', job.title))) onSetJobActive(job, false);
-                  } else {
-                    onSetJobActive(job, true);
-                  }
-                }}
+                onClick={() => requestJobStatusChange(job, !job.is_active)}
+                disabled={statusSavingId === job.id}
                 aria-label={job.is_active ? t('portal_listings_close_job') : t('portal_listings_reopen_job')}
                 className={`inline-flex min-h-10 items-center justify-center gap-1.5 px-3 py-2 text-sm border rounded-lg transition-colors ${
                   job.is_active
@@ -252,7 +268,11 @@ export function PortalJobListings({
                     : (dm ? 'border-green-700 text-green-300 hover:bg-green-900/20' : 'border-green-300 text-green-700 hover:bg-green-50')
                 }`}
               >
-                {job.is_active ? t('portal_listings_close_job') : t('portal_listings_reopen_job')}
+                {statusSavingId === job.id
+                  ? t('portal_billing_updating')
+                  : job.is_active
+                    ? t('portal_listings_close_job')
+                    : t('portal_listings_reopen_job')}
               </button>
             </div>
           </div>
@@ -477,6 +497,24 @@ export function PortalJobListings({
           </div>
         )}
       </div>
+      <ConfirmActionDialog
+        open={Boolean(statusConfirm)}
+        title={statusConfirm?.isActive ? t('portal_listings_reopen_job') : t('portal_listings_close_job')}
+        description={statusConfirm?.isActive
+          ? `${t('portal_listings_reopen_job')} "${statusConfirm.job.title}"?`
+          : t('portal_listings_close_confirm').replace('{title}', statusConfirm?.job.title ?? '')}
+        detail={statusConfirm?.job.title}
+        cancelLabel={t('dashboard_cancel_update')}
+        confirmLabel={statusConfirm?.isActive ? t('portal_listings_reopen_job') : t('portal_listings_close_job')}
+        loadingLabel={t('portal_billing_updating')}
+        loading={Boolean(statusSavingId)}
+        tone={statusConfirm?.isActive ? 'primary' : 'danger'}
+        onOpenChange={(open) => {
+          if (!open) closeStatusConfirm();
+        }}
+        onCancel={closeStatusConfirm}
+        onConfirm={confirmJobStatusChange}
+      />
     </>
   );
 }
