@@ -171,6 +171,14 @@ const PHOTO_FIELD_LABELS = ['写真', 'Photo', '顔写真'];
 const HEADER_STOP_FIELD_LABELS = [...CONTACT_FIELD_LABELS, ...LOCATION_FIELD_LABELS, ...PHOTO_FIELD_LABELS]
   .sort((a, b) => b.length - a.length);
 const HEADER_STOP_FIELD_REGEX = new RegExp(`(?:${HEADER_STOP_FIELD_LABELS.map(escapeRegex).join('|')})\\s*[:：]`, 'i');
+const HEADER_FIELD_IN_NAME_REGEX = new RegExp(
+  `(?:${[
+    ...CONTACT_FIELD_LABELS.filter((label) => !['Mobile', 'Portfolio'].includes(label)),
+    ...LOCATION_FIELD_LABELS,
+    ...PHOTO_FIELD_LABELS,
+  ].map(escapeRegex).join('|')})\\s*(?:[:：]|[+\\d\\w@])`,
+  'i',
+);
 const LOCATION_VALUE_REGEX = new RegExp(
   `(?:${LOCATION_FIELD_LABELS.map(escapeRegex).join('|')})\\s*[:：]?\\s*(.*?)(?=(?:${HEADER_STOP_FIELD_LABELS.map(escapeRegex).join('|')})\\s*[:：]|$)`,
   'gi',
@@ -211,6 +219,11 @@ const hasContactField = (value: string): boolean => {
   const result = CONTACT_REGEX.test(value);
   CONTACT_REGEX.lastIndex = 0;
   return result;
+};
+
+const hasHeaderFieldInsideName = (value: string): boolean => {
+  if (!value) return false;
+  return HEADER_FIELD_IN_NAME_REGEX.test(value) || /[\w.+-]+@[\w.-]+\.\w+/.test(value) || /https?:\/\//i.test(value);
 };
 
 export const parseResumeHeader = (content: string): ParsedResumeHeader => {
@@ -437,6 +450,11 @@ export const assessFormattedResume = (text: string): ResumeValidation => {
   const topBlock = sections.find((s) => s.title === 'Header' || s.title === 'Resume Content');
   if (contentSections.length === 0 && cleaned.trim().length > 400) issues.push('no_sections');
   else if ((topBlock?.content?.length ?? 0) > 900) issues.push('overlong_header');
+
+  const parsedHeader = parseResumeHeader(topBlock?.content ?? '');
+  if (parsedHeader.name.length > 90 || hasHeaderFieldInsideName(parsedHeader.name)) {
+    issues.push('garbled_header');
+  }
 
   // Protected / sensitive fields the formatter must not fabricate (soft — the source
   // resume may legitimately carry them, so warn rather than block).

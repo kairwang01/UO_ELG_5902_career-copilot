@@ -60,6 +60,13 @@ describe('ResumePreview parsing', () => {
     expect(result.issues).toContain('photo_placeholder');
   });
 
+  it('flags a header where contact fields are still mixed into the rendered name', () => {
+    const garbled = 'Name: Kai Wang Phone 130-225-7015 Email kai@example.com\nSUMMARY\nProduct manager.\nEXPERIENCE\nLed teams.';
+    const result = assessFormattedResume(garbled);
+    expect(result.status).toBe('needs_regen');
+    expect(result.issues).toContain('garbled_header');
+  });
+
   it('warns (non-blocking) on fabricated-looking sensitive fields', () => {
     const withDob = 'Jane Doe\nEmail: jane@example.com\nSUMMARY\nProduct manager.\nEXPERIENCE\nLed teams.\nDate of Birth: 1990-01-01';
     expect(assessFormattedResume(withDob).status).toBe('warn');
@@ -105,5 +112,38 @@ describe('ResumePreview parsing', () => {
     const cleaned = cleanResumeDisplay(raw);
     expect(cleaned).not.toContain('写真');
     expect(cleaned).not.toContain('証明写真');
+  });
+
+  it.each([
+    {
+      market: 'Canada',
+      text: 'Kai Wang\nOttawa, ON | +1 302 254 7015 | kai@example.com | https://kairwang.cloud\nSUMMARY\nProduct operations candidate with engineering training and cross-functional delivery experience.\nEDUCATION\nUniversity of Ottawa — Ottawa, ON\nM.Eng., Electrical and Computer Engineering | GPA 4.0/4.0\nEXPERIENCE\nCareer CoPilot — Product Operations Lead\n• Coordinated a 6-person engineering team and standardized sprint delivery.',
+    },
+    {
+      market: 'Germany',
+      text: 'Kai Wang\nBerlin, Germany | kai@example.com | https://kairwang.cloud\nProfil\nProjektmanagement-Kandidat mit Erfahrung in Softwareentwicklung, Datenanalyse und funktionsübergreifender Zusammenarbeit.\nBerufserfahrung\nCareer CoPilot — Product Operations Lead\n• Koordinierte ein sechsköpfiges Engineering-Team und verbesserte Sprint-Prozesse.\nAusbildung\nUniversity of Ottawa — M.Eng. Electrical and Computer Engineering.',
+    },
+    {
+      market: 'Singapore',
+      text: 'Kai Wang\nSingapore | kai@example.com | https://kairwang.cloud\nSUMMARY\nProject management candidate with software engineering internship experience and strong stakeholder coordination.\nEXPERIENCE\nCareer CoPilot — Product Operations Lead\n• Improved delivery workflow across resume analysis, interview practice, and career planning modules.\nSKILLS\nProduct operations, Jira, SQL, Python',
+    },
+    {
+      market: 'Japan',
+      text: '氏名: Kai Wang\n電話番号: 130-2254-7015\nメールアドレス: kai@example.com\n所在地: カナダ、オタワ\n志望動機\nプロジェクトマネジメント候補者として、技術チームの進行管理と品質改善に貢献したいです。\n学歴\nオタワ大学 電気・コンピュータ工学\n職務経歴\nCareer CoPilot プロダクト運用リード',
+    },
+    {
+      market: 'Vietnam',
+      text: 'Kai Wang\nHo Chi Minh City | kai@example.com | https://kairwang.cloud\nProfil professionnel\nCandidate with engineering training, product operations experience, and bilingual stakeholder communication.\nExpérience professionnelle\nCareer CoPilot — Product Operations Lead\n• Led workflow improvements across AI career tools.\nCompétences\nProduct operations, data analysis, Jira, Python',
+    },
+  ])('keeps a $market regional formatted resume inside the quality gate', ({ market, text }) => {
+    const style = getResumeMarketStyle(market);
+    const result = assessFormattedResume(text);
+    const sections = parseResumeSections(cleanResumeDisplay(text));
+    const header = parseResumeHeader(sections.find((section) => section.title === 'Header')?.content ?? '');
+
+    expect(result.status).not.toBe('needs_regen');
+    expect(style.pageSize).toBe(market === 'Canada' ? 'letter' : 'a4');
+    expect(header.name.length).toBeGreaterThan(0);
+    expect(sections.filter((section) => section.title !== 'Header').length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -46,6 +46,7 @@ const RESUME_FORMAT_ISSUE_LABELS: Record<string, string> = {
   pipe_table: 'A table-like layout is still present.',
   no_sections: 'The resume did not split into clear sections.',
   overlong_header: 'The header area is still too dense.',
+  garbled_header: 'Contact details are still mixed into the name/header.',
 };
 
 const readinessRank: Record<ReadinessSeverity, number> = {
