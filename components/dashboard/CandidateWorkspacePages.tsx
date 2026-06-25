@@ -22,6 +22,13 @@ import type { AppSession as Session } from '../../lib/data';
 import type { AnalysisResult, Improvement, UserProfile } from '../../types';
 import { ALL_PLANS, PLAN_HIERARCHY } from '../../config';
 import { createBillingPortalSession } from '../../services/subscriptionClient';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 
 type WorkspaceView = 'dashboard' | 'resume' | 'talent_profile' | 'jobs' | 'interview' | 'plan' | 'toolkit' | 'billing';
 
@@ -803,6 +810,7 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
   const isPending = currentStatus.startsWith('pending_');
   const hasActivePaidPlan = currentLevel > 0 && !isPending;
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [planToConfirm, setPlanToConfirm] = useState<CandidatePlanKey | null>(null);
   const openingPortalRef = useRef(false);
 
   const handleManageSubscription = async () => {
@@ -817,6 +825,20 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
       setOpeningPortal(false);
     }
   };
+
+  const handleSelectPlan = (planKey: CandidatePlanKey) => {
+    if (savingPlan !== null || planKey === currentPlanKey) return;
+    setPlanToConfirm(planKey);
+  };
+
+  const handleConfirmPlanChange = () => {
+    if (!planToConfirm || savingPlan !== null) return;
+    const planKey = planToConfirm;
+    setPlanToConfirm(null);
+    onSelectPlan(planKey);
+  };
+
+  const planForConfirmation = planToConfirm ? ALL_PLANS[planToConfirm] : null;
 
   return (
     <div className="space-y-6">
@@ -934,7 +956,7 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => onSelectPlan(planKey)}
+                  onClick={() => handleSelectPlan(planKey)}
                   disabled={isCurrent || savingPlan !== null}
                   className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
                     isCurrent
@@ -952,6 +974,45 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
           })}
         </div>
       </Panel>
+      <Dialog
+        open={Boolean(planToConfirm)}
+        onOpenChange={(open) => {
+          if (!open && savingPlan === null) setPlanToConfirm(null);
+        }}
+      >
+        <DialogContent maxWidth="sm" className="p-6 sm:p-7">
+          <DialogHeader className="text-left">
+            <DialogTitle>{t('ws_billing_available_plans')}</DialogTitle>
+            <DialogDescription className="not-sr-only pt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              {planForConfirmation
+                ? `${t(`plan_${planForConfirmation.key}_name`)} · ${planForConfirmation.price}`
+                : t('ws_billing_available_desc')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-100">
+            {t('ws_billing_available_desc')}
+          </div>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setPlanToConfirm(null)}
+              disabled={savingPlan !== null}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              {t('dashboard_cancel_update')}
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmPlanChange}
+              disabled={!planToConfirm || savingPlan !== null}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingPlan !== null && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {savingPlan !== null ? t('ws_billing_updating') : t('business_page_plan_cta')}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
