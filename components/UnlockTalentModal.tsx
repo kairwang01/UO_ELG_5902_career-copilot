@@ -37,6 +37,7 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
   t,
 }) => {
   const [isPaying, setIsPaying] = useState(false);
+  const [upgradeConfirmOpen, setUpgradeConfirmOpen] = useState(false);
   const [unlockFee, setUnlockFee] = useState<string>(
     t('unlock_modal_fee_loading'),
   );
@@ -80,8 +81,10 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
   }, [hasWallet, t]);
 
   const handleUnlock = async () => {
+    if (isPaying) return;
     if (!canUnlock) {
-      navigateToBusinessPricing();
+      setError(null);
+      setUpgradeConfirmOpen(true);
       return;
     }
     if (!candidate.nft_token_id) {
@@ -128,6 +131,16 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
     }
   };
 
+  const handleOpenUpgradeConfirm = () => {
+    setError(null);
+    setUpgradeConfirmOpen(true);
+  };
+
+  const handleConfirmUpgrade = () => {
+    setUpgradeConfirmOpen(false);
+    navigateToBusinessPricing();
+  };
+
   return (
     <ViewportAwareDialog open onClose={onClose} closeOnBackdrop labelledBy="unlock-modal-title" maxWidth={448} zIndex={70}>
       <div className="rounded-xl bg-white shadow-2xl dark:bg-slate-800">
@@ -163,7 +176,16 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
           </p>
 
           <div className="my-6">
-            {canUnlock ? (
+            {upgradeConfirmOpen ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-left dark:border-amber-900/50 dark:bg-amber-950/25">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                  {t('business_page_pricing_title')}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-amber-800 dark:text-amber-100/80">
+                  {t('site_pricing_business_upsell_banner')}
+                </p>
+              </div>
+            ) : canUnlock ? (
               <p className="text-gray-600 dark:text-gray-300">
                 {t('unlock_modal_desc')}
               </p>
@@ -174,7 +196,7 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
             )}
           </div>
 
-          {canUnlock && (
+          {canUnlock && !upgradeConfirmOpen && (
             <div className="p-4 bg-gray-100 dark:bg-slate-700 rounded-lg">
               <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">
                 {t('unlock_modal_unlock_fee')}
@@ -203,16 +225,26 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
         </div>
         <div className="p-4 border-t bg-gray-50 rounded-b-xl grid grid-cols-2 gap-3 dark:border-slate-700 dark:bg-slate-900/40">
           <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
+            type="button"
+            onClick={upgradeConfirmOpen ? () => setUpgradeConfirmOpen(false) : onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
           >
             {t('unlock_modal_cancel')}
           </button>
-          {canUnlock ? (
+          {upgradeConfirmOpen ? (
             <button
+              type="button"
+              onClick={handleConfirmUpgrade}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            >
+              {t('unlock_modal_upgrade_button')}
+            </button>
+          ) : canUnlock ? (
+            <button
+              type="button"
               onClick={handleUnlock}
               disabled={isPaying || !hasWallet}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-400"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:bg-blue-400"
             >
               {!hasWallet
                 ? t('unlock_modal_wallet_required')
@@ -222,8 +254,9 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
             </button>
           ) : (
             <button
-              onClick={navigateToBusinessPricing}
-              className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700"
+              type="button"
+              onClick={handleOpenUpgradeConfirm}
+              className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500/40"
             >
               {t('unlock_modal_upgrade_button')}
             </button>
