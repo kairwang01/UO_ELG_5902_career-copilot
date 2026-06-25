@@ -306,6 +306,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const [report, setReport] = useState<InterviewSessionReport | null>(null);
     const [lockedReport, setLockedReport] = useState<LockedSessionReport | null>(null);
     const [unlocking, setUnlocking] = useState(false);
+    const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
     const [openBreakdown, setOpenBreakdown] = useState<number | null>(null);
     const [historyItems, setHistoryItems] = useState<InterviewSessionHistoryItem[]>([]);
     const [historyOpen, setHistoryOpen] = useState(true);
@@ -672,6 +673,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
 
     const handleUnlock = async () => {
         if (!lockedReport || unlocking) return;
+        setUnlockConfirmOpen(false);
         setUnlocking(true);
         setError(null);
         try {
@@ -690,6 +692,11 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
 
     const openUpgradePrompt = () => {
         setUpgradePromptOpen(true);
+    };
+
+    const openUnlockConfirm = () => {
+        if (!lockedReport || unlocking) return;
+        setUnlockConfirmOpen(true);
     };
 
     const confirmUpgradeNavigation = () => {
@@ -739,6 +746,54 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                     >
                         <Crown className="h-4 w-4" aria-hidden="true" />
                         {t('mi_paid_only_cta')}
+                    </button>
+                </div>
+            </div>
+        </ViewportAwareDialog>
+    ) : null;
+
+    const unlockConfirmDialog = unlockConfirmOpen && lockedReport ? (
+        <ViewportAwareDialog
+            open
+            onClose={() => setUnlockConfirmOpen(false)}
+            closeOnBackdrop
+            labelledBy="mock-interview-unlock-title"
+            maxWidth={448}
+            zIndex={96}
+        >
+            <div className="rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+                <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                        <Lock className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                        <h3 id="mock-interview-unlock-title" className="text-lg font-bold text-slate-950 dark:text-slate-50">
+                            {t('credit_modal_confirm_title').replace('{cost}', String(lockedReport.unlockCredits))}
+                        </h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                            {t('mi_locked_desc').replace('{n}', String(lockedReport.preview.perQuestionCount))}
+                        </p>
+                    </div>
+                </div>
+                <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm leading-6 text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-100">
+                    {t('mi_unlock_button').replace('{n}', String(lockedReport.unlockCredits))}
+                </div>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <button
+                        type="button"
+                        onClick={() => setUnlockConfirmOpen(false)}
+                        disabled={unlocking}
+                        className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                        {t('credit_modal_cancel')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleUnlock}
+                        disabled={unlocking}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-violet-800 focus:outline-none focus:ring-2 focus:ring-violet-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {unlocking ? t('mi_unlocking') : t('credit_modal_confirm_cta')}
                     </button>
                 </div>
             </div>
@@ -1120,7 +1175,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                             <Lock className="h-8 w-8 text-gray-400 dark:text-slate-500" />
                             <button
                                 type="button"
-                                onClick={handleUnlock}
+                                onClick={openUnlockConfirm}
                                 disabled={unlocking}
                                 className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-bold rounded-lg shadow-lg"
                             >
@@ -1145,6 +1200,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         </button>
                     </div>
                 </div>
+                {unlockConfirmDialog}
                 {upgradePromptDialog}
                 </>
             );
