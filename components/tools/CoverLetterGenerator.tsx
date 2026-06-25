@@ -3,12 +3,18 @@ import { BriefcaseBusiness, CheckCircle2, ClipboardList, FileText, PenLine, Shie
 import { generateCoverLetter } from '../../services/aiClient';
 import type { CoverLetter } from '../../types';
 import StagedLoader from '../StagedLoader';
-import { CopyButton, DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
+import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { useApiStatus } from '../../contexts/ApiStatusContext';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
 import type { AppSession as Session } from '../../lib/data';
+import {
+  assessCoverLetterDraft,
+  canExportCoverLetter,
+  CoverLetterExportGate,
+  CoverLetterQualityNotice,
+} from './CoverLetterActions';
 
 interface CoverLetterGeneratorProps {
   resumeText: string;
@@ -56,7 +62,7 @@ Requirements:
 - Clear written communication and ownership in cross-functional teams`;
 
 const hasMeaningfulCoverLetter = (value: Partial<CoverLetter> | null | undefined) =>
-  Boolean(value?.letter?.trim() && value.letter.trim().length > 80);
+  Boolean(value?.letter?.trim());
 
 const extractJobTitle = (text: string) => {
   const match = text.match(/(?:^|\n)\s*(?:job\s*title|role|position)\s*:\s*(.+)/i);
@@ -126,7 +132,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   };
 
   useEffect(() => {
-    if (saved && !result && hasMeaningfulCoverLetter(saved.result)) {
+    if (saved && !result && hasMeaningfulCoverLetter(saved.result) && canExportCoverLetter(assessCoverLetterDraft(saved.result.letter))) {
       setResult(saved.result);
       setEditableResult(saved.result.letter);
       setJobDescription(saved.result.jobDescription || '');
@@ -181,6 +187,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
       if (!hasMeaningfulCoverLetter(apiResult)) {
         throw new Error(t('ai_error_empty_response'));
       }
+      const validation = assessCoverLetterDraft(apiResult.letter);
       const nextResult: CoverLetterResult = {
         ...apiResult,
         jobDescription: nextInput,
@@ -190,7 +197,9 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
       setResult(nextResult);
       setEditableResult(nextResult.letter);
       setFromSaved(false);
-      persist(nextResult);
+      if (canExportCoverLetter(validation)) {
+        persist(nextResult);
+      }
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -368,16 +377,20 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     const jobTitle = extractJobTitle(result.jobDescription || jobDescription);
     const company = extractCompany(result.jobDescription || jobDescription);
     const letterLength = describeTextLength(editableResult, isChineseUi);
+    const validation = assessCoverLetterDraft(editableResult);
 
     return (
       <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
-        <SavedResultBar
-          t={t}
-          canSave={canSave}
-          isSaved={fromSaved}
-          savedAt={saved?.savedAt ?? null}
-          onTryNext={resetResult}
-        />
+        {canExportCoverLetter(validation) && (
+          <SavedResultBar
+            t={t}
+            canSave={canSave}
+            isSaved={fromSaved}
+            savedAt={saved?.savedAt ?? null}
+            onTryNext={resetResult}
+          />
+        )}
+        <CoverLetterQualityNotice validation={validation} />
 
         <CardShell className="overflow-hidden">
           <div className="border-b border-slate-200 bg-slate-50 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6 lg:px-8">
@@ -395,8 +408,14 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <CopyButton text={editableResult} label={ui.copyLetter} copiedLabel={ui.copied} />
-                <DownloadButtons textContent={editableResult} baseFilename="cover_letter" />
+                <CoverLetterExportGate
+                  validation={validation}
+                  text={editableResult}
+                  copyLabel={ui.copyLetter}
+                  copiedLabel={ui.copied}
+                  regenerateLabel={t('tool_cover_letter_generate_button')}
+                  onRegenerate={() => void runTool(result.jobDescription || jobDescription)}
+                />
               </div>
             </div>
           </div>
