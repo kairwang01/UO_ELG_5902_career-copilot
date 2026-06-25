@@ -1805,6 +1805,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const [mode, setMode] = useState<"general" | "matching">("general");
   const [files, setFiles] = useState<BulkAnalysisItem[]>([]);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [removeFileTarget, setRemoveFileTarget] = useState<BulkAnalysisItem | null>(null);
   const [market, setMarket] = useState<string>(DEFAULT_MARKET);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -2232,6 +2233,12 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
     if (viewPrepKitId === id) setViewPrepKitId(null);
     if (viewBlindResumeId === id) setViewBlindResumeId(null);
     if (showDetailModal?.id === id) setShowDetailModal(null);
+    setRemoveFileTarget(null);
+  };
+
+  const requestRemoveFile = (id: string) => {
+    const target = files.find((file) => file.id === id);
+    if (target) setRemoveFileTarget(target);
   };
 
   const handleBlindResumeAction = (id: string) => {
@@ -2810,7 +2817,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                 )}
                 <QueueStatusList
                   files={displayFiles}
-                  onRemove={removeFile}
+                  onRemove={requestRemoveFile}
                   t={t}
                 />
                 {currentFilter === "complete" &&
@@ -2875,7 +2882,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => removeFile(file.id)}
+                            onClick={() => requestRemoveFile(file.id)}
                             className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full"
                             title={t("agency_action_remove")}
                             aria-label={t("agency_action_remove")}
@@ -2897,7 +2904,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                   onAnonymize={handleBlindResumeAction}
                   onPrep={handlePrepKitAction}
                   onPitch={handlePitchAction}
-                  onRemove={removeFile}
+                  onRemove={requestRemoveFile}
                   t={t}
                 />
 
@@ -2938,6 +2945,22 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
         onConfirm={() => {
           setFiles([]);
           setClearConfirmOpen(false);
+        }}
+      />
+      <ConfirmActionDialog
+        open={Boolean(removeFileTarget)}
+        title={t("agency_action_remove")}
+        description="Remove this resume from the agency workspace?"
+        detail={removeFileTarget?.fileName}
+        cancelLabel={t("dashboard_cancel_update")}
+        confirmLabel={t("agency_action_remove")}
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open) setRemoveFileTarget(null);
+        }}
+        onCancel={() => setRemoveFileTarget(null)}
+        onConfirm={() => {
+          if (removeFileTarget) removeFile(removeFileTarget.id);
         }}
       />
     </div>

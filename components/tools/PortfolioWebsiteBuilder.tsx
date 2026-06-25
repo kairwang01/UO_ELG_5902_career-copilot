@@ -5,6 +5,7 @@ import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, User
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useToast } from '../Toast';
+import ConfirmActionDialog from '../ConfirmActionDialog';
 import { ToolError } from './ToolUtils';
 import type { AppSession as Session } from '../../lib/data';
 import PortfolioPreviewViewer, { applyPortfolioTheme, PORTFOLIO_TEMPLATES } from '../showcase/PortfolioPreviewViewer';
@@ -699,6 +700,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const [currentStep, setCurrentStep] = useState<'template' | 'details' | 'result'>('template');
   const [details, setDetails] = useState({ tagline: '', bio: '', theme: 'sapphire' });
   const [projects, setProjects] = useState<Project[]>([DEFAULT_PROJECT]);
+  const [clearDraftConfirmOpen, setClearDraftConfirmOpen] = useState(false);
+  const [projectRemoveTarget, setProjectRemoveTarget] = useState<Project | null>(null);
   
   const [headshotStep, setHeadshotStep] = useState<'initial' | 'camera' | 'photo_uploaded' | 'generating' | 'generated' | 'final_selected'>('initial');
   // Headshot failures get their own state so the message shows next to the
@@ -1110,7 +1113,10 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const handleDetailChange = (field: keyof typeof details, value: string) => setDetails(prev => ({ ...prev, [field]: value }));
   const handleProjectChange = (id: number, field: string, value: string) => setProjects(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
   const addProject = () => setProjects(prev => [...prev, { id: createProjectId(), title: '', description: '', url: '', category: 'Web' }]);
-  const removeProject = (id: number) => setProjects(prev => prev.filter(p => p.id !== id));
+  const removeProject = (id: number) => {
+    setProjects(prev => prev.filter(p => p.id !== id));
+    setProjectRemoveTarget(null);
+  };
 
   const clearSavedDraft = async () => {
     const uid = session?.user?.id;
@@ -1126,6 +1132,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setResult(null);
       setCurrentStep('template');
       setDraftStatus('idle');
+      setClearDraftConfirmOpen(false);
       addToast(t('tool_portfolio_draft_cleared'), 'success');
     } catch (err) {
       if (!mountedRef.current) return;
@@ -1342,7 +1349,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 {session?.user?.id && (
                     <button
                         type="button"
-                        onClick={clearSavedDraft}
+                        onClick={() => setClearDraftConfirmOpen(true)}
                         className="px-3 py-1.5 rounded-full text-xs font-bold border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                     >
                         {t('tool_portfolio_clear_draft_button')}
@@ -1406,7 +1413,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                     {projects.map(p => (
                         <div key={p.id} className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm relative group overflow-hidden">
                             {projects.length > 1 && (
-                                <button type="button" aria-label={isChineseUi ? `移除 ${p.title || '项目'}` : `Remove ${p.title || 'project'}`} onClick={() => removeProject(p.id)} className="absolute top-4 right-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full h-8 w-8 flex items-center justify-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100">
+                                <button type="button" aria-label={isChineseUi ? `移除 ${p.title || '项目'}` : `Remove ${p.title || 'project'}`} onClick={() => setProjectRemoveTarget(p)} className="absolute top-4 right-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full h-8 w-8 flex items-center justify-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                                 </button>
                             )}
@@ -1485,6 +1492,36 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             </button>
           </aside>
         </form>
+        <ConfirmActionDialog
+          open={clearDraftConfirmOpen}
+          title={t('tool_portfolio_clear_draft_button')}
+          description={isChineseUi ? '清除已保存的作品集草稿，并重置当前编辑内容？' : 'Clear the saved portfolio draft and reset the current editor content?'}
+          cancelLabel={isChineseUi ? '取消' : 'Cancel'}
+          confirmLabel={t('tool_portfolio_clear_draft_button')}
+          loadingLabel={t('tool_portfolio_draft_status_saving')}
+          tone="danger"
+          onOpenChange={(open) => {
+            if (!open) setClearDraftConfirmOpen(false);
+          }}
+          onCancel={() => setClearDraftConfirmOpen(false)}
+          onConfirm={() => void clearSavedDraft()}
+        />
+        <ConfirmActionDialog
+          open={Boolean(projectRemoveTarget)}
+          title={isChineseUi ? '移除项目' : 'Remove project'}
+          description={isChineseUi ? '从作品集草稿中移除这个项目？' : 'Remove this project from the portfolio draft?'}
+          detail={projectRemoveTarget?.title || projectRemoveTarget?.category}
+          cancelLabel={isChineseUi ? '取消' : 'Cancel'}
+          confirmLabel={isChineseUi ? '移除项目' : 'Remove project'}
+          tone="danger"
+          onOpenChange={(open) => {
+            if (!open) setProjectRemoveTarget(null);
+          }}
+          onCancel={() => setProjectRemoveTarget(null)}
+          onConfirm={() => {
+            if (projectRemoveTarget) removeProject(projectRemoveTarget.id);
+          }}
+        />
     </div>
     );
   };

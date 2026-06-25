@@ -5,6 +5,7 @@ import { SUPPORTED_MARKETS } from '../config';
 import { extractTextFromUrl } from '../services/aiClient';
 import { parseFile } from '../services/fileHelpers';
 import ResumePreview from './ResumePreview';
+import ConfirmActionDialog from './ConfirmActionDialog';
 
 interface UploadSectionProps {
   resumeText: string;
@@ -70,6 +71,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
   const [urlInput, setUrlInput] = useState<string>('');
   const [isParsing, setIsParsing] = useState(false);
   const [isUrlProcessing, setIsUrlProcessing] = useState(false);
+  const [removeFileConfirmOpen, setRemoveFileConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Shared token across the file-parse and URL-import paths: a newer upload/import (or
   // unmount) bumps it so a slow earlier call can't write its content — or persist the
@@ -256,7 +258,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                 {onRemoveResumeFile && (
                   <button
                     type="button"
-                    onClick={onRemoveResumeFile}
+                    onClick={() => setRemoveFileConfirmOpen(true)}
                     className="shrink-0 text-[var(--site-text-muted)] hover:text-[var(--site-risk)] hover:underline"
                   >
                     {t('resume_file_remove')}
@@ -375,6 +377,27 @@ const UploadSection: React.FC<UploadSectionProps> = ({
             </button>
         </div>
       </form>
+      <ConfirmActionDialog
+        open={removeFileConfirmOpen}
+        title={t('resume_file_remove')}
+        description="Remove the saved resume file from your account? Your pasted resume text stays in the editor."
+        detail={storedResumeFile?.name ?? undefined}
+        cancelLabel="Cancel"
+        confirmLabel={t('resume_file_remove')}
+        loadingLabel={t('resume_file_saving')}
+        loading={Boolean(isSavingResumeFile)}
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open && !isSavingResumeFile) setRemoveFileConfirmOpen(false);
+        }}
+        onCancel={() => {
+          if (!isSavingResumeFile) setRemoveFileConfirmOpen(false);
+        }}
+        onConfirm={() => {
+          onRemoveResumeFile?.();
+          setRemoveFileConfirmOpen(false);
+        }}
+      />
     </div>
   );
 };
