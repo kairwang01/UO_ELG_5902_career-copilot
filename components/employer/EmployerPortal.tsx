@@ -5,6 +5,7 @@ import { data } from '../../lib/data';
 import { createSubscriptionCheckout, setUserSubscription } from '../../services/subscriptionClient';
 import AgencyHub from '../AgencyHub';
 import ApplicantFunnel from '../ApplicantFunnel';
+import RecoverableSectionBoundary from '../RecoverableSectionBoundary';
 import { PortalSidebar, type PortalPage } from './PortalSidebar';
 import { PortalTopBar } from './PortalTopBar';
 import { PortalAccountMenuProvider } from './PortalAccountMenuContext';
@@ -315,12 +316,22 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
           <main ref={mainRef} className="flex-1 overflow-y-auto" data-qa-employer-page="applicant-funnel">
             <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
             <div className="mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8">
-              <ApplicantFunnel
-                job={jobForFunnel}
-                employerUid={session.user.id}
-                onBack={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
-                t={t}
-              />
+              <RecoverableSectionBoundary
+                resetKey={`applicant-funnel:${jobForFunnel.id}:${jobForFunnel.updated_at ?? ''}`}
+                title={t('applicant_funnel_error_title')}
+                description={t('applicant_funnel_load_error')}
+                retryLabel={t('applicant_funnel_retry')}
+                onRetry={fetchData}
+                secondaryLabel={t('applicant_funnel_back')}
+                onSecondaryAction={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
+              >
+                <ApplicantFunnel
+                  job={jobForFunnel}
+                  employerUid={session.user.id}
+                  onBack={() => { setJobForFunnel(null); setCurrentPage(prevPage); }}
+                  t={t}
+                />
+              </RecoverableSectionBoundary>
             </div>
           </main>
         </div>
