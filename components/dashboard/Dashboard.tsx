@@ -345,14 +345,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         )),
       ]);
 
-      const unavailableSections: string[] = [];
+      const unavailableHistorySections: string[] = [];
       let analyses: Record<string, unknown>[] = [];
       let activities: (Record<string, unknown> & { id: string })[] = [];
 
       if (analysesResult.status === 'fulfilled') {
         analyses = analysesResult.value.docs.map((doc) => doc.data());
       } else {
-        unavailableSections.push(t('dashboard_section_readiness_history'));
+        unavailableHistorySections.push(t('dashboard_section_readiness_history'));
         setScoreData([]);
         setTopSkills([]);
         setPriorityFixCount(null);
@@ -385,7 +385,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
           ...doc.data(),
         }));
       } else {
-        unavailableSections.push(t('dashboard_section_recent_activity'));
+        unavailableHistorySections.push(t('dashboard_section_recent_activity'));
         setActivityFeed([]);
       }
 
@@ -417,7 +417,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         ? insightResult.value.docs[0]?.data()
         : null;
       if (insightResult.status === 'rejected') {
-        unavailableSections.push(t('dashboard_section_weekly_history'));
+        unavailableHistorySections.push(t('dashboard_section_weekly_history'));
       }
 
       if (insight && typeof insight.summary_text === 'string' && insight.summary_text.trim().length > 0) {
@@ -439,13 +439,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
                 created_at: serverTimestamp(),
               });
             } catch {
-              unavailableSections.push(t('dashboard_section_save_summary'));
+              // The generated summary is still usable. Treat history persistence
+              // as a background sync concern instead of a user-facing failure.
             }
           } else {
             setWeeklySummary(t('dashboard_welcome_summary'));
           }
         } catch {
-          unavailableSections.push(t('dashboard_section_generated_summary'));
           setWeeklySummary(t('dashboard_generated_summary_fallback'));
         }
       } else {
@@ -453,12 +453,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
       }
 
       setError(
-        unavailableSections.length > 0
-          ? t('dashboard_partial_data_error').replace('{sections}', unavailableSections.join(', '))
+        unavailableHistorySections.length > 0
+          ? t('dashboard_partial_data_error').replace('{sections}', unavailableHistorySections.join(', '))
           : null,
       );
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('dashboard_history_load_error'));
+      setError(t('dashboard_history_load_error'));
       setWeeklySummary(t('dashboard_generated_summary_fallback'));
     } finally {
       setLoading(false);
