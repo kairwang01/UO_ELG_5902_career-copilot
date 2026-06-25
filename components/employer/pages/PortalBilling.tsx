@@ -116,6 +116,7 @@ export function PortalBilling({
   const [requestedPlanKey, setRequestedPlanKey] = useState<string | null>(null);
   const [openingPortal, setOpeningPortal] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
+  const plansRef = useRef<HTMLElement>(null);
   const currentStatus = profile.subscription_status || 'free';
   const currentPlanKey = stripPendingPrefix(currentStatus);
   const currentPlan = resolvePlanDisplay(currentStatus);
@@ -141,7 +142,8 @@ export function PortalBilling({
 
   const handleManageBilling = async () => {
     if (!isActive) {
-      navigateToBusinessPricing();
+      setPortalError(null);
+      plansRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     if (openingPortal || openingPortalRef.current) return;
@@ -194,8 +196,12 @@ export function PortalBilling({
             ) : (
               <CreditCard size={15} />
             )}
-            {openingPortal ? t('portal_billing_opening_portal') : t('portal_billing_manage')}
-            {!isActive && !openingPortal && <ArrowUpRight size={15} />}
+            {openingPortal
+              ? t('portal_billing_opening_portal')
+              : isActive
+                ? t('portal_billing_manage')
+                : t('portal_billing_available_plans')}
+            {!isActive && !openingPortal && <ArrowUpRight size={15} aria-hidden="true" />}
           </button>
         </div>
 
@@ -300,7 +306,7 @@ export function PortalBilling({
           </div>
         </section>
 
-        <section>
+        <section ref={plansRef}>
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className={sectionLabel}>{t('portal_billing_available_plans')}</p>
