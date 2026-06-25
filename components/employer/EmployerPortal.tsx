@@ -3,6 +3,7 @@ import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { data } from '../../lib/data';
 import { createSubscriptionCheckout, setUserSubscription } from '../../services/subscriptionClient';
+import { shouldRedirectBusinessPlanToCheckout } from '../../lib/access/businessEntryDecisions';
 import AgencyHub from '../AgencyHub';
 import ApplicantFunnel from '../ApplicantFunnel';
 import RecoverableSectionBoundary from '../RecoverableSectionBoundary';
@@ -235,7 +236,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
     try {
       const pendingPlanKey = `pending_biz_${planKey}`;
       const result = await setUserSubscription(pendingPlanKey);
-      if (result.status === 'pending_payment') {
+      if (shouldRedirectBusinessPlanToCheckout(planKey, result.status)) {
         const checkout = await createSubscriptionCheckout(pendingPlanKey);
         window.location.assign(checkout.url);
         return;

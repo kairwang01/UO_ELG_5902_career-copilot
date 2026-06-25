@@ -55,6 +55,10 @@ import OnboardingFlow from './components/onboarding/OnboardingFlow';
 import WorkspaceTour from './components/onboarding/WorkspaceTour';
 import { isOnboardingDue, isTourDone, loadBirthdayLocal, loadPendingOnboardingName, markTourDone } from './lib/onboarding';
 import { hasBusinessPortalAccess, normalizeBusinessSubscriptionStatus } from './lib/access/businessAccess';
+import {
+  DEFAULT_BUSINESS_ENTRY_PLAN,
+  shouldRedirectBusinessPlanToCheckout,
+} from './lib/access/businessEntryDecisions';
 import { decideWorkspaceShell } from './lib/access/navigationDecisions';
 import { decideSessionTransition } from './lib/access/sessionTransitions';
 import { useSession } from './contexts/SessionContext';
@@ -507,7 +511,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             const subscriptionResult = await setUserSubscription(planKey, {
               fullName: user.user_metadata?.full_name || loadPendingOnboardingName(),
             });
-            if (subscriptionResult.status === 'pending_payment') {
+            if (shouldRedirectBusinessPlanToCheckout(pendingPlan, subscriptionResult.status)) {
               const checkout = await createSubscriptionCheckout(planKey);
               window.location.assign(checkout.url);
               return;
@@ -664,7 +668,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     try {
       const pendingPlanKey = `pending_biz_${planKey}`;
       const result = await setUserSubscription(pendingPlanKey);
-      if (result.status === 'pending_payment') {
+      if (shouldRedirectBusinessPlanToCheckout(planKey, result.status)) {
         const checkout = await createSubscriptionCheckout(pendingPlanKey);
         window.location.assign(checkout.url);
         return;

@@ -17,6 +17,7 @@ import { Button } from '../ui/button';
 import { Check } from 'lucide-react';
 import CheckoutRedirectNotice from '../billing/CheckoutRedirectNotice';
 import { businessPlanDefs, type BusinessPlanId } from './businessPlans';
+import { shouldRedirectBusinessPlanToCheckout } from '../../lib/access/businessEntryDecisions';
 
 interface Props {
   isOpen: boolean;
@@ -105,7 +106,7 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
         // so a `!mountedRef.current` return here would SKIP the redirect and strand
         // a paid signup in the portal with an unpaid pending account.
         // window.location.assign is a navigation — safe regardless of mount state.
-        if (!profileError && subscriptionResult.status === 'pending_payment') {
+        if (!profileError && shouldRedirectBusinessPlanToCheckout(selectedPlan, subscriptionResult.status)) {
           const checkout = await createSubscriptionCheckout(pendingPlanKey);
           window.location.assign(checkout.url);
           return;

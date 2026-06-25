@@ -16,6 +16,7 @@ const INPUT_CLASS =
 import { markOnboardingPending } from '../lib/onboarding';
 import { createSubscriptionCheckout, setUserSubscription } from '../services/subscriptionClient';
 import { useToast } from './Toast';
+import { shouldRedirectBusinessPlanToCheckout } from '../lib/access/businessEntryDecisions';
 
 /**
  * Password input with a show/hide toggle — a standard auth affordance that lets
@@ -253,7 +254,11 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
         // navigates the new session away (unmounting this modal), so a guard here
         // would skip the redirect and strand a paid signup with an unpaid account.
         // window.location.assign is a navigation — safe regardless of mount state.
-        if (!profileError && subscriptionResult.status === 'pending_payment') {
+        if (
+          !profileError &&
+          subscriptionResult.status === 'pending_payment' &&
+          (mode !== 'business' || shouldRedirectBusinessPlanToCheckout(selectedPlan, subscriptionResult.status))
+        ) {
           const checkout = await createSubscriptionCheckout(planKeyForServer);
           window.location.assign(checkout.url);
           return;

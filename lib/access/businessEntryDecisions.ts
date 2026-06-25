@@ -10,6 +10,13 @@ export function requiresBusinessPlanPaymentConfirmation(planKey: string): boolea
   return planKey !== DEFAULT_BUSINESS_ENTRY_PLAN;
 }
 
+export function shouldRedirectBusinessPlanToCheckout(
+  planKey: string,
+  status: string | null | undefined,
+): boolean {
+  return status === 'pending_payment' && requiresBusinessPlanPaymentConfirmation(planKey);
+}
+
 interface BusinessPortalActionInput {
   hasSession: boolean;
   canEnterBusinessPortal: boolean;

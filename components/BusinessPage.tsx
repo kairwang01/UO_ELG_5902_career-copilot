@@ -453,11 +453,11 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                   return;
                 }
                 setModal('none');
-                window.requestAnimationFrame(handleViewPricing);
+                onSelectBusinessPlan(DEFAULT_BUSINESS_ENTRY_PLAN);
               }}
               className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#1D4ED8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e40af] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40"
             >
-              {accessPromptPlan ? t('business_page_plan_cta') : t('business_page_pricing_title')}
+              {t('business_page_plan_cta')}
             </button>
           </div>
         </DialogContent>

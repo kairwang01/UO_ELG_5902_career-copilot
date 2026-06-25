@@ -3,6 +3,7 @@ import {
   DEFAULT_BUSINESS_ENTRY_PLAN,
   decideBusinessPortalAction,
   requiresBusinessPlanPaymentConfirmation,
+  shouldRedirectBusinessPlanToCheckout,
 } from '../lib/access/businessEntryDecisions';
 
 describe('business entry decisions', () => {
@@ -46,5 +47,12 @@ describe('business entry decisions', () => {
     expect(requiresBusinessPlanPaymentConfirmation('free')).toBe(false);
     expect(requiresBusinessPlanPaymentConfirmation('starter')).toBe(true);
     expect(requiresBusinessPlanPaymentConfirmation('growth')).toBe(true);
+  });
+
+  it('never redirects the free business plan to checkout even if backend state is stale', () => {
+    expect(shouldRedirectBusinessPlanToCheckout('free', 'pending_payment')).toBe(false);
+    expect(shouldRedirectBusinessPlanToCheckout('starter', 'pending_payment')).toBe(true);
+    expect(shouldRedirectBusinessPlanToCheckout('growth', 'active')).toBe(false);
+    expect(shouldRedirectBusinessPlanToCheckout('pro', undefined)).toBe(false);
   });
 });
