@@ -313,7 +313,11 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
           <PortalSidebar {...sidebarProps} currentPage={prevPage} />
           {renderMobileNavDrawer(prevPage)}
-          <main ref={mainRef} className="flex-1 overflow-y-auto" data-qa-employer-page="applicant-funnel">
+          <main
+            ref={mainRef}
+            className="flex-1 overflow-y-auto pb-[var(--cookie-consent-bottom-space,0px)] transition-[padding-bottom] duration-200"
+            data-qa-employer-page="applicant-funnel"
+          >
             <PortalTopBar title={`${t('portal_title_applicants_for')} — ${jobForFunnel.title}`} darkMode={darkMode} />
             <div className="mx-auto max-w-[1088px] p-4 animate-view-fade sm:p-6 lg:p-8">
               <RecoverableSectionBoundary
@@ -345,7 +349,11 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
         <PortalSidebar {...sidebarProps} currentPage={currentPage} />
         {renderMobileNavDrawer(currentPage)}
 
-        <main ref={mainRef} className="flex-1 overflow-y-auto" data-qa-employer-page={currentPage}>
+        <main
+          ref={mainRef}
+          className="flex-1 overflow-y-auto pb-[var(--cookie-consent-bottom-space,0px)] transition-[padding-bottom] duration-200"
+          data-qa-employer-page={currentPage}
+        >
           {currentPage === 'dashboard' && (
             <PortalDashboard
               jobPostings={jobPostings}

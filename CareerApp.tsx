@@ -1409,7 +1409,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             </div>
           </header>
           <main
-            className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10"
+            className="flex-1 overflow-y-auto bg-slate-50 px-6 pb-[calc(1.5rem+var(--cookie-consent-bottom-space,0px))] pt-6 transition-[padding-bottom] duration-200 dark:bg-slate-950 md:px-10 md:pb-10 md:pt-10"
             data-qa-workspace-view={dashboardView}
           >
             <div className="max-w-6xl mx-auto" data-tour="main">
