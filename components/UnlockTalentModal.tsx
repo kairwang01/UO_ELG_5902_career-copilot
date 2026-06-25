@@ -137,6 +137,8 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
   };
 
   const handleConfirmUpgrade = () => {
+    if (isPaying) return;
+    setIsPaying(true);
     setUpgradeConfirmOpen(false);
     navigateToBusinessPricing();
   };
@@ -235,9 +237,10 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
             <button
               type="button"
               onClick={handleConfirmUpgrade}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              disabled={isPaying}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {t('unlock_modal_upgrade_button')}
+              {isPaying ? t('portal_billing_updating') : t('unlock_modal_upgrade_button')}
             </button>
           ) : canUnlock ? (
             <button
