@@ -48,6 +48,7 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
     sendRunRef.current += 1;
     sendingRef.current = false;
     setSending(false);
+    setMessages([]);
     setError(null);
     setDraft('');
     setTemplate('custom');
@@ -55,7 +56,16 @@ const ApplicationMessageThread: React.FC<ApplicationMessageThreadProps> = ({ app
 
   useEffect(() => {
     if (!applicationId) return;
-    const unsub = subscribeApplicationMessages(applicationId, setMessages, () => setError(t('msg_load_error')));
+    const targetId = applicationId;
+    const unsub = subscribeApplicationMessages(
+      targetId,
+      (nextMessages) => {
+        if (mountedRef.current && applicationId === targetId) setMessages(nextMessages);
+      },
+      () => {
+        if (mountedRef.current && applicationId === targetId) setError(t('msg_load_error'));
+      },
+    );
     return () => unsub();
   }, [applicationId, t]);
 

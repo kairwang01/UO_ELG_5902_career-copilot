@@ -3,25 +3,11 @@
  * live via Firestore (rules allow each party to read their own application's thread).
  */
 import { httpsCallable } from 'firebase/functions';
-import { collection, onSnapshot, orderBy, query, where, type Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { firebaseFunctions, firestoreDb } from '../lib/firebaseClient';
+import { normalizeApplicationMessage, type ApplicationMessage, type MessageTemplateKey } from '../lib/applicationMessageNormalize';
 
-export type MessageTemplateKey =
-  | 'interview_invite'
-  | 'request_info'
-  | 'rejection'
-  | 'offer_followup'
-  | 'custom';
-
-export interface ApplicationMessage {
-  id: string;
-  application_id: string;
-  sender_role: 'employer' | 'candidate';
-  sender_uid: string;
-  body: string;
-  template_key: MessageTemplateKey;
-  created_at: Timestamp | null;
-}
+export type { ApplicationMessage, MessageTemplateKey } from '../lib/applicationMessageNormalize';
 
 const sendCallable = httpsCallable<
   { applicationId: string; body: string; templateKey?: string },
@@ -50,7 +36,7 @@ export function subscribeApplicationMessages(
   );
   return onSnapshot(
     q,
-    (snap) => onMessages(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApplicationMessage, 'id'>) }))),
+    (snap) => onMessages(snap.docs.map((d) => normalizeApplicationMessage(d.id, d.data()))),
     (error) => onError?.(error),
   );
 }
