@@ -143,6 +143,10 @@ function assertOverlayState(metrics, label) {
   assertInsideViewport(metrics.coach, metrics.viewport, `${label} coach`);
   assertInsideViewport(metrics.saveBar, metrics.viewport, `${label} save bar`);
   assertInsideViewport(metrics.saveButton, metrics.viewport, `${label} save button`);
+  if (metrics.viewport.width >= 640) {
+    assert(metrics.cookie.height <= 96, `${label}: workspace cookie banner too tall ${JSON.stringify(roundRect(metrics.cookie))}`);
+    assert(metrics.cookie.top <= 128, `${label}: workspace cookie banner should stay near the top edge ${JSON.stringify(roundRect(metrics.cookie))}`);
+  }
   assertNoOverlap(metrics.cookie, metrics.coach, `${label} cookie/coach`);
   assertNoOverlap(metrics.cookie, metrics.saveBar, `${label} cookie/save bar`);
   assertNoOverlap(metrics.cookie, metrics.saveButton, `${label} cookie/save button`);

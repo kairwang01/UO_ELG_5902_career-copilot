@@ -72,8 +72,17 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
     };
 
     const positionClass = avoidSidebar
-        ? 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:bottom-auto sm:left-auto sm:right-4 sm:top-[calc(4.75rem+env(safe-area-inset-top))] sm:w-[23rem] sm:max-w-[calc(100vw-18rem)]'
+        ? 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:bottom-auto sm:left-auto sm:right-4 sm:top-[calc(4.25rem+env(safe-area-inset-top))] sm:w-[min(26rem,calc(100vw-18rem))] sm:max-w-[calc(100vw-1.5rem)]'
         : 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-6 sm:right-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:w-[30rem]';
+    const panelClass = avoidSidebar
+        ? 'rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-lg shadow-slate-900/10 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-200'
+        : 'rounded-2xl border border-slate-700 bg-slate-950/95 text-gray-200 shadow-2xl shadow-slate-950/25 backdrop-blur';
+    const secondaryButtonClass = avoidSidebar
+        ? 'pointer-events-auto min-h-8 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-white dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800 dark:focus:ring-offset-slate-900'
+        : 'pointer-events-auto min-h-10 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950';
+    const primaryButtonClass = avoidSidebar
+        ? 'pointer-events-auto min-h-8 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900'
+        : 'pointer-events-auto min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950';
 
     return (
         <div
@@ -84,17 +93,15 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
             aria-label="Cookie consent"
             data-qa="cookie-consent-banner"
         >
-            <div className={`pointer-events-none rounded-2xl border border-slate-700 bg-slate-950/95 text-gray-200 shadow-2xl shadow-slate-950/25 backdrop-blur ${
-                avoidSidebar ? 'p-3 sm:p-3.5' : 'p-3 sm:p-4'
-            }`}>
-                <div className={`${avoidSidebar ? 'space-y-3 sm:flex sm:items-start sm:gap-3 sm:space-y-0' : ''}`}>
-                    <p className={`${avoidSidebar ? 'min-w-0 flex-1 text-xs leading-5' : 'text-xs leading-5 sm:text-sm'}`}>
+            <div className={`pointer-events-none ${panelClass} ${avoidSidebar ? 'p-2.5 sm:p-3' : 'p-3 sm:p-4'}`}>
+                <div className={`${avoidSidebar ? 'space-y-2 sm:flex sm:items-center sm:gap-3 sm:space-y-0' : ''}`}>
+                    <p className={`${avoidSidebar ? 'min-w-0 flex-1 text-[11px] leading-5 text-slate-600 dark:text-slate-300' : 'text-xs leading-5 sm:text-sm'}`}>
                         {t('cookie_consent_message')}{' '}
                         <a
                             href="/privacy.html"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="pointer-events-auto text-blue-400 underline hover:text-blue-300"
+                            className={`${avoidSidebar ? 'text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200' : 'text-blue-400 hover:text-blue-300'} pointer-events-auto underline`}
                         >
                             {t('cookie_consent_learn_more')}
                         </a>
@@ -103,14 +110,14 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
                         <button
                             type="button"
                             onClick={() => decide('declined')}
-                            className="pointer-events-auto min-h-10 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950"
+                            className={secondaryButtonClass}
                         >
                             {t('cookie_consent_decline')}
                         </button>
                         <button
                             type="button"
                             onClick={() => decide('accepted')}
-                            className="pointer-events-auto min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-950"
+                            className={primaryButtonClass}
                         >
                             {t('cookie_consent_accept')}
                         </button>
