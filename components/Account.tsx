@@ -22,6 +22,7 @@ import { listModels } from '../services/aiClient';
 import { isWeb3Enabled, onWeb3FlagChange, refreshWeb3Enabled } from '../config/featureFlags';
 import { loadBirthdayLocal, saveBirthdayLocal } from '../lib/onboarding';
 import type { UserProfile } from '../types';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 // A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
 const TALENT_NFT_CONTRACT_ADDRESS =
@@ -64,6 +65,8 @@ type AccountNotice = {
   type: 'success' | 'error' | 'info';
   text: string;
 };
+
+type Web3ConfirmAction = 'mint' | 'stake' | 'unstake' | 'claim';
 
 type EthereumProviderLike = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -230,6 +233,7 @@ const Account: React.FC<AccountProps> = ({
   const [profileNotice, setProfileNotice] = useState<AccountNotice | null>(null);
   const [passwordNotice, setPasswordNotice] = useState<AccountNotice | null>(null);
   const [web3Notice, setWeb3Notice] = useState<AccountNotice | null>(null);
+  const [web3ConfirmAction, setWeb3ConfirmAction] = useState<Web3ConfirmAction | null>(null);
 
   // Web3 State
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -993,6 +997,35 @@ const Account: React.FC<AccountProps> = ({
 
   const web3ActionBusy = web3Busy || isSyncing;
   const hasWallet = Boolean(walletAddress);
+
+  const openWeb3Confirm = (action: Web3ConfirmAction) => {
+    if (web3ActionBusy) return;
+    setWeb3ConfirmAction(action);
+  };
+
+  const closeWeb3Confirm = () => {
+    if (!web3ActionBusy) setWeb3ConfirmAction(null);
+  };
+
+  const confirmWeb3Action = async () => {
+    const action = web3ConfirmAction;
+    if (!action || web3ActionBusy) return;
+
+    setWeb3ConfirmAction(null);
+
+    if (action === 'mint') {
+      await handleMintNFT();
+      return;
+    }
+
+    if (action === 'stake' || action === 'unstake') {
+      await handleToggleStake();
+      return;
+    }
+
+    await handleClaimRewards();
+  };
+
   const hasCredential = Boolean(nftMinted);
   const web3NextStep = isSyncing
     ? t('account_web3_syncing')
@@ -1058,6 +1091,69 @@ const Account: React.FC<AccountProps> = ({
   const credentialEligibilityText = TALENT_NFT_PREVIEW_MODE
     ? t('account_web3_preview_notice')
     : t('account_web3_nft_eligible_desc');
+  const web3ConfirmTitle = web3ConfirmAction === 'mint'
+    ? t('account_web3_nft_mint_button')
+    : web3ConfirmAction === 'claim'
+      ? t('account_web3_claim_rewards_button')
+      : web3ConfirmAction === 'unstake'
+        ? t('account_web3_approve_unstake')
+        : t('account_web3_stake_label');
+  const web3ConfirmDescription = TALENT_NFT_PREVIEW_MODE
+    ? t('account_web3_preview_notice')
+    : web3ConfirmAction === 'claim'
+      ? t('account_web3_claim_approve')
+      : web3ConfirmAction === 'stake'
+        ? t('account_web3_approve_stake')
+        : web3ConfirmAction === 'unstake'
+          ? t('account_web3_approve_unstake')
+          : t('account_web3_approve_transaction');
+  const web3ConfirmDialog = web3ConfirmAction ? (
+    <ViewportAwareDialog
+      open
+      onClose={closeWeb3Confirm}
+      closeOnBackdrop
+      labelledBy="account-web3-confirm-title"
+      maxWidth={448}
+      zIndex={96}
+    >
+      <div className="rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+            <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div>
+            <h3 id="account-web3-confirm-title" className="text-lg font-bold text-gray-950 dark:text-gray-50">
+              {web3ConfirmTitle}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-slate-300">
+              {web3ConfirmDescription}
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
+          {t('account_web3_optional_note')}
+        </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={closeWeb3Confirm}
+            disabled={web3ActionBusy}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            {t('action_cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={confirmWeb3Action}
+            disabled={web3ActionBusy}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {web3Busy ? '...' : t('ob_continue')}
+          </button>
+        </div>
+      </div>
+    </ViewportAwareDialog>
+  ) : null;
 
   return (
     <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 p-8 rounded-lg shadow-md border border-gray-200 dark:border-slate-700 animate-fade-in">
@@ -1315,7 +1411,7 @@ const Account: React.FC<AccountProps> = ({
                       </div>
                     </div>
                     <button
-                      onClick={handleMintNFT}
+                      onClick={() => openWeb3Confirm('mint')}
                       disabled={web3ActionBusy}
                       className="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:bg-blue-400"
                     >
@@ -1391,7 +1487,7 @@ const Account: React.FC<AccountProps> = ({
                   <button
                     id="stake-toggle"
                     type="button"
-                    onClick={handleToggleStake}
+                    onClick={() => openWeb3Confirm(nftStaked ? 'unstake' : 'stake')}
                     disabled={web3ActionBusy}
                     aria-pressed={Boolean(nftStaked)}
                     className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-slate-900 ${nftStaked ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}
@@ -1417,7 +1513,7 @@ const Account: React.FC<AccountProps> = ({
                     {nftEarnings && nftEarnings > 0 && (
                       <button
                         type="button"
-                        onClick={handleClaimRewards}
+                        onClick={() => openWeb3Confirm('claim')}
                         disabled={web3ActionBusy}
                         className="mt-2 rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800 hover:bg-green-200 disabled:opacity-50"
                       >
@@ -1433,6 +1529,8 @@ const Account: React.FC<AccountProps> = ({
           </div>
         </div>
       )}
+
+      {web3ConfirmDialog}
 
       <form onSubmit={handleUpdatePassword} className="space-y-6 mt-10">
         <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
