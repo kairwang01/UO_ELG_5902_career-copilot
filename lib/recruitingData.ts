@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from './firebaseClient';
+import { cleanStringArray, normalizeJobPostingForClient, normalizeScreenerQuestions } from './jobPostingNormalize';
 
 /** Indeed/LinkedIn-style screener question. `expected` is a SCREENING SIGNAL only
  *  (shown as met/gap in the employer packet) — it never auto-rejects. */
@@ -116,7 +117,7 @@ const sortByCreatedDesc = <T extends { created_at: string }>(rows: T[]) => (
   [...rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 );
 
-const mapJobPosting = (id: string, data: DocumentData): JobPosting => ({
+const mapJobPosting = (id: string, data: DocumentData): JobPosting => normalizeJobPostingForClient({
   id,
   employer_id: String(data.employer_id ?? ''),
   title: String(data.title ?? ''),
@@ -137,8 +138,8 @@ const mapJobPosting = (id: string, data: DocumentData): JobPosting => ({
   responsibilities: data.responsibilities ?? null,
   required_qualifications: data.required_qualifications ?? null,
   nice_to_have_qualifications: data.nice_to_have_qualifications ?? null,
-  required_skills: Array.isArray(data.required_skills) ? data.required_skills.map(String) : [],
-  preferred_skills: Array.isArray(data.preferred_skills) ? data.preferred_skills.map(String) : [],
+  required_skills: cleanStringArray(data.required_skills, 30, 80),
+  preferred_skills: cleanStringArray(data.preferred_skills, 30, 80),
   application_deadline: data.application_deadline ?? null,
   headcount: typeof data.headcount === 'number' ? data.headcount : null,
   visa_sponsorship: data.visa_sponsorship === true,
@@ -146,7 +147,7 @@ const mapJobPosting = (id: string, data: DocumentData): JobPosting => ({
   language_requirement: data.language_requirement ?? null,
   interview_process: data.interview_process ?? null,
   campus_new_grad: data.campus_new_grad === true,
-  screener_questions: Array.isArray(data.screener_questions) ? (data.screener_questions as ScreenerQuestion[]) : [],
+  screener_questions: normalizeScreenerQuestions(data.screener_questions),
 });
 
 const mapApplication = (id: string, data: DocumentData): JobApplication => ({

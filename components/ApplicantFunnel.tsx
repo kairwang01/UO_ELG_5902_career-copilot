@@ -53,6 +53,7 @@ import ResumePreview from './ResumePreview';
 import FunnelChart from './FunnelChart';
 import ApplicationMessageThread from './ApplicationMessageThread';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import { normalizeJobPostingForClient } from '../lib/jobPostingNormalize';
 import {
     APPLICATION_PIPELINE_STAGES,
     getApplicationStatusIndex,
@@ -1347,7 +1348,8 @@ const StatusHistory: React.FC<{
     );
 };
 
-const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job, employerUid, onBack, t }) => {
+const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employerUid, onBack, t }) => {
+    const job = useMemo(() => normalizeJobPostingForClient(rawJob), [rawJob]);
     const { addToast } = useToast();
     const [loading, setLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState(t('applicant_funnel_loading_initial'));
