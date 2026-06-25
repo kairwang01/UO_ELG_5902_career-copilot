@@ -666,7 +666,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const saveBar = (
     <div
       data-qa="talent-profile-save-bar"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:px-4 lg:left-64"
+      className="fixed inset-x-0 bottom-[var(--cookie-consent-bottom-space,0px)] z-30 border-t border-gray-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur transition-[bottom] duration-200 dark:border-slate-700 dark:bg-slate-900/95 sm:px-4 lg:left-64"
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:pr-24 xl:pr-0">
         {saveError && (
@@ -694,7 +694,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   );
 
   return (
-    <div className="mx-auto max-w-3xl pb-28">
+    <div className="mx-auto max-w-3xl pb-[calc(7rem+var(--cookie-consent-bottom-space,0px))]">
       <div className="mb-5">
         <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Talent Profile</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Fill this once. It pre-fills every job application and lets employers discover you. References are shown to employers as “available on request”.</p>

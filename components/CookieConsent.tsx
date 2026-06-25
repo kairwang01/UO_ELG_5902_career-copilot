@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface CookieConsentProps {
     t: (key: string) => string;
@@ -26,6 +26,7 @@ const consentAlreadyGiven = (): boolean => {
 
 const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }) => {
     const [visible, setVisible] = useState(false);
+    const bannerRef = useRef<HTMLDivElement | null>(null);
 
     // Only show the banner if the visitor has not made a choice yet.
     useEffect(() => {
@@ -33,6 +34,35 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
             setVisible(true);
         }
     }, []);
+
+    useEffect(() => {
+        if (!visible) return undefined;
+
+        const setReservedSpace = () => {
+            const isSmUp = typeof window !== 'undefined'
+                ? window.matchMedia('(min-width: 640px)').matches
+                : false;
+            // In the workspace/portal shell the banner moves to the top-right from
+            // sm upward, so bottom sticky bars only need reserved space on mobile.
+            const bottomPositioned = !avoidSidebar || !isSmUp;
+            const height = bottomPositioned ? (bannerRef.current?.offsetHeight ?? 0) : 0;
+            const next = height > 0 ? `${height + 16}px` : '0px';
+            document.documentElement.style.setProperty('--cookie-consent-bottom-space', next);
+        };
+
+        setReservedSpace();
+        const resizeObserver = typeof ResizeObserver !== 'undefined' && bannerRef.current
+            ? new ResizeObserver(setReservedSpace)
+            : null;
+        resizeObserver?.observe(bannerRef.current as Element);
+        window.addEventListener('resize', setReservedSpace);
+
+        return () => {
+            resizeObserver?.disconnect();
+            window.removeEventListener('resize', setReservedSpace);
+            document.documentElement.style.removeProperty('--cookie-consent-bottom-space');
+        };
+    }, [avoidSidebar, visible]);
 
     if (!visible) return null;
 
@@ -47,6 +77,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false }
 
     return (
         <div
+            ref={bannerRef}
             className={`${positionClass} pointer-events-none`}
             role="region"
             aria-live="polite"
