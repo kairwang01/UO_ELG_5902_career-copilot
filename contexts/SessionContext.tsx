@@ -35,9 +35,9 @@ const SessionContext = createContext<SiteSessionState | undefined>(undefined);
  * — the race behind the recurring redirect mismatches. Lifting the identical logic
  * into ONE provider gives every consumer the same settled state from a single read.
  *
- * The derivations (`ready` / `isBusiness` / `isAdmin`) are preserved VERBATIM from the
- * old hook, so routing decisions that read them are unchanged — only the data source
- * is consolidated.
+ * `ready` / `isAdmin` mirror the old hook's settled-state behavior. `isBusiness`
+ * intentionally means active employer access; unpaid pending business checkout
+ * intents stay on the embedded portal/pricing path until payment completes.
  */
 export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<AppSession | null>(null);

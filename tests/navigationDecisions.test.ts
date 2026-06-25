@@ -86,6 +86,19 @@ describe('navigation decisions', () => {
     })).toBe('employer');
   });
 
+  it('keeps unpaid pending business plans on the embedded portal page, not the employer shell', () => {
+    expect(decideWorkspaceShell({
+      entry: 'portal',
+      hasSession: true,
+      profileLoaded: true,
+      languageLoaded: true,
+      showHomePageOverride: false,
+      currentView: 'home',
+      role: 'candidate',
+      subscriptionStatus: 'pending_biz_starter',
+    })).toBe('embedded');
+  });
+
   it('does not force the employer portal while the user is explicitly on workspace', () => {
     expect(decideWorkspaceShell({
       entry: 'workspace',

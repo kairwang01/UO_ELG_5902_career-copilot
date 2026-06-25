@@ -4,6 +4,12 @@ export function normalizeBusinessSubscriptionStatus(status?: string | null): str
   return (status ?? '').replace(/^pending_biz_/, '');
 }
 
+export function isPendingBusinessSubscriptionStatus(status?: string | null): boolean {
+  return (status ?? '').startsWith('pending_biz_');
+}
+
 export function hasBusinessPortalAccess(role?: string | null, subscriptionStatus?: string | null): boolean {
-  return role === 'employer' || BUSINESS_PORTAL_STATUSES.has(normalizeBusinessSubscriptionStatus(subscriptionStatus));
+  if (role === 'employer') return true;
+  if (isPendingBusinessSubscriptionStatus(subscriptionStatus)) return false;
+  return BUSINESS_PORTAL_STATUSES.has(subscriptionStatus ?? '');
 }

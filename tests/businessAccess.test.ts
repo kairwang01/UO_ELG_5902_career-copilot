@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { hasBusinessPortalAccess, normalizeBusinessSubscriptionStatus } from '../lib/access/businessAccess';
+import {
+  hasBusinessPortalAccess,
+  isPendingBusinessSubscriptionStatus,
+  normalizeBusinessSubscriptionStatus,
+} from '../lib/access/businessAccess';
 
 describe('business portal access', () => {
   it('allows employer-role accounts', () => {
@@ -8,11 +12,16 @@ describe('business portal access', () => {
 
   it('allows candidate-role accounts with a business subscription', () => {
     expect(hasBusinessPortalAccess('candidate', 'starter')).toBe(true);
-    expect(hasBusinessPortalAccess('candidate', 'pending_biz_growth')).toBe(true);
+    expect(hasBusinessPortalAccess('candidate', 'growth')).toBe(true);
   });
 
   it('does not treat an ordinary free candidate as a business account', () => {
     expect(hasBusinessPortalAccess('candidate', 'free')).toBe(false);
+  });
+
+  it('does not treat an unpaid pending business plan as portal access', () => {
+    expect(hasBusinessPortalAccess('candidate', 'pending_biz_growth')).toBe(false);
+    expect(isPendingBusinessSubscriptionStatus('pending_biz_growth')).toBe(true);
   });
 
   it('normalizes pending business status prefixes', () => {
