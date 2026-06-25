@@ -98,6 +98,12 @@ async function signInAndAssertShell(browser, scenario) {
       await page.goto(`${BASE_URL}${scenario.targetPath}`, { waitUntil: 'domcontentloaded' });
       await page.locator('[data-qa-auth="signed-in"]').waitFor({ timeout: 25_000 });
       await page.locator(`[data-qa-shell="${scenario.expectedShell}"]`).waitFor({ timeout: 25_000 });
+      if (scenario.mustNotEnterPricing) {
+        const current = new URL(page.url());
+        if (current.pathname === '/pricing') {
+          throw new Error(`${scenario.name} unexpectedly redirected to pricing: ${page.url()}`);
+        }
+      }
     }
 
     if (consoleErrors.length) {
@@ -126,6 +132,14 @@ async function main() {
         email: 'candidate@careercopilot.test',
         loginShell: 'candidate',
         expectedShell: 'candidate',
+      });
+      await signInAndAssertShell(browser, {
+        name: 'candidate-business-auth',
+        email: 'candidate@careercopilot.test',
+        loginShell: 'candidate',
+        targetPath: '/portal?auth=signin',
+        expectedShell: 'embedded',
+        mustNotEnterPricing: true,
       });
       await signInAndAssertShell(browser, {
         name: 'employer',

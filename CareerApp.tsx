@@ -831,11 +831,14 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     // A signed-in user has no use for the auth modal: opening it just flashes and is
     // instantly closed again by the "session exists" effect, which reads as a frozen,
     // unresponsive click (e.g. a logged-in candidate pressing "Enter Portal" on the
-    // employer page). Skip the dead modal; send a non-employer who wants the business
-    // side to the upgrade flow instead (selecting a business plan promotes them to
-    // employer), and otherwise just no-op.
+    // employer page). Skip the dead modal. Do NOT send them straight to checkout:
+    // non-employers should land on the business page/access prompt, and only an
+    // explicit plan-selection action should start payment.
     if (view === 'auth' && session) {
-      if (mode === 'business' && !isEmployer) { navigateToBusinessPricing(); }
+      if (mode === 'business' && !isEmployer) {
+        setShowHomePageOverride(false);
+        setView('business');
+      }
       return;
     }
     if (view !== 'home') { setShowHomePageOverride(false); }
