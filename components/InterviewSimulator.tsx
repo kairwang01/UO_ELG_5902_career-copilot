@@ -44,6 +44,7 @@ import { listAllActiveJobPostings, type JobPosting } from '../lib/recruitingData
 import { saveInterviewSession, subscribeInterviewSessions, type InterviewSessionHistoryItem } from '../lib/interviewSessionHistory';
 import InterviewerAvatar from './InterviewerAvatar';
 import { DownloadButtons } from './tools/ToolUtils';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 interface InterviewSimulatorProps {
   resumeText: string;
@@ -309,6 +310,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const [historyItems, setHistoryItems] = useState<InterviewSessionHistoryItem[]>([]);
     const [historyOpen, setHistoryOpen] = useState(true);
     const savedReportKeyRef = useRef<string | null>(null);
+    const [upgradePromptOpen, setUpgradePromptOpen] = useState(false);
 
     const [error, setError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
@@ -686,6 +688,63 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         }
     };
 
+    const openUpgradePrompt = () => {
+        setUpgradePromptOpen(true);
+    };
+
+    const confirmUpgradeNavigation = () => {
+        setUpgradePromptOpen(false);
+        if (navigateToPricing) {
+            navigateToPricing();
+            return;
+        }
+        onClose();
+    };
+
+    const upgradePromptDialog = upgradePromptOpen ? (
+        <ViewportAwareDialog
+            open
+            onClose={() => setUpgradePromptOpen(false)}
+            closeOnBackdrop
+            labelledBy="mock-interview-upgrade-title"
+            maxWidth={448}
+            zIndex={95}
+        >
+            <div className="rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+                <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                        <Crown className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                        <h3 id="mock-interview-upgrade-title" className="text-lg font-bold text-slate-950 dark:text-slate-50">
+                            {t('mi_paid_only_title')}
+                        </h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                            {t('mi_paid_only_desc')}
+                        </p>
+                    </div>
+                </div>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <button
+                        type="button"
+                        onClick={() => setUpgradePromptOpen(false)}
+                        className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                        {t('action_cancel')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={confirmUpgradeNavigation}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    >
+                        <Crown className="h-4 w-4" aria-hidden="true" />
+                        {t('mi_paid_only_cta')}
+                    </button>
+                </div>
+            </div>
+        </ViewportAwareDialog>
+    ) : null;
+
     /** Dependency-free PDF: open a minimal printable document and trigger the
      *  browser's print-to-PDF. Only reachable from the full (entitled/unlocked)
      *  report view. */
@@ -1025,6 +1084,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
         // behind the unlock — with the upgrade CTA framed as the better deal.
         if (lockedReport) {
             return (
+                <>
                 <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-6 sm:p-8 animate-fade-in space-y-6">
                     <div className="flex flex-col items-center text-center gap-3">
                         <div className="relative h-28 w-28">
@@ -1068,7 +1128,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                             </button>
                             <button
                                 type="button"
-                                onClick={navigateToPricing ?? onClose}
+                                onClick={openUpgradePrompt}
                                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-600 dark:text-amber-400 hover:underline"
                             >
                                 <Crown className="h-4 w-4" />
@@ -1085,6 +1145,8 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         </button>
                     </div>
                 </div>
+                {upgradePromptDialog}
+                </>
             );
         }
         if (!report) {
@@ -1552,7 +1614,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         ) : (
                             <button
                                 type="button"
-                                onClick={navigateToPricing ?? onClose}
+                                onClick={openUpgradePrompt}
                                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
                             >
                                 <Crown className="h-4 w-4" />
@@ -1659,6 +1721,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                     )}
                 </aside>
             </form>
+            {upgradePromptDialog}
         </div>
     );
 };
