@@ -68,6 +68,7 @@ import { ApiPlatformPanel } from './ApiPlatformPanel';
 import { Web3SettingsPanel } from './Web3SettingsPanel';
 import Avatar from '../Avatar';
 import { ToastProvider } from '../Toast';
+import ConfirmActionDialog from '../ConfirmActionDialog';
 
 // ─── minimal i18n stub — keys returned in StructuredOutput ───────────────────
 const STRINGS: Record<string, string> = {
@@ -130,6 +131,15 @@ type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
 
 /** Per-key/model test result: key is a provider slug ('gemini'|'kairllm'|'deepseek') or a model id. */
 type TestStatus = { state: 'idle' } | { state: 'running' } | ({ state: 'done' } & TestModelResult);
+
+type AdminConfirmState = {
+  title: string;
+  description: string;
+  detail?: string;
+  confirmLabel: string;
+  tone?: 'primary' | 'danger';
+  run: () => Promise<void> | void;
+};
 
 const PLAN_KEYS: AdminPlanKey[] = [
   'free',
@@ -714,6 +724,8 @@ const AdminPortal: React.FC = () => {
   // Dashboard model routing inline selector state
   const [defaultModelChanging, setDefaultModelChanging] = useState(false);
   const [defaultModelToast, setDefaultModelToast] = useState<{ ok?: string; err?: string } | null>(null);
+  const [adminConfirm, setAdminConfirm] = useState<AdminConfirmState | null>(null);
+  const [adminConfirmLoading, setAdminConfirmLoading] = useState(false);
 
   const userFilters = useMemo<AdminUserFilters>(() => {
     const filters: AdminUserFilters = {
@@ -1309,15 +1321,35 @@ const AdminPortal: React.FC = () => {
     }
   };
 
-  const removeAdminEntry = async (uid: string) => {
-    if (!window.confirm(t('admin.admins.remove_confirm'))) return;
-    setError(null);
+  const runAdminConfirm = async () => {
+    if (!adminConfirm || adminConfirmLoading) return;
+    const action = adminConfirm.run;
+    setAdminConfirmLoading(true);
     try {
-      await adminRemoveAdmin({ uid });
-      await loadAdmins();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to remove admin');
+      await action();
+      if (mountedRef.current) setAdminConfirm(null);
+    } finally {
+      if (mountedRef.current) setAdminConfirmLoading(false);
     }
+  };
+
+  const removeAdminEntry = async (uid: string) => {
+    setAdminConfirm({
+      title: t('admin.admins.remove_btn'),
+      description: t('admin.admins.remove_confirm'),
+      detail: uid,
+      confirmLabel: t('admin.admins.remove_btn'),
+      tone: 'danger',
+      run: async () => {
+        setError(null);
+        try {
+          await adminRemoveAdmin({ uid });
+          await loadAdmins();
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to remove admin');
+        }
+      },
+    });
   };
 
   /** Open the add/edit form, seeding controlled fields from entry (or blank for new). */
@@ -1406,42 +1438,64 @@ const AdminPortal: React.FC = () => {
   };
 
   const deleteModel = async (id: string) => {
-    if (!window.confirm(`Delete model "${id}"? This cannot be undone.`)) return;
-    setError(null);
-    try {
-      const res = await adminDeleteModel(id);
-      setModels(res.models);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete model');
-    }
+    setAdminConfirm({
+      title: 'Delete model',
+      description: `Delete model "${id}"? This cannot be undone.`,
+      detail: id,
+      confirmLabel: 'Delete model',
+      tone: 'danger',
+      run: async () => {
+        setError(null);
+        try {
+          const res = await adminDeleteModel(id);
+          setModels(res.models);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to delete model');
+        }
+      },
+    });
   };
 
   const setModelAsDefault = async (id: string) => {
-    if (!window.confirm(t('admin.set_default_confirm'))) return;
-    setSetDefaultFeedback(null);
-    try {
-      const res = await adminSetDefaultModel(id);
-      setDefaultModelId(res.defaultModelId);
-      setSetDefaultFeedback({ ok: t('admin.model.set_default_ok') });
-    } catch (e) {
-      setSetDefaultFeedback({ err: e instanceof Error ? e.message : 'Failed to set default model' });
-    }
+    setAdminConfirm({
+      title: t('admin.model.set_default_btn'),
+      description: t('admin.set_default_confirm'),
+      detail: id,
+      confirmLabel: t('admin.model.set_default_btn'),
+      run: async () => {
+        setSetDefaultFeedback(null);
+        try {
+          const res = await adminSetDefaultModel(id);
+          setDefaultModelId(res.defaultModelId);
+          setSetDefaultFeedback({ ok: t('admin.model.set_default_ok') });
+        } catch (e) {
+          setSetDefaultFeedback({ err: e instanceof Error ? e.message : 'Failed to set default model' });
+        }
+      },
+    });
   };
 
   const changeDashboardDefaultModel = async (newId: string) => {
     if (!newId || newId === defaultModelId || defaultModelChanging) return;
-    if (!window.confirm(t('admin.set_default_confirm'))) return;
-    setDefaultModelChanging(true);
-    setDefaultModelToast(null);
-    try {
-      const res = await adminSetDefaultModel(newId);
-      setDefaultModelId(res.defaultModelId);
-      setDefaultModelToast({ ok: t('admin.model.set_default_ok') });
-    } catch (ex) {
-      setDefaultModelToast({ err: ex instanceof Error ? ex.message : 'Failed to set default model' });
-    } finally {
-      setDefaultModelChanging(false);
-    }
+    setAdminConfirm({
+      title: t('admin.dashboard.model_routing_select'),
+      description: t('admin.set_default_confirm'),
+      detail: newId,
+      confirmLabel: t('admin.model.set_default_btn'),
+      run: async () => {
+        setDefaultModelChanging(true);
+        setDefaultModelToast(null);
+        try {
+          const res = await adminSetDefaultModel(newId);
+          setDefaultModelId(res.defaultModelId);
+          setDefaultModelToast({ ok: t('admin.model.set_default_ok') });
+        } catch (ex) {
+          setDefaultModelToast({ err: ex instanceof Error ? ex.message : 'Failed to set default model' });
+        } finally {
+          setDefaultModelChanging(false);
+        }
+      },
+    });
   };
 
   // ── auth gates ────────────────────────────────────────────────────────────
@@ -1792,26 +1846,10 @@ const AdminPortal: React.FC = () => {
                               value={defaultModelId ?? ''}
                               disabled={defaultModelChanging}
                               aria-label={t('admin.dashboard.model_routing_select')}
-                              onChange={async (e) => {
+                              onChange={(e) => {
                                 const newId = e.target.value;
                                 if (!newId || newId === defaultModelId) return;
-                                if (!window.confirm(t('admin.set_default_confirm'))) {
-                                  // Controlled select won't re-render on a no-op cancel, so the
-                                  // DOM would stay stuck on the un-committed option — revert it.
-                                  e.target.value = defaultModelId ?? '';
-                                  return;
-                                }
-                                setDefaultModelChanging(true);
-                                setDefaultModelToast(null);
-                                try {
-                                  const res = await adminSetDefaultModel(newId);
-                                  setDefaultModelId(res.defaultModelId);
-                                  setDefaultModelToast({ ok: t('admin.model.set_default_ok') });
-                                } catch (ex) {
-                                  setDefaultModelToast({ err: ex instanceof Error ? ex.message : 'Failed to set default model' });
-                                } finally {
-                                  setDefaultModelChanging(false);
-                                }
+                                void changeDashboardDefaultModel(newId);
                               }}
                               className="hidden"
                             >
@@ -3162,18 +3200,25 @@ const AdminPortal: React.FC = () => {
                                                         <button
                                                           type="button"
                                                           disabled={promptSaving}
-                                                          onClick={async () => {
-                                                            if (!window.confirm(t('admin.prompts.publish_confirm'))) return;
-                                                            setPromptSaving(true);
-                                                            try {
-                                                              await adminPublishPrompt({ versionId: v.id });
-                                                              setPromptVersionsFeedback({ ok: 'Published.' });
-                                                              await loadPromptVersions(entry.key);
-                                                            } catch (e) {
-                                                              setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Publish failed' });
-                                                            } finally {
-                                                              setPromptSaving(false);
-                                                            }
+                                                          onClick={() => {
+                                                            setAdminConfirm({
+                                                              title: t('admin.prompts.publish'),
+                                                              description: t('admin.prompts.publish_confirm'),
+                                                              detail: `${entry.key} · v${v.version}`,
+                                                              confirmLabel: t('admin.prompts.publish'),
+                                                              run: async () => {
+                                                                setPromptSaving(true);
+                                                                try {
+                                                                  await adminPublishPrompt({ versionId: v.id });
+                                                                  setPromptVersionsFeedback({ ok: 'Published.' });
+                                                                  await loadPromptVersions(entry.key);
+                                                                } catch (e) {
+                                                                  setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Publish failed' });
+                                                                } finally {
+                                                                  setPromptSaving(false);
+                                                                }
+                                                              },
+                                                            });
                                                           }}
                                                           className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-800 text-white font-medium transition-colors focus:outline-none disabled:opacity-50"
                                                         >
@@ -3187,18 +3232,26 @@ const AdminPortal: React.FC = () => {
                                                         <button
                                                           type="button"
                                                           disabled={promptSaving || v.status === 'rolled_back'}
-                                                          onClick={async () => {
-                                                            if (!window.confirm(t('admin.prompts.rollback_confirm'))) return;
-                                                            setPromptSaving(true);
-                                                            try {
-                                                              await adminRollbackPrompt({ versionId: v.id });
-                                                              setPromptVersionsFeedback({ ok: 'Rolled back.' });
-                                                              await loadPromptVersions(entry.key);
-                                                            } catch (e) {
-                                                              setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Rollback failed' });
-                                                            } finally {
-                                                              setPromptSaving(false);
-                                                            }
+                                                          onClick={() => {
+                                                            setAdminConfirm({
+                                                              title: t('admin.prompts.rollback'),
+                                                              description: t('admin.prompts.rollback_confirm'),
+                                                              detail: `${entry.key} · v${v.version}`,
+                                                              confirmLabel: t('admin.prompts.rollback'),
+                                                              tone: 'danger',
+                                                              run: async () => {
+                                                                setPromptSaving(true);
+                                                                try {
+                                                                  await adminRollbackPrompt({ versionId: v.id });
+                                                                  setPromptVersionsFeedback({ ok: 'Rolled back.' });
+                                                                  await loadPromptVersions(entry.key);
+                                                                } catch (e) {
+                                                                  setPromptVersionsFeedback({ err: e instanceof Error ? e.message : 'Rollback failed' });
+                                                                } finally {
+                                                                  setPromptSaving(false);
+                                                                }
+                                                              },
+                                                            });
                                                           }}
                                                           className="text-xs px-2 py-1 rounded border border-amber-300 text-amber-700 hover:bg-amber-50 font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
@@ -4154,6 +4207,24 @@ const AdminPortal: React.FC = () => {
           </Card>
         )}
       </AdminShell>
+      <ConfirmActionDialog
+        open={Boolean(adminConfirm)}
+        title={adminConfirm?.title ?? ''}
+        description={adminConfirm?.description ?? ''}
+        detail={adminConfirm?.detail}
+        cancelLabel="Cancel"
+        confirmLabel={adminConfirm?.confirmLabel ?? 'Confirm'}
+        loadingLabel="Working..."
+        loading={adminConfirmLoading}
+        tone={adminConfirm?.tone ?? 'primary'}
+        onOpenChange={(open) => {
+          if (!open && !adminConfirmLoading) setAdminConfirm(null);
+        }}
+        onCancel={() => {
+          if (!adminConfirmLoading) setAdminConfirm(null);
+        }}
+        onConfirm={runAdminConfirm}
+      />
     </ToastProvider>
   );
 };

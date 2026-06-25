@@ -15,6 +15,7 @@ import { DownloadButtons } from "./tools/ToolUtils";
 import { listActiveEmployerJobs, type JobPosting } from "../lib/recruitingData";
 import { useToast } from "./Toast";
 import { ViewportAwareDialog } from "./ViewportAwareDialog";
+import ConfirmActionDialog from "./ConfirmActionDialog";
 import {
   BarChart3,
   BookOpen,
@@ -1803,6 +1804,7 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
   const { addToast } = useToast();
   const [mode, setMode] = useState<"general" | "matching">("general");
   const [files, setFiles] = useState<BulkAnalysisItem[]>([]);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [market, setMarket] = useState<string>(DEFAULT_MARKET);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -2767,7 +2769,9 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <button
                       type="button"
-                      onClick={() => { if (files.length > 0 && window.confirm(t("agency_clear_all_confirm"))) setFiles([]); }}
+                      onClick={() => {
+                        if (files.length > 0) setClearConfirmOpen(true);
+                      }}
                       className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       disabled={isAnalyzing}
                     >
@@ -2919,6 +2923,23 @@ const AgencyHub: React.FC<AgencyHubProps> = ({ session, profile, t }) => {
           </div>
         </div>
       </div>
+      <ConfirmActionDialog
+        open={clearConfirmOpen}
+        title={t("agency_clear_all")}
+        description={t("agency_clear_all_confirm")}
+        detail={`${files.length} file${files.length === 1 ? "" : "s"}`}
+        cancelLabel={t("dashboard_cancel_update")}
+        confirmLabel={t("agency_clear_all")}
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open) setClearConfirmOpen(false);
+        }}
+        onCancel={() => setClearConfirmOpen(false)}
+        onConfirm={() => {
+          setFiles([]);
+          setClearConfirmOpen(false);
+        }}
+      />
     </div>
   );
 };

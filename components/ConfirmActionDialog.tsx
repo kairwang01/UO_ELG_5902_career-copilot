@@ -1,12 +1,6 @@
-import React from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
+import React, { useId } from 'react';
+import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { ViewportAwareDialog } from './ViewportAwareDialog';
 
 type ConfirmTone = 'primary' | 'danger';
 
@@ -43,46 +37,73 @@ export const ConfirmActionDialog: React.FC<ConfirmActionDialogProps> = ({
   onOpenChange,
   onCancel,
   onConfirm,
-}) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent maxWidth="sm" className="p-6 sm:p-7">
-      <DialogHeader className="text-left">
-        <DialogTitle className="flex items-center gap-2">
+}) => {
+  const titleId = useId();
+  const descriptionId = useId();
+  const requestClose = () => {
+    if (!loading) onOpenChange(false);
+  };
+
+  return (
+    <ViewportAwareDialog
+      open={open}
+      onClose={requestClose}
+      closeOnBackdrop={!loading}
+      closeOnEscape={!loading}
+      labelledBy={titleId}
+      describedBy={descriptionId}
+      maxWidth={500}
+      zIndex={110}
+    >
+      <div className="relative rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800 sm:p-7">
+        <button
+          type="button"
+          onClick={requestClose}
+          disabled={loading}
+          className="absolute right-4 top-4 rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+        >
+          <X className="h-5 w-5" aria-hidden="true" />
+          <span className="sr-only">{cancelLabel}</span>
+        </button>
+
+        <div className="text-left">
+          <h2 id={titleId} className="flex items-center gap-2 pr-10 text-2xl font-semibold text-gray-900 dark:text-white">
           {tone === 'danger' && <AlertTriangle className="h-5 w-5 text-rose-600" aria-hidden="true" />}
           {title}
-        </DialogTitle>
-        <DialogDescription className="not-sr-only pt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+          </h2>
+          <p id={descriptionId} className="pt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
           {description}
-        </DialogDescription>
-      </DialogHeader>
-
-      {detail && (
-        <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-800 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100">
-          {detail}
+          </p>
         </div>
-      )}
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={loading}
-          className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-        >
-          {cancelLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={loading}
-          className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${toneClass[tone]}`}
-        >
-          {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {loading ? (loadingLabel ?? confirmLabel) : confirmLabel}
-        </button>
+        {detail && (
+          <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-800 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100">
+            {detail}
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${toneClass[tone]}`}
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            {loading ? (loadingLabel ?? confirmLabel) : confirmLabel}
+          </button>
+        </div>
       </div>
-    </DialogContent>
-  </Dialog>
-);
+    </ViewportAwareDialog>
+  );
+};
 
 export default ConfirmActionDialog;

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, EmptyState, FieldLabel, PrimaryButton, SectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
 import { at } from './adminText';
 import { ViewportAwareDialog } from '../ViewportAwareDialog';
+import ConfirmActionDialog from '../ConfirmActionDialog';
 import { API_KEY_SCOPES, type ApiKeyScope } from '../../lib/access/permissions';
 import {
   apiPlatform,
@@ -57,6 +58,8 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [secretCopied, setSecretCopied] = useState(false);
   const [busyKeyId, setBusyKeyId] = useState<string | null>(null);
+  const [productionKeyConfirmOpen, setProductionKeyConfirmOpen] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<PlatformApiKey | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -113,8 +116,6 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
 
   const createKey = async () => {
     if (!keyModalApp || !keyName.trim() || keyScopes.length === 0) return;
-    // Production keys count against live quotas — require an explicit confirm.
-    if (keyModalApp.environment === 'production' && !window.confirm(at('api.modal.prod_confirm'))) return;
     setCreatingKey(true);
     setActionError(null);
     try {
@@ -128,12 +129,23 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       setCreatedSecret(result.secret);
       setSecretCopied(false);
       setKeyName('');
+      setProductionKeyConfirmOpen(false);
       await load();
     } catch (err) {
       reportError(err);
     } finally {
       if (mountedRef.current) setCreatingKey(false);
     }
+  };
+
+  const requestCreateKey = () => {
+    if (!keyModalApp || creatingKey || !keyName.trim() || keyScopes.length === 0) return;
+    // Production keys count against live quotas — require an explicit product-level confirm.
+    if (keyModalApp.environment === 'production') {
+      setProductionKeyConfirmOpen(true);
+      return;
+    }
+    void createKey();
   };
 
   const closeSecretModal = () => {
@@ -146,10 +158,13 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   };
 
   const revokeKey = async (key: PlatformApiKey) => {
-    if (!window.confirm(`${at('api.revoke.confirm_prefix')} "${key.name}" (${key.prefix}…)? ${at('api.revoke.confirm_suffix')}`)) return;
     setBusyKeyId(key.id);
     setActionError(null);
-    try { await apiPlatform.revokeApiKey(key.id); await load(); }
+    try {
+      await apiPlatform.revokeApiKey(key.id);
+      if (mountedRef.current) setRevokeTarget(null);
+      await load();
+    }
     catch (err) { reportError(err); }
     finally { if (mountedRef.current) setBusyKeyId(null); }
   };
@@ -374,7 +389,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                             </button>
                             <button
                               type="button"
-                              onClick={() => revokeKey(key)}
+                              onClick={() => setRevokeTarget(key)}
                               disabled={busyKeyId === key.id}
                               className="text-sm font-semibold text-red-600 hover:text-red-800 hover:underline disabled:opacity-50"
                             >
@@ -501,7 +516,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
               </button>
               <button
                 type="button"
-                onClick={createKey}
+                onClick={requestCreateKey}
                 disabled={creatingKey || !keyName.trim() || keyScopes.length === 0}
                 className="inline-flex items-center gap-2 rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
               >
@@ -549,6 +564,48 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
           </div>
         </ViewportAwareDialog>
       )}
+
+      <ConfirmActionDialog
+        open={productionKeyConfirmOpen}
+        title={at('api.modal.generate')}
+        description={at('api.modal.prod_confirm')}
+        detail={keyModalApp?.name}
+        cancelLabel={at('api.modal.cancel')}
+        confirmLabel={at('api.modal.generate')}
+        loadingLabel={at('api.modal.generate')}
+        loading={creatingKey}
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open && !creatingKey) setProductionKeyConfirmOpen(false);
+        }}
+        onCancel={() => {
+          if (!creatingKey) setProductionKeyConfirmOpen(false);
+        }}
+        onConfirm={createKey}
+      />
+
+      <ConfirmActionDialog
+        open={Boolean(revokeTarget)}
+        title={at('api.keys.revoke')}
+        description={revokeTarget
+          ? `${at('api.revoke.confirm_prefix')} "${revokeTarget.name}" (${revokeTarget.prefix}…)? ${at('api.revoke.confirm_suffix')}`
+          : ''}
+        detail={revokeTarget?.name}
+        cancelLabel={at('api.modal.cancel')}
+        confirmLabel={at('api.keys.revoke')}
+        loadingLabel={at('api.keys.revoke')}
+        loading={Boolean(revokeTarget && busyKeyId === revokeTarget.id)}
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open && !busyKeyId) setRevokeTarget(null);
+        }}
+        onCancel={() => {
+          if (!busyKeyId) setRevokeTarget(null);
+        }}
+        onConfirm={() => {
+          if (revokeTarget) void revokeKey(revokeTarget);
+        }}
+      />
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { data as dataClient } from '@/lib/data';
 import type { AppSession, ApiKey } from '@/lib/data';
 import { useToast } from './Toast';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import ConfirmActionDialog from './ConfirmActionDialog';
 
 interface ApiKeyManagerProps {
   session: AppSession;
@@ -16,6 +17,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
   const [fetchError, setFetchError] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApiKey | null>(null);
   const { addToast } = useToast();
   // Guards setState if the user leaves the Settings tab while a key call is in flight.
   const mountedRef = useRef(true);
@@ -65,17 +67,15 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
     setLoading(false);
   };
 
-  const handleDeleteKey = async (keyId: number) => {
-    if (!window.confirm('Are you sure you want to delete this key? This action cannot be undone.')) {
-      return;
-    }
+  const handleDeleteKey = async (key: ApiKey) => {
     setLoading(true);
-    const { error } = await dataClient.apiKeys.remove(keyId, session.user.id);
+    const { error } = await dataClient.apiKeys.remove(key.id, session.user.id);
     if (!mountedRef.current) return;
 
     if (error) {
       addToast(`Failed to delete key: ${error.message}`, 'error');
     } else {
+      setDeleteTarget(null);
       addToast('API key deleted.', 'success');
       fetchKeys();
     }
@@ -139,7 +139,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
                 Created: {new Date(key.created_at).toLocaleDateString()} | Last used: {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
               </p>
             </div>
-            <button onClick={() => handleDeleteKey(key.id)} disabled={loading} className="text-sm text-red-600 hover:text-red-800 font-semibold disabled:opacity-50">
+            <button onClick={() => setDeleteTarget(key)} disabled={loading} className="text-sm text-red-600 hover:text-red-800 font-semibold disabled:opacity-50">
               Delete
             </button>
           </div>
@@ -153,6 +153,26 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
         )}
         {!loading && !fetchError && keys.length === 0 && <p className="text-sm text-gray-500">You have no API keys yet.</p>}
       </div>
+      <ConfirmActionDialog
+        open={Boolean(deleteTarget)}
+        title="Delete API key"
+        description="This key will stop working immediately. This action cannot be undone."
+        detail={deleteTarget?.key_name}
+        cancelLabel="Cancel"
+        confirmLabel="Delete key"
+        loadingLabel="Deleting..."
+        loading={Boolean(deleteTarget && loading)}
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open && !loading) setDeleteTarget(null);
+        }}
+        onCancel={() => {
+          if (!loading) setDeleteTarget(null);
+        }}
+        onConfirm={() => {
+          if (deleteTarget) void handleDeleteKey(deleteTarget);
+        }}
+      />
     </div>
   );
 };

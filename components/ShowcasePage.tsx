@@ -11,6 +11,7 @@ import {
 import PortfolioPreviewViewer, { PORTFOLIO_TEMPLATES } from './showcase/PortfolioPreviewViewer';
 import { useToast } from './Toast';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import ConfirmActionDialog from './ConfirmActionDialog';
 
 const PortfolioWebsiteBuilder = React.lazy(() => import('./tools/PortfolioWebsiteBuilder'));
 
@@ -64,6 +65,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
   const [revealedDeleteId, setRevealedDeleteId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavedPortfolio | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingTab, setPendingTab] = useState<ShowcaseTab | null>(null);
   const initialTabRef = useRef<string | null>(null);
 
   const setUnsaved = useCallback((next: boolean) => {
@@ -113,7 +115,20 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
 
   const switchTab = (next: ShowcaseTab) => {
     if (tab === next) return;
-    if (hasUnsaved && !window.confirm(t('showcase_unsaved_leave_confirm'))) return;
+    if (hasUnsaved) {
+      setPendingTab(next);
+      return;
+    }
+    setUnsaved(false);
+    setSelected(null);
+    setSelectedHtml('');
+    setTab(next);
+  };
+
+  const confirmLeaveUnsaved = () => {
+    if (!pendingTab) return;
+    const next = pendingTab;
+    setPendingTab(null);
     setUnsaved(false);
     setSelected(null);
     setSelectedHtml('');
@@ -361,6 +376,19 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
       )}
 
       {deleteConfirmDialog}
+      <ConfirmActionDialog
+        open={Boolean(pendingTab)}
+        title="Discard unsaved changes?"
+        description={t('showcase_unsaved_leave_confirm')}
+        cancelLabel={t('showcase_delete_cancel')}
+        confirmLabel="Leave without saving"
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open) setPendingTab(null);
+        }}
+        onCancel={() => setPendingTab(null)}
+        onConfirm={confirmLeaveUnsaved}
+      />
     </div>
   );
 };
