@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeApplicantForFunnel, stringArray } from '../lib/applicantFunnelNormalize';
+import { normalizeApplicantForFunnel, normalizeApplicantsForFunnel, stringArray } from '../lib/applicantFunnelNormalize';
 import type { JobApplicant } from '../services/aiClient';
 
 describe('applicant funnel normalization', () => {
@@ -109,5 +109,42 @@ describe('applicant funnel normalization', () => {
     expect(malformed.status_history).toEqual([]);
     expect(malformed.screener_answers).toEqual([]);
     expect(malformed.compatibility_score).toBe(0);
+  });
+
+  it('drops non-renderable applicant rows before they reach the funnel UI', () => {
+    const applicants = normalizeApplicantsForFunnel([
+      null,
+      'bad row',
+      { id: ' ', candidate_name: 'No id' },
+      {
+        application_id: ' app-from-legacy ',
+        candidate_name: 'Legacy Applicant',
+        strengths: ['Evidence'],
+        status_history: [{ skipped_statuses: 'bad' }],
+      },
+      {
+        id: 'app-valid',
+        candidate_name: 'Valid Applicant',
+        screener_answers: [{ question_id: 'q1', prompt: 'Work authorized?', answer: 'yes' }],
+      },
+    ]);
+
+    expect(applicants.map((applicant) => applicant.id)).toEqual(['app-from-legacy', 'app-valid']);
+    expect(applicants[0].strengths).toEqual(['Evidence']);
+    expect(applicants[0].status_history).toEqual([
+      {
+        id: null,
+        action: null,
+        from_status: '',
+        to_status: '',
+        reason: null,
+        candidate_note: null,
+        skipped_statuses: [],
+        created_at: null,
+      },
+    ]);
+    expect(applicants[1].screener_answers).toEqual([
+      { question_id: 'q1', prompt: 'Work authorized?', answer: 'yes' },
+    ]);
   });
 });

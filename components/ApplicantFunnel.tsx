@@ -36,7 +36,7 @@ import {
     type ApplicationStatusHistoryEvent,
     type JobApplicant,
 } from '../services/aiClient';
-import { normalizeApplicantForFunnel, stringArray } from '../lib/applicantFunnelNormalize';
+import { normalizeApplicantsForFunnel, stringArray } from '../lib/applicantFunnelNormalize';
 import { saveToShortlist } from '../lib/shortlistData';
 import { listInterviewsForApplication, scheduleInterview, updateInterview, type ApplicationInterview, type InterviewFormat } from '../lib/interviewData';
 import {
@@ -1549,7 +1549,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
             const { applicants: result } = await listJobApplicants(job.id);
 
             if (!mountedRef.current) return;
-            setApplicants((Array.isArray(result) ? result : []).map(normalizeApplicantForFunnel));
+            setApplicants(normalizeApplicantsForFunnel(result));
             setSelectedApplicantIds(new Set());
             // Don't auto-spotlight the top AI-scored applicant (result is score-sorted) —
             // let the selection effect pick filteredApplicants[0], i.e. the chronologically

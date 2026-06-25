@@ -2,6 +2,10 @@ import type { ApplicationStatusHistoryEvent, JobApplicant } from '../services/ai
 
 type ScreenerAnswer = JobApplicant['screener_answers'][number];
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 function cleanString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -41,7 +45,7 @@ function normalizeStatusHistory(value: unknown): ApplicationStatusHistoryEvent[]
 }
 
 export function normalizeApplicantForFunnel(applicant: JobApplicant): JobApplicant {
-  const raw = applicant as unknown as Record<string, unknown>;
+  const raw = isRecord(applicant) ? applicant as unknown as Record<string, unknown> : {};
   const id = cleanString(raw.id) || cleanString(raw.application_id) || cleanString(raw.applicationId);
   return {
     ...applicant,
@@ -62,4 +66,12 @@ export function normalizeApplicantForFunnel(applicant: JobApplicant): JobApplica
     status_history: normalizeStatusHistory(raw.status_history),
     screener_answers: normalizeScreenerAnswers(raw.screener_answers),
   };
+}
+
+export function normalizeApplicantsForFunnel(value: unknown): JobApplicant[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .map((item) => normalizeApplicantForFunnel(item as unknown as JobApplicant))
+    .filter((applicant) => applicant.id.length > 0);
 }
