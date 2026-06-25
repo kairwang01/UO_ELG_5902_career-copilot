@@ -4,10 +4,16 @@ import { generateProfessionalEmail } from '../../services/aiClient';
 import type { ProfessionalEmailResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { CopyButton, DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
+import { SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
 import type { AppSession as Session } from '../../lib/data';
+import {
+  assessEmailDraft,
+  canExportEmail,
+  EmailExportGate,
+  EmailQualityNotice,
+} from './EmailActions';
 
 const EMAIL_SCENARIOS = {
   'Thank You': 'Post-Interview Thank You',
@@ -45,7 +51,7 @@ type EmailResult = ProfessionalEmailResult & {
 };
 
 const hasMeaningfulEmailResult = (value: Partial<ProfessionalEmailResult> | null | undefined) =>
-  Boolean(value?.subject?.trim() && value?.body?.trim() && value.body.trim().length > 40);
+  Boolean(value?.subject?.trim() && value?.body?.trim());
 
 const scenarioLabelKey = (key: string) => `tool_email_crafter_scenario_${key.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
 const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
@@ -138,7 +144,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
   };
 
   useEffect(() => {
-    if (saved && !result && hasMeaningfulEmailResult(saved.result)) {
+    if (saved && !result && hasMeaningfulEmailResult(saved.result) && canExportEmail(assessEmailDraft(saved.result.subject, saved.result.body))) {
       setResult(saved.result);
       setEditableSubject(saved.result.subject);
       setEditableResult(saved.result.body);
@@ -210,6 +216,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
       const apiResult = await generateProfessionalEmail(resumeText, scenarioForApi, detailsForApi, market, tone, style, confidence);
       if (!alive()) return;
       if (!hasMeaningfulEmailResult(apiResult)) throw new Error(t('ai_error_empty_response'));
+      const validation = assessEmailDraft(apiResult.subject, apiResult.body);
       const nextResult: EmailResult = {
         ...apiResult,
         scenario: scenarioForApi,
@@ -221,7 +228,9 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
       setEditableSubject(nextResult.subject);
       setEditableResult(nextResult.body);
       setFromSaved(false);
-      persist(nextResult);
+      if (canExportEmail(validation)) {
+        persist(nextResult);
+      }
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -444,16 +453,20 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
     if (!result) return null;
     const exportText = `Subject: ${editableSubject}\n\n${editableResult}`;
     const lengthLabel = describeTextLength(editableResult, isChineseUi);
+    const validation = assessEmailDraft(editableSubject, editableResult);
 
     return (
       <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
-        <SavedResultBar
-          t={t}
-          canSave={canSave}
-          isSaved={fromSaved}
-          savedAt={saved?.savedAt ?? null}
-          onTryNext={resetResult}
-        />
+        {canExportEmail(validation) && (
+          <SavedResultBar
+            t={t}
+            canSave={canSave}
+            isSaved={fromSaved}
+            savedAt={saved?.savedAt ?? null}
+            onTryNext={resetResult}
+          />
+        )}
+        <EmailQualityNotice validation={validation} />
 
         <CardShell className="overflow-hidden">
           <div className="border-b border-slate-200 bg-slate-50 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6 lg:px-8">
@@ -471,8 +484,14 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <CopyButton text={exportText} label={ui.copyEmail} copiedLabel={ui.copied} />
-                <DownloadButtons textContent={exportText} baseFilename="email_draft" />
+                <EmailExportGate
+                  validation={validation}
+                  text={exportText}
+                  copyLabel={ui.copyEmail}
+                  copiedLabel={ui.copied}
+                  regenerateLabel={t('tool_email_crafter_generate_button')}
+                  onRegenerate={() => void runTool()}
+                />
               </div>
             </div>
           </div>
