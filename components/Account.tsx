@@ -5,7 +5,14 @@ import { firestoreDb } from '@/lib/firebaseClient';
 import type { AppSession as Session } from '../lib/data';
 import Avatar from './Avatar';
 import { ethers } from 'ethers';
-import { ArrowLeft } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  CircleDot,
+  ShieldCheck,
+  WalletCards,
+} from 'lucide-react';
 // TEMP HIDDEN: user-facing API keys + BYOA custom endpoint are hidden from the
 // settings page. Model/endpoint config is superadmin-only via the Admin Console.
 // To restore, re-enable these imports and the two JSX blocks below.
@@ -849,21 +856,13 @@ const Account: React.FC<AccountProps> = ({
     const newStakedStatus = !nftStaked;
     if (TALENT_NFT_PREVIEW_MODE) {
       const prevStaked = nftStaked;
-      const prevEarnings = nftEarnings;
       setWeb3Notice({
         type: 'info',
         text: t(nftStaked ? 'account_web3_unstake_wait' : 'account_web3_stake_wait'),
       });
       try {
-        const updates: Record<string, unknown> = { nft_staked: newStakedStatus };
         setNftStaked(newStakedStatus);
-        // Preview: activating in the talent pool accrues a sample reward so the
-        // claim step is demonstrable without waiting for real on-chain accrual.
-        if (newStakedStatus && (nftEarnings ?? 0) <= 0) {
-          updates.nft_earnings = 0.05;
-          setNftEarnings(0.05);
-        }
-        await data.profiles.update(session.user.id, updates);
+        await data.profiles.update(session.user.id, { nft_staked: newStakedStatus });
         if (!mountedRef.current) return;
         setWeb3Notice({
           type: 'success',
@@ -872,7 +871,6 @@ const Account: React.FC<AccountProps> = ({
       } catch (error: any) {
         if (mountedRef.current) {
           setNftStaked(prevStaked);
-          setNftEarnings(prevEarnings);
           setWeb3Notice({
             type: 'error',
             text: getWeb3ActionErrorText(
@@ -951,27 +949,8 @@ const Account: React.FC<AccountProps> = ({
     }
     setWeb3Busy(true);
     if (TALENT_NFT_PREVIEW_MODE) {
-      setWeb3Notice({ type: 'info', text: t('account_web3_claim_wait') });
-      const prevEarnings = nftEarnings;
-      try {
-        // Preview rewards accrue only while the credential is staked.
-        const reward = nftStaked ? 0.05 : 0;
-        const newEarnings = Number(((nftEarnings ?? 0) + reward).toFixed(4));
-        setNftEarnings(newEarnings);
-        await data.profiles.update(session.user.id, { nft_earnings: newEarnings });
-        if (!mountedRef.current) return;
-        setWeb3Notice({ type: 'success', text: t('account_web3_claim_success') });
-      } catch (error: any) {
-        if (mountedRef.current) {
-          setNftEarnings(prevEarnings);
-          setWeb3Notice({
-            type: 'error',
-            text: getWeb3ActionErrorText(error, 'account_web3_claim_failed'),
-          });
-        }
-      } finally {
-        if (mountedRef.current) setWeb3Busy(false);
-      }
+      setWeb3Notice({ type: 'info', text: t('account_web3_preview_notice') });
+      setWeb3Busy(false);
       return;
     }
     setWeb3Notice({ type: 'info', text: t('account_web3_claim_approve') });
@@ -1066,6 +1045,19 @@ const Account: React.FC<AccountProps> = ({
     }
     return 'border-gray-200 bg-gray-50 text-gray-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
   };
+  const renderWeb3StatusIcon = (tone: 'done' | 'attention' | 'pending') => {
+    if (tone === 'done') return <CheckCircle2 className="h-4 w-4" aria-hidden="true" />;
+    if (tone === 'attention') return <AlertTriangle className="h-4 w-4" aria-hidden="true" />;
+    return <CircleDot className="h-4 w-4" aria-hidden="true" />;
+  };
+  const web3IntroText = TALENT_NFT_PREVIEW_MODE
+    ? t('account_web3_optional_note')
+    : hasWallet
+      ? t('account_web3_desc_connected')
+      : t('account_web3_desc_unconnected');
+  const credentialEligibilityText = TALENT_NFT_PREVIEW_MODE
+    ? t('account_web3_preview_notice')
+    : t('account_web3_nft_eligible_desc');
 
   return (
     <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 p-8 rounded-lg shadow-md border border-gray-200 dark:border-slate-700 animate-fade-in">
@@ -1224,22 +1216,25 @@ const Account: React.FC<AccountProps> = ({
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/70 space-y-4">
             <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {hasWallet
-                      ? t('account_web3_desc_connected')
-                      : t('account_web3_desc_unconnected')}
-                  </p>
-                  {walletAddress && (
-                    <a
-                      href={`https://sepolia.etherscan.io/address/${walletAddress}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 block break-all font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
-                    >
-                      {walletAddress}
-                    </a>
-                  )}
+                <div className="flex min-w-0 gap-3">
+                  <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+                    <WalletCards className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {web3IntroText}
+                    </p>
+                    {walletAddress && (
+                      <a
+                        href={`https://sepolia.etherscan.io/address/${walletAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 block break-all font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        {walletAddress}
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex shrink-0 flex-wrap gap-2">
@@ -1250,20 +1245,7 @@ const Account: React.FC<AccountProps> = ({
                       className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-black disabled:bg-gray-400 sm:w-auto dark:bg-blue-600 dark:hover:bg-blue-500"
                       disabled={web3ActionBusy}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                        />
-                      </svg>
+                      <WalletCards className="h-5 w-5" aria-hidden="true" />
                       {t('account_web3_connect_button')}
                     </button>
                   ) : isWrongNetwork ? (
@@ -1300,9 +1282,7 @@ const Account: React.FC<AccountProps> = ({
                       <span className="text-[11px] font-bold uppercase tracking-wide opacity-75">
                         {item.label}
                       </span>
-                      <span aria-hidden="true" className="text-sm font-bold">
-                        {item.tone === 'done' ? '✓' : item.tone === 'attention' ? '!' : '·'}
-                      </span>
+                      {renderWeb3StatusIcon(item.tone)}
                     </div>
                     <p className="mt-1 text-sm font-semibold">{item.value}</p>
                   </div>
@@ -1319,156 +1299,135 @@ const Account: React.FC<AccountProps> = ({
               !nftMinted &&
               !isWrongNetwork &&
               walletAddress && (
-                <div className="p-4 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-500/30 rounded-lg text-center animate-fade-in">
-                  <h3 className="font-bold text-lg text-blue-800 dark:text-blue-200">
-                    {t('account_web3_nft_eligible_title')}
-                  </h3>
-                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                    {t('account_web3_nft_eligible_desc')}
-                  </p>
-                  <button
-                    onClick={handleMintNFT}
-                    disabled={web3ActionBusy}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow hover:bg-blue-700 disabled:bg-blue-400"
-                  >
-                    {web3Busy
-                      ? t('account_web3_nft_minting_button')
-                      : t('account_web3_nft_mint_button')}
-                  </button>
+                <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm animate-fade-in dark:border-blue-900/50 dark:bg-slate-900">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 gap-3 text-left">
+                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                        <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <h3 className="font-bold text-lg text-gray-950 dark:text-gray-100">
+                          {t('account_web3_nft_eligible_title')}
+                        </h3>
+                        <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-slate-300">
+                          {credentialEligibilityText}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleMintNFT}
+                      disabled={web3ActionBusy}
+                      className="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:bg-blue-400"
+                    >
+                      {web3Busy
+                        ? t('account_web3_nft_minting_button')
+                        : t('account_web3_nft_mint_button')}
+                    </button>
+                  </div>
                 </div>
               )}
 
             {nftMinted && !isWrongNetwork && walletAddress && (
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50 rounded-lg animate-fade-in space-y-4">
-                <h3 className="font-bold text-lg text-green-800 dark:text-green-200 text-center">
-                  {t('account_web3_your_nft')}
-                </h3>
-
-                <div className="group relative w-full max-w-sm mx-auto p-1 rounded-2xl bg-gradient-to-br from-blue-500 via-cyan-400 to-green-400 transition-transform duration-300 hover:-translate-y-2 [transform-style:preserve-3d] hover:[transform:perspective(800px)_rotateY(10deg)_translateY(-0.5rem)]">
-                  <div className="relative bg-gray-900 rounded-xl p-6 h-full text-white overflow-hidden [transform:translateZ(40px)]">
-                    <div className="absolute inset-0 -z-10 opacity-30 [background-image:radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-500 via-transparent to-transparent [background-size:1000%_1000%] animate-aurora"></div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold tracking-widest uppercase text-cyan-300">
+              <div className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm animate-fade-in dark:border-emerald-900/50 dark:bg-slate-900">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 gap-3">
+                    <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm">
+                      <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
                         Proof-of-Talent
-                      </span>
-                      <span className="text-xs font-mono text-gray-400">
-                        ID: #{tokenId}
-                      </span>
-                    </div>
-
-                    <div className="my-8 flex justify-center items-center">
-                      <svg
-                        width="80"
-                        height="80"
-                        viewBox="0 0 100 100"
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="drop-shadow-[0_0_10px_rgba(0,190,255,0.7)]"
-                      >
-                        <defs>
-                          <linearGradient
-                            id="crystal-grad"
-                            x1="0%"
-                            y1="0%"
-                            x2="100%"
-                            y2="100%"
-                          >
-                            <stop offset="0%" stopColor="#00d1ff" />
-                            <stop offset="100%" stopColor="#00ffc4" />
-                          </linearGradient>
-                          <filter id="glow">
-                            <feGaussianBlur
-                              stdDeviation="3.5"
-                              result="coloredBlur"
-                            />
-                            <feMerge>
-                              <feMergeNode in="coloredBlur" />
-                              <feMergeNode in="SourceGraphic" />
-                            </feMerge>
-                          </filter>
-                        </defs>
-                        <g filter="url(#glow)" className="animate-pulse-glow">
-                          <path
-                            d="M50 2 L98 50 L50 98 L2 50 Z"
-                            fill="rgba(0,255,196,0.1)"
-                            stroke="url(#crystal-grad)"
-                            strokeWidth="1"
-                          />
-                          <path
-                            d="M50 2 L74 26 L50 50 L26 26 Z"
-                            fill="rgba(0,209,255,0.2)"
-                          />
-                          <path
-                            d="M50 98 L74 74 L50 50 L26 74 Z"
-                            fill="rgba(0,209,255,0.2)"
-                          />
-                          <path
-                            d="M2 50 L26 26 L50 50 L26 74 Z"
-                            fill="rgba(0,255,196,0.2)"
-                          />
-                          <path
-                            d="M98 50 L74 26 L50 50 L74 74 Z"
-                            fill="rgba(0,255,196,0.2)"
-                          />
-                        </g>
-                      </svg>
-                    </div>
-
-                    <div className="text-center">
-                      <h4 className="text-2xl font-semibold tracking-wide bg-gradient-to-r from-gray-200 via-cyan-300 to-gray-200 bg-clip-text text-transparent [background-size:200%_auto] animate-holographic-text">
-                        {fullName}
-                      </h4>
-                      <p className="text-sm text-cyan-400 mt-1">
+                      </p>
+                      <h3 className="mt-1 text-lg font-bold text-gray-950 dark:text-gray-100">
+                        {t('account_web3_your_nft')}
+                      </h3>
+                      <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-slate-300">
                         {t('account_web3_verified_candidate')}
+                        {fullName ? ` · ${fullName}` : ''}
                       </p>
                     </div>
                   </div>
+                  <span className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                    ID #{tokenId}
+                  </span>
                 </div>
 
-                <div className="flex items-center justify-between bg-white dark:bg-slate-700/50 p-3 rounded-md">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                      {t('account_web3_status_credential')}
+                    </p>
+                    <p className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                      {t('account_web3_status_minted')}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                      {t('account_web3_stake_label')}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {nftStaked
+                        ? t('account_web3_status_ready')
+                        : t('account_web3_status_waiting')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <label
                       htmlFor="stake-toggle"
-                      className="font-semibold text-gray-800 dark:text-gray-200"
+                      className="font-semibold text-gray-900 dark:text-gray-100"
                     >
                       {t('account_web3_stake_label')}
                     </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {t('account_web3_stake_desc')}
+                    <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-slate-300">
+                      {TALENT_NFT_PREVIEW_MODE
+                        ? t('account_web3_preview_notice')
+                        : t('account_web3_stake_desc')}
                     </p>
                   </div>
                   <button
                     id="stake-toggle"
+                    type="button"
                     onClick={handleToggleStake}
                     disabled={web3ActionBusy}
-                    className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${nftStaked ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}
+                    aria-pressed={Boolean(nftStaked)}
+                    className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-slate-900 ${nftStaked ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}
                   >
+                    <span className="sr-only">{t('account_web3_stake_label')}</span>
                     <span
-                      className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${nftStaked ? 'translate-x-6' : 'translate-x-1'}`}
+                      className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition-transform ${nftStaked ? 'translate-x-7' : 'translate-x-1'}`}
                     />
                   </button>
                 </div>
-                <div className="text-center pt-2">
-                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                    {t('account_web3_earnings_title')}
-                  </h4>
-                  <p className="text-3xl font-bold text-green-600 dark:text-green-500 mt-1">
-                    {(nftEarnings || 0).toFixed(4)} ETH
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t('account_web3_earnings_desc')}
-                  </p>
-                  {nftEarnings && nftEarnings > 0 && (
-                    <button
-                      onClick={handleClaimRewards}
-                      disabled={web3ActionBusy}
-                      className="mt-2 text-sm bg-green-100 text-green-800 font-semibold px-3 py-1 rounded-full hover:bg-green-200 disabled:opacity-50"
-                    >
-                      {web3Busy
-                        ? t('account_web3_claiming_button')
-                        : t('account_web3_claim_rewards_button')}
-                    </button>
-                  )}
-                </div>
+
+                {!TALENT_NFT_PREVIEW_MODE && (
+                  <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-center dark:border-green-900/50 dark:bg-green-950/20">
+                    <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                      {t('account_web3_earnings_title')}
+                    </h4>
+                    <p className="mt-1 text-3xl font-bold text-green-600 dark:text-green-400">
+                      {(nftEarnings || 0).toFixed(4)} ETH
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {t('account_web3_earnings_desc')}
+                    </p>
+                    {nftEarnings && nftEarnings > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClaimRewards}
+                        disabled={web3ActionBusy}
+                        className="mt-2 rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800 hover:bg-green-200 disabled:opacity-50"
+                      >
+                        {web3Busy
+                          ? t('account_web3_claiming_button')
+                          : t('account_web3_claim_rewards_button')}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
