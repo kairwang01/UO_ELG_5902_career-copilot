@@ -8,6 +8,7 @@ import type { Plan } from '@/types';
 import { X, Eye, EyeOff } from 'lucide-react';
 import { BrandMark } from './BrandLogo';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import CheckoutRedirectNotice from './billing/CheckoutRedirectNotice';
 
 // Unified input styling (was inconsistent — sign-in inputs lacked dark mode).
 const INPUT_CLASS =
@@ -145,6 +146,9 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string>(mode === 'business' ? 'single_post' : 'free');
+  const selectedBusinessPlan = mode === 'business'
+    ? (BUSINESS_PLANS[selectedPlan as keyof typeof BUSINESS_PLANS] ?? null)
+    : null;
   useEffect(() => {
     setAuthView(initialView);
   }, [initialView]);
@@ -382,6 +386,11 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
                     <PlanSelectorCard key={plan.key} plan={plan} isSelected={selectedPlan === plan.key} onSelect={() => setSelectedPlan(plan.key)} t={t} />
                   ))}
                 </div>
+                {selectedBusinessPlan && (
+                  <CheckoutRedirectNotice>
+                    {t(`plan_${selectedBusinessPlan.key}_name`)} · {t('portal_billing_available_desc')}
+                  </CheckoutRedirectNotice>
+                )}
               </div>
             )}
 

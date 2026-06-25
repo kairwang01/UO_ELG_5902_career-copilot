@@ -15,6 +15,7 @@ import { Input } from '../ui/input';
 import { PasswordInput } from '../ui/PasswordInput';
 import { Button } from '../ui/button';
 import { Check } from 'lucide-react';
+import CheckoutRedirectNotice from '../billing/CheckoutRedirectNotice';
 import { businessPlanDefs, type BusinessPlanId } from './businessPlans';
 
 interface Props {
@@ -36,6 +37,7 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const selectedBusinessPlan = businessPlanDefs.find((plan) => plan.id === selectedPlan) ?? businessPlanDefs[0];
   // Ref latch (state lags a render → a double Enter could fire two signUp /
   // setUserSubscription calls). mountedRef drops tail setState if the modal unmounts.
   const submittingRef = useRef(false);
@@ -194,6 +196,11 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
                 </button>
               ))}
             </div>
+            {selectedBusinessPlan.id !== 'free' && (
+              <CheckoutRedirectNotice className="mt-3">
+                {t(selectedBusinessPlan.nameKey)} · {t('portal_billing_available_desc')}
+              </CheckoutRedirectNotice>
+            )}
           </div>
 
           <Input
