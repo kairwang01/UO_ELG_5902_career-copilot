@@ -247,7 +247,13 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
         **Output contract (strict):**
         - Return a complete resume as plain text only. No Markdown tables, pipe tables, columns, HTML, images, photo placeholders, decorative dividers, square bullets, or form placeholders.
         - Use standard section headers on their own lines (for example: SUMMARY, SKILLS, EXPERIENCE, PROJECTS, EDUCATION, CERTIFICATIONS, LANGUAGES).
-        - Put each header/contact item on its own line. Do not combine Name, Phone, Email, Location, Website, or Summary into one sentence.
+        - Put each header/contact item on its own line. Do not combine Name, Phone, Email, Location, Website, or Summary into one sentence. The first header block must be parseable as separate lines:
+          Name
+          Location
+          Phone
+          Email
+          Website / LinkedIn / GitHub
+          Then the first resume section heading.
         - Use short paragraphs and "- " bullets. One bullet = one evidence point.
         - Keep contact details in a compact header block. Never invent phone, email, location, links, work authorization, photo, phonetic name reading, date of birth, nationality, gender, marital status, visa status, GPA, metrics, employers, or certifications.
         - Preserve all real facts from the original resume. You may tighten phrasing and reorder sections for the target market, but you must not add unverifiable claims.
@@ -281,6 +287,12 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
 
         **Original Resume:**
         {{resumeText}}
+
+        Before returning, run this self-check silently:
+        1. The candidate name line contains ONLY the name, not phone/email/location/website/photo text.
+        2. Phone, email, location, and website/link fields, if present in the source, are on separate lines.
+        3. No photo placeholder, fake personal field, pipe table, markdown table, or country-form template labels remain.
+        4. The document has at least two real resume sections after the header.
 
         Produce only the final, localized document text — no commentary or notes.
       `,

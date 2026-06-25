@@ -175,15 +175,19 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
       const languageName = resolveOutputLanguageName(targetMarket, outputLanguage);
       const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter, languageName);
       if (!alive()) return;
+      const formattedText = cleanResumeDisplay(apiResult.formattedText);
+      const validation = assessFormattedResume(formattedText);
       const normalizedResult = {
         ...apiResult,
-        formattedText: cleanResumeDisplay(apiResult.formattedText),
+        formattedText,
         targetMarket,
         outputLanguage,
       };
       setResult(normalizedResult);
       setFromSaved(false);
-      persist(normalizedResult);
+      if (validation.status !== 'needs_regen') {
+        persist(normalizedResult);
+      }
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -396,7 +400,9 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
         : 'Regenerate before downloading';
     return (
       <div className="space-y-4 animate-fade-in">
-        <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
+        {validation.status !== 'needs_regen' && (
+          <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
+        )}
 
         {/* Post-generation validator gate: don't present a garbled/blob output as final. */}
         {validation.status === 'needs_regen' && (
@@ -433,7 +439,19 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
               </p>
             )}
           </div>
-          <DownloadButtons textContent={formattedText} baseFilename={`${generatedMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
+          {validation.status === 'needs_regen' ? (
+            <button
+              type="button"
+              onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
+              disabled={loading}
+              className="inline-flex min-h-10 items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+              data-qa="resume-formatter-download-blocked-regenerate"
+            >
+              {t('tool_resume_formatter_regen_cta')}
+            </button>
+          ) : (
+            <DownloadButtons textContent={formattedText} baseFilename={`${generatedMarket.toLowerCase().replace(/\s/g, '_')}_resume`} />
+          )}
         </div>
 
         <section
