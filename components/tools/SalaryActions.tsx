@@ -1,9 +1,16 @@
 import React from 'react';
-import { AlertTriangle, Wallet } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 import type { SalaryNegotiationResult } from '../../types';
+import {
+  BlockedCopyBadge,
+  BlockedRegenerateButton,
+  canExportQualityGate,
+  QualityGateNotice,
+  type QualityValidationStatus,
+} from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
-export type SalaryValidationStatus = 'ok' | 'warn' | 'needs_regen';
+export type SalaryValidationStatus = QualityValidationStatus;
 
 export interface SalaryValidation {
   status: SalaryValidationStatus;
@@ -147,7 +154,7 @@ export const assessSalaryNegotiation = (result: SalaryDraft | null | undefined):
 };
 
 export const canExportSalaryNegotiation = (validation: SalaryValidation): boolean =>
-  validation.status !== 'needs_regen';
+  canExportQualityGate(validation);
 
 export const salaryIssueLabel = (issue: string): string => {
   const labels: Record<string, string> = {
@@ -192,15 +199,11 @@ export const SalaryExportGate: React.FC<SalaryExportGateProps> = ({
 }) => {
   if (!canExportSalaryNegotiation(validation)) {
     return (
-      <button
-        type="button"
+      <BlockedRegenerateButton
+        label={regenerateLabel}
         onClick={onRegenerate}
-        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
-        data-qa="salary-export-blocked-regenerate"
-      >
-        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-        {regenerateLabel}
-      </button>
+        dataQa="salary-export-blocked-regenerate"
+      />
     );
   }
 
@@ -215,14 +218,7 @@ interface SalaryCopyGateProps {
 
 export const SalaryCopyGate: React.FC<SalaryCopyGateProps> = ({ validation, text, label }) => {
   if (!canExportSalaryNegotiation(validation)) {
-    return (
-      <span
-        className="inline-flex min-h-9 items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100"
-        data-qa="salary-copy-blocked"
-      >
-        Review needed
-      </span>
-    );
+    return <BlockedCopyBadge dataQa="salary-copy-blocked" />;
   }
 
   return <CopyButton text={text} label={label} />;
@@ -233,34 +229,15 @@ interface SalaryQualityNoticeProps {
 }
 
 export const SalaryQualityNotice: React.FC<SalaryQualityNoticeProps> = ({ validation }) => {
-  if (validation.status === 'ok') return null;
-  const isBlocking = validation.status === 'needs_regen';
   return (
-    <div
-      className={`rounded-xl border p-4 ${
-        isBlocking
-          ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100'
-          : 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
-      }`}
-      role={isBlocking ? 'alert' : 'note'}
-      data-qa="salary-quality-notice"
-      data-qa-salary-quality={validation.status}
-    >
-      <div className="flex items-start gap-3">
-        {isBlocking ? (
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        ) : (
-          <Wallet className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        )}
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">
-            {isBlocking ? 'Fix this negotiation plan before exporting' : 'Review before using'}
-          </p>
-          <p className="mt-1 text-sm leading-6 opacity-85">
-            {validation.issues.map(salaryIssueLabel).join(' ')}
-          </p>
-        </div>
-      </div>
-    </div>
+    <QualityGateNotice
+      validation={validation}
+      dataQa="salary-quality-notice"
+      statusDataAttribute="data-qa-salary-quality"
+      blockingTitle="Fix this negotiation plan before exporting"
+      warningTitle="Review before using"
+      issueLabel={salaryIssueLabel}
+      warningIcon={Wallet}
+    />
   );
 };

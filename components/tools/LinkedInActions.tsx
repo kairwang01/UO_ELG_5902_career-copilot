@@ -1,9 +1,15 @@
 import React from 'react';
-import { AlertTriangle, Link2 } from 'lucide-react';
+import { Link2 } from 'lucide-react';
 import type { LinkedInOptimization } from '../../types';
+import {
+  BlockedRegenerateButton,
+  canExportQualityGate,
+  QualityGateNotice,
+  type QualityValidationStatus,
+} from './QualityGate';
 import { DownloadButtons } from './ToolUtils';
 
-export type LinkedInValidationStatus = 'ok' | 'warn' | 'needs_regen';
+export type LinkedInValidationStatus = QualityValidationStatus;
 
 export interface LinkedInValidation {
   status: LinkedInValidationStatus;
@@ -86,7 +92,7 @@ export const assessLinkedInOptimization = (result: Partial<LinkedInOptimization>
 };
 
 export const canExportLinkedInOptimization = (validation: LinkedInValidation): boolean =>
-  validation.status !== 'needs_regen';
+  canExportQualityGate(validation);
 
 export const linkedInIssueLabel = (issue: string): string => {
   const labels: Record<string, string> = {
@@ -120,15 +126,11 @@ export const LinkedInExportGate: React.FC<LinkedInExportGateProps> = ({
 }) => {
   if (!canExportLinkedInOptimization(validation)) {
     return (
-      <button
-        type="button"
+      <BlockedRegenerateButton
+        label={regenerateLabel}
         onClick={onRegenerate}
-        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
-        data-qa="linkedin-export-blocked-regenerate"
-      >
-        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-        {regenerateLabel}
-      </button>
+        dataQa="linkedin-export-blocked-regenerate"
+      />
     );
   }
 
@@ -140,34 +142,15 @@ interface LinkedInQualityNoticeProps {
 }
 
 export const LinkedInQualityNotice: React.FC<LinkedInQualityNoticeProps> = ({ validation }) => {
-  if (validation.status === 'ok') return null;
-  const isBlocking = validation.status === 'needs_regen';
   return (
-    <div
-      className={`rounded-xl border p-4 ${
-        isBlocking
-          ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100'
-          : 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
-      }`}
-      role={isBlocking ? 'alert' : 'note'}
-      data-qa="linkedin-quality-notice"
-      data-qa-linkedin-quality={validation.status}
-    >
-      <div className="flex items-start gap-3">
-        {isBlocking ? (
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        ) : (
-          <Link2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        )}
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">
-            {isBlocking ? 'Fix this profile draft before exporting' : 'Review before using'}
-          </p>
-          <p className="mt-1 text-sm leading-6 opacity-85">
-            {validation.issues.map(linkedInIssueLabel).join(' ')}
-          </p>
-        </div>
-      </div>
-    </div>
+    <QualityGateNotice
+      validation={validation}
+      dataQa="linkedin-quality-notice"
+      statusDataAttribute="data-qa-linkedin-quality"
+      blockingTitle="Fix this profile draft before exporting"
+      warningTitle="Review before using"
+      issueLabel={linkedInIssueLabel}
+      warningIcon={Link2}
+    />
   );
 };

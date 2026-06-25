@@ -1,8 +1,14 @@
 import React from 'react';
-import { AlertTriangle, MailCheck } from 'lucide-react';
+import { MailCheck } from 'lucide-react';
+import {
+  BlockedRegenerateButton,
+  canExportQualityGate,
+  QualityGateNotice,
+  type QualityValidationStatus,
+} from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
-export type EmailValidationStatus = 'ok' | 'warn' | 'needs_regen';
+export type EmailValidationStatus = QualityValidationStatus;
 
 export interface EmailValidation {
   status: EmailValidationStatus;
@@ -55,7 +61,7 @@ export const assessEmailDraft = (subject: string, body: string): EmailValidation
 };
 
 export const canExportEmail = (validation: EmailValidation): boolean =>
-  validation.status !== 'needs_regen';
+  canExportQualityGate(validation);
 
 export const emailIssueLabel = (issue: string): string => {
   const labels: Record<string, string> = {
@@ -91,15 +97,11 @@ export const EmailExportGate: React.FC<EmailExportGateProps> = ({
 }) => {
   if (!canExportEmail(validation)) {
     return (
-      <button
-        type="button"
+      <BlockedRegenerateButton
+        label={regenerateLabel}
         onClick={onRegenerate}
-        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
-        data-qa="email-export-blocked-regenerate"
-      >
-        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-        {regenerateLabel}
-      </button>
+        dataQa="email-export-blocked-regenerate"
+      />
     );
   }
 
@@ -116,34 +118,15 @@ interface EmailQualityNoticeProps {
 }
 
 export const EmailQualityNotice: React.FC<EmailQualityNoticeProps> = ({ validation }) => {
-  if (validation.status === 'ok') return null;
-  const isBlocking = validation.status === 'needs_regen';
   return (
-    <div
-      className={`rounded-xl border p-4 ${
-        isBlocking
-          ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100'
-          : 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
-      }`}
-      role={isBlocking ? 'alert' : 'note'}
-      data-qa="email-quality-notice"
-      data-qa-email-quality={validation.status}
-    >
-      <div className="flex items-start gap-3">
-        {isBlocking ? (
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        ) : (
-          <MailCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        )}
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">
-            {isBlocking ? 'Fix this draft before exporting' : 'Review before sending'}
-          </p>
-          <p className="mt-1 text-sm leading-6 opacity-85">
-            {validation.issues.map(emailIssueLabel).join(' ')}
-          </p>
-        </div>
-      </div>
-    </div>
+    <QualityGateNotice
+      validation={validation}
+      dataQa="email-quality-notice"
+      statusDataAttribute="data-qa-email-quality"
+      blockingTitle="Fix this draft before exporting"
+      warningTitle="Review before sending"
+      issueLabel={emailIssueLabel}
+      warningIcon={MailCheck}
+    />
   );
 };

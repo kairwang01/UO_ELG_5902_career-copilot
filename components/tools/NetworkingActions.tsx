@@ -1,9 +1,16 @@
 import React from 'react';
-import { AlertTriangle, Network } from 'lucide-react';
+import { Network } from 'lucide-react';
 import type { NetworkingStrategyResult } from '../../types';
+import {
+  BlockedCopyBadge,
+  BlockedRegenerateButton,
+  canExportQualityGate,
+  QualityGateNotice,
+  type QualityValidationStatus,
+} from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
-export type NetworkingValidationStatus = 'ok' | 'warn' | 'needs_regen';
+export type NetworkingValidationStatus = QualityValidationStatus;
 
 export interface NetworkingValidation {
   status: NetworkingValidationStatus;
@@ -118,7 +125,7 @@ export const assessNetworkingStrategy = (result: SavedNetworkingStrategy | null 
 };
 
 export const canExportNetworkingStrategy = (validation: NetworkingValidation): boolean =>
-  validation.status !== 'needs_regen';
+  canExportQualityGate(validation);
 
 export const networkingIssueLabel = (issue: string): string => {
   const labels: Record<string, string> = {
@@ -158,15 +165,11 @@ export const NetworkingExportGate: React.FC<NetworkingExportGateProps> = ({
 }) => {
   if (!canExportNetworkingStrategy(validation)) {
     return (
-      <button
-        type="button"
+      <BlockedRegenerateButton
+        label={regenerateLabel}
         onClick={onRegenerate}
-        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
-        data-qa="networking-export-blocked-regenerate"
-      >
-        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-        {regenerateLabel}
-      </button>
+        dataQa="networking-export-blocked-regenerate"
+      />
     );
   }
 
@@ -181,14 +184,7 @@ interface NetworkingCopyGateProps {
 
 export const NetworkingCopyGate: React.FC<NetworkingCopyGateProps> = ({ validation, text, label }) => {
   if (!canExportNetworkingStrategy(validation)) {
-    return (
-      <span
-        className="inline-flex min-h-9 items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100"
-        data-qa="networking-copy-blocked"
-      >
-        Review needed
-      </span>
-    );
+    return <BlockedCopyBadge dataQa="networking-copy-blocked" />;
   }
 
   return <CopyButton text={text} label={label} />;
@@ -199,34 +195,15 @@ interface NetworkingQualityNoticeProps {
 }
 
 export const NetworkingQualityNotice: React.FC<NetworkingQualityNoticeProps> = ({ validation }) => {
-  if (validation.status === 'ok') return null;
-  const isBlocking = validation.status === 'needs_regen';
   return (
-    <div
-      className={`rounded-xl border p-4 ${
-        isBlocking
-          ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100'
-          : 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
-      }`}
-      role={isBlocking ? 'alert' : 'note'}
-      data-qa="networking-quality-notice"
-      data-qa-networking-quality={validation.status}
-    >
-      <div className="flex items-start gap-3">
-        {isBlocking ? (
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        ) : (
-          <Network className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        )}
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">
-            {isBlocking ? 'Fix this networking plan before exporting' : 'Review before using'}
-          </p>
-          <p className="mt-1 text-sm leading-6 opacity-85">
-            {validation.issues.map(networkingIssueLabel).join(' ')}
-          </p>
-        </div>
-      </div>
-    </div>
+    <QualityGateNotice
+      validation={validation}
+      dataQa="networking-quality-notice"
+      statusDataAttribute="data-qa-networking-quality"
+      blockingTitle="Fix this networking plan before exporting"
+      warningTitle="Review before using"
+      issueLabel={networkingIssueLabel}
+      warningIcon={Network}
+    />
   );
 };
