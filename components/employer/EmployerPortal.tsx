@@ -199,6 +199,11 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   };
 
   const handleViewApplicants = (job: JobPostingWithCount) => {
+    if (!job?.id || !job?.title) {
+      addToast(t('applicant_funnel_load_error'), 'error');
+      setCurrentPage('job-listings');
+      return;
+    }
     setJobForFunnel(job);
     setPrevPage(currentPage);
   };

@@ -2104,7 +2104,15 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                         })}
                     </span>
                 </div>
-                <FunnelChart data={funnelData} t={t} />
+                <RecoverableSectionBoundary
+                    resetKey={`funnel-chart:${job.id}:${applicants.length}`}
+                    title={t('applicant_funnel_error_title')}
+                    description="Pipeline summary could not be shown. Applicant review is still available below."
+                    retryLabel={t('applicant_funnel_retry')}
+                    onRetry={fetchApplicants}
+                >
+                    <FunnelChart data={funnelData} t={t} />
+                </RecoverableSectionBoundary>
             </div>
 
             {/* AI-hiring disclosure: AI output here is advisory decision-support,
@@ -2539,21 +2547,53 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                                 )}
                             </div>
 
-                            <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
+                            <RecoverableSectionBoundary
+                                resetKey={`talent-profile:${selectedApplicant.id}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="The structured talent profile could not be shown. You can still review the rest of this application."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
+                            </RecoverableSectionBoundary>
 
-                            <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
+                            <RecoverableSectionBoundary
+                                resetKey={`job-fit:${selectedApplicant.id}:${job.id}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="The job-fit checklist could not be shown. You can still review the applicant packet."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
+                            </RecoverableSectionBoundary>
 
-                            <InterviewsSection
-                                // Remount per applicant so a half-typed scorecard/interview
-                                // draft for one candidate can't bleed into the next.
-                                key={selectedApplicant.id}
-                                applicationId={selectedApplicant.id}
-                                employerUid={employerUid}
-                                defaultStage={getStatusLabel(selectedApplicant.status)}
-                                t={t}
-                            />
+                            <RecoverableSectionBoundary
+                                resetKey={`interviews:${selectedApplicant.id}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="Interview scheduling could not be shown. The candidate review panel remains available."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <InterviewsSection
+                                    // Remount per applicant so a half-typed scorecard/interview
+                                    // draft for one candidate can't bleed into the next.
+                                    key={selectedApplicant.id}
+                                    applicationId={selectedApplicant.id}
+                                    employerUid={employerUid}
+                                    defaultStage={getStatusLabel(selectedApplicant.status)}
+                                    t={t}
+                                />
+                            </RecoverableSectionBoundary>
 
-                            <StatusHistory history={selectedApplicant.status_history} getStatusLabel={getStatusLabel} t={t} />
+                            <RecoverableSectionBoundary
+                                resetKey={`status-history:${selectedApplicant.id}:${(selectedApplicant.status_history ?? []).length}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="Status history could not be shown. The current application status is still visible above."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <StatusHistory history={selectedApplicant.status_history ?? []} getStatusLabel={getStatusLabel} t={t} />
+                            </RecoverableSectionBoundary>
 
                             {selectedRecommendation && RecommendationIcon && (
                                 <div className={`rounded-xl border p-4 ${RECOMMENDATION_TONE_CLASS[selectedRecommendation.tone]}`}>
@@ -2601,19 +2641,51 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                         </div>
                     ) : (
                         <div key={selectedApplicant.id} className="animate-panel-expand space-y-5">
-                            <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
+                            <RecoverableSectionBoundary
+                                resetKey={`talent-profile:${selectedApplicant.id}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="The structured talent profile could not be shown. You can still review the rest of this application."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <TalentProfileSummary profile={selectedApplicant.talent_profile} t={t} />
+                            </RecoverableSectionBoundary>
 
-                            <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
-                            <InterviewsSection
-                                // Remount per applicant so a half-typed scorecard/interview
-                                // draft for one candidate can't bleed into the next.
-                                key={selectedApplicant.id}
-                                applicationId={selectedApplicant.id}
-                                employerUid={employerUid}
-                                defaultStage={getStatusLabel(selectedApplicant.status)}
-                                t={t}
-                            />
-                            <StatusHistory history={selectedApplicant.status_history} getStatusLabel={getStatusLabel} t={t} />
+                            <RecoverableSectionBoundary
+                                resetKey={`job-fit:${selectedApplicant.id}:${job.id}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="The job-fit checklist could not be shown. You can still review the applicant packet."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <JobFitChecklist job={job} profile={selectedApplicant.talent_profile} t={t} />
+                            </RecoverableSectionBoundary>
+                            <RecoverableSectionBoundary
+                                resetKey={`interviews:${selectedApplicant.id}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="Interview scheduling could not be shown. The candidate review panel remains available."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <InterviewsSection
+                                    // Remount per applicant so a half-typed scorecard/interview
+                                    // draft for one candidate can't bleed into the next.
+                                    key={selectedApplicant.id}
+                                    applicationId={selectedApplicant.id}
+                                    employerUid={employerUid}
+                                    defaultStage={getStatusLabel(selectedApplicant.status)}
+                                    t={t}
+                                />
+                            </RecoverableSectionBoundary>
+                            <RecoverableSectionBoundary
+                                resetKey={`status-history:${selectedApplicant.id}:${(selectedApplicant.status_history ?? []).length}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="Status history could not be shown. The current application status is still visible above."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <StatusHistory history={selectedApplicant.status_history ?? []} getStatusLabel={getStatusLabel} t={t} />
+                            </RecoverableSectionBoundary>
                             <div className="mx-auto max-w-sm rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
                                 <FileWarning className="mx-auto h-10 w-10 text-amber-500" />
                                 <p className="mt-3 font-semibold text-gray-700 dark:text-gray-200">
@@ -2682,7 +2754,15 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
 
                     {selectedApplicant && (
                         <div className="mt-5">
-                            <ApplicationMessageThread key={selectedApplicant.id} applicationId={selectedApplicant.id} viewerRole="employer" viewerUid={employerUid} t={t} />
+                            <RecoverableSectionBoundary
+                                resetKey={`messages:${selectedApplicant.id}`}
+                                title={t('applicant_funnel_error_title')}
+                                description="Messages could not be shown. Application review is still available."
+                                retryLabel={t('applicant_funnel_retry')}
+                                onRetry={fetchApplicants}
+                            >
+                                <ApplicationMessageThread key={selectedApplicant.id} applicationId={selectedApplicant.id} viewerRole="employer" viewerUid={employerUid} t={t} />
+                            </RecoverableSectionBoundary>
                         </div>
                     )}
                     </RecoverableSectionBoundary>
