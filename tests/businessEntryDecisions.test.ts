@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { decideBusinessPortalAction } from '../lib/access/businessEntryDecisions';
+import {
+  DEFAULT_BUSINESS_ENTRY_PLAN,
+  decideBusinessPortalAction,
+  requiresBusinessPlanPaymentConfirmation,
+} from '../lib/access/businessEntryDecisions';
 
 describe('business entry decisions', () => {
   it('opens sign-up for logged-out users', () => {
@@ -32,5 +36,15 @@ describe('business entry decisions', () => {
       canEnterBusinessPortal: true,
       hasPortalHandler: false,
     })).toBe('go_back');
+  });
+
+  it('defaults business entry to the free plan instead of a paid checkout plan', () => {
+    expect(DEFAULT_BUSINESS_ENTRY_PLAN).toBe('free');
+  });
+
+  it('does not require payment confirmation for the free business plan', () => {
+    expect(requiresBusinessPlanPaymentConfirmation('free')).toBe(false);
+    expect(requiresBusinessPlanPaymentConfirmation('starter')).toBe(true);
+    expect(requiresBusinessPlanPaymentConfirmation('growth')).toBe(true);
   });
 });

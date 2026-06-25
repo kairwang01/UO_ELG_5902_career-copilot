@@ -4,7 +4,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type { AppSession as Session } from '../lib/data';
 import type { UserProfile } from '../types';
 import { hasBusinessPortalAccess } from '../lib/access/businessAccess';
-import { decideBusinessPortalAction } from '../lib/access/businessEntryDecisions';
+import {
+  DEFAULT_BUSINESS_ENTRY_PLAN,
+  decideBusinessPortalAction,
+  requiresBusinessPlanPaymentConfirmation,
+} from '../lib/access/businessEntryDecisions';
 import BusinessSignInModal from './business/BusinessSignInModal';
 import BusinessSignUpModal from './business/BusinessSignUpModal';
 import BusinessForgotPasswordModal from './business/BusinessForgotPasswordModal';
@@ -71,12 +75,12 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
         onBack();
         break;
       case 'open_signup':
-        setSignupPlan('starter');
+        setSignupPlan(DEFAULT_BUSINESS_ENTRY_PLAN);
         setAccessPromptPlan(null);
         setModal('signup');
         break;
       case 'open_business_access_prompt':
-        setSignupPlan('starter');
+        setSignupPlan(DEFAULT_BUSINESS_ENTRY_PLAN);
         setAccessPromptPlan(null);
         setModal('business_access');
         break;
@@ -436,6 +440,13 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
               type="button"
               onClick={() => {
                 if (accessPromptPlan) {
+                  if (!requiresBusinessPlanPaymentConfirmation(accessPromptPlan)) {
+                    setSignupPlan(DEFAULT_BUSINESS_ENTRY_PLAN);
+                    setAccessPromptPlan(null);
+                    setModal('none');
+                    onSelectBusinessPlan(accessPromptPlan);
+                    return;
+                  }
                   setSignupPlan(accessPromptPlan);
                   setAccessPromptPlan(null);
                   setModal('confirm_plan');

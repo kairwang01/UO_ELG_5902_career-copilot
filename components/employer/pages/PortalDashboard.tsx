@@ -5,7 +5,6 @@ import {
   Briefcase,
   Building2,
   ChevronRight,
-  CreditCard,
   Plus,
   Search,
   TrendingUp,
@@ -131,12 +130,6 @@ export function PortalDashboard({
       page: 'company-profile' as PortalPage,
       action: t('portal_action_go_to_profile'),
       Icon: User,
-    },
-    {
-      msg: t('portal_action_check_billing'),
-      page: 'billing' as PortalPage,
-      action: t('portal_action_view_plan'),
-      Icon: CreditCard,
     },
   ].filter(Boolean) as {
     msg: string;
