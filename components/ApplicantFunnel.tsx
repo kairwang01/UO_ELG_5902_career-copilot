@@ -36,7 +36,7 @@ import {
     type ApplicationStatusHistoryEvent,
     type JobApplicant,
 } from '../services/aiClient';
-import { normalizeApplicantForFunnel } from '../lib/applicantFunnelNormalize';
+import { normalizeApplicantForFunnel, stringArray } from '../lib/applicantFunnelNormalize';
 import { saveToShortlist } from '../lib/shortlistData';
 import { listInterviewsForApplication, scheduleInterview, updateInterview, type ApplicationInterview, type InterviewFormat } from '../lib/interviewData';
 import {
@@ -52,6 +52,7 @@ import { useToast } from './Toast';
 import ResumePreview from './ResumePreview';
 import FunnelChart from './FunnelChart';
 import ApplicationMessageThread from './ApplicationMessageThread';
+import RecoverableSectionBoundary from './RecoverableSectionBoundary';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
 import { normalizeJobPostingForClient } from '../lib/jobPostingNormalize';
 import {
@@ -1940,7 +1941,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                     to_status: result.status,
                     reason: meta?.reason?.trim() || null,
                     candidate_note: meta?.candidateNote?.trim() || null,
-                    skipped_statuses: result.skippedStatuses ?? [],
+                    skipped_statuses: stringArray(result.skippedStatuses),
                     created_at: new Date().toISOString(),
                 };
                 const appendHistory = (entry: Applicant): Applicant => (
@@ -2431,6 +2432,15 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                     className="min-h-[520px] scroll-mt-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2 lg:h-[72vh] lg:overflow-y-auto"
                     aria-live="polite"
                 >
+                    <RecoverableSectionBoundary
+                        resetKey={`${selectedApplicant?.id ?? 'none'}:${selectedApplicant?.status ?? ''}`}
+                        title="Applicant details could not be shown"
+                        description="One part of this applicant packet returned unexpected data. The rest of the portal is still usable."
+                        retryLabel={t('applicant_funnel_retry')}
+                        onRetry={fetchApplicants}
+                        secondaryLabel={t('applicant_funnel_back')}
+                        onSecondaryAction={onBack}
+                    >
                     {!selectedApplicant ? (
                         <div className="flex h-full min-h-[360px] items-center justify-center rounded-xl border border-dashed border-gray-300 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
                             {t('applicant_funnel_select_prompt')}
@@ -2644,6 +2654,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                             <ApplicationMessageThread key={selectedApplicant.id} applicationId={selectedApplicant.id} viewerRole="employer" t={t} />
                         </div>
                     )}
+                    </RecoverableSectionBoundary>
                 </section>
             </div>
 

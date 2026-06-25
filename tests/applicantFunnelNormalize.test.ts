@@ -85,4 +85,29 @@ describe('applicant funnel normalization', () => {
   it('filters non-empty strings only', () => {
     expect(stringArray(['Python', ' ', 1, null, 'SQL'])).toEqual(['Python', 'SQL']);
   });
+
+  it('keeps selected-applicant detail fields safe after malformed server payloads', () => {
+    const malformed = normalizeApplicantForFunnel({
+      id: 'app-detail',
+      candidate_name: 'Candidate',
+      strengths: { 0: 'not an array' },
+      potentialGaps: null,
+      suggestedQuestions: 'Ask this?',
+      status_history: {
+        skipped_statuses: 'Group interview',
+      },
+      screener_answers: {
+        question_id: 'q1',
+        answer: 'yes',
+      },
+      compatibility_score: Infinity,
+    } as unknown as JobApplicant);
+
+    expect(malformed.strengths).toEqual([]);
+    expect(malformed.potentialGaps).toEqual([]);
+    expect(malformed.suggestedQuestions).toEqual([]);
+    expect(malformed.status_history).toEqual([]);
+    expect(malformed.screener_answers).toEqual([]);
+    expect(malformed.compatibility_score).toBe(0);
+  });
 });
