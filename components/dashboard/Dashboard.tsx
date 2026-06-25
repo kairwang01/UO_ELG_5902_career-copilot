@@ -57,6 +57,14 @@ interface ActivityItem {
   details: string;
 }
 
+type WeeklySummarySectionKey = 'win' | 'gap' | 'next';
+
+interface WeeklySummarySection {
+  key: WeeklySummarySectionKey;
+  label: string;
+  body: string;
+}
+
 const toolMetadataMap: { [key: string]: { nameKey: string } } = {
   'cover-letter': { nameKey: 'tool_cover_letter_title' },
   'mock-interview': { nameKey: 'tool_mock_interview_title' },
@@ -68,6 +76,68 @@ const toolMetadataMap: { [key: string]: { nameKey: string } } = {
 
 const formatCopy = (template: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce((copy, [key, value]) => copy.replaceAll(`{${key}}`, String(value)), template);
+
+const normalizeSummaryText = (value: string) =>
+  value
+    .replace(/\r/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const clampSummaryText = (value: string, maxLength = 170) => {
+  const copy = normalizeSummaryText(value).replace(/\n+/g, ' ');
+  if (copy.length <= maxLength) return copy;
+
+  const draft = copy.slice(0, maxLength);
+  const boundary = Math.max(draft.lastIndexOf('. '), draft.lastIndexOf('; '), draft.lastIndexOf(', '), draft.lastIndexOf(' '));
+  const clipped = boundary > 90 ? draft.slice(0, boundary) : draft;
+  return `${clipped.trim()}...`;
+};
+
+const getWeeklySummaryKey = (label: string): WeeklySummarySectionKey => {
+  const normalized = label.toLowerCase();
+  if (normalized.includes('gap') || normalized.includes('risk')) return 'gap';
+  if (normalized.includes('next') || normalized.includes('action')) return 'next';
+  return 'win';
+};
+
+const parseWeeklySummarySections = (summary: string): WeeklySummarySection[] => {
+  const source = normalizeSummaryText(summary);
+  const labelRegex = /\b(Win|Wins|Gap|Gaps|Risk|Risks|Next Week|Next|Action|Actions):\s*/gi;
+  const markers: Array<{ key: WeeklySummarySectionKey; label: string; start: number; end: number }> = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = labelRegex.exec(source)) !== null) {
+    const label = match[1];
+    markers.push({
+      key: getWeeklySummaryKey(label),
+      label: label.toLowerCase().includes('next') || label.toLowerCase().includes('action') ? 'Next' : getWeeklySummaryKey(label) === 'gap' ? 'Gap' : 'Win',
+      start: match.index,
+      end: labelRegex.lastIndex,
+    });
+  }
+
+  if (markers.length === 0) return [];
+
+  const sections = new Map<WeeklySummarySectionKey, WeeklySummarySection>();
+  markers.forEach((marker, index) => {
+    const nextMarker = markers[index + 1];
+    const body = source.slice(marker.end, nextMarker?.start ?? source.length).trim();
+    if (!body) return;
+
+    const existing = sections.get(marker.key);
+    sections.set(marker.key, {
+      key: marker.key,
+      label: marker.label,
+      body: existing ? `${existing.body} ${body}` : body,
+    });
+  });
+
+  return (['win', 'gap', 'next'] as WeeklySummarySectionKey[])
+    .map((key) => sections.get(key))
+    .filter((section): section is WeeklySummarySection => Boolean(section));
+};
 
 const getStartOfWeek = () => {
   const now = new Date();
@@ -174,6 +244,59 @@ const PriorityItem: React.FC<{
         <span className={`shrink-0 rounded border px-2 py-1 text-[11px] font-semibold ${tone}`}>{statusLabel}</span>
       </div>
     </button>
+  );
+};
+
+const WeeklyCoachingSummary: React.FC<{ summary: string; t: DashboardProps['t'] }> = ({ summary, t }) => {
+  const [expanded, setExpanded] = useState(false);
+  const sections = parseWeeklySummarySections(summary);
+  const normalizedSummary = normalizeSummaryText(summary);
+  const shouldShowFullText = normalizedSummary.length > 360;
+  const sectionTone: Record<WeeklySummarySectionKey, string> = {
+    win: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-100',
+    gap: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100',
+    next: 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-100',
+  };
+
+  return (
+    <div className="mt-4">
+      {sections.length >= 2 ? (
+        <div className="grid gap-3 lg:grid-cols-3">
+          {sections.map((section) => (
+            <article key={section.key} className={`rounded-lg border p-3 ${sectionTone[section.key]}`}>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-80">{section.label}</p>
+              <p className="mt-2 text-sm leading-6">{clampSummaryText(section.body, 180)}</p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p
+          className={`rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300 ${
+            expanded && shouldShowFullText ? 'max-h-52 overflow-y-auto whitespace-pre-wrap' : ''
+          }`}
+        >
+          {expanded ? normalizedSummary : clampSummaryText(normalizedSummary, 360)}
+        </p>
+      )}
+
+      {shouldShowFullText && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            className="inline-flex min-h-[34px] items-center rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-700 dark:hover:text-blue-300"
+            aria-expanded={expanded}
+          >
+            {expanded ? t('agency_summary_show_less') : t('agency_summary_show_more')}
+          </button>
+          {expanded && sections.length >= 2 && (
+            <p className="mt-3 max-h-52 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+              {normalizedSummary}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -715,7 +838,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
             <TrendingUp className="h-5 w-5 text-blue-700 dark:text-blue-400" />
             <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('dashboard_weekly_coaching_title')}</h3>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{weeklySummary}</p>
+          <WeeklyCoachingSummary summary={weeklySummary} t={t} />
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {[t('dashboard_weekly_chip_resume'), t('dashboard_weekly_chip_applications'), t('dashboard_weekly_chip_interview')].map((label, index) => (
               <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60 p-3">
