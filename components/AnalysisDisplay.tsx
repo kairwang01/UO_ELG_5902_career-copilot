@@ -10,6 +10,7 @@ import { applyResumeImprovements } from '../services/aiClient';
 import { renderFormattedText } from './tools/ToolUtils';
 import ResumePreview from './ResumePreview';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import RecoverableSectionBoundary from './RecoverableSectionBoundary';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
 
 interface AnalysisDisplayProps {
@@ -282,6 +283,15 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                         </div>
                         <div className="flex-1 overflow-y-auto bg-slate-50/70 p-4 dark:bg-slate-950/40 sm:p-6 md:p-10">
                             <div className={`mx-auto ${activeTool === 'mock-interview' ? 'max-w-[1440px]' : 'max-w-4xl'}`}>
+                                {/* A tool can crash on malformed AI output; contain it here so the
+                                    user keeps their analysis instead of the whole app going down. */}
+                                <RecoverableSectionBoundary
+                                    resetKey={`tool:${activeTool ?? ''}`}
+                                    title={t('tool_crash_title')}
+                                    description={t('tool_crash_desc')}
+                                    retryLabel={t('tool_crash_back')}
+                                    onRetry={() => setActiveTool(null)}
+                                >
                                 {activeTool === 'mock-interview' ? (
                                         <InterviewSimulator
                                             resumeText={resumeText}
@@ -306,6 +316,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                             t={t}
                                         />
                                 )}
+                                </RecoverableSectionBoundary>
                             </div>
                         </div>
                     </>
