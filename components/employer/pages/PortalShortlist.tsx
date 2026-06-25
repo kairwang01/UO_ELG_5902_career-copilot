@@ -16,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { PortalTopBar } from "../PortalTopBar";
+import ConfirmActionDialog from "../../ConfirmActionDialog";
 import type { PortalPage } from "../PortalSidebar";
 import type { AppSession as Session } from "../../../lib/data";
 import {
@@ -383,7 +384,7 @@ function EntryActions({
   layout?: "icon" | "stacked";
   onMarkContacted: (entry: ShortlistEntry) => void;
   onCopyOutreach: (entry: ShortlistEntry) => void;
-  onRemove: (id: string) => void;
+  onRemove: (entry: ShortlistEntry) => void;
 }) {
   const dm = darkMode;
   const anyBusy = Boolean(busyEntryId);
@@ -429,7 +430,7 @@ function EntryActions({
         </button>
         <button
           type="button"
-          onClick={() => onRemove(entry.id)}
+          onClick={() => onRemove(entry)}
           disabled={disableAction}
           className={`${mobileButton} ${
             dm
@@ -480,7 +481,7 @@ function EntryActions({
       </button>
       <button
         type="button"
-        onClick={() => onRemove(entry.id)}
+        onClick={() => onRemove(entry)}
         title={t("shortlist_remove")}
         aria-label={t("shortlist_remove")}
         disabled={disableAction}
@@ -517,6 +518,7 @@ export function PortalShortlist({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<ShortlistEntry | null>(null);
   const busyEntryRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
 
@@ -547,14 +549,16 @@ export function PortalShortlist({
     fetchEntries();
   }, [fetchEntries]);
 
-  const handleRemove = async (id: string) => {
+  const handleRemove = async (entry: ShortlistEntry) => {
     if (busyEntryId || busyEntryRef.current) return;
+    const id = entry.id;
     busyEntryRef.current = id;
     setBusyEntryId(id);
     try {
       await removeFromShortlist(employerUid, id);
       if (!mountedRef.current) return;
       setEntries((prev) => prev.filter((e) => e.id !== id));
+      setRemoveTarget(null);
       addToast(t("shortlist_removed"), "success");
     } catch {
       if (mountedRef.current) addToast(t("shortlist_action_error"), "error");
@@ -1044,7 +1048,7 @@ export function PortalShortlist({
                     layout="stacked"
                     onMarkContacted={handleMarkContacted}
                     onCopyOutreach={handleCopyOutreach}
-                    onRemove={handleRemove}
+                    onRemove={setRemoveTarget}
                   />
                 </article>
               ))}
@@ -1129,7 +1133,7 @@ export function PortalShortlist({
                             busyEntryId={busyEntryId}
                             onMarkContacted={handleMarkContacted}
                             onCopyOutreach={handleCopyOutreach}
-                            onRemove={handleRemove}
+                            onRemove={setRemoveTarget}
                           />
                         </td>
                       </tr>
@@ -1149,6 +1153,26 @@ export function PortalShortlist({
           </>
         )}
       </div>
+      <ConfirmActionDialog
+        open={Boolean(removeTarget)}
+        title={t("shortlist_remove")}
+        description={`Remove ${removeTarget?.candidate_name ?? "this candidate"} from your shortlist?`}
+        detail={removeTarget?.job_title}
+        cancelLabel="Cancel"
+        confirmLabel={t("shortlist_remove")}
+        loadingLabel={t("portal_billing_updating")}
+        loading={Boolean(removeTarget && busyEntryId === removeTarget.id)}
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open && !busyEntryId) setRemoveTarget(null);
+        }}
+        onCancel={() => {
+          if (!busyEntryId) setRemoveTarget(null);
+        }}
+        onConfirm={() => {
+          if (removeTarget) void handleRemove(removeTarget);
+        }}
+      />
     </>
   );
 }

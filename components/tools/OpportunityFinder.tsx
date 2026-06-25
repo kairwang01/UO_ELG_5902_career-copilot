@@ -9,6 +9,7 @@ import {
 } from '../../lib/savedOpportunities';
 import { findOpportunities, calculateCompatibility, generateProfessionalEmail } from '../../services/aiClient';
 import ApplyReviewModal, { type ApplyReviewJob } from '../ApplyReviewModal';
+import ConfirmActionDialog from '../ConfirmActionDialog';
 import type { OpportunityResult, Opportunity } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
@@ -70,6 +71,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
   // Saved opportunities — kept SEPARATE from `result` (a live subscription, never
   // auto-persisting search results) so it can't clobber the found list on mount.
   const [savedOpps, setSavedOpps] = useState<SavedOpportunity[]>([]);
+  const [removeSavedTarget, setRemoveSavedTarget] = useState<{ url: string; title: string; company?: string } | null>(null);
+  const [removingSavedUrl, setRemovingSavedUrl] = useState<string | null>(null);
   const savingUrlsRef = useRef<Set<string>>(new Set());
 
   // ---- salary chip: Map<internalJobId, { salary_range?: string, location?: string }> ----
@@ -196,24 +199,50 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
 
   const savedUrls = useMemo(() => new Set(savedOpps.map((o) => o.url)), [savedOpps]);
 
+  const requestRemoveSavedOpportunity = useCallback((target: { url: string; title: string; company?: string }) => {
+    if (!sessionUserId || savingUrlsRef.current.has(target.url)) return;
+    setRemoveSavedTarget(target);
+  }, [sessionUserId]);
+
+  const confirmRemoveSavedOpportunity = useCallback(async () => {
+    if (!sessionUserId || !removeSavedTarget || savingUrlsRef.current.has(removeSavedTarget.url)) return;
+    const { url } = removeSavedTarget;
+    savingUrlsRef.current.add(url);
+    setRemovingSavedUrl(url);
+    try {
+      await removeOpportunity(sessionUserId, url);
+      if (!mountedRef.current) return;
+      setRemoveSavedTarget(null);
+    } catch {
+      if (mountedRef.current) addToast(t('tool_opportunity_finder_save_error'), 'error');
+    } finally {
+      savingUrlsRef.current.delete(url);
+      if (mountedRef.current) setRemovingSavedUrl(null);
+    }
+  }, [addToast, removeSavedTarget, sessionUserId, t]);
+
   const toggleSaveOpportunity = useCallback(async (job: Opportunity) => {
     if (!sessionUserId || savingUrlsRef.current.has(job.url)) return;
+    if (savedUrls.has(job.url)) {
+      requestRemoveSavedOpportunity({
+        url: job.url,
+        title: job.jobTitle,
+        company: job.company,
+      });
+      return;
+    }
     savingUrlsRef.current.add(job.url);
     try {
-      if (savedUrls.has(job.url)) {
-        await removeOpportunity(sessionUserId, job.url);
-      } else {
-        await saveOpportunity(sessionUserId, {
-          jobTitle: job.jobTitle, company: job.company, location: job.location,
-          url: job.url, summary: job.summary, compatibilityScore: job.compatibilityScore,
-        });
-      }
+      await saveOpportunity(sessionUserId, {
+        jobTitle: job.jobTitle, company: job.company, location: job.location,
+        url: job.url, summary: job.summary, compatibilityScore: job.compatibilityScore,
+      });
     } catch {
       addToast(t('tool_opportunity_finder_save_error'), 'error');
     } finally {
       savingUrlsRef.current.delete(job.url);
     }
-  }, [sessionUserId, savedUrls, addToast, t]);
+  }, [sessionUserId, savedUrls, addToast, t, requestRemoveSavedOpportunity]);
 
   // Rendered in both the empty (revisit-on-open) and results views.
   const savedPanel = savedOpps.length > 0 ? (
@@ -235,7 +264,12 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                   <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />{t('tool_opportunity_finder_open_link')}
                 </a>
               )}
-              <button type="button" onClick={() => { if (sessionUserId) void removeOpportunity(sessionUserId, o.url); }} aria-label={t('tool_opportunity_finder_remove_saved')} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30">
+              <button
+                type="button"
+                onClick={() => requestRemoveSavedOpportunity({ url: o.url, title: o.job_title, company: o.company })}
+                aria-label={t('tool_opportunity_finder_remove_saved')}
+                className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30"
+              >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
@@ -776,6 +810,24 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
           onClose={() => setPendingApply(null)}
         />
       )}
+      <ConfirmActionDialog
+        open={Boolean(removeSavedTarget)}
+        title={t('tool_opportunity_finder_remove_saved')}
+        description="Remove this saved opportunity from your list?"
+        detail={removeSavedTarget ? `${removeSavedTarget.title}${removeSavedTarget.company ? ` · ${removeSavedTarget.company}` : ''}` : undefined}
+        cancelLabel="Cancel"
+        confirmLabel={t('tool_opportunity_finder_remove_saved')}
+        loadingLabel="Removing..."
+        loading={Boolean(removeSavedTarget && removingSavedUrl === removeSavedTarget.url)}
+        tone="danger"
+        onOpenChange={(open) => {
+          if (!open && !removingSavedUrl) setRemoveSavedTarget(null);
+        }}
+        onCancel={() => {
+          if (!removingSavedUrl) setRemoveSavedTarget(null);
+        }}
+        onConfirm={() => void confirmRemoveSavedOpportunity()}
+      />
     </div>
   );
 };
