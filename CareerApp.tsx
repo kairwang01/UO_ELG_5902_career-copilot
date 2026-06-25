@@ -1222,6 +1222,19 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm">
                     <VerifiedTalentSection t={t} />
                 </div>
+                {/* VerifiedTalentSection is informational only; the wallet connect + credential
+                    mint live in Account settings. Without this CTA the page is a dead end —
+                    the user has no path from the value prop to the actual action. */}
+                <div className="flex justify-center">
+                    <button
+                        type="button"
+                        onClick={() => setWorkspaceView('account')}
+                        className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800"
+                    >
+                        {t('ws_credentials_manage_cta')}
+                        <span aria-hidden="true">→</span>
+                    </button>
+                </div>
             </div>
         )}
 
