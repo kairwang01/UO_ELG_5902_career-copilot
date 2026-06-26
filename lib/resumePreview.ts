@@ -141,8 +141,9 @@ const CJK_SECTION_LABELS = [
   '職務要約', '職務経歴', '職歴', '学歴', 'スキル', '技術スキル', '保有スキル',
   '資格', '語学', '自己PR', '志望動機', 'プロジェクト経験',
   'Profil', 'Expérience professionnelle', 'Formation', 'Compétences', 'Certifications', 'Langues',
-  'Profil professionnel', 'Berufserfahrung', 'Ausbildung', 'Studium', 'Kenntnisse', 'Fähigkeiten',
-  'Zertifikate', 'Sprachen',
+  'Profil professionnel', 'Expérience', 'Projets',
+  'Berufserfahrung', 'Ausbildung', 'Studium', 'Kenntnisse', 'Fähigkeiten',
+  'Zertifikate', 'Sprachen', 'Profil', 'Projekte',
 ];
 
 const INLINE_FIELD_LABELS = [
@@ -198,6 +199,20 @@ const EN_SECTION_KEYWORDS = [
   'languages', 'interests', 'additional information',
 ];
 
+const INLINE_SECTION_LABELS = [
+  ...EN_SECTION_KEYWORDS,
+  ...CJK_SECTION_LABELS,
+  'profil', 'profil professionnel', 'expérience', 'expérience professionnelle',
+  'formation', 'compétences', 'projets', 'certifications', 'langues',
+  'berufserfahrung', 'ausbildung', 'studium', 'kenntnisse', 'fähigkeiten',
+  'zertifikate', 'sprachen', 'projekte',
+].sort((a, b) => b.length - a.length);
+
+const INLINE_SECTION_REGEX = new RegExp(
+  `([^\\n])\\s+(${INLINE_SECTION_LABELS.map(escapeRegex).join('|')})\\s*(?=[:：\\n]|[A-ZÀ-ÖØ-Þ\\u3040-\\u30ff\\u3400-\\u9fff])`,
+  'gi',
+);
+
 // PDF text extraction often inserts a space between every CJK glyph and leaves
 // runs of stray whitespace. Collapse those for the on-screen PREVIEW only (the
 // stored resume_text is untouched) so a Chinese/Japanese resume reads cleanly.
@@ -242,6 +257,22 @@ const cleanHeaderValue = (value: string): string =>
     .replace(/\s+/g, ' ')
     .replace(/^[•|｜，,\s]+|[•|｜，,\s]+$/g, '')
     .trim();
+
+const repairInlineSectionBreaks = (value: string): string => (
+  value
+    .split('\n')
+    .map((line, index) => {
+      // The recurrent formatter failure is a dense header line where contact
+      // info is followed immediately by PROFILE/SUMMARY/etc. Limit this repair
+      // to the resume header area so body prose is never reflowed accidentally.
+      if (index > 5 && !hasContactField(line)) return line;
+      return line.replace(INLINE_SECTION_REGEX, (_match, before: string, label: string) => {
+        const compactLabel = cleanHeaderValue(label);
+        return `${before}\n${compactLabel}\n`;
+      });
+    })
+    .join('\n')
+);
 
 const cutAtNextHeaderField = (value: string): string => {
   const match = HEADER_STOP_FIELD_REGEX.exec(value);
@@ -357,6 +388,8 @@ export const cleanResumeDisplay = (text: string): string => {
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/[●▪◦■◆◇]/g, '•');
 
+  cleaned = repairInlineSectionBreaks(cleaned);
+
   const fieldLabelsByLength = [...INLINE_FIELD_LABELS].sort((a, b) => b.length - a.length);
   for (const label of fieldLabelsByLength) {
     cleaned = cleaned.replace(
@@ -379,7 +412,7 @@ export const cleanResumeDisplay = (text: string): string => {
   // can recover a resume structure without mutating the stored resume text.
   for (const label of CJK_SECTION_LABELS) {
     cleaned = cleaned.replace(
-      new RegExp(`[\\s•·\\-–—]*(${escapeRegex(label)})(?:\\s*[:：])?\\s*`, 'g'),
+      new RegExp(`[\\s•·\\-–—]*(${escapeRegex(label)})(?:\\s*[:：])?\\s*`, 'gi'),
       '\n$1\n',
     );
   }
@@ -413,7 +446,7 @@ export const parseResumeSections = (text: string): ResumeSection[] => {
   let currentSection: { title: string; content: string[] } = { title: 'Header', content: [] };
 
   const headerRegex = new RegExp(`^\\s*[^a-zA-Z0-9]*(${EN_SECTION_KEYWORDS.map(escapeRegex).join('|')})[^a-zA-Z0-9]*\\s*$`, 'i');
-  const cjkHeaderRegex = new RegExp(`^[\\s•·\\-—]*(${CJK_SECTION_LABELS.map(escapeRegex).join('|')})[\\s:：]*$`);
+  const cjkHeaderRegex = new RegExp(`^[\\s•·\\-—]*(${CJK_SECTION_LABELS.map(escapeRegex).join('|')})[\\s:：]*$`, 'i');
 
   let contentStarted = false;
 

@@ -104,6 +104,19 @@ describe('ResumePreview parsing', () => {
     expect(header.summary).toBe('');
   });
 
+  it('repairs French formatter output when PROFILE is glued to the contact line', () => {
+    const raw = '王铂凯\n13022547015 · jacksonkai0408@gmail.com · https://kairwang.cloud · Ottawa, Canada PROFIL Gestionnaire de projet / produit avec double compétence en informatique et génie électrique. Expérience en développement logiciel, recherche utilisateur et collaboration interfonctionnelle.\nFORMATION\nUniversité d’Ottawa — M.Eng., génie électrique et informatique\nEXPÉRIENCE\nCareer CoPilot — Responsable produit\n- A dirigé une équipe de 6 ingénieurs.';
+    const cleaned = cleanResumeDisplay(raw);
+    const sections = parseResumeSections(cleaned);
+    const header = parseResumeHeader(sections.find((section) => section.title === 'Header')?.content ?? '');
+    const result = assessFormattedResume(raw);
+
+    expect(cleaned).toContain('\nPROFIL\n');
+    expect(header.name).toBe('王铂凯');
+    expect(sections.map((section) => section.title.toLowerCase())).toContain('profil');
+    expect(result.status).not.toBe('needs_regen');
+  });
+
   it('recovers Japanese inline header fields with ASCII colons before parsing sections', () => {
     const raw = '氏名: Kai Wang 電話番号: 130-2254-7015 メールアドレス: jackson@example.com 所在地: カナダ、オタワ ウェブサイト: https://kairwang.cloud 志望動機 プロジェクトマネジメント候補者として貢献したいです。 学歴 2025年09月〜2027年06月 オタワ大学';
     const cleaned = cleanResumeDisplay(raw);
