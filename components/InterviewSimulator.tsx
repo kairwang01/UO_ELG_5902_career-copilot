@@ -71,17 +71,75 @@ const PREP_SECONDS = 15;
 const ANSWER_SECONDS = 180;
 
 // The interviewer's portrait (public/interviewer.jpg, 640px JPEG). The persona
-// is female — pickVoice() below matches the TTS voice to the portrait.
+// is female; when possible, pickVoice() keeps the selected locale and prefers a
+// natural-sounding voice.
 const INTERVIEWER_IMAGE = '/interviewer.jpg';
 
-/** Prefer a female English voice to match the interviewer portrait; voices load
- *  async in some browsers, so fall back gracefully to the default. */
-const pickVoice = (): SpeechSynthesisVoice | null => {
+type SpeechLocale = 'auto' | 'en-US' | 'zh-CN' | 'zh-TW' | 'fr-FR' | 'de-DE' | 'ja-JP' | 'ko-KR' | 'vi-VN' | 'es-ES';
+
+const SPEECH_LOCALE_OPTIONS: { value: SpeechLocale; label: string; hint: string }[] = [
+    { value: 'auto', label: 'Auto', hint: 'Match the question' },
+    { value: 'en-US', label: 'English', hint: 'English answers' },
+    { value: 'zh-CN', label: '中文', hint: '普通话回答' },
+    { value: 'zh-TW', label: '繁體中文', hint: '國語回答' },
+    { value: 'fr-FR', label: 'Français', hint: 'French answers' },
+    { value: 'de-DE', label: 'Deutsch', hint: 'German answers' },
+    { value: 'ja-JP', label: '日本語', hint: 'Japanese answers' },
+    { value: 'ko-KR', label: '한국어', hint: 'Korean answers' },
+    { value: 'vi-VN', label: 'Tiếng Việt', hint: 'Vietnamese answers' },
+    { value: 'es-ES', label: 'Español', hint: 'Spanish answers' },
+];
+
+const detectSpeechLocale = (text: string, market = ''): Exclude<SpeechLocale, 'auto'> => {
+    const source = `${text} ${market}`.toLowerCase();
+    if (/[\u3040-\u30ff]/.test(source)) return 'ja-JP';
+    if (/[\uac00-\ud7af]/.test(source)) return 'ko-KR';
+    if (/[\u4e00-\u9fff]/.test(source)) return /taiwan|traditional|繁體|台湾|台灣/.test(source) ? 'zh-TW' : 'zh-CN';
+    if (/\b(france|french|francais|français|canada french|quebec|québec)\b/.test(source)) return 'fr-FR';
+    if (/\b(germany|german|deutsch|deutschland)\b/.test(source)) return 'de-DE';
+    if (/\b(japan|japanese|nihongo|日本)\b/.test(source)) return 'ja-JP';
+    if (/\b(korea|korean|한국)\b/.test(source)) return 'ko-KR';
+    if (/\b(vietnam|vietnamese|tiếng việt)\b/.test(source)) return 'vi-VN';
+    if (/\b(spain|spanish|español|latam)\b/.test(source)) return 'es-ES';
+    return 'en-US';
+};
+
+const splitSpeechText = (text: string): string[] => {
+    const sentences: string[] = [];
+    let current = '';
+    for (const char of text.replace(/\s+/g, ' ').trim()) {
+        current += char;
+        if ('。！？.!?'.includes(char)) {
+            const sentence = current.trim();
+            if (sentence) sentences.push(sentence);
+            current = '';
+        }
+    }
+    if (current.trim()) sentences.push(current.trim());
+    const chunks: string[] = [];
+    for (const sentence of sentences.length ? sentences : [text.trim()]) {
+        if (sentence.length <= 180) {
+            chunks.push(sentence);
+            continue;
+        }
+        for (let i = 0; i < sentence.length; i += 160) {
+            chunks.push(sentence.slice(i, i + 160));
+        }
+    }
+    return chunks;
+};
+
+/** Prefer a locale-matched voice; voices load async in some browsers, so fall
+ *  back gracefully to the default. */
+const pickVoice = (locale: string): SpeechSynthesisVoice | null => {
     try {
         const voices = window.speechSynthesis.getVoices();
+        const base = locale.split('-')[0];
         return (
-            voices.find((v) => v.lang.startsWith('en') && /female|samantha|victoria|zira|jenny|aria|karen|moira|tessa/i.test(v.name)) ??
-            voices.find((v) => v.lang === 'en-US') ??
+            voices.find((v) => v.lang === locale && /female|samantha|victoria|zira|jenny|aria|karen|moira|tessa|ting-ting|mei-jia|kyoko|yuna/i.test(v.name)) ??
+            voices.find((v) => v.lang === locale) ??
+            voices.find((v) => v.lang.toLowerCase().startsWith(base.toLowerCase())) ??
+            (base === 'en' ? voices.find((v) => v.lang === 'en-US') : null) ??
             null
         );
     } catch {
@@ -334,6 +392,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const [error, setError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
     const [confirmEndEarly, setConfirmEndEarly] = useState(false);
+    const [speechLocale, setSpeechLocale] = useState<SpeechLocale>('auto');
     const recognitionRef = useRef<any>(null);
     const answerBoxRef = useRef<HTMLTextAreaElement>(null);
 
@@ -404,6 +463,11 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const companyNameSuggestions = Array.from(
         new Set(postings.map((p) => p.company_name).filter((n): n is string => !!n)),
     );
+    const currentQuestionText = questions[currentIndex]?.question ?? '';
+    const activeSpeechLocale = speechLocale === 'auto'
+        ? detectSpeechLocale(`${currentQuestionText} ${jobTitle} ${jobDescription}`, market)
+        : speechLocale;
+    const activeSpeechOption = SPEECH_LOCALE_OPTIONS.find((option) => option.value === activeSpeechLocale);
 
     // ── TTS: the avatar "speaks" each question (approximate mouth animation is
     //    driven by these lifecycle events — see InterviewerAvatar for the
@@ -446,17 +510,26 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         if (!synth) { onDone?.(); return; } // no TTS → don't block the prep timer
         try {
             const start = () => {
-                const u = new SpeechSynthesisUtterance(text);
-                u.lang = 'en-US';
-                u.rate = 1;
-                const voice = pickVoice();
-                if (voice) u.voice = voice;
-                u.onstart = () => setAvatarSpeaking(true);
-                // onDone fires when the question has finished being read aloud,
-                // which is when the 15s prep clock should start.
-                u.onend = () => { setAvatarSpeaking(false); onDone?.(); };
-                u.onerror = () => { setAvatarSpeaking(false); onDone?.(); };
-                synth.speak(u);
+                const chunks = splitSpeechText(text);
+                const voice = pickVoice(activeSpeechLocale);
+                const speakChunk = (index: number) => {
+                    if (index >= chunks.length) {
+                        setAvatarSpeaking(false);
+                        onDone?.();
+                        return;
+                    }
+                    const u = new SpeechSynthesisUtterance(chunks[index]);
+                    u.lang = activeSpeechLocale;
+                    u.rate = activeSpeechLocale.startsWith('zh') || activeSpeechLocale === 'ja-JP' || activeSpeechLocale === 'ko-KR' ? 0.92 : 1;
+                    if (voice) u.voice = voice;
+                    u.onstart = () => setAvatarSpeaking(true);
+                    // onDone fires when the whole question has finished being read aloud,
+                    // which is when the 15s prep clock should start.
+                    u.onend = () => speakChunk(index + 1);
+                    u.onerror = () => { setAvatarSpeaking(false); onDone?.(); };
+                    synth.speak(u);
+                };
+                speakChunk(0);
             };
             if (synth.speaking || synth.pending) {
                 // Cancel, then start only after the engine has reset — a
@@ -476,7 +549,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         cancelSpeech();
         // Release the mic too, so it is never left live after the room unmounts.
         try { recognitionRef.current?.stop?.(); } catch { /* noop */ }
-    }, []);
+    }, [activeSpeechLocale]);
 
     const handleJobSourcePick = (value: string) => {
         if (!value) return;
@@ -548,31 +621,39 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
 
     // ── Speech recognition (answers can be dictated) ──
     useEffect(() => {
-        if (isSpeechSupported) {
-            recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = true;
-            recognitionRef.current.interimResults = true;
-            recognitionRef.current.lang = 'en-US';
+        if (!isSpeechSupported) return;
 
-            recognitionRef.current.onresult = (event: any) => {
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        setAnswerDraft(prev => prev + event.results[i][0].transcript);
-                    }
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = activeSpeechLocale;
+
+        recognitionRef.current.onresult = (event: any) => {
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    const transcript = event.results[i][0].transcript.trim();
+                    setAnswerDraft(prev => {
+                        if (!prev.trim()) return transcript;
+                        return `${prev.trimEnd()} ${transcript}`;
+                    });
                 }
-            };
+            }
+        };
 
-            recognitionRef.current.onerror = (event: any) => {
-                console.error("Speech recognition error:", event.error);
-                setError(`${t('tool_mock_interview_speech_error')} ${event.error}`);
-                setIsListening(false);
-            };
+        recognitionRef.current.onerror = (event: any) => {
+            console.error("Speech recognition error:", event.error);
+            setError(`${t('tool_mock_interview_speech_error')} ${event.error}`);
+            setIsListening(false);
+        };
 
-            // The engine can stop on its own (silence/network/timeout); reset the
-            // mic indicator so it never shows a live mic after dictation stopped.
-            recognitionRef.current.onend = () => setIsListening(false);
-        }
-    }, [t]);
+        // The engine can stop on its own (silence/network/timeout); reset the
+        // mic indicator so it never shows a live mic after dictation stopped.
+        recognitionRef.current.onend = () => setIsListening(false);
+
+        return () => {
+            try { recognitionRef.current?.abort?.(); } catch { /* noop */ }
+        };
+    }, [activeSpeechLocale, t]);
 
     const stopListening = () => {
         if (isListening) {
@@ -1114,7 +1195,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         ) : (
                             <div className="mt-4 flex flex-1 flex-col gap-4">
                                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                                         {isSpeechSupported && (
                                             <button
                                                 type="button"
@@ -1131,11 +1212,36 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                                 <Mic className="h-5 w-5" />
                                             </button>
                                         )}
-                                        <AudioWave active={isListening} />
-                                        <span className="hidden text-xs font-semibold text-slate-600 sm:inline dark:text-slate-300">
-                                            {isListening ? 'Listening' : 'Voice optional'}
-                                        </span>
+                                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                                            <AudioWave active={isListening} />
+                                            <span className="hidden text-xs font-semibold text-slate-600 sm:inline dark:text-slate-300">
+                                                {isListening ? `Listening · ${activeSpeechOption?.label ?? activeSpeechLocale}` : `Voice · ${activeSpeechOption?.label ?? activeSpeechLocale}`}
+                                            </span>
+                                        </div>
+                                        <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                            <span>Speech</span>
+                                            <select
+                                                value={speechLocale}
+                                                onChange={(event) => {
+                                                    stopListening();
+                                                    setSpeechLocale(event.target.value as SpeechLocale);
+                                                }}
+                                                className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                                title={SPEECH_LOCALE_OPTIONS.find((option) => option.value === speechLocale)?.hint}
+                                            >
+                                                {SPEECH_LOCALE_OPTIONS.map((option) => (
+                                                    <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
                                     </div>
+                                    {speechLocale === 'auto' && (
+                                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                            Auto is using {activeSpeechOption?.label ?? activeSpeechLocale} for this question.
+                                        </p>
+                                    )}
                                 </div>
                                 <textarea
                                     data-qa="mock-interview-answer"

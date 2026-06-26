@@ -80,6 +80,67 @@ const normalizeImprovements = (value: unknown): Improvement[] =>
 const normalizeStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((item) => String(item ?? '').trim()).filter(Boolean) : [];
 
+const isChineseWorkspace = (t: (key: string) => string): boolean =>
+  /简历|履历/.test(t('ws_resume_label'));
+
+const isMostlyEnglish = (value: string): boolean => {
+  const latin = (value.match(/[A-Za-z]/g) ?? []).length;
+  const cjk = (value.match(/[\u3400-\u9fff]/g) ?? []).length;
+  return latin > 60 && latin > cjk * 2;
+};
+
+const localizeResumeAreaForChinese = (area: string): string => {
+  const key = area.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const map: Record<string, string> = {
+    'quantifying impact': '量化成果',
+    'ats keyword alignment': 'ATS 关键词匹配',
+    'timeline consistency': '时间线一致性',
+    'contact header clarity': '联系信息清晰度',
+    'credential verification': '资质与链接验证',
+    'formatting structure': '格式与结构',
+    'content quality suggestions': '内容质量建议',
+    'work authorization clarity': '工作许可说明',
+    'role targeting': '目标岗位定位',
+  };
+  return map[key] ?? area;
+};
+
+const localizeResumeSuggestionForChinese = (suggestion: string): string =>
+  suggestion
+    .replace(/\bWeak\s*:/gi, '原句：')
+    .replace(/\bStronger\s*:/gi, '建议：')
+    .replace(/\bMissing\b/gi, '缺少')
+    .replace(/\bAdd\b/gi, '补充')
+    .replace(/\bFix\b/gi, '修正')
+    .replace(/\bEnsure\b/gi, '确保');
+
+const localizeResumeKeywordForChinese = (keyword: string): string => {
+  const key = keyword.toLowerCase().trim();
+  const map: Record<string, string> = {
+    'project management': '项目管理',
+    'agile methodology': '敏捷方法',
+    'jira': 'Jira',
+    'confluence': 'Confluence',
+    'stakeholder communication': '干系人沟通',
+    'cross-functional collaboration': '跨职能协作',
+    'product development': '产品开发',
+    'ai products': 'AI 产品',
+    'mvp to production': 'MVP 到生产化',
+    'risk assessment': '风险评估',
+    'change management': '变更管理',
+    'project lifecycle': '项目生命周期',
+  };
+  return map[key] ?? keyword;
+};
+
+const localizeResumeImprovement = (issue: Improvement, t: (key: string) => string): Improvement => {
+  if (!isChineseWorkspace(t)) return issue;
+  return {
+    area: localizeResumeAreaForChinese(issue.area),
+    suggestion: localizeResumeSuggestionForChinese(issue.suggestion),
+  };
+};
+
 const useLatestResumeAnalysis = (session?: Session | null) => {
   const uid = session?.user?.id ?? null;
   const [analysis, setAnalysis] = useState<LatestResumeAnalysis | null>(null);
@@ -161,7 +222,7 @@ const Panel: React.FC<{ title: string; description?: string; children: React.Rea
         <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{title}</h3>
         {description && <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{description}</p>}
       </div>
-      {action}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
     {children}
   </section>
@@ -294,33 +355,47 @@ const ResumeFixQueue: React.FC<{
   t: (key: string) => string;
   onOpenFormatter: () => void;
 }> = ({ improvements, summary, t, onOpenFormatter }) => {
-  const topFixes = improvements.slice(0, 3);
-  const remainingFixes = improvements.slice(3);
+  const hasEnglishSavedReport = isChineseWorkspace(t) && isMostlyEnglish(summary);
+  const localizedImprovements = improvements.map((issue) => {
+    const localized = localizeResumeImprovement(issue, t);
+    return hasEnglishSavedReport && isMostlyEnglish(issue.suggestion)
+      ? { ...localized, suggestion: '这条修改建议来自旧英文报告。请重新运行简历分析，生成完整中文版建议。' }
+      : localized;
+  });
+  const visibleFixes = localizedImprovements;
+  const visibleSummary = hasEnglishSavedReport
+    ? '这份报告正文是之前用英文生成的旧结果。请点击“更新简历”重新生成中文版报告；下方已先将可识别的标题和标签转为中文。'
+    : summary;
 
   return (
     <Panel
       title={formatWorkspaceCopy(t('ws_resume_priority_fixes'), { count: improvements.length })}
-      description={summary}
+      description={visibleSummary}
       action={
         <button
           type="button"
           onClick={onOpenFormatter}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+          className="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
         >
           {t('ws_resume_open_formatter')}
           <ArrowRight className="h-4 w-4" />
         </button>
       }
     >
-      {topFixes.length > 0 ? (
-        <div className="space-y-3">
-          {topFixes.map((issue, index) => (
+      {hasEnglishSavedReport && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/25 dark:text-amber-100">
+          当前保存的分析内容不是中文版本。重新运行简历分析后，新的摘要、优势、修改项和关键词会按当前语言输出。
+        </div>
+      )}
+      {visibleFixes.length > 0 ? (
+        <div className="max-h-[620px] space-y-3 overflow-y-auto pr-1">
+          {visibleFixes.map((issue, index) => (
             <article
               key={`${issue.area}-${index}`}
-              className="rounded-lg border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-200 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-blue-800 dark:hover:bg-blue-900/20"
+              className="rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-blue-200 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-blue-800 dark:hover:bg-blue-900/20"
             >
-              <div className="flex gap-4">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-sm font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-300">
+              <div className="flex gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-xs font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-300">
                   {String(index + 1).padStart(2, '0')}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -335,21 +410,6 @@ const ResumeFixQueue: React.FC<{
               </div>
             </article>
           ))}
-          {remainingFixes.length > 0 && (
-            <details className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-              <summary className="cursor-pointer text-sm font-semibold text-blue-700 dark:text-blue-400">
-                {t('ws_resume_improvements_title')} · {remainingFixes.length}
-              </summary>
-              <div className="mt-3 grid gap-2 lg:grid-cols-2">
-                {remainingFixes.map((issue, index) => (
-                  <div key={`${issue.area}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
-                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{issue.area || t('ws_resume_improvement_fallback')}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.suggestion}</p>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
         </div>
       ) : (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
@@ -394,9 +454,11 @@ const ResumeSignalsPanel: React.FC<{
 const StickyResumePreviewPanel: React.FC<{
   resumeText: string;
   market: string;
+  strengths?: string[];
+  keywords?: string[];
   t: (key: string) => string;
   onOpenFormatter: () => void;
-}> = ({ resumeText, market, t, onOpenFormatter }) => (
+}> = ({ resumeText, market, strengths = [], keywords = [], t, onOpenFormatter }) => (
   <aside className="xl:sticky xl:top-6">
     <Panel
       title={t('ws_resume_preview_title')}
@@ -405,7 +467,7 @@ const StickyResumePreviewPanel: React.FC<{
         <button
           type="button"
           onClick={onOpenFormatter}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+          className="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
         >
           {t('ws_resume_open_formatter')}
           <ArrowRight className="h-4 w-4" />
@@ -413,6 +475,41 @@ const StickyResumePreviewPanel: React.FC<{
       }
     >
       <ResumePreview resumeText={resumeText} market={market} t={t} />
+      {(strengths.length > 0 || keywords.length > 0) && (
+        <div className="mt-4 grid gap-3">
+          {strengths.length > 0 && (
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">{t('ws_resume_strengths_title')}</p>
+              {isChineseWorkspace(t) && strengths.some(isMostlyEnglish) ? (
+                <p className="mt-2 text-sm leading-relaxed text-emerald-950 dark:text-emerald-100">
+                  当前优势描述来自旧英文报告。重新运行简历分析后，这里会显示完整中文优势摘要。
+                </p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {strengths.slice(0, 3).map((strength) => (
+                    <div key={strength} className="flex gap-2 text-sm leading-relaxed text-emerald-950 dark:text-emerald-100">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                      <span>{strength}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {keywords.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('ws_resume_keywords_title')}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {keywords.slice(0, 10).map((keyword) => (
+                  <StatusPill key={keyword} tone="ready">
+                    {isChineseWorkspace(t) ? localizeResumeKeywordForChinese(keyword) : keyword}
+                  </StatusPill>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </Panel>
   </aside>
 );
@@ -480,6 +577,8 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
           <StickyResumePreviewPanel
             resumeText={resumeText}
             market={market}
+            strengths={strengths}
+            keywords={keywords}
             t={t}
             onOpenFormatter={() => onOpenTool('resume-formatter')}
           />
@@ -500,12 +599,13 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
               t={t}
               onOpenFormatter={() => onOpenTool('resume-formatter')}
             />
-            <ResumeSignalsPanel strengths={strengths} keywords={keywords} t={t} />
           </div>
 
           <StickyResumePreviewPanel
             resumeText={resumeText}
             market={analysis.market_name || market}
+            strengths={strengths}
+            keywords={keywords}
             t={t}
             onOpenFormatter={() => onOpenTool('resume-formatter')}
           />

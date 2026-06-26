@@ -873,7 +873,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     setAnalysisResult(null);
 
     try {
-      const result = await analyzeResume(resumeText, resumeImages, market);
+      const result = await analyzeResume(resumeText, resumeImages, market, currentLang);
 
       // If the user signed out or switched accounts mid-call, don't render results
       // into — or write the profile of — a session that's no longer current.

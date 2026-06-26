@@ -43,6 +43,8 @@ interface AnalyzeResumeRequest {
   resumeImages?: ResumeImage[];
   /** Target job market, e.g. "Canada", "United States". Required. */
   marketName: string;
+  /** UI/output language requested by the user, e.g. "zh", "en", "fr". */
+  outputLanguage?: string;
   /** Client-generated idempotency key for one user action. */
   requestId?: string;
 }
@@ -60,6 +62,18 @@ interface AnalysisResult {
   keywords: string[];
   extractedText?: string;
 }
+
+const outputLanguageName = (value?: string): string => {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized.startsWith("zh")) return "Simplified Chinese";
+  if (normalized.startsWith("fr")) return "French";
+  if (normalized.startsWith("de")) return "German";
+  if (normalized.startsWith("ja")) return "Japanese";
+  if (normalized.startsWith("vi")) return "Vietnamese";
+  if (normalized.startsWith("es")) return "Spanish";
+  if (normalized.startsWith("ko")) return "Korean";
+  return "English";
+};
 
 // ---------------------------------------------------------------------------
 // Gemini response schema — mirrors the schema in the frontend geminiService.ts
@@ -124,16 +138,27 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
   // Step 4: Build the prompt
   let prompt: string;
   let parts: Array<{ inlineData: { mimeType: string; data: string } }> | undefined;
+  const outputLanguageInstruction =
+    `Write every user-visible output field in ${outputLanguageName(data.outputLanguage)}: ` +
+    `summary, strengths, improvements.area, improvements.suggestion, and keywords. ` +
+    `Do not leave generic labels such as "quantifying impact", "Weak", "Stronger", or "ATS keyword alignment" in English unless the requested output language is English. ` +
+    `Keep proper nouns, employer names, school names, product names, URLs, programming languages, frameworks, and exact resume terms in their original form when translating them would be misleading.`;
 
   if (hasImages) {
     // Multimodal: Gemini transcribes the images and analyzes
-    prompt = buildPrompt("handler_resume_analysis_image", { marketName: data.marketName });
+    prompt = buildPrompt("handler_resume_analysis_image", {
+      marketName: data.marketName,
+      outputLanguageInstruction,
+    });
     parts = data.resumeImages!.map((img) => ({
       inlineData: { mimeType: img.mimeType, data: img.data },
     }));
   } else {
     // Text-only path: instruction template rendered, then resume appended exactly as before
-    const basePrompt = buildPrompt("handler_resume_analysis", { marketName: data.marketName });
+    const basePrompt = buildPrompt("handler_resume_analysis", {
+      marketName: data.marketName,
+      outputLanguageInstruction,
+    });
     prompt = `${basePrompt}\n\nResume:\n${data.resumeText}`;
   }
 

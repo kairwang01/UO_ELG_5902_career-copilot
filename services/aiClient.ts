@@ -291,6 +291,7 @@ export const analyzeResume = async (
   resumeText: string,
   resumeImages: ResumeImage[] | null,
   marketName: string,
+  outputLanguage?: string,
 ): Promise<AnalysisResult & { extractedText?: string }> => {
   return callDedicated(async () => {
     const fn = httpsCallable<any, AnalysisResult & { extractedText?: string }>(firebaseFunctions, 'analyzeResume', { timeout: 190_000 });
@@ -298,6 +299,7 @@ export const analyzeResume = async (
       resumeText,
       resumeImages: resumeImages ?? undefined,
       marketName,
+      outputLanguage,
       model: currentModelId,
       requestId: makeCallableRequestId('resume_analysis'),
     });
