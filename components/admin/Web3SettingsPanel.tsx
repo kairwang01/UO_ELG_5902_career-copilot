@@ -7,6 +7,7 @@ import {
   isWeb3Enabled,
   onWeb3FlagChange,
   setWeb3Enabled,
+  updateWeb3Config,
   type Web3Config,
 } from '../../config/featureFlags';
 
@@ -23,7 +24,10 @@ export const Web3SettingsPanel: React.FC = () => {
   const [config, setConfig] = useState<Web3Config | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [runtimeSaving, setRuntimeSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState(true);
+  const [contractAddress, setContractAddress] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -33,6 +37,8 @@ export const Web3SettingsPanel: React.FC = () => {
         if (!mounted) return;
         setConfig(cfg);
         setEnabled(cfg.enabled);
+        setPreviewMode(cfg.preview_mode !== false);
+        setContractAddress(cfg.contract_address);
       })
       .catch((err) => {
         if (mounted) setError(err instanceof Error ? err.message : at('web3.error.load'));
@@ -54,10 +60,33 @@ export const Web3SettingsPanel: React.FC = () => {
       const updated = await setWeb3Enabled(next);
       setConfig(updated);
       setEnabled(updated.enabled);
+      setPreviewMode(updated.preview_mode !== false);
+      setContractAddress(updated.contract_address);
     } catch (err) {
       setError(err instanceof Error ? err.message : at('web3.error.save'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveRuntime = async () => {
+    const trimmedAddress = contractAddress.trim();
+    setRuntimeSaving(true);
+    setError(null);
+    try {
+      const updated = await updateWeb3Config({
+        enabled,
+        preview_mode: previewMode,
+        contract_address: trimmedAddress,
+      });
+      setConfig(updated);
+      setEnabled(updated.enabled);
+      setPreviewMode(updated.preview_mode !== false);
+      setContractAddress(updated.contract_address);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : at('web3.error.save'));
+    } finally {
+      setRuntimeSaving(false);
     }
   };
 
@@ -133,9 +162,50 @@ export const Web3SettingsPanel: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-x-3">
             <dt className="text-gray-500 shrink-0">{at('web3.contract.address')}</dt>
-            <dd className="font-mono text-gray-800 break-all">0x2A3b1A43842238321a22542a035921A362358189</dd>
+            <dd className="font-mono text-gray-800 break-all">{config?.contract_address ?? contractAddress}</dd>
           </div>
         </dl>
+        <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold text-gray-900">{at('web3.runtime.title')}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{at('web3.runtime.desc')}</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={previewMode}
+              onClick={() => setPreviewMode((value) => !value)}
+              disabled={loading || runtimeSaving}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${previewMode ? 'bg-amber-500' : 'bg-emerald-600'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${previewMode ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          <p className={`mt-2 text-xs font-medium ${previewMode ? 'text-amber-700' : 'text-emerald-700'}`}>
+            {previewMode ? at('web3.runtime.preview') : at('web3.runtime.live')}
+          </p>
+          <label className="mt-4 block text-xs font-semibold text-gray-700" htmlFor="web3-contract-address">
+            {at('web3.contract.address')}
+          </label>
+          <input
+            id="web3-contract-address"
+            type="text"
+            value={contractAddress}
+            onChange={(event) => setContractAddress(event.target.value)}
+            disabled={loading || runtimeSaving}
+            placeholder="0x..."
+            className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-xs text-gray-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
+          />
+          <button
+            type="button"
+            onClick={saveRuntime}
+            disabled={loading || runtimeSaving || !/^0x[a-fA-F0-9]{40}$/.test(contractAddress.trim())}
+            className="mt-3 inline-flex min-h-9 items-center justify-center rounded-md bg-gray-900 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-black disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+          >
+            {runtimeSaving ? at('web3.runtime.saving') : at('web3.runtime.save')}
+          </button>
+        </div>
       </Card>
     </div>
   );

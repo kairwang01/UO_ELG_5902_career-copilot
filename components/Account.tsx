@@ -19,7 +19,7 @@ import {
 // import ApiKeyManager from './ApiKeyManager';
 // import { BusinessCustomApi } from './BusinessCustomApi';
 import { listModels } from '../services/aiClient';
-import { isWeb3Enabled, onWeb3FlagChange, refreshWeb3Enabled } from '../config/featureFlags';
+import { isWeb3Enabled, onWeb3FlagChange, refreshWeb3Config, type Web3Config } from '../config/featureFlags';
 import { loadBirthdayLocal, saveBirthdayLocal } from '../lib/onboarding';
 import type { UserProfile } from '../types';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
@@ -28,10 +28,6 @@ import {
   SEPOLIA_EXPLORER_ORIGIN,
   getSepoliaAddressUrl,
 } from '../lib/web3Links';
-
-// Reserved Sepolia-compatible contract address for the live credential flow.
-const TALENT_NFT_CONTRACT_ADDRESS =
-  '0x2A3b1A43842238321a22542a035921A362358189';
 
 // The ABI for the smart contract, defining its functions and events
 const TALENT_NFT_ABI = [
@@ -53,12 +49,15 @@ const TALENT_NFT_ABI = [
 const TARGET_CHAIN_ID = SEPOLIA_CHAIN_ID; // Sepolia Testnet Chain ID
 const TARGET_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia Chain ID in Hex
 
-// The live contract is not enabled in this environment. Until it is, the
-// credential runs as a Sepolia preview: wallet state is saved and credential
-// actions persist to the user's nft_* profile fields without sending an
-// on-chain transaction.
-// Flip to false once TALENT_NFT_CONTRACT_ADDRESS points at a deployed contract.
-const TALENT_NFT_PREVIEW_MODE = true;
+const WEB3_CONFIG_FALLBACK: Web3Config = {
+  enabled: false,
+  preview_mode: true,
+  network: 'sepolia',
+  chain_id: SEPOLIA_CHAIN_ID,
+  contract_address: '0x2A3b1A43842238321a22542a035921A362358189',
+  updated_at: null,
+  updated_by: null,
+};
 
 // Deterministic per-wallet token id for the preview credential, so re-opening
 // the page shows a stable id and re-mints don't churn.
@@ -252,12 +251,22 @@ const Account: React.FC<AccountProps> = ({
   // Web3 is an experimental, admin-toggleable module — the whole section hides
   // when disabled and nothing else on this page depends on wallet state.
   const [web3Enabled, setWeb3Enabled] = useState(isWeb3Enabled());
+  const [web3Config, setWeb3Config] = useState<Web3Config>(() => ({
+    ...WEB3_CONFIG_FALLBACK,
+    enabled: isWeb3Enabled(),
+  }));
+  const web3PreviewMode = web3Config.preview_mode !== false;
+  const talentNftContractAddress = web3Config.contract_address || WEB3_CONFIG_FALLBACK.contract_address;
 
   useEffect(() => {
     let cancelled = false;
     const unsubscribe = onWeb3FlagChange(setWeb3Enabled);
-    refreshWeb3Enabled()
-      .then((enabled) => { if (!cancelled) setWeb3Enabled(enabled); })
+    refreshWeb3Config()
+      .then((config) => {
+        if (cancelled) return;
+        setWeb3Config(config);
+        setWeb3Enabled(config.enabled);
+      })
       .catch(() => { /* keep cached fallback */ });
     return () => {
       cancelled = true;
@@ -335,7 +344,7 @@ const Account: React.FC<AccountProps> = ({
         return;
       }
 
-      if (TALENT_NFT_PREVIEW_MODE) {
+      if (web3PreviewMode) {
         // No deployed contract yet: skip on-chain reads (they would throw and
         // wrongly wipe the credential). The wallet is connected (checked above)
         // and the nft_* values from the profile, already in local state, are the
@@ -365,7 +374,7 @@ const Account: React.FC<AccountProps> = ({
 
       // Correct network, proceed with sync
       const contract = new ethers.Contract(
-        TALENT_NFT_CONTRACT_ADDRESS,
+        talentNftContractAddress,
         TALENT_NFT_ABI,
         provider,
       );
@@ -416,7 +425,7 @@ const Account: React.FC<AccountProps> = ({
     } finally {
       if (isCurrentRun()) setIsSyncing(false);
     }
-  }, [walletAddress, session.user.id, t]);
+  }, [walletAddress, session.user.id, t, web3PreviewMode, talentNftContractAddress]);
 
   useEffect(() => {
     if (walletAddress) {
@@ -770,7 +779,7 @@ const Account: React.FC<AccountProps> = ({
       return;
     }
     setWeb3Busy(true);
-    if (TALENT_NFT_PREVIEW_MODE) {
+    if (web3PreviewMode) {
       setWeb3Notice({ type: 'info', text: t('account_web3_minting_wait') });
       const prevTokenId = tokenId;
       const prevMinted = nftMinted;
@@ -806,7 +815,7 @@ const Account: React.FC<AccountProps> = ({
       const signer = await getSignerForSavedWallet();
       if (!signer || !mountedRef.current) return;
       const contract = new ethers.Contract(
-        TALENT_NFT_CONTRACT_ADDRESS,
+        talentNftContractAddress,
         TALENT_NFT_ABI,
         signer,
       );
@@ -862,7 +871,7 @@ const Account: React.FC<AccountProps> = ({
     if (tokenId === null) return;
     setWeb3Busy(true);
     const newStakedStatus = !nftStaked;
-    if (TALENT_NFT_PREVIEW_MODE) {
+    if (web3PreviewMode) {
       const prevStaked = nftStaked;
       setWeb3Notice({
         type: 'info',
@@ -905,7 +914,7 @@ const Account: React.FC<AccountProps> = ({
       const signer = await getSignerForSavedWallet();
       if (!signer || !mountedRef.current) return;
       const contract = new ethers.Contract(
-        TALENT_NFT_CONTRACT_ADDRESS,
+        talentNftContractAddress,
         TALENT_NFT_ABI,
         signer,
       );
@@ -956,7 +965,7 @@ const Account: React.FC<AccountProps> = ({
       return;
     }
     setWeb3Busy(true);
-    if (TALENT_NFT_PREVIEW_MODE) {
+    if (web3PreviewMode) {
       setWeb3Notice({ type: 'info', text: t('account_web3_preview_notice') });
       setWeb3Busy(false);
       return;
@@ -966,7 +975,7 @@ const Account: React.FC<AccountProps> = ({
       const signer = await getSignerForSavedWallet();
       if (!signer || !mountedRef.current) return;
       const contract = new ethers.Contract(
-        TALENT_NFT_CONTRACT_ADDRESS,
+        talentNftContractAddress,
         TALENT_NFT_ABI,
         signer,
       );
@@ -1087,12 +1096,12 @@ const Account: React.FC<AccountProps> = ({
     if (tone === 'attention') return <AlertTriangle className="h-4 w-4" aria-hidden="true" />;
     return <CircleDot className="h-4 w-4" aria-hidden="true" />;
   };
-  const web3IntroText = TALENT_NFT_PREVIEW_MODE
+  const web3IntroText = web3PreviewMode
     ? t('account_web3_optional_note')
     : hasWallet
       ? t('account_web3_desc_connected')
       : t('account_web3_desc_unconnected');
-  const credentialEligibilityText = TALENT_NFT_PREVIEW_MODE
+  const credentialEligibilityText = web3PreviewMode
     ? t('account_web3_preview_notice')
     : t('account_web3_nft_eligible_desc');
   const web3ConfirmTitle = web3ConfirmAction === 'mint'
@@ -1102,7 +1111,7 @@ const Account: React.FC<AccountProps> = ({
       : web3ConfirmAction === 'unstake'
         ? t('account_web3_approve_unstake')
         : t('account_web3_stake_label');
-  const web3ConfirmDescription = TALENT_NFT_PREVIEW_MODE
+  const web3ConfirmDescription = web3PreviewMode
     ? t('account_web3_preview_notice')
     : web3ConfirmAction === 'claim'
       ? t('account_web3_claim_approve')
@@ -1298,7 +1307,7 @@ const Account: React.FC<AccountProps> = ({
           <p className="text-xs text-gray-500 dark:text-gray-400 -mt-3">
             {t('account_web3_optional_note')}
           </p>
-          {TALENT_NFT_PREVIEW_MODE && (
+          {web3PreviewMode && (
             <div
               className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200"
               role="note"
@@ -1483,7 +1492,7 @@ const Account: React.FC<AccountProps> = ({
                       {t('account_web3_stake_label')}
                     </label>
                     <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-slate-300">
-                      {TALENT_NFT_PREVIEW_MODE
+                      {web3PreviewMode
                         ? t('account_web3_preview_notice')
                         : t('account_web3_stake_desc')}
                     </p>
@@ -1503,7 +1512,7 @@ const Account: React.FC<AccountProps> = ({
                   </button>
                 </div>
 
-                {!TALENT_NFT_PREVIEW_MODE && (
+                {!web3PreviewMode && (
                   <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-center dark:border-green-900/50 dark:bg-green-950/20">
                     <h4 className="font-semibold text-gray-800 dark:text-gray-200">
                       {t('account_web3_earnings_title')}

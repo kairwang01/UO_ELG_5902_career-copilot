@@ -122,6 +122,13 @@ const ADMIN_TEXT: Record<string, string> = {
   'web3.contract.title': 'Contract',
   'web3.contract.network': 'Network',
   'web3.contract.address': 'Proof-of-Talent',
+  'web3.runtime.title': 'Runtime mode',
+  'web3.runtime.desc':
+    'Preview saves credential state to the user profile. Live sends Sepolia transactions to the configured contract.',
+  'web3.runtime.preview': 'Preview mode — no on-chain transactions.',
+  'web3.runtime.live': 'Live mode — wallet actions use the contract.',
+  'web3.runtime.save': 'Save runtime settings',
+  'web3.runtime.saving': 'Saving...',
 };
 
 export const at = (key: string): string => ADMIN_TEXT[key] ?? key;

@@ -18,10 +18,11 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-const CONTRACT_ADDRESS = "0x2A3b1A43842238321a22542a035921A362358189";
+const DEFAULT_CONTRACT_ADDRESS = "0x2A3b1A43842238321a22542a035921A362358189";
 
 export interface Web3ConfigResponse {
   enabled: boolean;
+  preview_mode: boolean;
   network: "sepolia";
   chain_id: 11155111;
   contract_address: string;
@@ -37,12 +38,19 @@ function iso(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function normalizeContractAddress(value: unknown): string {
+  if (typeof value !== "string") return DEFAULT_CONTRACT_ADDRESS;
+  const trimmed = value.trim();
+  return /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed : DEFAULT_CONTRACT_ADDRESS;
+}
+
 function coerceConfig(data: admin.firestore.DocumentData | undefined): Web3ConfigResponse {
   return {
     enabled: data?.enabled === true,
+    preview_mode: data?.preview_mode === false ? false : true,
     network: "sepolia",
     chain_id: 11155111,
-    contract_address: CONTRACT_ADDRESS,
+    contract_address: normalizeContractAddress(data?.contract_address),
     updated_at: iso(data?.updated_at),
     updated_by: typeof data?.updated_by === "string" ? data.updated_by : null,
   };
@@ -57,25 +65,56 @@ export async function updateWeb3ConfigImpl(uid: string, data: Record<string, unk
   if (typeof data.enabled !== "boolean") {
     throw new HttpsError("invalid-argument", "enabled must be a boolean.");
   }
+  if (data.preview_mode !== undefined && typeof data.preview_mode !== "boolean") {
+    throw new HttpsError("invalid-argument", "preview_mode must be a boolean.");
+  }
+  if (
+    data.contract_address !== undefined &&
+    (typeof data.contract_address !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(data.contract_address.trim()))
+  ) {
+    throw new HttpsError("invalid-argument", "contract_address must be a valid Ethereum address.");
+  }
+
   const ref = db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.web3);
+  const currentSnap = await ref.get();
+  const current = coerceConfig(currentSnap.exists ? currentSnap.data() : undefined);
+  const previewMode =
+    data.preview_mode === undefined
+      ? current.preview_mode
+      : data.preview_mode === false
+        ? false
+        : true;
+  const contractAddress =
+    typeof data.contract_address === "string"
+      ? data.contract_address.trim()
+      : current.contract_address;
+
   await ref.set({
     enabled: data.enabled,
+    preview_mode: previewMode,
     network: "sepolia",
     chain_id: 11155111,
-    contract_address: CONTRACT_ADDRESS,
+    contract_address: contractAddress,
     updated_at: FieldValue.serverTimestamp(),
     updated_by: uid,
   }, { merge: true });
   await logAdminAction({
     admin_uid: uid,
     action: "update_web3_config",
-    details: { enabled: data.enabled, network: "sepolia", chain_id: 11155111 },
+    details: {
+      enabled: data.enabled,
+      preview_mode: previewMode,
+      contract_address: contractAddress,
+      network: "sepolia",
+      chain_id: 11155111,
+    },
   });
   return {
     enabled: data.enabled,
+    preview_mode: previewMode,
     network: "sepolia",
     chain_id: 11155111,
-    contract_address: CONTRACT_ADDRESS,
+    contract_address: contractAddress,
     updated_at: new Date().toISOString(),
     updated_by: uid,
   };

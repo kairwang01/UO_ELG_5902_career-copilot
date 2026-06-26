@@ -16,12 +16,19 @@ const WEB3_DEFAULT = false;
 
 export interface Web3Config {
   enabled: boolean;
+  preview_mode: boolean;
   network: 'sepolia';
   chain_id: 11155111;
   contract_address: string;
   updated_at: string | null;
   updated_by: string | null;
 }
+
+export type Web3ConfigUpdate = {
+  enabled: boolean;
+  preview_mode?: boolean;
+  contract_address?: string;
+};
 
 const call = <Req, Res>(name: string) =>
   httpsCallable<Req, Res>(firebaseFunctions, name);
@@ -47,12 +54,17 @@ const publishWeb3Flag = (enabled: boolean): void => {
 
 export const isWeb3Enabled = (): boolean => readCachedWeb3Enabled();
 
-export const refreshWeb3Enabled = async (): Promise<boolean> => {
+export const refreshWeb3Config = async (): Promise<Web3Config> => {
   const result = await call<Record<string, never>, Web3Config>('getWeb3Config')({});
   const enabled = result.data.enabled === true;
   writeCachedWeb3Enabled(enabled);
   publishWeb3Flag(enabled);
-  return enabled;
+  return result.data;
+};
+
+export const refreshWeb3Enabled = async (): Promise<boolean> => {
+  const config = await refreshWeb3Config();
+  return config.enabled;
 };
 
 export const getWeb3Config = async (): Promise<Web3Config> => {
@@ -63,7 +75,14 @@ export const getWeb3Config = async (): Promise<Web3Config> => {
 };
 
 export const setWeb3Enabled = async (enabled: boolean): Promise<Web3Config> => {
-  const result = await call<{ enabled: boolean }, Web3Config>('adminUpdateWeb3Config')({ enabled });
+  const result = await call<Web3ConfigUpdate, Web3Config>('adminUpdateWeb3Config')({ enabled });
+  writeCachedWeb3Enabled(result.data.enabled);
+  publishWeb3Flag(result.data.enabled);
+  return result.data;
+};
+
+export const updateWeb3Config = async (update: Web3ConfigUpdate): Promise<Web3Config> => {
+  const result = await call<Web3ConfigUpdate, Web3Config>('adminUpdateWeb3Config')(update);
   writeCachedWeb3Enabled(result.data.enabled);
   publishWeb3Flag(result.data.enabled);
   return result.data;
