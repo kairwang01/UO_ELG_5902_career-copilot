@@ -3591,5 +3591,7 @@
   "showcase_delete_confirm_button": "删除作品集",
   "showcase_deleting": "正在删除...",
   "showcase_delete_success": "作品集已删除。",
-  "showcase_delete_failed": "无法删除此作品集，请重试。"
+  "showcase_delete_failed": "无法删除此作品集，请重试。",
+  "tool_resume_formatter_saved_versions": "已保存版本：{markets}",
+  "tool_resume_formatter_saved_market_hint": "已保存 {market} 版本，切换后会自动加载。"
 }

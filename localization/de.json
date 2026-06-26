@@ -3455,5 +3455,7 @@
   "job_section_role": "Rollendetails",
   "resume_lang_chinese": "Chinesisch",
   "resume_market_hint_china": "China-Lebenslauf (简历): 1–2 Seiten antichronologisch auf Vereinfachtem Chinesisch; Arbeitgeber- und Schulnamen lokalisiert mit dem Original in Klammern. Nur quellengestützte persönliche Angaben einfügen — kein erfundenes Foto, Alter oder Familienstand.",
-  "ws_credentials_manage_cta": "Wallet verbinden und Nachweis verwalten"
+  "ws_credentials_manage_cta": "Wallet verbinden und Nachweis verwalten",
+  "tool_resume_formatter_saved_versions": "Saved versions: {markets}",
+  "tool_resume_formatter_saved_market_hint": "A saved {market} version is available and will load automatically."
 }

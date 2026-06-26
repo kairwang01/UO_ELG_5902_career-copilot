@@ -3455,5 +3455,7 @@
   "job_section_role": "Chi tiết vị trí",
   "resume_lang_chinese": "Tiếng Trung",
   "resume_market_hint_china": "CV Trung Quốc (简历): CV 1–2 trang theo thứ tự thời gian nghịch đảo bằng tiếng Trung giản thể; tên công ty và trường học bản địa hoá với nguyên gốc trong ngoặc. Chỉ bao gồm thông tin cá nhân có dữ liệu nguồn hỗ trợ — không tạo ảnh, tuổi, hoặc tình trạng hôn nhân giả.",
-  "ws_credentials_manage_cta": "Kết nối ví và quản lý chứng chỉ"
+  "ws_credentials_manage_cta": "Kết nối ví và quản lý chứng chỉ",
+  "tool_resume_formatter_saved_versions": "Saved versions: {markets}",
+  "tool_resume_formatter_saved_market_hint": "A saved {market} version is available and will load automatically."
 }

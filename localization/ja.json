@@ -3455,5 +3455,7 @@
   "job_section_role": "ポジション詳細",
   "resume_lang_chinese": "中語",
   "resume_market_hint_china": "中国履歴書 (简历): 中国語簡体字で1–2ページの逆時系履歴書。企業名・学校名は現地語で記載し、原文を把れで示す。ソースにない個人情報（写真、年齢、婚姻状況）は追加しない。",
-  "ws_credentials_manage_cta": "ウォレット接続と資格情報管理"
+  "ws_credentials_manage_cta": "ウォレット接続と資格情報管理",
+  "tool_resume_formatter_saved_versions": "Saved versions: {markets}",
+  "tool_resume_formatter_saved_market_hint": "A saved {market} version is available and will load automatically."
 }

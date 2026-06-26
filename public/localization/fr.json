@@ -3455,5 +3455,7 @@
   "job_section_role": "Détails du poste",
   "resume_lang_chinese": "Chinois",
   "resume_market_hint_china": "CV chinois (简历) : 1–2 pages en ordre chronologique inverse en chinois simplifié ; noms d'employeurs et d'écoles localisés avec l'original entre parenthèses. Inclure uniquement les renseignements personnels présents dans la source — pas de photo, d'âge ou de statut marital inventés.",
-  "ws_credentials_manage_cta": "Connecter le portefeuille et gérer le justificatif"
+  "ws_credentials_manage_cta": "Connecter le portefeuille et gérer le justificatif",
+  "tool_resume_formatter_saved_versions": "Saved versions: {markets}",
+  "tool_resume_formatter_saved_market_hint": "A saved {market} version is available and will load automatically."
 }

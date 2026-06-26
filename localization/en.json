@@ -3610,5 +3610,7 @@
   "showcase_delete_confirm_button": "Delete portfolio",
   "showcase_deleting": "Deleting...",
   "showcase_delete_success": "Portfolio deleted.",
-  "showcase_delete_failed": "Could not delete this portfolio. Please try again."
+  "showcase_delete_failed": "Could not delete this portfolio. Please try again.",
+  "tool_resume_formatter_saved_versions": "Saved versions: {markets}",
+  "tool_resume_formatter_saved_market_hint": "A saved {market} version is available and will load automatically."
 }
