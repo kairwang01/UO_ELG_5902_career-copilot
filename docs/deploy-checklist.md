@@ -24,6 +24,12 @@ Functions read plain env vars from `functions/.env` (no Secret Manager binding).
 | `STRIPE_PRICE_ESSENTIALS` `_ACCELERATOR` `_EXECUTIVE` `_STARTER` `_GROWTH` `_PRO` `_SINGLE_POST` `_JOB_PACK` | `createCheckoutSession` | one Stripe Price id per plan |
 | `ALLOW_DEMO_GRANTS` | `setSubscriptionStatus` | `true` ONLY in demo/staging (zero-payment plan activation, tagged `demo_preview`). **Leave unset in production** so paid plans require a real `billing/{uid}.active`. |
 
+Frontend Hosting / build env:
+
+| Var | Needed by | Notes |
+|-----|-----------|-------|
+| `VITE_STRIPE_PUBLISHABLE_KEY` | embedded Checkout modal | Use `pk_test_*` for sandbox. If omitted, the client falls back to hosted Checkout redirects. Never use `sk_*` in frontend env. |
+
 Verify Java 21 for the emulator test gate: `JAVA_HOME=/opt/homebrew/opt/openjdk@21`.
 
 ---
@@ -119,3 +125,10 @@ Demo fake-payment path shipped behind `BILLING_SIMULATION` (set `true` in `funct
 - `stripeWebhook` still **not** deployed (needs `STRIPE_WEBHOOK_SECRET`; unused in simulation).
 - **Frontend publish still required** (no Firebase Hosting configured — served by the project's own host): `npm run build` then publish `dist/`. The `/billing/checkout` page + Talent Discovery hide + all earlier UI ride this bundle.
 - To switch to real Stripe later: set `STRIPE_SECRET_KEY` (+ `sk_test_` for test mode) and the `STRIPE_PRICE_*`, set `BILLING_SIMULATION` unset/false, deploy `createCheckoutSession,stripeWebhook`.
+
+### 2026-06-26 — embedded Checkout modal
+Checkout can now open inside an in-app modal using Stripe Embedded Checkout.
+- frontend env required for modal UX: `VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...`
+- functions (updated): `createCheckoutSession` (supports `uiMode: embedded`, returns `clientSecret`; hosted/simulated fallback remains)
+- frontend publish required: `npm run build` then publish `dist/`
+- deploy pairing: `firebase deploy --only functions:createCheckoutSession` plus frontend rebuild/publish. Keep `stripeWebhook` deployed/configured for real entitlement activation; modal completion is not the source of truth.

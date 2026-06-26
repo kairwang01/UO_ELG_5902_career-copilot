@@ -12,7 +12,10 @@ export interface SubscriptionUpdateResult {
 
 export interface CheckoutSessionResult {
   id: string;
-  url: string;
+  mode?: 'hosted' | 'embedded';
+  url?: string;
+  clientSecret?: string;
+  simulated?: boolean;
 }
 
 const setSubscriptionStatusCallable = httpsCallable<
@@ -21,7 +24,7 @@ const setSubscriptionStatusCallable = httpsCallable<
 >(firebaseFunctions, 'setSubscriptionStatus');
 
 const createCheckoutSessionCallable = httpsCallable<
-  { planKey: string },
+  { planKey: string; uiMode?: 'hosted' | 'embedded' },
   CheckoutSessionResult
 >(firebaseFunctions, 'createCheckoutSession');
 
@@ -48,6 +51,11 @@ export async function setUserSubscription(
 
 export async function createSubscriptionCheckout(planKey: string): Promise<CheckoutSessionResult> {
   const result = await createCheckoutSessionCallable({ planKey });
+  return result.data;
+}
+
+export async function createEmbeddedSubscriptionCheckout(planKey: string): Promise<CheckoutSessionResult> {
+  const result = await createCheckoutSessionCallable({ planKey, uiMode: 'embedded' });
   return result.data;
 }
 

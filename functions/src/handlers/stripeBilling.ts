@@ -265,11 +265,18 @@ async function findBillingBySubscription(stripeSubscriptionId: string): Promise<
 
 interface CreateCheckoutRequest {
   planKey: string;
+  uiMode?: "hosted" | "embedded";
 }
 
-export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
+type CheckoutSessionResult =
+  | { mode: "hosted"; url: string; id: string; simulated?: boolean }
+  | { mode: "embedded"; clientSecret: string; id: string };
+
+export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request): Promise<CheckoutSessionResult> => {
   const uid = requireAuth(request);
-  const plan = normalizeCheckoutPlan((request.data as CreateCheckoutRequest | undefined)?.planKey);
+  const data = (request.data ?? {}) as CreateCheckoutRequest;
+  const plan = normalizeCheckoutPlan(data.planKey);
+  const useEmbeddedCheckout = data.uiMode === "embedded";
 
   // Simulation mode: return an in-app fake-checkout URL with the same { url, id }
   // shape the client already consumes (window.location.assign). No Stripe keys or
@@ -277,7 +284,7 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
   if (billingSimulationEnabled()) {
     const simId = `sim_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const params = new URLSearchParams({ plan: plan.plan, audience: plan.audience, sim: simId });
-    return { url: `/billing/checkout?${params.toString()}`, id: simId, simulated: true };
+    return { mode: "hosted", url: `/billing/checkout?${params.toString()}`, id: simId, simulated: true };
   }
 
   const price = process.env[plan.priceEnv];
@@ -290,14 +297,12 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
   const email = stringOrNull(request.auth?.token.email);
   const successPath = plan.audience === "business" ? "/portal?checkout=success" : "/workspace/billing?checkout=success";
   const cancelPath = plan.audience === "business" ? "/pricing?audience=employer&checkout=cancel" : "/pricing?checkout=cancel";
-
-  const session = await stripe.checkout.sessions.create({
+  const returnPath = plan.audience === "business" ? "/portal?checkout=return" : "/workspace/billing?checkout=return";
+  const baseSessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: plan.mode,
     customer_email: email ?? undefined,
     client_reference_id: uid,
     line_items: [{ price, quantity: 1 }],
-    success_url: `${baseUrl}${successPath}`,
-    cancel_url: `${baseUrl}${cancelPath}`,
     metadata: {
       uid,
       plan_key: plan.plan,
@@ -314,12 +319,35 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
           },
         }
       : {}),
-  });
+  };
+
+  const session = await stripe.checkout.sessions.create(
+    useEmbeddedCheckout
+      ? {
+          ...baseSessionParams,
+          ui_mode: "embedded_page",
+          return_url: `${baseUrl}${returnPath}&session_id={CHECKOUT_SESSION_ID}`,
+          redirect_on_completion: "if_required",
+        }
+      : {
+          ...baseSessionParams,
+          ui_mode: "hosted_page",
+          success_url: `${baseUrl}${successPath}`,
+          cancel_url: `${baseUrl}${cancelPath}`,
+        },
+  );
+
+  if (useEmbeddedCheckout) {
+    if (!session.client_secret) {
+      throw new HttpsError("internal", "Stripe did not return an embedded Checkout client secret.");
+    }
+    return { mode: "embedded", clientSecret: session.client_secret, id: session.id };
+  }
 
   if (!session.url) {
     throw new HttpsError("internal", "Stripe did not return a Checkout URL.");
   }
-  return { url: session.url, id: session.id };
+  return { mode: "hosted", url: session.url, id: session.id };
 });
 
 interface ConfirmSimulatedCheckoutRequest {

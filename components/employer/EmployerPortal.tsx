@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppSession as Session } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { data } from '../../lib/data';
-import { createSubscriptionCheckout, setUserSubscription } from '../../services/subscriptionClient';
+import { setUserSubscription } from '../../services/subscriptionClient';
+import { useSubscriptionCheckout } from '../../contexts/SubscriptionCheckoutContext';
 import { shouldRedirectBusinessPlanToCheckout } from '../../lib/access/businessEntryDecisions';
 import AgencyHub from '../AgencyHub';
 import ApplicantFunnel from '../ApplicantFunnel';
@@ -63,6 +64,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   currentLang,
   onLanguageChange,
 }) => {
+  const { startSubscriptionCheckout } = useSubscriptionCheckout();
   const [currentPage, setCurrentPage] = useState<PortalPage>(initialPage);
   const darkMode = theme === 'dark';
 
@@ -237,8 +239,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
       const pendingPlanKey = `pending_biz_${planKey}`;
       const result = await setUserSubscription(pendingPlanKey);
       if (shouldRedirectBusinessPlanToCheckout(planKey, result.status)) {
-        const checkout = await createSubscriptionCheckout(pendingPlanKey);
-        window.location.assign(checkout.url);
+        await startSubscriptionCheckout(pendingPlanKey, { onComplete: refreshProfile });
         return;
       }
       await refreshProfile();

@@ -1,0 +1,149 @@
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { EmbeddedCheckout, EmbeddedCheckoutProvider } from '@stripe/react-stripe-js';
+import { loadStripe, type Stripe } from '@stripe/stripe-js';
+import { Loader2 } from 'lucide-react';
+import {
+  createEmbeddedSubscriptionCheckout,
+  createSubscriptionCheckout,
+} from '../services/subscriptionClient';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { useToast } from '../components/Toast';
+
+type CheckoutCompleteHandler = () => Promise<void> | void;
+
+interface StartSubscriptionCheckoutOptions {
+  onComplete?: CheckoutCompleteHandler;
+}
+
+interface SubscriptionCheckoutContextValue {
+  startSubscriptionCheckout: (planKey: string, options?: StartSubscriptionCheckoutOptions) => Promise<void>;
+}
+
+const SubscriptionCheckoutContext = createContext<SubscriptionCheckoutContextValue | null>(null);
+
+const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.trim() || '';
+const stripePromise: Promise<Stripe | null> | null = stripePublishableKey
+  ? loadStripe(stripePublishableKey)
+  : null;
+
+export const useSubscriptionCheckout = (): SubscriptionCheckoutContextValue => {
+  const ctx = useContext(SubscriptionCheckoutContext);
+  if (!ctx) {
+    throw new Error('useSubscriptionCheckout must be used within SubscriptionCheckoutProvider');
+  }
+  return ctx;
+};
+
+export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { addToast } = useToast();
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [isOpening, setIsOpening] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const openingRef = useRef(false);
+  const completeHandlerRef = useRef<CheckoutCompleteHandler | null>(null);
+
+  const closeCheckout = useCallback(() => {
+    setClientSecret(null);
+    setCheckoutError(null);
+    completeHandlerRef.current = null;
+  }, []);
+
+  const redirectToHostedCheckout = useCallback(async (planKey: string) => {
+    const hosted = await createSubscriptionCheckout(planKey);
+    if (!hosted.url) {
+      throw new Error('Checkout is unavailable. Please try again.');
+    }
+    window.location.assign(hosted.url);
+  }, []);
+
+  const startSubscriptionCheckout = useCallback(
+    async (planKey: string, options?: StartSubscriptionCheckoutOptions) => {
+      if (isOpening || openingRef.current) return;
+      openingRef.current = true;
+      setIsOpening(true);
+      setCheckoutError(null);
+      completeHandlerRef.current = options?.onComplete ?? null;
+
+      try {
+        if (!stripePromise) {
+          await redirectToHostedCheckout(planKey);
+          return;
+        }
+
+        try {
+          const embedded = await createEmbeddedSubscriptionCheckout(planKey);
+          if (embedded.mode === 'embedded' && embedded.clientSecret) {
+            setClientSecret(embedded.clientSecret);
+            return;
+          }
+          if (embedded.url) {
+            window.location.assign(embedded.url);
+            return;
+          }
+        } catch (embeddedError) {
+          // Older deployed functions or incomplete Stripe config may not support
+          // embedded Checkout yet. Keep the purchase path open via hosted Checkout.
+          console.warn('Embedded Checkout unavailable, falling back to hosted Checkout.', embeddedError);
+        }
+
+        await redirectToHostedCheckout(planKey);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Checkout could not be started.';
+        setCheckoutError(message);
+        addToast(message, 'error');
+        completeHandlerRef.current = null;
+      } finally {
+        openingRef.current = false;
+        setIsOpening(false);
+      }
+    },
+    [addToast, isOpening, redirectToHostedCheckout],
+  );
+
+  const embeddedOptions = useMemo(
+    () => ({
+      clientSecret,
+      onComplete: async () => {
+        const handler = completeHandlerRef.current;
+        closeCheckout();
+        if (handler) {
+          await handler();
+        }
+      },
+    }),
+    [clientSecret, closeCheckout],
+  );
+
+  return (
+    <SubscriptionCheckoutContext.Provider value={{ startSubscriptionCheckout }}>
+      {children}
+      <Dialog open={Boolean(clientSecret)} onOpenChange={(open) => { if (!open) closeCheckout(); }}>
+        <DialogContent maxWidth="lg" className="p-0 sm:p-0">
+          <DialogHeader className="border-b border-slate-200 px-5 py-4 text-left dark:border-slate-700">
+            <DialogTitle className="text-lg">Secure checkout</DialogTitle>
+            <DialogDescription className="not-sr-only text-sm text-slate-500 dark:text-slate-400">
+              Complete payment in this window. Your plan updates after Stripe confirms the payment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-[560px] px-3 py-4 sm:px-5">
+            {clientSecret && stripePromise ? (
+              <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
+                <EmbeddedCheckout className="min-h-[520px]" />
+              </EmbeddedCheckoutProvider>
+            ) : (
+              <div className="flex min-h-[520px] items-center justify-center text-sm text-slate-500">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                Loading checkout…
+              </div>
+            )}
+            {checkoutError && (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {checkoutError}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </SubscriptionCheckoutContext.Provider>
+  );
+};

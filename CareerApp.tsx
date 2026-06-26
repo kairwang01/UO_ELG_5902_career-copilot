@@ -10,7 +10,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from './lib/firebaseClient';
 import { data } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
-import { createSubscriptionCheckout, setUserSubscription } from './services/subscriptionClient';
+import { setUserSubscription } from './services/subscriptionClient';
 import { useLocalization } from './hooks/useLocalization';
 import { ToastProvider, useToast } from './components/Toast';
 import { useCredits } from './contexts/CreditsContext';
@@ -62,6 +62,7 @@ import {
 import { decideWorkspaceShell } from './lib/access/navigationDecisions';
 import { decideSessionTransition } from './lib/access/sessionTransitions';
 import { useSession } from './contexts/SessionContext';
+import { SubscriptionCheckoutProvider, useSubscriptionCheckout } from './contexts/SubscriptionCheckoutContext';
 import { ALL_TOOLS_CONFIG } from './constants/tools';
 import './marketing/site-theme.css';
 
@@ -235,6 +236,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const { credits, setCredits } = useCredits();
   const { addToast } = useToast();
+  const { startSubscriptionCheckout } = useSubscriptionCheckout();
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const analysisCost = TOOL_CREDIT_COSTS['resume-analysis'];
 
@@ -512,8 +514,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               fullName: user.user_metadata?.full_name || loadPendingOnboardingName(),
             });
             if (shouldRedirectBusinessPlanToCheckout(pendingPlan, subscriptionResult.status)) {
-              const checkout = await createSubscriptionCheckout(planKey);
-              window.location.assign(checkout.url);
+              await startSubscriptionCheckout(planKey, { onComplete: getProfile });
               return;
             }
           }
@@ -669,8 +670,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       const pendingPlanKey = `pending_biz_${planKey}`;
       const result = await setUserSubscription(pendingPlanKey);
       if (shouldRedirectBusinessPlanToCheckout(planKey, result.status)) {
-        const checkout = await createSubscriptionCheckout(pendingPlanKey);
-        window.location.assign(checkout.url);
+        await startSubscriptionCheckout(pendingPlanKey, { onComplete: getProfile });
         return;
       }
       await getProfile();
@@ -689,8 +689,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       const pendingPlanKey = planKey === 'free' ? 'free' : `pending_${planKey}`;
       const result = await setUserSubscription(pendingPlanKey);
       if (result.status === 'pending_payment') {
-        const checkout = await createSubscriptionCheckout(pendingPlanKey);
-        window.location.assign(checkout.url);
+        await startSubscriptionCheckout(pendingPlanKey, { onComplete: getProfile });
         return;
       }
       await getProfile();
@@ -1609,7 +1608,9 @@ interface AppWrapperProps {
 // workspace shares one state instance with the marketing shell instead of shadowing it.
 const AppWrapper: React.FC<AppWrapperProps> = ({ entry }) => (
     <ToastProvider>
+      <SubscriptionCheckoutProvider>
         <AppContent entry={entry} />
+      </SubscriptionCheckoutProvider>
     </ToastProvider>
 );
 

@@ -14,7 +14,8 @@ import CheckoutRedirectNotice from './billing/CheckoutRedirectNotice';
 const INPUT_CLASS =
   'w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30';
 import { markOnboardingPending } from '../lib/onboarding';
-import { createSubscriptionCheckout, setUserSubscription } from '../services/subscriptionClient';
+import { setUserSubscription } from '../services/subscriptionClient';
+import { useSubscriptionCheckout } from '../contexts/SubscriptionCheckoutContext';
 import { useToast } from './Toast';
 import { shouldRedirectBusinessPlanToCheckout } from '../lib/access/businessEntryDecisions';
 
@@ -128,6 +129,7 @@ const getAuthErrorMessage = (message: string, t: AuthProps['t']): string => {
 };
 
 const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }) => {
+  const { startSubscriptionCheckout } = useSubscriptionCheckout();
   const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
   // Ref latch: the `loading` state lags a render, so a fast double Enter/click would fire
@@ -250,17 +252,15 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           updated_at: new Date().toISOString(),
         });
 
-        // Paid plan → Stripe checkout. BEFORE the mount guard: the auth listener
-        // navigates the new session away (unmounting this modal), so a guard here
-        // would skip the redirect and strand a paid signup with an unpaid account.
-        // window.location.assign is a navigation — safe regardless of mount state.
+        // Paid plan → Stripe checkout. The checkout host is mounted above route
+        // switches, so the auth listener can move the user to the workspace while
+        // the embedded checkout stays open.
         if (
           !profileError &&
           subscriptionResult.status === 'pending_payment' &&
           (mode !== 'business' || shouldRedirectBusinessPlanToCheckout(selectedPlan, subscriptionResult.status))
         ) {
-          const checkout = await createSubscriptionCheckout(planKeyForServer);
-          window.location.assign(checkout.url);
+          await startSubscriptionCheckout(planKeyForServer);
           return;
         }
         if (!mountedRef.current) return;

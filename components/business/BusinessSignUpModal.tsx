@@ -3,7 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { sendEmailVerification } from 'firebase/auth';
 import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
-import { createSubscriptionCheckout, setUserSubscription } from '@/services/subscriptionClient';
+import { setUserSubscription } from '@/services/subscriptionClient';
+import { useSubscriptionCheckout } from '@/contexts/SubscriptionCheckoutContext';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSignIn, onSignedUp, initialPlan = 'starter', t }: Props) {
+  const { startSubscriptionCheckout } = useSubscriptionCheckout();
   const [selectedPlan, setSelectedPlan] = useState<BusinessPlanId>(initialPlan);
   const [orgName, setOrgName] = useState('');
   const [contactName, setContactName] = useState('');
@@ -101,14 +103,11 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
           updated_at: new Date().toISOString(),
         });
 
-        // Paid plan → Stripe checkout. Do this BEFORE the mount guard below: the
-        // auth listener routes the new session to /portal, unmounting this modal,
-        // so a `!mountedRef.current` return here would SKIP the redirect and strand
-        // a paid signup in the portal with an unpaid pending account.
-        // window.location.assign is a navigation — safe regardless of mount state.
+        // Paid plan → Stripe checkout. The checkout host is mounted above route
+        // switches, so auth routing can move the user to /portal while the embedded
+        // checkout remains open.
         if (!profileError && shouldRedirectBusinessPlanToCheckout(selectedPlan, subscriptionResult.status)) {
-          const checkout = await createSubscriptionCheckout(pendingPlanKey);
-          window.location.assign(checkout.url);
+          await startSubscriptionCheckout(pendingPlanKey);
           return;
         }
         if (!mountedRef.current) return;
