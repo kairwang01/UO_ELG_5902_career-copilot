@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
-import { Globe, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Code2, Globe, Sparkles, X } from 'lucide-react';
 import { generatePortfolioWebsite, generateProfessionalHeadshot } from '../../services/aiClient';
 import type { PortfolioWebsiteResult, PortfolioContent, SkillBridgeProject, UserProfile } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -59,6 +59,7 @@ const HTML_TEMPLATE = `
         .hero-content p { font-size: 1.2rem; margin-bottom: 30px; color: var(--secondary); max-width: 500px; }
         .hero-image { flex: 1; text-align: center; max-width: 400px; }
         .profile-img { width: 350px; height: 350px; border-radius: 50%; object-fit: cover; border: 5px solid var(--primary); box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1); }
+        .profile-initials { display: inline-flex; align-items: center; justify-content: center; background: var(--primary); color: white; font-size: 5.5rem; font-weight: 800; letter-spacing: 0; }
         .social-icons { margin-top: 20px; }
         .social-icons { display: flex; flex-wrap: wrap; gap: 10px; }
         .social-icons a { display: inline-flex; width: 40px; height: 40px; align-items: center; justify-content: center; background-color: var(--primary); color: white; border-radius: 50%; text-align: center; text-decoration: none; transition: var(--transition); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.03em; }
@@ -78,8 +79,12 @@ const HTML_TEMPLATE = `
         .filter-btn.active, .filter-btn:hover, .filter-btn:focus-visible { background-color: var(--primary); color: white; border-color: var(--primary); }
         .portfolio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 25px; }
         .portfolio-item { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); height: 250px; }
-        .portfolio-item img { width: 100%; height: 100%; object-fit: cover; transition: var(--transition); }
-        .portfolio-item:hover img, .portfolio-item:focus-within img { transform: scale(1.1); }
+        .portfolio-item img, .portfolio-placeholder { width: 100%; height: 100%; transition: var(--transition); }
+        .portfolio-item img { object-fit: cover; }
+        .portfolio-placeholder { display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; padding: 28px; background: color-mix(in srgb, var(--primary) 10%, var(--surface-card)); color: var(--dark); }
+        .project-kicker { align-self: flex-start; border-radius: 999px; background: var(--surface-card); color: var(--primary); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.02em; padding: 6px 10px; }
+        .project-title { max-width: 18rem; font-size: 1.45rem; line-height: 1.15; }
+        .portfolio-item:hover img, .portfolio-item:focus-within img, .portfolio-item:hover .portfolio-placeholder, .portfolio-item:focus-within .portfolio-placeholder { transform: scale(1.06); }
         .portfolio-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(37, 99, 235, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; opacity: 0; transition: var(--transition); padding: 20px; text-align: center; }
         .portfolio-item:hover .portfolio-overlay, .portfolio-item:focus-within .portfolio-overlay { opacity: 1; }
         .portfolio-overlay h3 { color: white; font-size: 1.5rem; margin-bottom: 10px; }
@@ -173,7 +178,7 @@ const HTML_TEMPLATE = `
                     </div>
                 </div>
                 <div class="hero-image">
-                    <img src="PROFILE_IMAGE_SRC" alt="Profile Image" class="profile-img">
+                    <!-- PROFILE IMAGE -->
                 </div>
             </div>
         </div>
@@ -551,18 +556,27 @@ const normalizeExternalUrl = (unsafe: string | null | undefined): string => {
     return '';
 };
 
-const buildInitialsAvatarDataUrl = (content: PortfolioContent): string => {
+const buildPersonInitials = (content: PortfolioContent): string => {
     const initials = `${content.firstName?.[0] ?? ''}${content.lastName?.[0] ?? ''}`.toUpperCase() || 'ME';
-    const safeInitials = escapeHtml(initials);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="350" height="350" viewBox="0 0 350 350"><rect width="350" height="350" rx="175" fill="#2563eb"/><circle cx="175" cy="175" r="150" fill="#1d4ed8"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="96" font-weight="700" fill="#f8fafc">${safeInitials}</text></svg>`;
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    return initials.slice(0, 2);
 };
 
-const buildProjectPlaceholderDataUrl = (project: Project): string => {
-    const title = escapeHtml(project.title || project.category || 'Project');
+const buildProfileImageHtml = (content: PortfolioContent, headshot: HeadshotImage | null): string => {
+    if (headshot) {
+        const src = `data:${headshot.mimeType};base64,${headshot.data}`;
+        return `<img src="${escapeAttr(src)}" alt="${escapeAttr(`Profile image of ${content.fullName}`)}" class="profile-img">`;
+    }
+    return `<div class="profile-img profile-initials" role="img" aria-label="${escapeAttr(`Initials for ${content.fullName}`)}"><span>${escapeHtml(buildPersonInitials(content))}</span></div>`;
+};
+
+const buildProjectMediaHtml = (project: Project): string => {
+    if (project.image) {
+        const src = `data:${project.image.mimeType};base64,${project.image.data}`;
+        return `<img src="${escapeAttr(src)}" alt="${escapeAttr(project.title || project.category || 'Portfolio item')}">`;
+    }
+    const title = escapeHtml(truncate(project.title || project.category || 'Project', 54));
     const category = escapeHtml(project.category || 'Portfolio item');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="600" height="400" rx="24" fill="#f8fafc"/><rect x="28" y="28" width="544" height="344" rx="18" fill="#e2e8f0"/><rect x="72" y="86" width="456" height="24" rx="12" fill="#2563eb"/><rect x="72" y="140" width="280" height="18" rx="9" fill="#64748b"/><text x="72" y="232" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="700" fill="#0f172a">${title}</text><text x="72" y="282" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="600" fill="#475569">${category}</text></svg>`;
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    return `<div class="portfolio-placeholder" aria-hidden="true"><span class="project-kicker">${category}</span><strong class="project-title">${title}</strong></div>`;
 };
 
 const buildSkillInitials = (category: string | null | undefined): string => {
@@ -606,10 +620,7 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
     html = html.replace('<!-- LOCATION -->', escapeHtml(content.contactLocation || 'N/A'));
     html = html.replace(/&copy; \d{4} Alex Johnson/g, `&copy; ${new Date().getFullYear()} ${escapeHtml(content.fullName)}`);
 
-    // Headshot
-    const headshotSrc = headshot ? `data:${headshot.mimeType};base64,${headshot.data}` : buildInitialsAvatarDataUrl(content);
-    html = html.replace('PROFILE_IMAGE_SRC', escapeAttr(headshotSrc));
-    html = html.replace('alt="Profile Image"', `alt="${escapeAttr(`Profile image of ${content.fullName}`)}"`);
+    html = html.replace('<!-- PROFILE IMAGE -->', buildProfileImageHtml(content, headshot));
 
     // Social Icons
     const githubUrl = normalizeExternalUrl(content.socials?.github);
@@ -645,7 +656,7 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
 
     // Projects
     const projectsHtml = projects.map(p => {
-        const projectImageSrc = p.image ? `data:${p.image.mimeType};base64,${p.image.data}` : buildProjectPlaceholderDataUrl(p);
+        const projectMediaHtml = buildProjectMediaHtml(p);
         const categorySlug = escapeAttr(p.category?.toLowerCase().trim().replace(/\s+/g, '-')) || 'web';
         const projectUrl = normalizeExternalUrl(p.url);
         const projectHref = projectUrl || '#portfolio';
@@ -656,7 +667,7 @@ const buildHtml = ({ content, branding, projects, headshot }: BuildHtmlProps): s
                     <h3>${escapeHtml(p.title)}</h3>
                     <p>${escapeHtml(truncate(p.description, 140))}</p>
                 </a>
-                <img src="${escapeAttr(projectImageSrc)}" alt="${escapeAttr(p.title || p.category || 'Portfolio item')}">
+                ${projectMediaHtml}
             </div>`;
     }).join('');
     html = html.replace('<!-- PORTFOLIO ITEMS -->', projectsHtml);
@@ -700,6 +711,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const [currentStep, setCurrentStep] = useState<'template' | 'details' | 'result'>('template');
   const [details, setDetails] = useState({ tagline: '', bio: '', theme: 'sapphire' });
   const [projects, setProjects] = useState<Project[]>([DEFAULT_PROJECT]);
+  const [importedProjectNotice, setImportedProjectNotice] = useState<string | null>(null);
   const [clearDraftConfirmOpen, setClearDraftConfirmOpen] = useState(false);
   const [projectRemoveTarget, setProjectRemoveTarget] = useState<Project | null>(null);
   
@@ -724,6 +736,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   const savePortfolioRef = useRef(false);
   const saveDraftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDraftRef = useRef('');
+  const consumedInitialInputRef = useRef<string | null>(null);
   const resumeFingerprint = useMemo(() => portfolioDraftResumeFingerprint(resumeText), [resumeText]);
 
   useEffect(() => {
@@ -746,7 +759,9 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
     setResult(null);
     setPortfolioName('');
     setSaveStatus('idle');
+    setImportedProjectNotice(null);
     savePortfolioRef.current = false;
+    consumedInitialInputRef.current = null;
     onUnsavedPortfolioChange?.(false);
     setCurrentStep('template');
     setDraftHydrated(false);
@@ -844,21 +859,26 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   }, [headshotStep, cameraStream]);
 
   useEffect(() => {
-    if (initialInput && draftHydrated) {
-        try {
-            const project: SkillBridgeProject = JSON.parse(initialInput);
-            if(project.projectTitle && project.objective) {
-                // If the first project is empty, replace it. Otherwise, add a new one.
-                setProjects(prev => {
-                    if(prev.length === 1 && !prev[0].title && !prev[0].description) {
-                        return [{...prev[0], title: project.projectTitle, description: project.objective }];
-                    }
-                    return [...prev, { id: createProjectId(), title: project.projectTitle, description: project.objective, url: '', category: 'Web' }]
-                });
-            }
-        } catch (e) {
-            console.error("Could not parse initial project for portfolio builder", e);
+    if (!initialInput || !draftHydrated || consumedInitialInputRef.current === initialInput) return;
+
+    try {
+      const project: SkillBridgeProject = JSON.parse(initialInput);
+      const projectTitle = project.projectTitle?.trim();
+      const projectObjective = project.objective?.trim();
+      if (!projectTitle || !projectObjective) return;
+
+      consumedInitialInputRef.current = initialInput;
+      setProjects(prev => {
+        if (prev.length === 1 && !prev[0].title.trim() && !prev[0].description.trim()) {
+          return [{ ...prev[0], title: projectTitle, description: projectObjective, category: prev[0].category || 'Web' }];
         }
+        return [...prev, { id: createProjectId(), title: projectTitle, description: projectObjective, url: '', category: 'Web' }];
+      });
+      setImportedProjectNotice(projectTitle);
+      setError(null);
+      setCurrentStep('details');
+    } catch (e) {
+      console.error("Could not parse initial project for portfolio builder", e);
     }
   }, [draftHydrated, initialInput]);
 
@@ -898,7 +918,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       setSaveStatus('idle');
       onUnsavedPortfolioChange?.(true);
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -1192,7 +1212,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
   };
   
   const renderTemplateSelection = () => (
-    <div className="space-y-8 animate-fade-in py-4">
+    <div data-qa="portfolio-builder-tool" data-qa-tool-state="template" className="space-y-8 animate-fade-in py-4">
         <div className="text-center">
             <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{t('tool_portfolio_choose_style_title')}</h3>
             <p className="text-gray-600 dark:text-gray-400 mt-2">{t('tool_portfolio_choose_style_subtitle')}</p>
@@ -1202,6 +1222,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             {PORTFOLIO_TEMPLATES.map(t_template => (
                 <button 
                     key={t_template.key} 
+                    data-qa={`portfolio-template-${t_template.key}`}
                     onClick={() => {
                         handleDetailChange('theme', t_template.key);
                         setCurrentStep('details');
@@ -1216,9 +1237,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                         </div>
                         {details.theme === t_template.key && (
                             <div className="bg-blue-600 text-white p-1 rounded-full shadow-md">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
+                                <Check className="h-4 w-4" aria-hidden="true" />
                             </div>
                         )}
                     </div>
@@ -1228,7 +1247,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                     
                     <div className="mt-auto flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm group-hover:translate-x-1 transition-transform">
                         <span>{t('tool_portfolio_select_template')}</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </div>
                 </button>
             ))}
@@ -1324,13 +1343,13 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
       />
     );
     return (
-    <div className="max-w-6xl mx-auto space-y-10 animate-fade-in">
+    <div data-qa="portfolio-builder-tool" data-qa-tool-state="details" className="max-w-6xl mx-auto space-y-10 animate-fade-in">
         <div className="flex items-center justify-between mb-2">
             <button 
                 onClick={() => setCurrentStep('template')}
                 className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 {t('tool_portfolio_back_to_styles')}
             </button>
             <div className="flex flex-wrap justify-end gap-2">
@@ -1361,6 +1380,30 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             </div>
         </div>
 
+        {importedProjectNotice && (
+          <div
+            data-qa="portfolio-builder-imported-project-notice"
+            role="status"
+            className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100 sm:flex-row sm:items-start sm:justify-between"
+          >
+            <div className="flex min-w-0 gap-3">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="font-bold">{isChineseUi ? '已从职业路径导入项目' : 'Project imported from Career Path'}</p>
+                <p className="mt-1 truncate text-emerald-800 dark:text-emerald-200">{importedProjectNotice}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setImportedProjectNotice(null)}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center self-end rounded-md text-emerald-700 transition hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/40 sm:self-auto"
+              aria-label={isChineseUi ? '关闭导入提示' : 'Dismiss imported project notice'}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
           <div className="min-w-0 space-y-8">
             <div>
@@ -1386,11 +1429,11 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 <div className="space-y-4 p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
                     <div>
                         <label htmlFor={`${formId}-tagline`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_tagline_label')}</label>
-                        <input id={`${formId}-tagline`} type="text" value={details.tagline} onChange={e => handleDetailChange('tagline', e.target.value)} placeholder={t('tool_portfolio_tagline_placeholder')} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                        <input data-qa="portfolio-tagline" id={`${formId}-tagline`} type="text" value={details.tagline} onChange={e => handleDetailChange('tagline', e.target.value)} placeholder={t('tool_portfolio_tagline_placeholder')} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                     </div>
                     <div>
                         <label htmlFor={`${formId}-bio`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_bio_label')}</label>
-                        <textarea id={`${formId}-bio`} value={details.bio} onChange={e => handleDetailChange('bio', e.target.value)} rows={3} placeholder={t('tool_portfolio_bio_placeholder')} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                        <textarea data-qa="portfolio-bio" id={`${formId}-bio`} value={details.bio} onChange={e => handleDetailChange('bio', e.target.value)} rows={3} placeholder={t('tool_portfolio_bio_placeholder')} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                     </div>
                 </div>
             </div>
@@ -1399,8 +1442,8 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 <h4 className="font-bold text-xl text-gray-900 dark:text-gray-100 mb-4">{t('tool_portfolio_step2_title')}</h4>
                 <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
                     {headshotError && (
-                        <div role="alert" className="mb-4 rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-300 animate-panel-expand">
-                            {headshotError}
+                        <div className="mb-4">
+                            <ToolError message={headshotError} />
                         </div>
                     )}
                     {renderHeadshotGenerator()}
@@ -1410,17 +1453,17 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             <div>
                 <h4 className="font-bold text-xl text-gray-900 dark:text-gray-100 mb-4">{t('tool_portfolio_step3_title')}</h4>
                 <div className="space-y-4">
-                    {projects.map(p => (
+                    {projects.map((p, index) => (
                         <div key={p.id} className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm relative group overflow-hidden">
                             {projects.length > 1 && (
                                 <button type="button" aria-label={isChineseUi ? `移除 ${p.title || '项目'}` : `Remove ${p.title || 'project'}`} onClick={() => setProjectRemoveTarget(p)} className="absolute top-4 right-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full h-8 w-8 flex items-center justify-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                                    <X className="h-5 w-5" aria-hidden="true" />
                                 </button>
                             )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <div>
                                     <label htmlFor={`${formId}-project-title-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_title_label')}</label>
-                                    <input id={`${formId}-project-title-${p.id}`} type="text" value={p.title} onChange={e => handleProjectChange(p.id, 'title', e.target.value)} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                    <input data-qa={`portfolio-project-title-${index}`} id={`${formId}-project-title-${p.id}`} type="text" value={p.title} onChange={e => handleProjectChange(p.id, 'title', e.target.value)} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                                 </div>
                                 <div>
                                     <label htmlFor={`${formId}-project-url-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_url_label')}</label>
@@ -1430,11 +1473,11 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                             </div>
                             <div className="mt-6">
                                 <label htmlFor={`${formId}-project-category-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_category_label')}</label>
-                                <input id={`${formId}-project-category-${p.id}`} type="text" value={p.category} onChange={e => handleProjectChange(p.id, 'category', e.target.value)} required placeholder={t('tool_portfolio_project_category_placeholder')} className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                    <input data-qa={`portfolio-project-category-${index}`} id={`${formId}-project-category-${p.id}`} type="text" value={p.category} onChange={e => handleProjectChange(p.id, 'category', e.target.value)} required placeholder={t('tool_portfolio_project_category_placeholder')} className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                             </div>
                             <div className="mt-6">
                                 <label htmlFor={`${formId}-project-description-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_desc_label')}</label>
-                                <textarea id={`${formId}-project-description-${p.id}`} value={p.description} onChange={e => handleProjectChange(p.id, 'description', e.target.value)} rows={2} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
+                                <textarea data-qa={`portfolio-project-description-${index}`} id={`${formId}-project-description-${p.id}`} value={p.description} onChange={e => handleProjectChange(p.id, 'description', e.target.value)} rows={2} required className="w-full bg-gray-50 dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white" />
                             </div>
                             <div className="mt-6">
                                 <label htmlFor={`${formId}-project-image-${p.id}`} className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">{t('tool_portfolio_project_image_label')}</label>
@@ -1482,11 +1525,11 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
                 </div>
             </div>
 
-            {error && <div role="alert" className="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-4 rounded-xl text-sm border border-red-200 dark:border-red-800/50">{error}</div>}
+            {error && <ToolError message={error} />}
 
-            <button type="submit" disabled={loading || autoFillLoading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transform active:scale-[0.98] transition-all">
+            <button data-qa="portfolio-generate" type="submit" disabled={loading || autoFillLoading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transform active:scale-[0.98] transition-all">
                 <>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                    <Code2 className="h-5 w-5" aria-hidden="true" />
                     <span>{t('tool_portfolio_generate_button')}</span>
                 </>
             </button>
@@ -1566,9 +1609,13 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         <label className="block">
           <span className="text-sm font-bold text-gray-800 dark:text-slate-200">{t('showcase_save_name_label')}</span>
           <input
+            data-qa="portfolio-save-name"
             type="text"
             value={portfolioName}
-            onChange={(event) => setPortfolioName(event.target.value)}
+            onChange={(event) => {
+              setPortfolioName(event.target.value);
+              if (saveStatus === 'saved') setSaveStatus('idle');
+            }}
             placeholder={defaultPortfolioName()}
             className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950/50"
           />
@@ -1577,6 +1624,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
           <button
             type="button"
             onClick={handleSavePortfolio}
+            data-qa="portfolio-save"
             disabled={saveStatus === 'saving'}
             className="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -1590,25 +1638,27 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
             {t('showcase_discard_button')}
           </button>
         </div>
-        {saveStatus === 'saved' && <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t('showcase_saved_status')}</p>}
-        {saveStatus === 'error' && <p className="text-sm font-semibold text-red-700 dark:text-red-300">{t('showcase_save_failed')}</p>}
+        {saveStatus === 'saved' && <p data-qa="portfolio-save-status" className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t('showcase_saved_status')}</p>}
+        {saveStatus === 'error' && <p data-qa="portfolio-save-status" className="text-sm font-semibold text-red-700 dark:text-red-300">{t('showcase_save_failed')}</p>}
       </div>
     );
 
     return (
-      <PortfolioPreviewViewer
-        htmlContent={htmlContent}
-        theme={previewTheme}
-        title={t('showcase_generated_title')}
-        hint={t('showcase_generated_hint')}
-        filename={portfolioName || 'showcase'}
-        badges={[`${completedProjectCount} ${t('showcase_projects_selected')}`]}
-        actionSlot={saveStatus === 'saved' ? undefined : saveActions}
-        onThemeChange={setPreviewTheme}
-        showActionCards={false}
-        showThemePicker={false}
-        t={t}
-      />
+      <div data-qa="portfolio-builder-tool" data-qa-tool-state="result">
+        <PortfolioPreviewViewer
+          htmlContent={htmlContent}
+          theme={previewTheme}
+          title={t('showcase_generated_title')}
+          hint={t('showcase_generated_hint')}
+          filename={portfolioName || 'showcase'}
+          badges={[`${completedProjectCount} ${t('showcase_projects_selected')}`]}
+          actionSlot={saveActions}
+          onThemeChange={setPreviewTheme}
+          showActionCards={false}
+          showThemePicker={false}
+          t={t}
+        />
+      </div>
     );
 
   };

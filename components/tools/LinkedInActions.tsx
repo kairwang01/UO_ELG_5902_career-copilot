@@ -5,7 +5,9 @@ import {
   BlockedRegenerateButton,
   canExportQualityGate,
   QualityGateNotice,
+  type QualityCopyFn,
   type QualityValidationStatus,
+  useQualityGateCopy,
 } from './QualityGate';
 import { DownloadButtons } from './ToolUtils';
 
@@ -94,21 +96,23 @@ export const assessLinkedInOptimization = (result: Partial<LinkedInOptimization>
 export const canExportLinkedInOptimization = (validation: LinkedInValidation): boolean =>
   canExportQualityGate(validation);
 
-export const linkedInIssueLabel = (issue: string): string => {
-  const labels: Record<string, string> = {
-    empty: 'No LinkedIn optimization was generated.',
-    missing_headline: 'Add a specific headline.',
-    missing_summary: 'Add a profile summary.',
-    missing_experience_suggestions: 'Add at least one experience rewrite.',
-    thin_headline: 'The headline is too thin to use.',
-    thin_summary: 'The summary needs more substance.',
-    thin_experience_suggestions: 'Experience suggestions need more usable detail.',
-    unfinished_summary: 'The summary appears unfinished.',
-    placeholder: 'Placeholders are still present.',
-    template_language: 'Template instructions are still visible.',
-    long_headline: 'The headline is long; trim it before using.',
+export const linkedInIssueLabel = (issue: string, copy?: QualityCopyFn): string => {
+  const labels: Record<string, { key: string; fallback: string }> = {
+    empty: { key: 'quality_linkedin_empty', fallback: 'No LinkedIn optimization was generated.' },
+    missing_headline: { key: 'quality_linkedin_missing_headline', fallback: 'Add a specific headline.' },
+    missing_summary: { key: 'quality_linkedin_missing_summary', fallback: 'Add a profile summary.' },
+    missing_experience_suggestions: { key: 'quality_linkedin_missing_experience_suggestions', fallback: 'Add at least one experience rewrite.' },
+    thin_headline: { key: 'quality_linkedin_thin_headline', fallback: 'The headline is too thin to use.' },
+    thin_summary: { key: 'quality_linkedin_thin_summary', fallback: 'The summary needs more substance.' },
+    thin_experience_suggestions: { key: 'quality_linkedin_thin_experience_suggestions', fallback: 'Experience suggestions need more usable detail.' },
+    unfinished_summary: { key: 'quality_linkedin_unfinished_summary', fallback: 'The summary appears unfinished.' },
+    placeholder: { key: 'quality_issue_placeholder', fallback: 'Placeholders are still present.' },
+    template_language: { key: 'quality_issue_template_language', fallback: 'Template instructions are still visible.' },
+    long_headline: { key: 'quality_linkedin_long_headline', fallback: 'The headline is long; trim it before using.' },
   };
-  return labels[issue] || issue.replace(/_/g, ' ');
+  const label = labels[issue];
+  if (!label) return issue.replace(/_/g, ' ');
+  return copy ? copy(label.key, label.fallback) : label.fallback;
 };
 
 interface LinkedInExportGateProps {
@@ -142,14 +146,15 @@ interface LinkedInQualityNoticeProps {
 }
 
 export const LinkedInQualityNotice: React.FC<LinkedInQualityNoticeProps> = ({ validation }) => {
+  const copy = useQualityGateCopy();
   return (
     <QualityGateNotice
       validation={validation}
       dataQa="linkedin-quality-notice"
       statusDataAttribute="data-qa-linkedin-quality"
-      blockingTitle="Fix this profile draft before exporting"
-      warningTitle="Review before using"
-      issueLabel={linkedInIssueLabel}
+      blockingTitle={copy('quality_profile_blocking_title', 'Fix this profile draft before exporting')}
+      warningTitle={copy('quality_review_before_using', 'Review before using')}
+      issueLabel={(issue) => linkedInIssueLabel(issue, copy)}
       warningIcon={Link2}
     />
   );

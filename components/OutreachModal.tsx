@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { generateOutreachEmail } from '../services/aiClient';
 import type { ProfessionalEmailResult, UserProfile } from '../types';
 import { DEFAULT_MARKET } from '../config';
@@ -25,6 +25,8 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
     const [result, setResult] = useState<ProfessionalEmailResult | null>(null);
     const [editableBody, setEditableBody] = useState('');
     const [editableSubject, setEditableSubject] = useState('');
+    const [copying, setCopying] = useState(false);
+    const copyingRef = useRef(false);
     const { addToast } = useToast();
 
 
@@ -57,12 +59,17 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
     }, [candidate, jobDescription, employerProfile, t]);
 
     const handleCopy = async () => {
-        if (!result) return;
+        if (!result || copyingRef.current) return;
+        copyingRef.current = true;
+        setCopying(true);
         try {
             await navigator.clipboard.writeText(`${t('outreach_subject_copy_prefix')}: ${editableSubject}\n\n${editableBody}`);
             addToast(t('outreach_copied_toast'), 'success');
         } catch {
             addToast(t('outreach_copy_failed'), 'error');
+        } finally {
+            copyingRef.current = false;
+            setCopying(false);
         }
     };
     
@@ -99,7 +106,7 @@ const OutreachModal: React.FC<OutreachModalProps> = ({ candidate, jobDescription
                     <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-slate-600">
                         {t('outreach_cancel')}
                     </button>
-                    <button type="button" onClick={handleCopy} disabled={!result} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300">
+                    <button type="button" onClick={handleCopy} disabled={!result || copying} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300">
                         {t('outreach_copy')}
                     </button>
                 </div>

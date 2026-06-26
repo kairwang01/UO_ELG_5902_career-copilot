@@ -9,6 +9,7 @@ interface ConfirmActionDialogProps {
   title: string;
   description: string;
   detail?: string;
+  dataQa?: string;
   cancelLabel: string;
   confirmLabel: string;
   loadingLabel?: string;
@@ -29,6 +30,7 @@ export const ConfirmActionDialog: React.FC<ConfirmActionDialogProps> = ({
   title,
   description,
   detail,
+  dataQa,
   cancelLabel,
   confirmLabel,
   loadingLabel,
@@ -55,7 +57,7 @@ export const ConfirmActionDialog: React.FC<ConfirmActionDialogProps> = ({
       maxWidth={500}
       zIndex={110}
     >
-      <div className="relative rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800 sm:p-7">
+      <div data-qa={dataQa} className="relative rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800 sm:p-7">
         <button
           type="button"
           onClick={requestClose}
@@ -87,6 +89,7 @@ export const ConfirmActionDialog: React.FC<ConfirmActionDialogProps> = ({
             type="button"
             onClick={onCancel}
             disabled={loading}
+            data-qa={dataQa ? `${dataQa}-cancel` : undefined}
             className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             {cancelLabel}
@@ -95,6 +98,7 @@ export const ConfirmActionDialog: React.FC<ConfirmActionDialogProps> = ({
             type="button"
             onClick={onConfirm}
             disabled={loading}
+            data-qa={dataQa ? `${dataQa}-confirm` : undefined}
             className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${toneClass[tone]}`}
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}

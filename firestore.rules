@@ -133,6 +133,24 @@ service cloud.firestore {
         data.subscription_status.matches("^pending_biz_[a-z0-9_]+$");
     }
 
+    function validJobPreferences(prefs) {
+      return prefs == null ||
+        (
+          prefs is map &&
+          prefs.keys().hasOnly(["status", "roles", "locations", "salaryMin", "availability"]) &&
+          prefs.keys().hasAll(["status", "roles", "locations", "salaryMin", "availability"]) &&
+          prefs.status in ["active", "open", "browsing", "not_looking"] &&
+          prefs.roles is string &&
+          prefs.roles.size() <= 240 &&
+          prefs.locations is string &&
+          prefs.locations.size() <= 240 &&
+          prefs.salaryMin is string &&
+          prefs.salaryMin.size() <= 80 &&
+          prefs.availability is string &&
+          prefs.availability.size() <= 120
+        );
+    }
+
     function validUser(data) {
       return data.keys().hasOnly([
           "role",
@@ -148,6 +166,7 @@ service cloud.firestore {
           "resume_file_path",
           "resume_file_size",
           "resume_file_uploaded_at",
+          "job_preferences",
           "company_name",
           "company_description",
           "company_logo_url",
@@ -192,6 +211,7 @@ service cloud.firestore {
         optionalString(data, "resume_file_path", 1024) &&
         optionalNumber(data, "resume_file_size", 0, 52428800) &&
         optionalString(data, "resume_file_uploaded_at", 40) &&
+        (!hasField(data, "job_preferences") || validJobPreferences(data.job_preferences)) &&
         optionalString(data, "company_name", 160) &&
         optionalString(data, "company_size", 20) &&
         optionalString(data, "industry", 80) &&

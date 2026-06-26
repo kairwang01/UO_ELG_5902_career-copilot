@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BriefcaseBusiness, CheckCircle2, ClipboardList, Mail, MessageSquareReply, SlidersHorizontal, Sparkles, Wand2 } from 'lucide-react';
 import { generateProfessionalEmail } from '../../services/aiClient';
 import type { ProfessionalEmailResult } from '../../types';
@@ -8,6 +8,7 @@ import { SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useRecentApplications } from '../../hooks/useRecentApplications';
 import type { AppSession as Session } from '../../lib/data';
+import { parseToolEmailContext, parseToolJobContext } from '../../lib/toolPrefill';
 import {
   assessEmailDraft,
   canExportEmail,
@@ -20,6 +21,7 @@ const EMAIL_SCENARIOS = {
   'Follow-up': 'Application Follow-up',
   Networking: 'Networking Outreach',
   Application: 'Job Application Submission',
+  Salary: 'Salary Counter-Offer',
 } as const;
 
 const DATE_FIELDS = new Set(['Date of Application']);
@@ -32,13 +34,15 @@ const SAMPLE_DETAILS: Record<string, string> = {
 const SCENARIO_DETAILS: Record<string, string[]> = {
   'Thank You': ['Interviewer Name', 'Job Title'],
   'Follow-up': ['Company Name', 'Job Title', 'Date of Application'],
-  Networking: ['Recipient Name', 'Recipient Title', 'Recipient Company'],
+  Networking: ['Recipient Name (optional)', 'Recipient Title', 'Recipient Company', 'Message Context (optional)'],
   Application: ['Company Name', 'Job Title', 'Contact Person (optional)'],
+  Salary: ['Company Name', 'Job Title', 'Current Offer', 'Target Range', 'Message Context (optional)'],
 };
 
 interface EmailCrafterProps {
   resumeText: string;
   market: string;
+  initialInput?: string;
   t: (key: string) => string;
   session: Session | null;
 }
@@ -53,7 +57,12 @@ type EmailResult = ProfessionalEmailResult & {
 const hasMeaningfulEmailResult = (value: Partial<ProfessionalEmailResult> | null | undefined) =>
   Boolean(value?.subject?.trim() && value?.body?.trim());
 
-const scenarioLabelKey = (key: string) => `tool_email_crafter_scenario_${key.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+const toLocaleKeySegment = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const scenarioLabelKey = (key: string) => `tool_email_crafter_scenario_${toLocaleKeySegment(key)}`;
+const scenarioDescKey = (key: string) => `tool_email_crafter_scenario_${toLocaleKeySegment(key)}_desc`;
+const detailLabelKey = (detail: string) => `tool_email_crafter_detail_${toLocaleKeySegment(detail)}`;
+const isOptionalDetail = (detail: string) => /\(optional\)/i.test(detail);
+const isLongDetail = (detail: string) => /context|notes|message/i.test(detail);
 const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
 const hasCjkText = (text: string) => /[\u3040-\u30ff\u3400-\u9fff]/.test(text);
 const describeTextLength = (text: string, useChineseUnit = false) => {
@@ -61,6 +70,11 @@ const describeTextLength = (text: string, useChineseUnit = false) => {
   if (!trimmed) return useChineseUnit ? '0 词' : '0 words';
   if (hasCjkText(trimmed)) return `${trimmed.length.toLocaleString()} ${useChineseUnit ? '字' : 'chars'}`;
   return `${countWords(trimmed).toLocaleString()} ${useChineseUnit ? '词' : 'words'}`;
+};
+const toDateInputValue = (value: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 };
 
 const CardShell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
@@ -104,11 +118,11 @@ const SliderControl: React.FC<{
   </div>
 );
 
-const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, session }) => {
+const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, initialInput = '', t, session }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EmailResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<EmailResult>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<EmailResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [editableSubject, setEditableSubject] = useState('');
   const [editableResult, setEditableResult] = useState('');
@@ -119,7 +133,9 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
   const [confidence, setConfidence] = useState(50);
   const [emailScenario, setEmailScenario] = useState<string>('');
   const [emailDetails, setEmailDetails] = useState<Record<string, string>>({});
+  const [prefillSource, setPrefillSource] = useState<'opportunity' | 'networking' | 'salary' | null>(null);
   const { applications } = useRecentApplications(session);
+  const consumedInitialInputRef = useRef('');
 
   const isChineseUi = /[\u3400-\u9fff]/.test(t('tool_email_crafter_generate_button'));
   const ui = {
@@ -144,6 +160,78 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
   };
 
   useEffect(() => {
+    const value = initialInput.trim();
+    if (!value || consumedInitialInputRef.current === value) return;
+    const emailContext = parseToolEmailContext(value);
+    if (emailContext.source === 'Salary Negotiator') {
+      consumedInitialInputRef.current = value;
+      setCraftingMode('draft');
+      setEmailScenario(emailContext.scenario || EMAIL_SCENARIOS.Salary);
+      setEmailDetails((prev) => ({
+        ...prev,
+        ...(emailContext.company ? { 'Company Name': emailContext.company } : {}),
+        ...(emailContext.jobTitle ? { 'Job Title': emailContext.jobTitle } : {}),
+        ...(emailContext.currentOffer ? { 'Current Offer': emailContext.currentOffer } : {}),
+        ...(emailContext.targetRange ? { 'Target Range': emailContext.targetRange } : {}),
+        ...(emailContext.messageContext ? { 'Message Context (optional)': emailContext.messageContext } : {}),
+      }));
+      setPrefillSource('salary');
+      setResult(null);
+      setEditableSubject('');
+      setEditableResult('');
+      setFromSaved(false);
+      setError(null);
+      return;
+    }
+
+    if (emailContext.scenario || emailContext.recipientCompany || emailContext.recipientTitle || emailContext.messageContext) {
+      consumedInitialInputRef.current = value;
+      setCraftingMode('draft');
+      setEmailScenario(emailContext.scenario || EMAIL_SCENARIOS.Networking);
+      setEmailDetails((prev) => ({
+        ...prev,
+        ...(emailContext.recipientName ? { 'Recipient Name (optional)': emailContext.recipientName } : {}),
+        ...(emailContext.recipientTitle ? { 'Recipient Title': emailContext.recipientTitle } : {}),
+        ...(emailContext.recipientCompany ? { 'Recipient Company': emailContext.recipientCompany } : {}),
+        ...(emailContext.messageContext || emailContext.reason || emailContext.targetRole || emailContext.targetLocation ? {
+          'Message Context (optional)': [
+            emailContext.targetRole ? `Target role: ${emailContext.targetRole}` : '',
+            emailContext.targetLocation ? `Target location: ${emailContext.targetLocation}` : '',
+            emailContext.reason ? `Reason: ${emailContext.reason}` : '',
+            emailContext.messageContext || '',
+          ].filter(Boolean).join('\n\n'),
+        } : {}),
+      }));
+      setPrefillSource('networking');
+      setResult(null);
+      setEditableSubject('');
+      setEditableResult('');
+      setFromSaved(false);
+      setError(null);
+      return;
+    }
+
+    const context = parseToolJobContext(value);
+    if (!context.jobTitle && !context.company) return;
+
+    consumedInitialInputRef.current = value;
+    setCraftingMode('draft');
+    setEmailScenario(EMAIL_SCENARIOS.Application);
+    setEmailDetails((prev) => ({
+      ...prev,
+      ...(context.company ? { 'Company Name': context.company } : {}),
+      ...(context.jobTitle ? { 'Job Title': context.jobTitle } : {}),
+    }));
+    setPrefillSource('opportunity');
+    setResult(null);
+    setEditableSubject('');
+    setEditableResult('');
+    setFromSaved(false);
+    setError(null);
+  }, [initialInput]);
+
+  useEffect(() => {
+    if (initialInput.trim()) return;
     if (saved && !result && hasMeaningfulEmailResult(saved.result) && canExportEmail(assessEmailDraft(saved.result.subject, saved.result.body))) {
       setResult(saved.result);
       setEditableSubject(saved.result.subject);
@@ -162,12 +250,13 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
 
   const selectedScenarioKey = Object.keys(EMAIL_SCENARIOS).find((key) => EMAIL_SCENARIOS[key as keyof typeof EMAIL_SCENARIOS] === emailScenario) || '';
   const requiredDetails = SCENARIO_DETAILS[selectedScenarioKey] || [];
-  const completedDetailCount = requiredDetails.filter((detail) => detail.includes('optional') || emailDetails[detail]?.trim()).length;
+  const completedDetailCount = requiredDetails.filter((detail) => isOptionalDetail(detail) || emailDetails[detail]?.trim()).length;
 
   const handleTryExample = () => {
     setEmailScenario(SAMPLE_SCENARIO);
     setEmailDetails(SAMPLE_DETAILS);
     setCraftingMode('draft');
+    setPrefillSource(null);
     setError(null);
   };
 
@@ -177,19 +266,23 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
     if (!app) return;
     setEmailDetails((prev) => ({
       ...prev,
-      ...(Object.prototype.hasOwnProperty.call(prev, 'Job Title') || emailScenario.includes('Follow-up') || emailScenario.includes('Thank You')
-        ? { 'Job Title': app.job_title }
-        : {}),
+      'Job Title': app.job_title,
+      ...(app.company_name ? { 'Company Name': app.company_name } : {}),
+      ...(app.application_date ? { 'Date of Application': toDateInputValue(app.application_date) } : {}),
     }));
+    setPrefillSource(null);
+    setError(null);
   };
 
   const handleScenarioSelect = (value: string) => {
     setEmailScenario(value);
+    setPrefillSource(null);
     setError(null);
   };
 
   const handleDetailChange = (key: string, value: string) => {
     setEmailDetails((prev) => ({ ...prev, [key]: value }));
+    setPrefillSource(null);
   };
 
   const runTool = async () => {
@@ -207,8 +300,10 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
         detailsForApi = { receivedEmailText: received };
       } else {
         if (!emailScenario) throw new Error(t('tool_email_crafter_error_required_scenario'));
-        const missing = requiredDetails.filter((detail) => !detail.includes('optional') && !emailDetails[detail]?.trim());
-        if (missing.length > 0) throw new Error(`${missing[0]} is required.`);
+        const missing = requiredDetails.filter((detail) => !isOptionalDetail(detail) && !emailDetails[detail]?.trim());
+        if (missing.length > 0) {
+          throw new Error(t('tool_email_crafter_error_required_detail').replace('{field}', t(detailLabelKey(missing[0]))));
+        }
         scenarioForApi = emailScenario;
         detailsForApi = emailDetails;
       }
@@ -232,7 +327,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
         persist(nextResult);
       }
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -244,7 +339,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
   };
 
   const renderInput = () => (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div data-qa="email-crafter-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-5">
       <CardShell className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
           <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
@@ -263,7 +358,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
               <div className="grid grid-cols-2 gap-1" role="tablist" aria-label={ui.mode}>
                 <button
                   type="button"
-                  onClick={() => { setCraftingMode('draft'); setError(null); }}
+                  onClick={() => { setCraftingMode('draft'); setPrefillSource(null); setError(null); }}
                   aria-pressed={craftingMode === 'draft'}
                   className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
                     craftingMode === 'draft'
@@ -276,7 +371,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setCraftingMode('reply'); setError(null); }}
+                  onClick={() => { setCraftingMode('reply'); setPrefillSource(null); setError(null); }}
                   aria-pressed={craftingMode === 'reply'}
                   className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
                     craftingMode === 'reply'
@@ -297,6 +392,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
                   <button
                     type="button"
                     onClick={handleTryExample}
+                    data-qa="email-crafter-try-example"
                     className="inline-flex w-fit items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
                   >
                     <Sparkles className="h-4 w-4" />
@@ -306,11 +402,26 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
 
                 <div>
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t('tool_email_crafter_scenario_label')}</p>
+                  {prefillSource && (
+                    <p
+                      data-qa="email-crafter-prefill-note"
+                      className="mt-1 text-xs font-semibold text-blue-700 dark:text-blue-300"
+                    >
+                      {t(
+                        prefillSource === 'salary'
+                          ? 'tool_email_crafter_prefill_salary_label'
+                          : prefillSource === 'networking'
+                            ? 'tool_email_crafter_prefill_networking_label'
+                            : 'tool_email_crafter_prefill_opportunity_label',
+                      )}
+                    </p>
+                  )}
                   <div className="mt-2 grid gap-3 sm:grid-cols-2">
                     {Object.entries(EMAIL_SCENARIOS).map(([key, value]) => (
                       <button
                         type="button"
                         key={key}
+                        data-qa={`email-crafter-scenario-${toLocaleKeySegment(key)}`}
                         onClick={() => handleScenarioSelect(value)}
                         aria-pressed={emailScenario === value}
                         className={`min-h-[76px] rounded-xl border p-4 text-left transition ${
@@ -320,7 +431,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
                         }`}
                       >
                         <span className="block text-sm font-semibold">{t(scenarioLabelKey(key))}</span>
-                        <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{value}</span>
+                        <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{t(scenarioDescKey(key))}</span>
                       </button>
                     ))}
                   </div>
@@ -332,6 +443,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
                       <label className="sm:col-span-2">
                         <span className="mb-1 block text-sm font-semibold text-slate-800 dark:text-slate-200">{t('tool_email_crafter_recent_apps_label')}</span>
                         <select
+                          data-qa="email-crafter-recent-apps"
                           defaultValue=""
                           onChange={(event) => handleSelectRecentApp(event.target.value)}
                           className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
@@ -346,18 +458,33 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
                       </label>
                     )}
 
-                    {requiredDetails.map((detail) => (
-                      <label key={detail}>
-                        <span className="mb-1 block text-sm font-semibold text-slate-800 dark:text-slate-200">{detail}</span>
-                        <input
-                          type={DATE_FIELDS.has(detail) ? 'date' : 'text'}
-                          value={emailDetails[detail] || ''}
-                          onChange={(event) => handleDetailChange(detail, event.target.value)}
-                          required={!detail.includes('optional')}
-                          className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                        />
-                      </label>
-                    ))}
+                    {requiredDetails.map((detail) => {
+                      const isLong = isLongDetail(detail);
+                      return (
+                        <label key={detail} className={isLong ? 'sm:col-span-2' : undefined}>
+                          <span className="mb-1 block text-sm font-semibold text-slate-800 dark:text-slate-200">{t(detailLabelKey(detail))}</span>
+                          {isLong ? (
+                            <textarea
+                              data-qa={`email-detail-${toLocaleKeySegment(detail)}`}
+                              rows={4}
+                              value={emailDetails[detail] || ''}
+                              onChange={(event) => handleDetailChange(detail, event.target.value)}
+                              required={!isOptionalDetail(detail)}
+                              className="min-h-[112px] w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-6 text-slate-950 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                            />
+                          ) : (
+                            <input
+                              data-qa={`email-detail-${toLocaleKeySegment(detail)}`}
+                              type={DATE_FIELDS.has(detail) ? 'date' : 'text'}
+                              value={emailDetails[detail] || ''}
+                              onChange={(event) => handleDetailChange(detail, event.target.value)}
+                              required={!isOptionalDetail(detail)}
+                              className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                            />
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -391,11 +518,12 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
 
             <button
               type="submit"
+              data-qa="email-crafter-generate"
               disabled={loading}
               className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400"
             >
               <Wand2 className="h-4 w-4" />
-              {t('tool_email_crafter_generate_button')}
+              {loading ? t('tool_email_crafter_drafting_button') : t('tool_email_crafter_generate_button')}
             </button>
           </form>
 
@@ -456,14 +584,16 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
     const validation = assessEmailDraft(editableSubject, editableResult);
 
     return (
-      <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
+      <div data-qa="email-crafter-tool" data-qa-tool-state="result" className="mx-auto max-w-6xl space-y-5 animate-fade-in">
         {canExportEmail(validation) && (
           <SavedResultBar
             t={t}
             canSave={canSave}
             isSaved={fromSaved}
             savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
             onTryNext={resetResult}
+            onClearSaved={() => { clear(); setFromSaved(false); }}
           />
         )}
         <EmailQualityNotice validation={validation} />
@@ -503,6 +633,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
               </label>
               <input
                 id="email-subject-result"
+                data-qa="email-crafter-result-subject"
                 value={editableSubject}
                 onChange={(event) => setEditableSubject(event.target.value)}
                 className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
@@ -513,6 +644,7 @@ const EmailCrafter: React.FC<EmailCrafterProps> = ({ resumeText, market, t, sess
               </label>
               <textarea
                 id="email-body-result"
+                data-qa="email-crafter-result-body"
                 value={editableResult}
                 onChange={(event) => setEditableResult(event.target.value)}
                 className="min-h-[520px] w-full resize-y rounded-xl border border-slate-200 bg-white p-5 text-base leading-8 text-slate-950 shadow-inner outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"

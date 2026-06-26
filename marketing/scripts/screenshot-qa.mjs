@@ -147,6 +147,36 @@ async function main() {
           checks.push('OK no horizontal overflow');
         }
 
+        if (target.expectAppShell && route === '/workspace') {
+          const cookieOverlap = await page.evaluate(() => {
+            const cookie = document.querySelector('[data-qa="cookie-consent-banner"]')?.getBoundingClientRect();
+            if (!cookie) return { maxArea: 0, label: 'no banner' };
+            const viewport = { width: window.innerWidth, height: window.innerHeight };
+            const controls = [...document.querySelectorAll('#upload-section button, #upload-section textarea, #upload-section select')]
+              .filter((element) => {
+                const rect = element.getBoundingClientRect();
+                const style = window.getComputedStyle(element);
+                return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < viewport.height;
+              })
+              .map((element) => {
+                const rect = element.getBoundingClientRect();
+                const width = Math.max(0, Math.min(cookie.right, rect.right) - Math.max(cookie.left, rect.left));
+                const height = Math.max(0, Math.min(cookie.bottom, rect.bottom) - Math.max(cookie.top, rect.top));
+                return {
+                  area: Math.round(width * height),
+                  label: element.getAttribute('aria-label') || element.textContent?.trim().slice(0, 48) || element.tagName.toLowerCase(),
+                };
+              })
+              .sort((a, b) => b.area - a.area);
+            return controls[0] ?? { maxArea: 0, label: 'no visible controls' };
+          });
+          if (cookieOverlap.maxArea > 0 || cookieOverlap.area > 0) {
+            fail(`cookie banner overlaps upload control: ${cookieOverlap.label}`);
+          } else {
+            checks.push('OK cookie banner avoids upload controls');
+          }
+        }
+
         await page.screenshot({ path: file, fullPage: true });
       } catch (err) {
         fail(err.message);

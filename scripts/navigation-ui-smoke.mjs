@@ -17,6 +17,24 @@ const CANDIDATE_EMAIL = 'candidate@careercopilot.test';
 const EMPLOYER_EMAIL = 'employer@careercopilot.test';
 const ADMIN_EMAIL = 'admin-candidate@careercopilot.test';
 const ARTIFACT_DIR = `${ROOT}/output/playwright`;
+const TOOL_KEYS = [
+  'opportunity-finder',
+  'cover-letter',
+  'interview-prep',
+  'mock-interview',
+  'resume-formatter',
+  'career-path',
+  'website-builder',
+  'skill-learning-plan',
+  'performance-review-prep',
+  'salary-negotiation',
+  'linkedin-optimizer',
+  'networking-assistant',
+  'industry-event-scout',
+  'email-crafter',
+  'english-pro',
+  'agile-coach',
+];
 
 const viteEnv = {
   ...process.env,
@@ -109,6 +127,34 @@ async function signIn(page, email, path = '/workspace?auth=signin') {
   await page.locator('button[type="submit"]').click();
 }
 
+async function assertToolkitLibrary(page, label = 'candidate toolkit') {
+  await page.locator('[data-qa="toolkit-card-website-builder"]').waitFor({ timeout: 20_000 });
+  const visibleToolCards = await page.locator('[data-qa^="toolkit-card-"]').count();
+  assert(visibleToolCards >= TOOL_KEYS.length, `${label}: expected at least ${TOOL_KEYS.length} tool cards, got ${visibleToolCards}`);
+}
+
+async function assertToolkitToolLaunches(page) {
+  for (const toolKey of TOOL_KEYS) {
+    await page.locator(`[data-qa="toolkit-card-${toolKey}"]`).click();
+    await page.locator(`[data-qa="toolkit-active-tool"][data-qa-tool="${toolKey}"]`).waitFor({ timeout: 20_000 });
+
+    if (toolKey === 'mock-interview') {
+      await page.locator('[data-qa="interview-simulator"]').waitFor({ timeout: 20_000 });
+    } else {
+      await page.locator(`[data-qa="tool-runner"][data-qa-tool="${toolKey}"]`).waitFor({ timeout: 20_000 });
+      await page.locator('[data-qa="tool-loading-state"]').waitFor({ state: 'detached', timeout: 20_000 }).catch(() => {});
+      const unavailable = await page.locator('[data-qa="tool-runner-unavailable"]').count();
+      assert(unavailable === 0, `candidate toolkit ${toolKey}: rendered unavailable fallback`);
+    }
+
+    const recoverableErrors = await page.locator('[data-qa="recoverable-section-error"]').count();
+    assert(recoverableErrors === 0, `candidate toolkit ${toolKey}: rendered recoverable error boundary`);
+    await assertNoOverflow(page, `candidate toolkit ${toolKey}`);
+    await page.locator('[data-qa="toolkit-back-to-library"]').click();
+    await assertToolkitLibrary(page, `candidate toolkit return from ${toolKey}`);
+  }
+}
+
 async function assertCandidateDesktop(browser) {
   const context = await browser.newContext({ viewport: { width: 1365, height: 820 } });
   const page = await context.newPage();
@@ -136,6 +182,10 @@ async function assertCandidateDesktop(browser) {
       await page.locator(`[data-qa="candidate-sidebar"] [data-qa="candidate-nav-${view}"]`).click();
       await page.locator(`[data-qa-workspace-view="${view}"]`).waitFor({ timeout: 20_000 });
       assert(page.url().includes(path), `candidate ${view}: expected URL to include ${path}, got ${page.url()}`);
+      if (view === 'toolkit') {
+        await assertToolkitLibrary(page);
+        await assertToolkitToolLaunches(page);
+      }
       await assertNoOverflow(page, `candidate desktop ${view}`);
     }
 

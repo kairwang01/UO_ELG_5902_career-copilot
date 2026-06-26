@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Copy } from 'lucide-react';
 import { data as dataClient } from '@/lib/data';
 import type { AppSession, ApiKey } from '@/lib/data';
 import { useToast } from './Toast';
@@ -103,10 +104,10 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ session, onViewDocs }) =>
                       />
                       <button 
                           onClick={() => { navigator.clipboard.writeText(generatedKey); addToast('Key copied!', 'success'); }} 
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-gray-800"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-gray-500 transition hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
                           aria-label="Copy API Key"
                       >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" /></svg>
+                          <Copy className="h-5 w-5" aria-hidden="true" />
                       </button>
                   </div>
                   <button onClick={() => setGeneratedKey(null)} className="mt-4 w-full bg-blue-600 text-white font-semibold py-2 rounded-md hover:bg-blue-700">

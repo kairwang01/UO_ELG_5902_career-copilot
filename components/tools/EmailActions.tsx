@@ -4,7 +4,9 @@ import {
   BlockedRegenerateButton,
   canExportQualityGate,
   QualityGateNotice,
+  type QualityCopyFn,
   type QualityValidationStatus,
+  useQualityGateCopy,
 } from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
@@ -63,19 +65,21 @@ export const assessEmailDraft = (subject: string, body: string): EmailValidation
 export const canExportEmail = (validation: EmailValidation): boolean =>
   canExportQualityGate(validation);
 
-export const emailIssueLabel = (issue: string): string => {
-  const labels: Record<string, string> = {
-    empty: 'No email draft was generated.',
-    missing_subject: 'Add a specific subject line.',
-    missing_body: 'Add an email body.',
-    too_short: 'The draft is too short to send.',
-    placeholder: 'Placeholders are still present.',
-    template_language: 'Template instructions are still visible.',
-    unfinished_ending: 'The draft appears unfinished.',
-    long_subject: 'The subject is long; trim it before sending.',
-    too_long: 'The email is long; trim it before sending.',
+export const emailIssueLabel = (issue: string, copy?: QualityCopyFn): string => {
+  const labels: Record<string, { key: string; fallback: string }> = {
+    empty: { key: 'quality_email_empty', fallback: 'No email draft was generated.' },
+    missing_subject: { key: 'quality_email_missing_subject', fallback: 'Add a specific subject line.' },
+    missing_body: { key: 'quality_email_missing_body', fallback: 'Add an email body.' },
+    too_short: { key: 'quality_email_too_short', fallback: 'The draft is too short to send.' },
+    placeholder: { key: 'quality_issue_placeholder', fallback: 'Placeholders are still present.' },
+    template_language: { key: 'quality_issue_template_language', fallback: 'Template instructions are still visible.' },
+    unfinished_ending: { key: 'quality_email_unfinished_ending', fallback: 'The draft appears unfinished.' },
+    long_subject: { key: 'quality_email_long_subject', fallback: 'The subject is long; trim it before sending.' },
+    too_long: { key: 'quality_email_too_long', fallback: 'The email is long; trim it before sending.' },
   };
-  return labels[issue] || issue.replace(/_/g, ' ');
+  const label = labels[issue];
+  if (!label) return issue.replace(/_/g, ' ');
+  return copy ? copy(label.key, label.fallback) : label.fallback;
 };
 
 interface EmailExportGateProps {
@@ -118,14 +122,15 @@ interface EmailQualityNoticeProps {
 }
 
 export const EmailQualityNotice: React.FC<EmailQualityNoticeProps> = ({ validation }) => {
+  const copy = useQualityGateCopy();
   return (
     <QualityGateNotice
       validation={validation}
       dataQa="email-quality-notice"
       statusDataAttribute="data-qa-email-quality"
-      blockingTitle="Fix this draft before exporting"
-      warningTitle="Review before sending"
-      issueLabel={emailIssueLabel}
+      blockingTitle={copy('quality_draft_blocking_title', 'Fix this draft before exporting')}
+      warningTitle={copy('quality_draft_warning_title', 'Review before sending')}
+      issueLabel={(issue) => emailIssueLabel(issue, copy)}
       warningIcon={MailCheck}
     />
   );

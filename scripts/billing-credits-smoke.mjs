@@ -21,12 +21,16 @@ import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/
 
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
+const { DEFAULT_PLAN_QUOTAS } = require('../functions/lib/admin/quotaDefaults.js');
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const PASSWORD = 'QaSeed!2026';
 const CANDIDATE_EMAIL = 'candidate@careercopilot.test';
 const EMPLOYER_EMAIL = 'employer@careercopilot.test';
+const SEED_CREDITS = 100;
+const ACCELERATOR_MONTHLY_CREDITS = DEFAULT_PLAN_QUOTAS.accelerator.monthly_credit_grant;
+const PRO_MONTHLY_CREDITS = DEFAULT_PLAN_QUOTAS.pro.monthly_credit_grant;
 
 process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9199';
@@ -102,7 +106,7 @@ async function seedBillingFixture() {
       {
         role: 'candidate',
         subscription_status: 'free',
-        credits: 100,
+        credits: SEED_CREDITS,
         full_name: 'Casey Candidate',
         updated_at: now,
       },
@@ -112,7 +116,7 @@ async function seedBillingFixture() {
       {
         role: 'employer',
         subscription_status: 'free',
-        credits: 100,
+        credits: SEED_CREDITS,
         full_name: 'Erin Employer',
         company_name: 'Seed Test Co',
         company_size: '11-50',
@@ -174,8 +178,8 @@ async function main() {
     const pending = await candidateSetSubscription({ planKey: 'pending_accelerator' });
     assert(pending.data.status === 'pending_payment', `Expected pending_payment: ${JSON.stringify(pending.data)}`);
     assert(pending.data.subscription_status === 'free', `Expected subscription to remain free: ${JSON.stringify(pending.data)}`);
-    assert(pending.data.credits === 100, `Expected no unpaid credit grant: ${JSON.stringify(pending.data)}`);
-    await assertUser(candidateUid, { role: 'candidate', subscription_status: 'free', credits: 100 });
+    assert(pending.data.credits === SEED_CREDITS, `Expected no unpaid credit grant: ${JSON.stringify(pending.data)}`);
+    await assertUser(candidateUid, { role: 'candidate', subscription_status: 'free', credits: SEED_CREDITS });
     await assertBilling(candidateUid, { active: false, pending_plan: 'accelerator', pending_audience: 'candidate' });
     console.log('  ✓ unpaid candidate plan stays pending with no credit grant');
 
@@ -187,16 +191,17 @@ async function main() {
     assert(activatedCandidate.data.status === 'active', `Candidate checkout did not activate: ${JSON.stringify(activatedCandidate.data)}`);
     assert(activatedCandidate.data.subscription_status === 'accelerator', `Unexpected candidate plan: ${JSON.stringify(activatedCandidate.data)}`);
     assert(activatedCandidate.data.grant_source === 'paid', `Expected paid grant source: ${JSON.stringify(activatedCandidate.data)}`);
-    await assertUser(candidateUid, { role: 'candidate', subscription_status: 'accelerator', credits: 850 });
+    const expectedCandidateCredits = SEED_CREDITS + ACCELERATOR_MONTHLY_CREDITS;
+    await assertUser(candidateUid, { role: 'candidate', subscription_status: 'accelerator', credits: expectedCandidateCredits });
     await assertBilling(candidateUid, { active: true, plan: 'accelerator', audience: 'candidate', provider: 'stripe', status: 'active' });
     const candidateRenewal = (await db.collection('credit_renewals').doc(candidateUid).get()).data();
-    assert(candidateRenewal?.granted_amount === 750, `Unexpected candidate renewal grant: ${JSON.stringify(candidateRenewal)}`);
+    assert(candidateRenewal?.granted_amount === ACCELERATOR_MONTHLY_CREDITS, `Unexpected candidate renewal grant: ${JSON.stringify(candidateRenewal)}`);
     assert(candidateRenewal?.grant_source === 'paid', `Unexpected candidate renewal source: ${JSON.stringify(candidateRenewal)}`);
     console.log('  ✓ simulated candidate payment activates billing + credits');
 
     const repeatedCandidate = await candidateConfirmCheckout({ planKey: 'pending_accelerator' });
-    assert(repeatedCandidate.data.credits === 850, `Repeat confirmation double-granted credits: ${JSON.stringify(repeatedCandidate.data)}`);
-    await assertUser(candidateUid, { credits: 850 });
+    assert(repeatedCandidate.data.credits === expectedCandidateCredits, `Repeat confirmation double-granted credits: ${JSON.stringify(repeatedCandidate.data)}`);
+    await assertUser(candidateUid, { credits: expectedCandidateCredits });
     console.log('  ✓ repeated candidate confirmation does not double-grant credits');
 
     const candidatePortal = await candidateCreatePortal({});
@@ -207,7 +212,7 @@ async function main() {
     const candidateCancel = await candidateCancelSubscription({});
     assert(candidateCancel.data.status === 'cancelled', `Candidate cancel failed: ${JSON.stringify(candidateCancel.data)}`);
     assert(candidateCancel.data.subscription_status === 'free', `Candidate cancel did not return free plan: ${JSON.stringify(candidateCancel.data)}`);
-    await assertUser(candidateUid, { role: 'candidate', subscription_status: 'free', credits: 850 });
+    await assertUser(candidateUid, { role: 'candidate', subscription_status: 'free', credits: expectedCandidateCredits });
     await assertBilling(candidateUid, { active: false, status: 'cancelled_simulated' });
     console.log('  ✓ candidate simulated cancel downgrades plan and preserves credits');
 
@@ -220,10 +225,11 @@ async function main() {
     assert(activatedEmployer.data.role === 'employer', `Business checkout did not preserve/promote employer: ${JSON.stringify(activatedEmployer.data)}`);
     assert(activatedEmployer.data.subscription_status === 'pro', `Unexpected business plan: ${JSON.stringify(activatedEmployer.data)}`);
     assert(activatedEmployer.data.grant_source === 'paid', `Expected paid business grant: ${JSON.stringify(activatedEmployer.data)}`);
-    await assertUser(employerUid, { role: 'employer', subscription_status: 'pro', credits: 20100 });
+    const expectedEmployerCredits = SEED_CREDITS + PRO_MONTHLY_CREDITS;
+    await assertUser(employerUid, { role: 'employer', subscription_status: 'pro', credits: expectedEmployerCredits });
     await assertBilling(employerUid, { active: true, plan: 'pro', audience: 'business', provider: 'stripe', status: 'active' });
     const employerRenewal = (await db.collection('credit_renewals').doc(employerUid).get()).data();
-    assert(employerRenewal?.granted_amount === 20000, `Unexpected employer renewal grant: ${JSON.stringify(employerRenewal)}`);
+    assert(employerRenewal?.granted_amount === PRO_MONTHLY_CREDITS, `Unexpected employer renewal grant: ${JSON.stringify(employerRenewal)}`);
     assert(employerRenewal?.grant_source === 'paid', `Unexpected employer renewal source: ${JSON.stringify(employerRenewal)}`);
     console.log('  ✓ simulated business payment activates entitlement + employer credits');
 
@@ -235,7 +241,7 @@ async function main() {
     const employerCancel = await employerCancelSubscription({});
     assert(employerCancel.data.status === 'cancelled', `Employer cancel failed: ${JSON.stringify(employerCancel.data)}`);
     assert(employerCancel.data.subscription_status === 'free', `Employer cancel did not return free plan: ${JSON.stringify(employerCancel.data)}`);
-    await assertUser(employerUid, { role: 'employer', subscription_status: 'free', credits: 20100 });
+    await assertUser(employerUid, { role: 'employer', subscription_status: 'free', credits: expectedEmployerCredits });
     await assertBilling(employerUid, { active: false, status: 'cancelled_simulated' });
     console.log('  ✓ employer simulated cancel preserves employer role and credits');
   } finally {

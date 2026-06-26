@@ -76,6 +76,45 @@ const OPPORTUNITY_SCHEMA = {
   required: ["opportunities", "jobSearchStrategies"],
 };
 
+const SALARY_NEGOTIATION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    marketAnalysisSummary: { type: Type.STRING },
+    recommendedRange: {
+      type: Type.OBJECT,
+      properties: {
+        baseMin: { type: Type.NUMBER },
+        baseMax: { type: Type.NUMBER },
+        currency: { type: Type.STRING },
+        explanation: { type: Type.STRING },
+      },
+      required: ["baseMin", "baseMax", "currency", "explanation"],
+    },
+    keyStrengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+    negotiationStrategy: { type: Type.ARRAY, items: { type: Type.STRING } },
+    counterOfferEmailDraft: { type: Type.STRING },
+    objectionHandlers: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          objection: { type: Type.STRING },
+          response: { type: Type.STRING },
+        },
+        required: ["objection", "response"],
+      },
+    },
+  },
+  required: [
+    "marketAnalysisSummary",
+    "recommendedRange",
+    "keyStrengths",
+    "negotiationStrategy",
+    "counterOfferEmailDraft",
+    "objectionHandlers",
+  ],
+};
+
 // Talent Profile extraction — keys MUST match lib/talentProfile.ts field keys so
 // the client can map the result straight into the form (no remapping layer).
 const _S = { type: Type.STRING };
@@ -305,7 +344,7 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
         resumeText: p.resumeText,
       }),
       useGoogleSearch: true,
-      // No responseSchema: googleSearch + free-text JSON, mirroring the old client.
+      responseSchema: SALARY_NEGOTIATION_SCHEMA,
     }),
   },
 
@@ -833,16 +872,104 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
     build: (p) => ({
       prompt: buildPrompt("generateCandidatePrepKit", {
         resumeText: p.resumeText,
-        jobDescription: p.jobDescription,
+        // Candidate flow may pass only a target role (no full posting). Fold both
+        // into one block so the prompt has a single target reference to reason about.
+        jobContextBlock: p.jobDescription
+          ? `TARGET JOB DESCRIPTION:\n${p.jobDescription}`
+          : p.targetRole
+            ? `TARGET ROLE (no full posting provided — reason from the role + market):\n${p.targetRole}`
+            : "TARGET ROLE: Not specified. Infer the most likely target role from the resume's trajectory and seniority.",
+        marketName: p.marketName || "the candidate's local job market",
+        sourceNotesBlock: p.sourceNotes
+          ? `CANDIDATE-PROVIDED SOURCES — real interview reports / notes the candidate pasted. A question or follow-up whose substance is traceable to this material may be marked evidenceLevel "source-backed":\n${p.sourceNotes}`
+          : `NO EXTERNAL SOURCES PROVIDED. You have only the resume and the target above. Never mark anything "source-backed". Use "inferred" for reasoned predictions grounded in the resume/role, and "weak" for low-confidence stretches.`,
       }),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
+          // Flat agency-facing summary (kept for backward compatibility).
           weakSpots: { type: Type.ARRAY, items: { type: Type.STRING } },
           keyProjects: { type: Type.ARRAY, items: { type: Type.STRING } },
           predictedQuestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+          // Evidence-driven candidate-facing layer.
+          targetRole: { type: Type.STRING },
+          targetCompany: { type: Type.STRING },
+          sourceCoverage: { type: Type.STRING },
+          resumeAnchors: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                label: { type: Type.STRING },
+                evidence: { type: Type.STRING },
+                relevance: { type: Type.STRING },
+              },
+              required: ["label", "evidence", "relevance"],
+            },
+          },
+          rankedQuestions: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING },
+                category: { type: Type.STRING },
+                rationale: { type: Type.STRING },
+                frequency: { type: Type.STRING },
+                recency: { type: Type.STRING },
+                evidenceLevel: { type: Type.STRING },
+                anchorLabel: { type: Type.STRING },
+              },
+              required: ["question", "category", "rationale", "frequency", "recency", "evidenceLevel"],
+            },
+          },
+          followUpChains: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                anchor: { type: Type.STRING },
+                questions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                watchFor: { type: Type.STRING },
+              },
+              required: ["anchor", "questions", "watchFor"],
+            },
+          },
+          gapRisks: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                area: { type: Type.STRING },
+                risk: { type: Type.STRING },
+                mitigation: { type: Type.STRING },
+                severity: { type: Type.STRING },
+              },
+              required: ["area", "risk", "mitigation", "severity"],
+            },
+          },
+          practicePlan: { type: Type.ARRAY, items: { type: Type.STRING } },
+          sourceRefs: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                label: { type: Type.STRING },
+                kind: { type: Type.STRING },
+                detail: { type: Type.STRING },
+              },
+              required: ["label", "kind"],
+            },
+          },
         },
-        required: ["weakSpots", "keyProjects", "predictedQuestions"],
+        required: [
+          "weakSpots",
+          "keyProjects",
+          "predictedQuestions",
+          "resumeAnchors",
+          "rankedQuestions",
+          "gapRisks",
+        ],
       },
     }),
   },

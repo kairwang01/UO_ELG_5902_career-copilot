@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { BarChart3 } from 'lucide-react';
+import { ArrowRight, BarChart3, Menu, MessageSquareText } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
 import { analyzeResume, setApiStatusUpdater, setAiModel, setErrorTranslator } from './services/aiClient';
@@ -1022,7 +1022,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   );
 
   const renderWorkspaceBody = () => (
-    <section className="py-10 sm:py-14">
+    <section className="pb-[calc(2.5rem+var(--cookie-consent-bottom-space,0px))] pt-[calc(2.5rem+var(--cookie-consent-top-space,0px))] transition-[padding] duration-200 sm:pb-[calc(3.5rem+var(--cookie-consent-bottom-space,0px))] sm:pt-[calc(3.5rem+var(--cookie-consent-top-space,0px))]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <ApiStatusBanner />
         {isPortalEntry ? renderPortalEntry() : renderContent()}
@@ -1127,6 +1127,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                 onOpenTool={openWorkspaceTool}
                 onViewChange={setWorkspaceView}
                 session={session}
+                profile={profile}
+                refreshProfile={getProfile}
               />
             </div>
         )}
@@ -1245,7 +1247,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
                         className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800"
                     >
                         {t('ws_credentials_manage_cta')}
-                        <span aria-hidden="true">→</span>
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </button>
                 </div>
             </div>
@@ -1405,9 +1407,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               aria-label={t('portal_open_navigation')}
               data-qa="candidate-mobile-nav-open"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <Menu className="h-5 w-5" aria-hidden="true" />
             </button>
             <ApiStatusBanner />
             {/* Profile access is consolidated into the sidebar "My Profile" block
@@ -1545,6 +1545,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // and its tool-launch would target views the employer doesn't have.
   const canUseCareerCoach = Boolean(session && isLangLoaded && !isWorkspaceSessionLoading && showCandidateShell);
   const hasCandidateStickyActionBar = showCandidateShell && dashboardView === 'talent_profile';
+  const useTopCookieConsent = !showCandidateShell && !showEmployerShell && (entry === 'workspace' || entry === 'portal');
 
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
@@ -1568,7 +1569,13 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             </SiteLayout>
         )}
 
-        {!isChatOpen && <CookieConsent t={t} avoidSidebar={showCandidateShell || showEmployerShell} />}
+        {!isChatOpen && (
+          <CookieConsent
+            t={t}
+            avoidSidebar={showCandidateShell || showEmployerShell}
+            placement={useTopCookieConsent ? 'top' : 'default'}
+          />
+        )}
 
         {canUseCareerCoach && !isChatOpen && (
           <button
@@ -1582,7 +1589,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             aria-expanded={isChatOpen}
             data-qa="career-coach-launcher"
           >
-            <svg className="h-6 w-6 sm:h-8 sm:w-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.82 7.18002C16.82 5.58002 15.42 4.18002 13.82 4.18002C12.22 4.18002 10.82 5.58002 10.82 7.18002C10.82 8.78002 12.22 10.18 13.82 10.18C15.42 10.18 16.82 8.78002 16.82 7.18002Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 14.63H15.63" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.13 9.32002C20.94 11.52 20.73 14.6 18.6 16.59C16.47 18.58 13.06 18.74 11.02 16.94L7.52002 20.44C7.14002 20.82 6.51002 20.82 6.13002 20.44L4.21002 18.52C3.83002 18.14 3.83002 17.51 4.21002 17.13L7.71002 13.63C5.91002 11.59 5.75002 8.43002 7.74002 6.30002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <MessageSquareText className="h-6 w-6 sm:h-8 sm:w-8" aria-hidden="true" />
           </button>
         )}
         {canUseCareerCoach && isChatOpen && (

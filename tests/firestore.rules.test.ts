@@ -17,7 +17,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, orderBy, query, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 const PROJECT_ID = 'demo-careercopilot';
 let testEnv: RulesTestEnvironment;
@@ -80,6 +80,34 @@ describe('user-doc trust boundary', () => {
     await seed('cand1', CANDIDATE);
     const db = testEnv.authenticatedContext('cand1').firestore();
     await assertSucceeds(updateDoc(doc(db, 'users', 'cand1'), { full_name: 'New Name', updated_at: ts() }));
+  });
+  it('candidate CAN save account-backed job preferences', async () => {
+    await seed('cand1', CANDIDATE);
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', 'cand1'), {
+      job_preferences: {
+        status: 'active',
+        roles: 'Frontend Engineer',
+        locations: 'Ottawa, Remote',
+        salaryMin: '90000',
+        availability: '2 weeks',
+      },
+      updated_at: ts(),
+    }));
+  });
+  it('candidate CANNOT save malformed job preferences', async () => {
+    await seed('cand1', CANDIDATE);
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'cand1'), {
+      job_preferences: {
+        status: 'employer',
+        roles: 'Frontend Engineer',
+        locations: 'Ottawa',
+        salaryMin: '90000',
+        availability: '2 weeks',
+      },
+      updated_at: ts(),
+    }));
   });
   it('candidate CAN save account profile fields through merge upsert', async () => {
     await seed('cand1', {
@@ -196,6 +224,16 @@ describe('saved Showcase portfolios access', () => {
     const other = testEnv.authenticatedContext('other').firestore();
     await assertFails(getDoc(doc(other, 'users', 'cand1', 'portfolios', 'portfolio_1')));
     await assertFails(setDoc(doc(other, 'users', 'cand1', 'portfolios', 'portfolio_2'), validPortfolio('cand1', 'portfolio_2')));
+    await assertFails(deleteDoc(doc(other, 'users', 'cand1', 'portfolios', 'portfolio_1')));
+  });
+
+  it('owner CAN delete a saved portfolio metadata document', async () => {
+    await seed('cand1', CANDIDATE);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'cand1', 'portfolios', 'portfolio_1'), validPortfolio('cand1'));
+    });
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertSucceeds(deleteDoc(doc(db, 'users', 'cand1', 'portfolios', 'portfolio_1')));
   });
 
   it('owner CANNOT update or schema-pollute saved portfolio metadata', async () => {

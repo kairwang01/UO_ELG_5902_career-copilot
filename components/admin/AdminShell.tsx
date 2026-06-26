@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { RefreshCw } from 'lucide-react';
 import { SITE_ROUTES } from '../../config/site';
 import BrandLogo from '../BrandLogo';
 
@@ -143,20 +144,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
                 aria-label="Refresh"
                 className="p-2 rounded-md text-gray-500 hover:text-gray-800 hover:bg-gray-100 disabled:opacity-40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-600"
               >
-                <svg
-                  className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <polyline points="23 4 23 10 17 10" />
-                  <polyline points="1 20 1 14 7 14" />
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                </svg>
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
               </button>
 
               <button

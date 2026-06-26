@@ -963,7 +963,7 @@ const AnalysisResultModal = ({
           {/* Strengths */}
           <div>
             <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
-              <span className="text-green-500">✓</span>{" "}
+              <CheckCircle2 className="h-4 w-4 text-green-500" aria-hidden="true" />
               {t("agency_analysis_strengths")}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

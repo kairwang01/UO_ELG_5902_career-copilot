@@ -357,14 +357,11 @@ const BusinessPage: React.FC<BusinessPageProps> = ({
                 <ul className="flex flex-col gap-3 flex-1 mb-8">
                   {plan.featureKeys.map((featureKey) => (
                     <li key={featureKey} className="flex items-start gap-2.5">
-                      <svg
+                      <CheckCircle2
                         className={`w-5 h-5 mt-0.5 flex-shrink-0 ${plan.featured ? 'text-[#60A5FA]' : 'text-[#1D4ED8]'}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
+                        strokeWidth={2.5}
+                        aria-hidden="true"
+                      />
                       <span className={`text-sm ${plan.featured ? 'text-gray-300' : 'text-gray-600 dark:text-gray-300'}`}>
                         {t(featureKey)}
                       </span>

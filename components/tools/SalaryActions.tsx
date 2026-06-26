@@ -6,7 +6,9 @@ import {
   BlockedRegenerateButton,
   canExportQualityGate,
   QualityGateNotice,
+  type QualityCopyFn,
   type QualityValidationStatus,
+  useQualityGateCopy,
 } from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
@@ -156,30 +158,32 @@ export const assessSalaryNegotiation = (result: SalaryDraft | null | undefined):
 export const canExportSalaryNegotiation = (validation: SalaryValidation): boolean =>
   canExportQualityGate(validation);
 
-export const salaryIssueLabel = (issue: string): string => {
-  const labels: Record<string, string> = {
-    empty: 'No salary negotiation plan was generated.',
-    missing_market_analysis: 'Add market analysis.',
-    missing_range: 'Add a recommended salary range.',
-    invalid_range: 'Fix the recommended salary range.',
-    missing_currency: 'Add the range currency.',
-    missing_range_explanation: 'Explain the salary range.',
-    missing_strengths: 'Add negotiation strengths.',
-    thin_strategy: 'Add more negotiation steps.',
-    thin_strategy_step: 'A negotiation step needs more detail.',
-    missing_email: 'Add a counter-offer email draft.',
-    thin_email: 'The counter-offer email is too short to send.',
-    unfinished_email: 'The counter-offer email appears unfinished.',
-    long_email: 'The counter-offer email is long; trim it before sending.',
-    missing_objections: 'Add objection handlers.',
-    incomplete_objection: 'Complete each objection and response.',
-    thin_objection_response: 'An objection response needs more usable detail.',
-    thin_market_analysis: 'The market analysis needs more substance.',
-    unfinished_market_analysis: 'The market analysis appears unfinished.',
-    placeholder: 'Placeholders are still present.',
-    template_language: 'Template instructions are still visible.',
+export const salaryIssueLabel = (issue: string, copy?: QualityCopyFn): string => {
+  const labels: Record<string, { key: string; fallback: string }> = {
+    empty: { key: 'quality_salary_empty', fallback: 'No salary negotiation plan was generated.' },
+    missing_market_analysis: { key: 'quality_salary_missing_market_analysis', fallback: 'Add market analysis.' },
+    missing_range: { key: 'quality_salary_missing_range', fallback: 'Add a recommended salary range.' },
+    invalid_range: { key: 'quality_salary_invalid_range', fallback: 'Fix the recommended salary range.' },
+    missing_currency: { key: 'quality_salary_missing_currency', fallback: 'Add the range currency.' },
+    missing_range_explanation: { key: 'quality_salary_missing_range_explanation', fallback: 'Explain the salary range.' },
+    missing_strengths: { key: 'quality_salary_missing_strengths', fallback: 'Add negotiation strengths.' },
+    thin_strategy: { key: 'quality_salary_thin_strategy', fallback: 'Add more negotiation steps.' },
+    thin_strategy_step: { key: 'quality_salary_thin_strategy_step', fallback: 'A negotiation step needs more detail.' },
+    missing_email: { key: 'quality_salary_missing_email', fallback: 'Add a counter-offer email draft.' },
+    thin_email: { key: 'quality_salary_thin_email', fallback: 'The counter-offer email is too short to send.' },
+    unfinished_email: { key: 'quality_salary_unfinished_email', fallback: 'The counter-offer email appears unfinished.' },
+    long_email: { key: 'quality_salary_long_email', fallback: 'The counter-offer email is long; trim it before sending.' },
+    missing_objections: { key: 'quality_salary_missing_objections', fallback: 'Add objection handlers.' },
+    incomplete_objection: { key: 'quality_salary_incomplete_objection', fallback: 'Complete each objection and response.' },
+    thin_objection_response: { key: 'quality_salary_thin_objection_response', fallback: 'An objection response needs more usable detail.' },
+    thin_market_analysis: { key: 'quality_salary_thin_market_analysis', fallback: 'The market analysis needs more substance.' },
+    unfinished_market_analysis: { key: 'quality_salary_unfinished_market_analysis', fallback: 'The market analysis appears unfinished.' },
+    placeholder: { key: 'quality_issue_placeholder', fallback: 'Placeholders are still present.' },
+    template_language: { key: 'quality_issue_template_language', fallback: 'Template instructions are still visible.' },
   };
-  return labels[issue] || issue.replace(/_/g, ' ');
+  const label = labels[issue];
+  if (!label) return issue.replace(/_/g, ' ');
+  return copy ? copy(label.key, label.fallback) : label.fallback;
 };
 
 interface SalaryExportGateProps {
@@ -229,14 +233,15 @@ interface SalaryQualityNoticeProps {
 }
 
 export const SalaryQualityNotice: React.FC<SalaryQualityNoticeProps> = ({ validation }) => {
+  const copy = useQualityGateCopy();
   return (
     <QualityGateNotice
       validation={validation}
       dataQa="salary-quality-notice"
       statusDataAttribute="data-qa-salary-quality"
-      blockingTitle="Fix this negotiation plan before exporting"
-      warningTitle="Review before using"
-      issueLabel={salaryIssueLabel}
+      blockingTitle={copy('quality_salary_blocking_title', 'Fix this negotiation plan before exporting')}
+      warningTitle={copy('quality_review_before_using', 'Review before using')}
+      issueLabel={(issue) => salaryIssueLabel(issue, copy)}
       warningIcon={Wallet}
     />
   );

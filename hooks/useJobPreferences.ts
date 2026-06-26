@@ -10,22 +10,51 @@ export interface JobPreferences {
 
 const KEY = 'job_preferences';
 const UPDATE_EVENT = 'career-copilot:job-preferences-updated';
+const STATUSES: JobPreferences['status'][] = ['active', 'open', 'browsing', 'not_looking'];
+
+const clampText = (value: unknown, maxLength: number): string => (
+  typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
+);
+
+const preferenceKey = (p: JobPreferences): string => (
+  [p.status, p.roles, p.locations, p.salaryMin, p.availability].join('\u001f')
+);
+
+export function normalizeJobPreferences(value: unknown): JobPreferences | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const status = record.status;
+  if (typeof status !== 'string' || !STATUSES.includes(status as JobPreferences['status'])) return null;
+
+  return {
+    status: status as JobPreferences['status'],
+    roles: clampText(record.roles, 240),
+    locations: clampText(record.locations, 240),
+    salaryMin: clampText(record.salaryMin, 80),
+    availability: clampText(record.availability, 120),
+  };
+}
 
 export function loadJobPreferences(): JobPreferences | null {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as JobPreferences) : null;
+    return raw ? normalizeJobPreferences(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
 }
 
+export function getEffectiveJobPreferences(accountPrefs?: unknown): JobPreferences | null {
+  return normalizeJobPreferences(accountPrefs) ?? loadJobPreferences();
+}
+
 export function saveJobPreferences(p: JobPreferences): void {
+  const next = normalizeJobPreferences(p) ?? p;
   try {
-    localStorage.setItem(KEY, JSON.stringify(p));
+    localStorage.setItem(KEY, JSON.stringify(next));
   } catch { /* storage unavailable */ }
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent<JobPreferences>(UPDATE_EVENT, { detail: p }));
+    window.dispatchEvent(new CustomEvent<JobPreferences>(UPDATE_EVENT, { detail: next }));
   }
 }
 
@@ -59,9 +88,19 @@ export function prefsSummaryLine(p: JobPreferences): string {
   return parts.join(' · ');
 }
 
-/** React hook — wraps load/save with local state. */
-export function useJobPreferences(): { prefs: JobPreferences | null; save: (p: JobPreferences) => void } {
+/** React hook — wraps load/save with local state and mirrors account-backed prefs. */
+export function useJobPreferences(options?: { accountPrefs?: unknown }): {
+  prefs: JobPreferences | null;
+  save: (p: JobPreferences) => void;
+} {
+  const accountPrefs = normalizeJobPreferences(options?.accountPrefs);
   const [prefs, setPrefs] = useState<JobPreferences | null>(() => loadJobPreferences());
+
+  useEffect(() => {
+    if (!accountPrefs) return;
+    saveJobPreferences(accountPrefs);
+    setPrefs(accountPrefs);
+  }, [accountPrefs ? preferenceKey(accountPrefs) : '']);
 
   useEffect(() => {
     const syncFromStorage = () => setPrefs(loadJobPreferences());

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { BriefcaseBusiness, Building2, CheckCircle2, CircleDollarSign, MessageSquareText, ShieldCheck, Target, TrendingUp, Wallet } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { BriefcaseBusiness, Building2, CheckCircle2, CircleDollarSign, Mail, MessageSquareText, ShieldCheck, Target, TrendingUp, Wallet } from 'lucide-react';
 import { generateSalaryNegotiationStrategy } from '../../services/aiClient';
 import type { SalaryNegotiationResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { SavedResultBar } from './ToolUtils';
+import { SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import {
   assessSalaryNegotiation,
@@ -14,6 +14,7 @@ import {
   SalaryExportGate,
   SalaryQualityNotice,
 } from './SalaryActions';
+import { buildEmailContextFromSalaryNegotiation, parseToolSalaryContext, type ToolSalaryContext } from '../../lib/toolPrefill';
 
 type GroundingChunk = { web?: { uri?: string; title?: string } };
 type SalaryResult = SalaryNegotiationResult & {
@@ -34,6 +35,8 @@ const SAMPLE_CURRENCY = 'CAD';
 
 interface SalaryNegotiatorProps {
   resumeText: string;
+  initialInput?: string;
+  openTool?: (tool: string, input?: string) => void;
   market: string;
   t: (key: string) => string;
 }
@@ -72,9 +75,12 @@ const hasMeaningfulSalaryResult = (value: Partial<SalaryNegotiationResult> | nul
     || value?.objectionHandlers?.length
   );
 
-const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market, t }) => {
+const isSupportedCurrency = (value: string | undefined): value is string => Boolean(value && CURRENCIES.includes(value));
+
+const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, initialInput = '', openTool, market, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
-  const { canSave, saved, persist } = useToolResults<SalaryResult>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<SalaryResult>();
+  const consumedInitialInputRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SalaryResult | null>(null);
   const [fromSaved, setFromSaved] = useState(false);
@@ -82,8 +88,10 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
   const [company, setCompany] = useState('');
   const [offer, setOffer] = useState('');
   const [currency, setCurrency] = useState(CURRENCIES[1]);
+  const [prefillContext, setPrefillContext] = useState<ToolSalaryContext | null>(null);
 
   useEffect(() => {
+    if (initialInput.trim()) return;
     if (saved && !result && hasMeaningfulSalaryResult(saved.result) && canExportSalaryNegotiation(assessSalaryNegotiation(saved.result))) {
       setResult(saved.result);
       setFromSaved(true);
@@ -92,7 +100,25 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       if (saved.result.offer) setOffer(saved.result.offer);
       if (saved.result.currency) setCurrency(saved.result.currency);
     }
-  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [saved, initialInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const value = initialInput.trim();
+    if (!value || consumedInitialInputRef.current === value) return;
+
+    const context = parseToolSalaryContext(value);
+    if (!context.jobTitle && !context.company && !context.offer && !context.currency) return;
+
+    consumedInitialInputRef.current = value;
+    if (context.jobTitle) setJobTitle(context.jobTitle);
+    if (context.company) setCompany(context.company);
+    if (context.offer) setOffer(context.offer);
+    if (isSupportedCurrency(context.currency)) setCurrency(context.currency);
+    setPrefillContext(context);
+    setResult(null);
+    setFromSaved(false);
+    setError(null);
+  }, [initialInput]);
 
   const resetResult = () => {
     setResult(null);
@@ -105,6 +131,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
     setCompany(SAMPLE_COMPANY);
     setOffer(SAMPLE_OFFER);
     setCurrency(SAMPLE_CURRENCY);
+    setPrefillContext(null);
   };
 
   const runTool = async (input: { jobTitle: string; company: string; offer: string; currency: string }) => {
@@ -146,7 +173,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
         persist(nextResult);
       }
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -158,7 +185,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
   };
 
   const renderInput = () => (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div data-qa="salary-negotiator-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-5">
       <CardShell className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
           <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
@@ -173,6 +200,20 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
               {t('tool_salary_negotiator_intro_desc')}
             </p>
 
+            {prefillContext && (
+              <div
+                data-qa="salary-negotiator-prefill-note"
+                className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100"
+              >
+                <p className="font-semibold">{t('tool_salary_negotiator_prefill_label')}</p>
+                {prefillContext.salaryRange && (
+                  <p className="mt-1 leading-relaxed text-emerald-800 dark:text-emerald-200">
+                    {t('tool_salary_negotiator_prefill_range').replace('{range}', prefillContext.salaryRange)}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="mt-7 grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="salary-job-title" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -181,10 +222,11 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                 <div className="relative mt-2">
                   <BriefcaseBusiness className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
+                    data-qa="salary-job-title"
                     type="text"
                     id="salary-job-title"
                     value={jobTitle}
-                    onChange={(event) => setJobTitle(event.target.value)}
+                    onChange={(event) => { setJobTitle(event.target.value); setPrefillContext(null); }}
                     required
                     className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                   />
@@ -198,6 +240,7 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                   </label>
                   <button
                     type="button"
+                    data-qa="salary-negotiator-try-example"
                     onClick={handleTryExample}
                     className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
                   >
@@ -207,10 +250,11 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                 <div className="relative">
                   <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
+                    data-qa="salary-company"
                     type="text"
                     id="salary-company"
                     value={company}
-                    onChange={(event) => setCompany(event.target.value)}
+                    onChange={(event) => { setCompany(event.target.value); setPrefillContext(null); }}
                     required
                     className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                   />
@@ -224,10 +268,11 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                 <div className="relative mt-2">
                   <CircleDollarSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
+                    data-qa="salary-offer"
                     type="number"
                     id="salary-offer"
                     value={offer}
-                    onChange={(event) => setOffer(event.target.value)}
+                    onChange={(event) => { setOffer(event.target.value); setPrefillContext(null); }}
                     required
                     placeholder={t('tool_salary_negotiator_offer_placeholder')}
                     className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
@@ -240,9 +285,10 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                   {t('tool_salary_negotiator_currency_label')}
                 </label>
                 <select
+                  data-qa="salary-currency"
                   id="salary-currency"
                   value={currency}
-                  onChange={(event) => setCurrency(event.target.value)}
+                  onChange={(event) => { setCurrency(event.target.value); setPrefillContext(null); }}
                   className="mt-2 block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 >
                   {CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
@@ -251,21 +297,18 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
             </div>
 
             {error && (
-              <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300" role="alert">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="leading-relaxed">{error}</p>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:hover:bg-red-900/30"
-                  >
-                    {t('tool_try_again')}
-                  </button>
-                </div>
+              <div className="mt-5">
+                <ToolError
+                  message={error}
+                  onRetry={() => void runTool({ jobTitle, company, offer, currency })}
+                  retryLabel={t('tool_try_again')}
+                  retryDisabled={loading}
+                />
               </div>
             )}
 
             <button
+              data-qa="salary-negotiator-generate"
               type="submit"
               disabled={loading}
               className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-lg bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-400"
@@ -345,16 +388,26 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
       },
       { job, employer, offerLabel, rangeLabel },
     );
+    const emailHandoffContext = buildEmailContextFromSalaryNegotiation({
+      jobTitle: job,
+      company: employer,
+      offerLabel,
+      targetRangeLabel: rangeLabel,
+      counterOfferEmailDraft,
+      marketAnalysisSummary,
+    });
 
     return (
-      <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
+      <div data-qa="salary-negotiator-tool" data-qa-tool-state="result" className="mx-auto max-w-7xl space-y-5 animate-fade-in">
         {canExportSalaryNegotiation(validation) && (
           <SavedResultBar
             t={t}
             canSave={canSave}
             isSaved={fromSaved}
             savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
             onTryNext={resetResult}
+            onClearSaved={() => { clear(); setFromSaved(false); }}
           />
         )}
         <SalaryQualityNotice validation={validation} />
@@ -439,6 +492,17 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, market,
                   text={counterOfferEmailDraft}
                   label={t('tool_networking_assistant_copy_button')}
                 />
+                {openTool && counterOfferEmailDraft.trim() && (
+                  <button
+                    type="button"
+                    data-qa="salary-open-email-crafter"
+                    onClick={() => openTool('email-crafter', emailHandoffContext)}
+                    className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    <Mail className="h-4 w-4" aria-hidden="true" />
+                    {t('tool_salary_negotiator_draft_email_button')}
+                  </button>
+                )}
               </div>
               <div className="mt-4 whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
                 {counterOfferEmailDraft}

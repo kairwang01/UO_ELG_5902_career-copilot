@@ -5,7 +5,7 @@ import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
 import { BUSINESS_PLANS } from '@/config';
 import type { Plan } from '@/types';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { Check, X, Eye, EyeOff } from 'lucide-react';
 import { BrandMark } from './BrandLogo';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
 import CheckoutRedirectNotice from './billing/CheckoutRedirectNotice';
@@ -95,7 +95,7 @@ const PlanSelectorCard: React.FC<{ plan: Plan & { key: string }; isSelected: boo
             <ul className="mt-2 space-y-1 text-xs text-gray-600">
                 {plan.features.slice(0, 3).map((feature, index) => (
                     <li key={index} className="flex items-start">
-                        <svg className="h-4 w-4 mr-2 mt-0.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                        <Check className="h-4 w-4 mr-2 mt-0.5 text-green-500 flex-shrink-0" aria-hidden="true" strokeWidth={3} />
                         <span>{featureLabel(index, feature)}</span>
                     </li>
                 ))}

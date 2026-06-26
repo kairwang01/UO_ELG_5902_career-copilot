@@ -6,7 +6,9 @@ import {
   BlockedRegenerateButton,
   canExportQualityGate,
   QualityGateNotice,
+  type QualityCopyFn,
   type QualityValidationStatus,
+  useQualityGateCopy,
 } from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
@@ -127,25 +129,27 @@ export const assessNetworkingStrategy = (result: SavedNetworkingStrategy | null 
 export const canExportNetworkingStrategy = (validation: NetworkingValidation): boolean =>
   canExportQualityGate(validation);
 
-export const networkingIssueLabel = (issue: string): string => {
-  const labels: Record<string, string> = {
-    empty: 'No networking strategy was generated.',
-    missing_strategy: 'Add a strategy summary.',
-    missing_contacts: 'Add contact suggestions.',
-    few_contacts: 'The plan has fewer than three contact ideas.',
-    thin_strategy: 'The strategy summary needs more substance.',
-    unfinished_strategy: 'The strategy summary appears unfinished.',
-    missing_contact_type: 'A contact suggestion is missing its persona.',
-    missing_reason: 'A contact suggestion is missing the reason to reach out.',
-    missing_outreach: 'A contact suggestion is missing its outreach message.',
-    thin_reason: 'A contact reason is too thin.',
-    thin_outreach: 'An outreach message is too short to send.',
-    long_outreach: 'An outreach message is long; trim it before sending.',
-    unfinished_outreach: 'An outreach message appears unfinished.',
-    placeholder: 'Placeholders are still present.',
-    template_language: 'Template instructions are still visible.',
+export const networkingIssueLabel = (issue: string, copy?: QualityCopyFn): string => {
+  const labels: Record<string, { key: string; fallback: string }> = {
+    empty: { key: 'quality_networking_empty', fallback: 'No networking strategy was generated.' },
+    missing_strategy: { key: 'quality_networking_missing_strategy', fallback: 'Add a strategy summary.' },
+    missing_contacts: { key: 'quality_networking_missing_contacts', fallback: 'Add contact suggestions.' },
+    few_contacts: { key: 'quality_networking_few_contacts', fallback: 'The plan has fewer than three contact ideas.' },
+    thin_strategy: { key: 'quality_networking_thin_strategy', fallback: 'The strategy summary needs more substance.' },
+    unfinished_strategy: { key: 'quality_networking_unfinished_strategy', fallback: 'The strategy summary appears unfinished.' },
+    missing_contact_type: { key: 'quality_networking_missing_contact_type', fallback: 'A contact suggestion is missing its persona.' },
+    missing_reason: { key: 'quality_networking_missing_reason', fallback: 'A contact suggestion is missing the reason to reach out.' },
+    missing_outreach: { key: 'quality_networking_missing_outreach', fallback: 'A contact suggestion is missing its outreach message.' },
+    thin_reason: { key: 'quality_networking_thin_reason', fallback: 'A contact reason is too thin.' },
+    thin_outreach: { key: 'quality_networking_thin_outreach', fallback: 'An outreach message is too short to send.' },
+    long_outreach: { key: 'quality_networking_long_outreach', fallback: 'An outreach message is long; trim it before sending.' },
+    unfinished_outreach: { key: 'quality_networking_unfinished_outreach', fallback: 'An outreach message appears unfinished.' },
+    placeholder: { key: 'quality_issue_placeholder', fallback: 'Placeholders are still present.' },
+    template_language: { key: 'quality_issue_template_language', fallback: 'Template instructions are still visible.' },
   };
-  return labels[issue] || issue.replace(/_/g, ' ');
+  const label = labels[issue];
+  if (!label) return issue.replace(/_/g, ' ');
+  return copy ? copy(label.key, label.fallback) : label.fallback;
 };
 
 interface NetworkingExportGateProps {
@@ -195,14 +199,15 @@ interface NetworkingQualityNoticeProps {
 }
 
 export const NetworkingQualityNotice: React.FC<NetworkingQualityNoticeProps> = ({ validation }) => {
+  const copy = useQualityGateCopy();
   return (
     <QualityGateNotice
       validation={validation}
       dataQa="networking-quality-notice"
       statusDataAttribute="data-qa-networking-quality"
-      blockingTitle="Fix this networking plan before exporting"
-      warningTitle="Review before using"
-      issueLabel={networkingIssueLabel}
+      blockingTitle={copy('quality_networking_blocking_title', 'Fix this networking plan before exporting')}
+      warningTitle={copy('quality_review_before_using', 'Review before using')}
+      issueLabel={(issue) => networkingIssueLabel(issue, copy)}
       warningIcon={Network}
     />
   );

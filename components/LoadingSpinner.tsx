@@ -5,7 +5,7 @@ interface LoadingSpinnerProps {
 }
 
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ market }) => {
-  const analyzingText = market ? `Our AI is analyzing your resume for the ${market} market...` : 'Our AI is analyzing your resume...';
+  const analyzingText = market ? `Analyzing your resume for the ${market} market...` : 'Analyzing your resume...';
   const descriptionText = market ? `This may take a few moments. We're checking for ATS compliance, standards for the ${market} market, and powerful keywords!` : "This may take a few moments. We're checking for ATS compliance, market standards, and powerful keywords!";
 
   return (

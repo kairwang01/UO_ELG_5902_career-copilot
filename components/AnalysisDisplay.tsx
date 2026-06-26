@@ -1,10 +1,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, FileText, LockKeyhole, Search, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Coins, FileText, Home, Loader2, Megaphone, Search, ShieldCheck, Sparkles, Tag, ThumbsUp, Wrench, X } from 'lucide-react';
 import type { AnalysisResult, UserProfile } from '../types';
 import ToolRunner from './ToolRunner';
 import InterviewSimulator from './InterviewSimulator';
-import { TOOL_ACCESS, hasAccess, ALL_PLANS, PLAN_HIERARCHY } from '../config';
 import type { AppSession as Session } from '../lib/data';
 import { applyResumeImprovements } from '../services/aiClient';
 import { renderFormattedText } from './tools/ToolUtils';
@@ -12,6 +11,7 @@ import ResumePreview from './ResumePreview';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
 import RecoverableSectionBoundary from './RecoverableSectionBoundary';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
+import { TOOL_CREDIT_COSTS } from '../config/credits';
 
 interface AnalysisDisplayProps {
   result: AnalysisResult | null;
@@ -33,46 +33,22 @@ interface AnalysisDisplayProps {
 }
 
 const ScoreCircle: React.FC<{ score: number, t: (key: string) => string }> = ({ score, t }) => {
-    const getGradientColors = () => {
-        if (score < 50) return ['from-red-500', 'to-orange-500'];
-        if (score < 75) return ['from-yellow-500', 'to-amber-500'];
-        return ['from-green-500', 'to-emerald-500'];
+    const getRingColor = () => {
+        if (score < 50) return '#ef4444';
+        if (score < 75) return '#f59e0b';
+        return '#10b981';
     };
-    const [fromColor, toColor] = getGradientColors();
     const scoreColor = score < 50 ? 'text-red-600 dark:text-red-500' : score < 75 ? 'text-yellow-600 dark:text-yellow-500' : 'text-green-600 dark:text-green-500';
+    const clampedScore = Math.min(Math.max(Number.isFinite(score) ? score : 0, 0), 100);
 
     return (
-        <div className="relative w-48 h-48 mx-auto">
-            <svg className="w-full h-full" viewBox="0 0 100 100">
-                <defs>
-                    <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" className={`stop-color-${fromColor}`} />
-                        <stop offset="100%" className={`stop-color-${toColor}`} />
-                    </linearGradient>
-                     <style>
-                        {`.stop-color-from-red-500 { stop-color: #ef4444; }`}
-                        {`.stop-color-to-orange-500 { stop-color: #f97316; }`}
-                        {`.stop-color-from-yellow-500 { stop-color: #eab308; }`}
-                        {`.stop-color-to-amber-500 { stop-color: #f59e0b; }`}
-                        {`.stop-color-from-green-500 { stop-color: #22c55e; }`}
-                        {`.stop-color-to-emerald-500 { stop-color: #10b981; }`}
-                    </style>
-                </defs>
-                <circle className="text-gray-200 dark:text-slate-700" strokeWidth="10" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50"/>
-                <circle
-                    stroke="url(#scoreGradient)"
-                    strokeWidth="10"
-                    strokeDasharray="283"
-                    strokeDashoffset={283 - (score / 100) * 283}
-                    strokeLinecap="round"
-                    fill="transparent"
-                    r="45"
-                    cx="50"
-                    cy="50"
-                    style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s ease-out' }}
-                />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div
+            className="relative mx-auto flex h-48 w-48 items-center justify-center rounded-full p-3 text-gray-200 dark:text-slate-700"
+            role="img"
+            aria-label={`${clampedScore} ${t('analysis_score_subtitle')}`}
+            style={{ background: `conic-gradient(${getRingColor()} ${clampedScore * 3.6}deg, currentColor 0deg)` }}
+        >
+            <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white dark:bg-slate-800">
                 <span className={`text-5xl font-bold ${scoreColor}`}>{score}</span>
                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('analysis_score_subtitle')}</span>
             </div>
@@ -93,7 +69,7 @@ const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; res
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-slate-700"
             aria-label={t('analysis_reference_close')}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            <X className="h-6 w-6" aria-hidden="true" />
           </button>
         </div>
         
@@ -105,7 +81,7 @@ const ResumeReferenceModal: React.FC<{ isOpen: boolean; onClose: () => void; res
   );
 };
 
-type ToolGroupId = 'recommended' | 'resume' | 'jobs' | 'practice' | 'growth';
+type ToolGroupId = 'recommended' | 'all' | 'resume' | 'jobs' | 'practice' | 'growth';
 
 // label / helper hold i18n KEYS, resolved with t() at render.
 const TOOL_GROUPS: { id: ToolGroupId; label: string; helper: string; keys: string[] }[] = [
@@ -114,6 +90,12 @@ const TOOL_GROUPS: { id: ToolGroupId; label: string; helper: string; keys: strin
     label: 'studio_group_recommended_label',
     helper: 'studio_group_recommended_helper',
     keys: ['resume-formatter', 'opportunity-finder', 'cover-letter', 'mock-interview'],
+  },
+  {
+    id: 'all',
+    label: 'studio_all_tools_included',
+    helper: 'studio_toolkit_subtitle',
+    keys: ALL_TOOLS_CONFIG.map((tool) => tool.key),
   },
   {
     id: 'resume',
@@ -131,13 +113,13 @@ const TOOL_GROUPS: { id: ToolGroupId; label: string; helper: string; keys: strin
     id: 'practice',
     label: 'studio_group_practice_label',
     helper: 'studio_group_practice_helper',
-    keys: ['mock-interview', 'english-pro', 'salary-negotiation'],
+    keys: ['interview-prep', 'mock-interview', 'english-pro', 'salary-negotiation'],
   },
   {
     id: 'growth',
     label: 'studio_group_growth_label',
     helper: 'studio_group_growth_helper',
-    keys: ['career-path', 'skill-learning-plan', 'performance-review-prep', 'agile-coach'],
+    keys: ['career-path', 'website-builder', 'skill-learning-plan', 'performance-review-prep', 'agile-coach'],
   },
 ];
 
@@ -150,20 +132,20 @@ const TOOL_PHASE_LABELS: Record<string, string> = {
   'email-crafter': 'studio_phase_outreach',
   'networking-assistant': 'studio_phase_outreach',
   'industry-event-scout': 'studio_phase_networking',
+  'interview-prep': 'studio_phase_interview',
   'mock-interview': 'studio_phase_interview',
   'english-pro': 'studio_phase_interview',
   'salary-negotiation': 'studio_phase_offer',
   'career-path': 'studio_phase_planning',
+  'website-builder': 'studio_phase_profile',
   'skill-learning-plan': 'studio_phase_learning',
   'performance-review-prep': 'studio_phase_growth',
   'agile-coach': 'studio_phase_growth',
 };
 
-const formatPlanLabel = (planKey: string | undefined): string => {
-  if (!planKey) return 'Free';
-  const plan = ALL_PLANS[planKey];
-  if (plan) return plan.name;
-  return planKey.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+const toolCreditCost = (toolKey: string): number | null => {
+  const value = TOOL_CREDIT_COSTS[toolKey as keyof typeof TOOL_CREDIT_COSTS];
+  return typeof value === 'number' ? value : null;
 };
 
 type ToolTransferInput = {
@@ -171,13 +153,11 @@ type ToolTransferInput = {
   input: string;
 };
 
-const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, resumeText, userPlan, market, navigateToPricing, session, profile, refreshProfile, onApplyImprovements, activeTool, setActiveTool, onContinueToToolkit, hideToolBackButton = false }) => {
+const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, resumeText, market, navigateToPricing, session, profile, refreshProfile, onApplyImprovements, activeTool, setActiveTool, onContinueToToolkit, hideToolBackButton = false }) => {
   const [toolInput, setToolInput] = useState<ToolTransferInput | null>(null);
   const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false);
-  const [toolGroup, setToolGroup] = useState<ToolGroupId>('recommended');
+  const [toolGroup, setToolGroup] = useState<ToolGroupId>('all');
   const [toolQuery, setToolQuery] = useState('');
-  const userPlanLevel = PLAN_HIERARCHY[userPlan] ?? 0;
-  const isHighestPlan = userPlanLevel === PLAN_HIERARCHY.executive;
 
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizationError, setOptimizationError] = useState<string | null>(null);
@@ -255,11 +235,16 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                 {activeTool ? (
                     <>
                         {/* Top Bar for Tool */}
-                        <div className="min-h-16 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-3 px-4 py-3 shrink-0 z-20 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                        <div
+                            data-qa="toolkit-active-tool"
+                            data-qa-tool={activeTool}
+                            className="min-h-16 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-3 px-4 py-3 shrink-0 z-20 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+                        >
                             <div className="flex min-w-0 items-center gap-3">
                                 {!hideToolBackButton && (
                                     <button
                                         onClick={() => setActiveTool(null)}
+                                        data-qa="toolkit-back-to-library"
                                         className="workspace-button-ghost inline-flex h-9 w-9 shrink-0 items-center justify-center"
                                         aria-label={t('studio_back_to_library')}
                                     >
@@ -281,7 +266,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                 {t('studio_review_resume')}
                             </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto bg-slate-50/70 p-4 dark:bg-slate-950/40 sm:p-6 md:p-10">
+                        <div data-qa="toolkit-active-tool-body" className="flex-1 overflow-y-auto bg-slate-50/70 p-4 dark:bg-slate-950/40 sm:p-6 md:p-10">
                             <div className={`mx-auto ${activeTool === 'mock-interview' ? 'max-w-[1440px]' : 'max-w-4xl'}`}>
                                 {/* A tool can crash on malformed AI output; contain it here so the
                                     user keeps their analysis instead of the whole app going down. */}
@@ -296,6 +281,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                         <InterviewSimulator
                                             resumeText={resumeText}
                                             market={market}
+                                            initialInput={activeToolInitialInput}
                                             onClose={() => setActiveTool(null)}
                                             session={session}
                                             profile={profile}
@@ -338,9 +324,11 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                       {t('studio_toolkit_subtitle')}
                                     </p>
                                   </div>
-                                  <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
-                                    {isHighestPlan ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <LockKeyhole className="h-4 w-4 text-slate-400" />}
-                                    {isHighestPlan ? t('studio_all_tools_included') : t('studio_plan_suffix').replace('{plan}', formatPlanLabel(userPlan))}
+                                  <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                    <span>{t('studio_all_tools_included')}</span>
+                                    <span className="hidden text-emerald-600 dark:text-emerald-400 sm:inline">·</span>
+                                    <span className="hidden sm:inline">{t('job_card_uses_credits')}</span>
                                   </div>
                                 </div>
 
@@ -435,13 +423,13 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                     const titleKey = `tool_${tool.key.replace(/-/g, '_')}_title`;
                                     const descKey = `tool_${tool.key.replace(/-/g, '_')}_desc`;
                                     const desc = t(descKey);
-                                    const requiredPlan = TOOL_ACCESS[tool.key];
-                                    const isIncluded = hasAccess(userPlan, requiredPlan);
+                                    const creditCost = toolCreditCost(tool.key);
                                     const isRecommended = TOOL_GROUPS[0].keys.includes(tool.key);
                                     return (
                                         <button
                                             key={tool.key}
                                             type="button"
+                                            data-qa={`toolkit-card-${tool.key}`}
                                             onClick={() => openTool(tool.key)}
                                             className="group workspace-card flex min-h-[184px] flex-col p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:border-blue-800"
                                             aria-label={t('studio_open_tool_aria').replace('{tool}', t(titleKey))}
@@ -469,8 +457,11 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                                                 <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-500 line-clamp-3 dark:text-slate-400">{desc}</p>
                                             )}
                                             <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-                                              <span className={`text-xs font-semibold ${isIncluded ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                                                {isIncluded ? t('studio_card_included') : t('studio_card_plan_prefix').replace('{plan}', formatPlanLabel(requiredPlan))}
+                                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                                                <Coins className="h-3.5 w-3.5 text-amber-500" />
+                                                {creditCost === null
+                                                  ? t('job_card_uses_credits')
+                                                  : `${creditCost} ${t('ws_credits_label')}`}
                                               </span>
                                               <span className="text-sm font-semibold text-blue-700 transition group-hover:translate-x-0.5 dark:text-blue-400">
                                                 {t('studio_card_open')}
@@ -508,7 +499,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                 onClick={onReset} 
                 className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                <Home className="h-4 w-4" aria-hidden="true" />
                 {t('analysis_breadcrumb_dashboard')}
             </button>
             <span>/</span>
@@ -548,7 +539,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                     className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-70"
                   >
                     {isOptimizing && (
-                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     )}
                     {isOptimizing ? t('analysis_applying') : t('analysis_apply_edits')}
                   </button>
@@ -594,7 +585,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
             {/* Strengths */}
                 <div className="bg-white dark:bg-slate-800 border border-green-200 dark:border-green-700/50 p-6 rounded-xl shadow-sm">
                     <h3 className="font-bold text-lg text-green-800 dark:text-green-300 mb-3 flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.085a2 2 0 00-1.736.93L5.5 8m7 2H5.5" /></svg>
+                        <ThumbsUp className="mr-2 h-6 w-6" aria-hidden="true" />
                         {t('analysis_strengths_title')}
                     </h3>
                     <ul className="list-disc list-inside space-y-2 text-green-900 dark:text-green-200">
@@ -605,7 +596,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
                 {/* Improvements */}
                 <div className="bg-white dark:bg-slate-800 border border-yellow-300 dark:border-yellow-600/50 p-6 rounded-xl shadow-sm">
                     <h3 className="font-bold text-lg text-yellow-800 dark:text-yellow-300 mb-3 flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-2.236 9.168-5.514C18.102 8.048 18 8.5 18 9a3 3 0 01-3 3h-1.572L9.5 17.5M5 13l2 6" /></svg>
+                        <Megaphone className="mr-2 h-6 w-6" aria-hidden="true" />
                         {t('analysis_improvements_title')}
                     </h3>
                     <ul className="space-y-3 text-yellow-900 dark:text-yellow-200">
@@ -620,7 +611,7 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ t, result, onReset, r
         {/* Keywords */}
         <div className="mt-8 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-600/50 p-6 rounded-xl shadow-sm">
                 <h3 className="font-bold text-lg text-blue-800 dark:text-blue-300 mb-3 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>
+                    <Tag className="mr-2 h-6 w-6" aria-hidden="true" />
                     {t('analysis_keywords_title')}
                 </h3>
                 <div className="flex flex-wrap gap-2">

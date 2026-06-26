@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, FileText, Sparkles, Upload } from 'lucide-react';
+import { CalendarDays, CheckCircle2, FileText, Sparkles, Upload } from 'lucide-react';
 import { data } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { parseFile } from '../../services/fileHelpers';
 import { uploadResumeFile, deleteResumeFile, type ResumeFileMeta } from '../../services/resumeStorage';
 import { BrandMark } from '../BrandLogo';
-import { loadJobPreferences, saveJobPreferences } from '../../hooks/useJobPreferences';
+import { loadJobPreferences, saveJobPreferences, type JobPreferences } from '../../hooks/useJobPreferences';
 import {
   CAREER_FIELDS,
   loadBirthdayLocal,
@@ -181,6 +181,20 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
     setPhase('finishing');
     setSaveError(false);
     try {
+      const roleTexts = selectedFields
+        .map((id) => CAREER_FIELDS.find((f) => f.id === id)?.roleText ?? '')
+        .filter(Boolean);
+      const existing = loadJobPreferences();
+      const onboardingJobPreferences: JobPreferences | null = roleTexts.length > 0
+        ? {
+            status: existing?.status ?? 'active',
+            roles: roleTexts.join(', '),
+            locations: existing?.locations ?? '',
+            salaryMin: existing?.salaryMin ?? '',
+            availability: existing?.availability ?? '',
+          }
+        : null;
+
       // Name + reviewed resume → profile in ONE write. Splitting it risked a partial
       // save (name persisted, resume lost) if the second call failed; a single update
       // keeps it atomic. The resume text must be saved before leaving onboarding —
@@ -193,24 +207,13 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
         ...(resumeTextToSave
           ? { resume_text: resumeTextToSave, ...(resumeFileMeta ?? {}) } // file refs when the upload succeeded
           : {}),
+        ...(onboardingJobPreferences ? { job_preferences: onboardingJobPreferences } : {}),
         updated_at: new Date().toISOString(),
       });
       if (error) throw new Error(error.message);
 
       // 2) Career fields → existing JobPreferences (drives AI search + job goals).
-      const roleTexts = selectedFields
-        .map((id) => CAREER_FIELDS.find((f) => f.id === id)?.roleText ?? '')
-        .filter(Boolean);
-      if (roleTexts.length > 0) {
-        const existing = loadJobPreferences();
-        saveJobPreferences({
-          status: existing?.status ?? 'active',
-          roles: roleTexts.join(', '),
-          locations: existing?.locations ?? '',
-          salaryMin: existing?.salaryMin ?? '',
-          availability: existing?.availability ?? '',
-        });
-      }
+      if (onboardingJobPreferences) saveJobPreferences(onboardingJobPreferences);
 
       // 3) Optional birthday → also mirror locally for old-client compatibility.
       saveBirthdayLocal(uid, birthday);
@@ -555,14 +558,12 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
 
           {phase === 'finishing' && <TransitionScreen line={t('ob_finishing')} />}
 
-          {/* ── DONE: checkmark ── */}
+          {/* ── DONE: completion state ── */}
           {phase === 'done' && (
             <div key="done" className="flex flex-col items-center py-12 text-center animate-fade-in">
-              <svg viewBox="0 0 72 72" className="h-24 w-24" aria-hidden="true">
-                <circle cx="36" cy="36" r="32" fill="none" strokeWidth="4" className="stroke-emerald-200 dark:stroke-emerald-900" />
-                <circle cx="36" cy="36" r="32" fill="none" strokeWidth="4" strokeLinecap="round" className="stroke-emerald-500 onboarding-check-circle" />
-                <path d="M22 37 L32 47 L51 27" fill="none" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" className="stroke-emerald-500 onboarding-check-mark" />
-              </svg>
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-emerald-100 bg-emerald-50 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/40" aria-hidden="true">
+                <CheckCircle2 className="h-14 w-14 text-emerald-600 dark:text-emerald-300" />
+              </div>
               <h1 className="mt-6 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{t('ob_done_title')}</h1>
               <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500 dark:text-slate-400">{t('ob_done_desc')}</p>
               <button

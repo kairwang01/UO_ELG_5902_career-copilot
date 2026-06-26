@@ -6,6 +6,7 @@
     "auth": { "port": 9198 },
     "functions": { "port": 5002 },
     "firestore": { "port": 8079 },
+    "storage": { "port": 9196 },
     "ui": { "enabled": false },
     "hub": { "port": 4399 },
     "singleProjectMode": true

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Card, SectionHeading } from './adminUi';
 import { at } from './adminText';
 import {
@@ -14,7 +15,7 @@ import {
  *
  * Web3 in this product is strictly optional identity tooling: candidates may
  * connect a wallet and hold a Proof-of-Talent credential (Sepolia testnet).
- * Nothing in the core product — auth, payments, hiring portal, AI tools —
+ * Nothing in the core product — auth, payments, hiring portal, career tools —
  * depends on a wallet. This panel turns the whole surface on/off.
  */
 export const Web3SettingsPanel: React.FC = () => {
@@ -62,9 +63,8 @@ export const Web3SettingsPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl space-y-5">
-      {/* Experimental banner */}
       <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <span className="mt-0.5 shrink-0" aria-hidden="true">⚠</span>
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
           <span className="font-semibold">{at('web3.banner.title')}</span>{' '}
           {at('web3.banner.body')}
@@ -112,9 +112,9 @@ export const Web3SettingsPanel: React.FC = () => {
         <ul className="space-y-2.5">
           {[
             ['Wallet connection (live)', 'Optional identity link on the candidate Account page. Connection failures fall back to the normal account — nothing is blocked.'],
-            ['Proof-of-Talent credential (live, testnet)', 'Candidates scoring 85+ on resume analysis can mint a verification credential; employers see verified status in the talent pool.'],
-            ['Credential verification (planned)', 'Third-party verification of issued credentials via the public contract — design reserved, no UI yet.'],
-            ['Developer settlement (placeholder)', 'Token-based settlement for API-platform partners is a research item only; nothing is implemented or scheduled.'],
+            ['Proof-of-Talent credential (Sepolia preview)', 'Candidates scoring 85+ on resume analysis can issue a credential signal; employers see verified status in the talent pool.'],
+            ['Credential verification (reserved)', 'Third-party verification will use the public contract path when the live contract is enabled.'],
+            ['Partner settlement (not enabled)', 'Token-based settlement for API-platform partners is outside the current release scope.'],
           ].map(([title, desc]) => (
             <li key={title} className="rounded-md border border-gray-200 px-3 py-2.5">
               <p className="text-xs font-semibold text-gray-900">{title}</p>

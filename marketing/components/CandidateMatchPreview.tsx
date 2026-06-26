@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Check } from 'lucide-react';
 import { ScoreBar } from './ScoreBar';
 
 interface CandidateMatchPreviewProps {
@@ -175,7 +176,7 @@ export const CandidateMatchPreview: React.FC<CandidateMatchPreviewProps> = ({ t 
                   <ul className="text-xs space-y-1 mb-4 text-[var(--site-text-muted)]">
                     {c.matchReasons.map((reason) => (
                       <li key={reason} className="flex gap-2">
-                        <span className="text-[var(--site-ready)] shrink-0">✓</span>
+                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--site-ready)]" aria-hidden="true" strokeWidth={2.5} />
                         <span>{reason}</span>
                       </li>
                     ))}

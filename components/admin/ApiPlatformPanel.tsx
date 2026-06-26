@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Info, X } from 'lucide-react';
 import { Card, EmptyState, FieldLabel, PrimaryButton, SectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
 import { at } from './adminText';
 import { ViewportAwareDialog } from '../ViewportAwareDialog';
@@ -202,7 +203,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
     <div className="space-y-6">
       {/* Trust banner — clear about server-side secret handling */}
       <div className="flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        <span className="mt-0.5 shrink-0" aria-hidden="true">ⓘ</span>
+        <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
           <span className="font-semibold">{at('api.banner.title')}</span>{' '}
           {at('api.banner.body')}
@@ -212,9 +213,11 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       {/* Mutation error banner */}
       {actionError && (
         <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 animate-panel-expand">
-          <span className="mt-0.5 shrink-0">✕</span>
+          <X className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{actionError}</span>
-          <button type="button" onClick={() => setActionError(null)} className="ml-auto shrink-0 text-red-600 hover:text-red-800" aria-label="Dismiss error">✕</button>
+          <button type="button" onClick={() => setActionError(null)} className="ml-auto shrink-0 text-red-600 hover:text-red-800" aria-label="Dismiss error">
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
       )}
 

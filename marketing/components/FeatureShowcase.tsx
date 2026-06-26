@@ -20,13 +20,13 @@ const ROTATE_MS = 6500;
 
 // ── Scene 1: the timed interview room (flagship) ──────────────────────────────
 const InterviewScene: React.FC = () => (
-  <ToolPanelChrome title="AI Mock Interview" subtitle="Question 3 of 8 · Technical">
+  <ToolPanelChrome title="Mock Interview" subtitle="Question 3 of 8 · Technical">
     <div className="flex items-start gap-4">
       <div className="relative shrink-0">
         <span className="absolute -inset-1 rounded-full border-2 border-blue-400/50 animate-pulse" aria-hidden="true" />
         <img
           src="/interviewer.jpg"
-          alt="AI interviewer"
+          alt="Interview coach"
           className="h-16 w-16 rounded-full object-cover ring-2 ring-blue-500"
         />
         <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white" />
@@ -47,12 +47,12 @@ const InterviewScene: React.FC = () => (
       </div>
     </div>
     <div className="mt-4 flex items-center gap-3 rounded-lg border border-[var(--site-border)] bg-[var(--site-surface-muted)] p-3">
-      <div className="relative h-12 w-12 shrink-0">
-        <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" strokeWidth="4" />
-          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#10b981" strokeWidth="4" strokeLinecap="round" strokeDasharray="86 100" />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">86</span>
+      <div
+        className="grid h-12 w-12 shrink-0 place-items-center rounded-full p-1"
+        style={{ background: 'conic-gradient(#10b981 86%, #e2e8f0 0)' }}
+        aria-label="Score 86 out of 100"
+      >
+        <span className="grid h-full w-full place-items-center rounded-full bg-[var(--site-surface-muted)] text-sm font-bold">86</span>
       </div>
       <div className="min-w-0">
         <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">

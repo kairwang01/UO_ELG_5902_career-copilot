@@ -180,7 +180,14 @@ const ChipEditor: React.FC<{
         {values.map((v) => (
           <span key={v} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
             {v}
-            <button type="button" onClick={() => onChange(values.filter((x) => x !== v))} className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-200" aria-label={`Remove ${v}`}>×</button>
+            <button
+              type="button"
+              onClick={() => onChange(values.filter((x) => x !== v))}
+              className="rounded-full text-blue-400 transition hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400/30 dark:hover:text-blue-200"
+              aria-label={`Remove ${v}`}
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
           </span>
         ))}
         <input
@@ -520,7 +527,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
     setPrefillReview(null);
     setShowAllPrefillPaths(false);
     setSaveError(false);
-    setPrefillMsg({ kind: 'info', text: 'AI prefill cleared. Your profile is back to the version before this draft.' });
+    setPrefillMsg({ kind: 'info', text: 'Draft prefill cleared. Your profile is back to the version before this draft.' });
   };
 
   const setObjectField = (sectionId: string, key: string, v: unknown) => {
@@ -722,7 +729,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="inline-flex items-center gap-1.5 text-sm font-bold text-blue-800 dark:text-blue-200">
-                <Sparkles className="h-4 w-4" /> Review AI-filled fields
+                <Sparkles className="h-4 w-4" /> Review filled fields
               </p>
               <p className="mt-1 text-sm leading-6 text-blue-900/80 dark:text-blue-100/80">
                 {prefillReview.paths.length} highlighted field{prefillReview.paths.length === 1 ? '' : 's'} were drafted in {prefillReview.languageLabel}. Click a chip to jump to that field, then confirm it from the field row.
@@ -788,7 +795,7 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
             </p>
             <h3 id="talent-profile-prefill-title" className="mt-2 text-lg font-bold text-gray-950 dark:text-gray-50">Choose the draft language</h3>
             <p id="talent-profile-prefill-desc" className="mt-1 text-sm leading-6 text-gray-500 dark:text-slate-400">
-              AI will extract facts from your resume and fill empty Talent Profile fields. It will not save automatically.
+              We will extract facts from your resume and fill empty Talent Profile fields. Nothing saves automatically.
             </p>
           </div>
           <button

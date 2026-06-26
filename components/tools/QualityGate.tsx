@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useLocalization } from '../../hooks/useLocalization';
 
 export type QualityValidationStatus = 'ok' | 'warn' | 'needs_regen';
 
@@ -11,6 +12,18 @@ export interface QualityValidationLike {
 
 export const canExportQualityGate = (validation: QualityValidationLike): boolean =>
   validation.status !== 'needs_regen';
+
+export type QualityCopyFn = (key: string, fallback: string) => string;
+
+export const formatQualityCopy = (t: (key: string) => string, key: string, fallback: string): string => {
+  const value = t(key);
+  return value === key ? fallback : value;
+};
+
+export const useQualityGateCopy = (): QualityCopyFn => {
+  const { t } = useLocalization();
+  return (key, fallback) => formatQualityCopy(t, key, fallback);
+};
 
 interface BlockedRegenerateButtonProps {
   label: string;
@@ -44,15 +57,20 @@ interface BlockedCopyBadgeProps {
 
 export const BlockedCopyBadge: React.FC<BlockedCopyBadgeProps> = ({
   dataQa,
-  label = 'Review needed',
-}) => (
-  <span
-    className="inline-flex min-h-9 items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100"
-    data-qa={dataQa}
-  >
-    {label}
-  </span>
-);
+  label,
+}) => {
+  const copy = useQualityGateCopy();
+  const displayLabel = label ?? copy('quality_review_needed', 'Review needed');
+
+  return (
+    <span
+      className="inline-flex min-h-9 items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100"
+      data-qa={dataQa}
+    >
+      {displayLabel}
+    </span>
+  );
+};
 
 interface QualityGateNoticeProps {
   validation: QualityValidationLike;

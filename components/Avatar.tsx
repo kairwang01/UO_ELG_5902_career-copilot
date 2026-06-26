@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { getAuth } from 'firebase/auth';
 import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/storage';
+import { Loader2, Pencil, User } from 'lucide-react';
 import { app } from '../lib/firebaseClient';
 import { useToast } from './Toast';
 
@@ -40,6 +41,7 @@ const Avatar: React.FC<AvatarProps> = ({
   uploadIconClassName = 'h-5 w-5',
 }) => {
   const { addToast } = useToast();
+  const inputId = useId();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,27 +114,31 @@ const Avatar: React.FC<AvatarProps> = ({
           />
         ) : (
           <span className="flex items-center justify-center rounded-full bg-gray-300" style={{ height: size, width: size }}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-1/2 w-1/2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
+            <User className="h-1/2 w-1/2 text-gray-500" aria-hidden="true" />
           </span>
         )}
         {onUpload && (
           <span className="absolute bottom-0 right-0">
-            <label htmlFor="avatar-upload" className={`cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-md inline-block ${uploadControlClassName}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className={uploadIconClassName} viewBox="0 0 20 20" fill="currentColor">
-                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-              </svg>
+            <label
+              htmlFor={inputId}
+              aria-label={uploading ? uploadingLabel : uploadLabel}
+              className={`cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-md inline-block transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-400/50 ${uploadControlClassName} ${uploading ? 'cursor-not-allowed opacity-75' : ''}`}
+            >
+              {uploading ? (
+                <Loader2 className={`${uploadIconClassName} animate-spin`} aria-hidden="true" />
+              ) : (
+                <Pencil className={uploadIconClassName} aria-hidden="true" />
+              )}
+              <input
+                ref={fileInputRef}
+                className="sr-only"
+                type="file"
+                id={inputId}
+                accept="image/*"
+                onChange={uploadAvatar}
+                disabled={uploading}
+              />
             </label>
-            <input
-              ref={fileInputRef}
-              style={{ visibility: 'hidden', position: 'absolute' }}
-              type="file"
-              id="avatar-upload"
-              accept="image/*"
-              onChange={uploadAvatar}
-              disabled={uploading}
-            />
           </span>
         )}
       </span>

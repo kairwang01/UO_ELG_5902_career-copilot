@@ -750,8 +750,26 @@ export const anonymizeResume = (resumeText: string, agencyName?: string) =>
 export const generateClientPitchEmail = (candidateResumeText: string, candidateName: string, jobDescription?: string) =>
   callTool<{ subject: string; body: string }>('generateClientPitchEmail', { candidateResumeText, candidateName, jobDescription });
 
-export const generateCandidatePrepKit = (resumeText: string, jobDescription: string) =>
-  callTool<CandidatePrepKit>('generateCandidatePrepKit', { resumeText, jobDescription });
+/**
+ * Builds an evidence-driven interview prep kit from a resume + target role.
+ *
+ * Shared by the agency Candidate Prep Kit (passes only resumeText + jobDescription)
+ * and the candidate Interview Prep tool (passes targetRole / marketName for
+ * localized, role-anchored output and optional sourceNotes — pasted real
+ * interview reports — that let the model mark questions "source-backed").
+ */
+export const generateCandidatePrepKit = (
+  resumeText: string,
+  jobDescription: string,
+  options?: { targetRole?: string; marketName?: string; sourceNotes?: string },
+) =>
+  callTool<CandidatePrepKit>('generateCandidatePrepKit', {
+    resumeText,
+    jobDescription,
+    ...(options?.targetRole ? { targetRole: options.targetRole } : {}),
+    ...(options?.marketName ? { marketName: options.marketName } : {}),
+    ...(options?.sourceNotes ? { sourceNotes: options.sourceNotes } : {}),
+  });
 
 // ---- Image generation & URL extraction (dedicated callables) ---------------
 export const generateProfessionalHeadshot = async (imageBase64: string): Promise<string[]> =>

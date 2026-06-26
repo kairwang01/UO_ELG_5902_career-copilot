@@ -4,7 +4,7 @@ import { generatePerformanceReviewPrep } from '../../services/aiClient';
 import type { PerformanceReviewResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 
@@ -43,7 +43,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SavedPerformanceReviewResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<SavedPerformanceReviewResult>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<SavedPerformanceReviewResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [accomplishments, setAccomplishments] = useState('');
   const [jobTitle, setJobTitle] = useState('');
@@ -84,7 +84,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
       setFromSaved(false);
       persist(nextResult);
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -111,7 +111,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
   };
 
   const renderInput = () => (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div data-qa="performance-review-prep-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-5">
       <CardShell className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
           <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
@@ -138,6 +138,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
                       setJobTitle(SAMPLE_JOB_TITLE);
                       setAccomplishments(SAMPLE_ACCOMPLISHMENTS);
                     }}
+                    data-qa="performance-review-prep-try-example"
                     className="text-sm font-semibold text-indigo-700 transition hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200"
                   >
                     {t('try_example')}
@@ -157,6 +158,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
                 <input
                   type="text"
                   id="performance-review-job-title"
+                  data-qa="performance-review-job-title"
                   value={jobTitle}
                   onChange={(event) => setJobTitle(event.target.value)}
                   required
@@ -171,6 +173,7 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
                 </label>
                 <textarea
                   id="performance-review-accomplishments"
+                  data-qa="performance-review-accomplishments"
                   value={accomplishments}
                   onChange={(event) => setAccomplishments(event.target.value)}
                   rows={8}
@@ -181,22 +184,17 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
               </div>
 
               {error && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300" role="alert">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="leading-relaxed">{error}</p>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:hover:bg-red-900/30"
-                    >
-                      {t('try_again')}
-                    </button>
-                  </div>
-                </div>
+                <ToolError
+                  message={error}
+                  onRetry={() => void runTool()}
+                  retryLabel={t('try_again')}
+                  retryDisabled={loading}
+                />
               )}
 
               <button
                 type="submit"
+                data-qa="performance-review-prep-generate"
                 disabled={loading}
                 className="inline-flex min-h-[48px] w-full items-center justify-center rounded-lg bg-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-indigo-400"
               >
@@ -244,13 +242,15 @@ const PerformanceReviewPrep: React.FC<PerformanceReviewPrepProps> = ({ resumeTex
     const downloadTitle = title.replace(/\s/g, '_');
 
     return (
-      <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
+      <div data-qa="performance-review-prep-tool" data-qa-tool-state="result" className="mx-auto max-w-7xl space-y-5 animate-fade-in">
         <SavedResultBar
           t={t}
           canSave={canSave}
           isSaved={fromSaved}
           savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
           onTryNext={resetResult}
+          onClearSaved={() => { clear(); setFromSaved(false); }}
         />
 
         <CardShell className="overflow-hidden">

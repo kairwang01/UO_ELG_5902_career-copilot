@@ -1,16 +1,18 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BookOpen, CheckCircle2, Clock3, Flag, GraduationCap, Lightbulb, Target } from 'lucide-react';
 import { generateLearningPlan } from '../../services/aiClient';
 import type { LearningPlanResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 import { useToolResults } from '../../contexts/ToolResultsContext';
+import { parseToolLearningContext, type ToolLearningContext } from '../../lib/toolPrefill';
 
 interface SkillLearningPlannerProps {
   resumeText: string;
   market: string;
+  initialInput?: string;
   t: (key: string) => string;
 }
 
@@ -32,17 +34,34 @@ const MetricTile: React.FC<{ label: string; value: string | number; icon: React.
   </div>
 );
 
-const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText, market, t }) => {
+const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText, market, initialInput = '', t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LearningPlanResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<LearningPlanResult>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<LearningPlanResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [skill, setSkill] = useState('');
+  const [prefillContext, setPrefillContext] = useState<ToolLearningContext | null>(null);
+  const consumedInitialInputRef = useRef('');
 
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
 
   useEffect(() => {
+    const value = initialInput.trim();
+    if (!value || consumedInitialInputRef.current === value) return;
+    const context = parseToolLearningContext(value);
+    if (!context.skill) return;
+
+    consumedInitialInputRef.current = value;
+    setSkill(context.skill);
+    setPrefillContext(context);
+    setResult(null);
+    setFromSaved(false);
+    setError(null);
+  }, [initialInput]);
+
+  useEffect(() => {
+    if (initialInput.trim()) return;
     if (saved && !result) {
       setResult(saved.result);
       setFromSaved(true);
@@ -53,6 +72,7 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
     setResult(null);
     setFromSaved(false);
     setError(null);
+    setPrefillContext(null);
   };
 
   const runTool = async (skillInput = skill) => {
@@ -72,7 +92,7 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
       setFromSaved(false);
       persist(apiResult);
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -99,7 +119,7 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
   };
 
   const renderInput = () => (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div data-qa="skill-learning-plan-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-5">
       <CardShell className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
           <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
@@ -122,7 +142,8 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
                   </label>
                   <button
                     type="button"
-                    onClick={() => setSkill(SAMPLE_SKILL)}
+                    onClick={() => { setSkill(SAMPLE_SKILL); setPrefillContext(null); }}
+                    data-qa="skill-learning-plan-try-example"
                     className="text-sm font-semibold text-violet-700 transition hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200"
                   >
                     {t('try_example')}
@@ -131,39 +152,52 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
                 <input
                   type="text"
                   id="skill-to-learn"
+                  data-qa="skill-learning-plan-skill"
                   value={skill}
-                  onChange={(event) => setSkill(event.target.value)}
+                  onChange={(event) => { setSkill(event.target.value); setPrefillContext(null); }}
                   required
                   className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                   placeholder={t('tool_skill_planner_skill_placeholder')}
                 />
               </div>
 
+              {prefillContext && (
+                <div
+                  data-qa="skill-learning-plan-prefill-note"
+                  className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-950 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-100"
+                >
+                  <p className="font-semibold">{t('tool_skill_planner_prefill_label')}</p>
+                  {prefillContext.targetRole && (
+                    <p className="mt-1 text-xs leading-5 text-violet-800 dark:text-violet-200">
+                      {t('tool_skill_planner_prefill_target').replace('{role}', prefillContext.targetRole)}
+                    </p>
+                  )}
+                  {prefillContext.reason && (
+                    <p className="mt-1 text-xs leading-5 text-violet-800 dark:text-violet-200">{prefillContext.reason}</p>
+                  )}
+                </div>
+              )}
+
               {resumeText && (
                 <SmartSuggestChips
                   items={suggestions.skills}
-                  onPick={(value) => setSkill(value)}
+                  onPick={(value) => { setSkill(value); setPrefillContext(null); }}
                   label={t('smart_suggest_skills')}
                 />
               )}
 
               {error && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300" role="alert">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="leading-relaxed">{error}</p>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:hover:bg-red-900/30"
-                    >
-                      {t('try_again')}
-                    </button>
-                  </div>
-                </div>
+                <ToolError
+                  message={error}
+                  onRetry={() => void runTool()}
+                  retryLabel={t('try_again')}
+                  retryDisabled={loading}
+                />
               )}
 
               <button
                 type="submit"
+                data-qa="skill-learning-plan-generate"
                 disabled={loading}
                 className="inline-flex min-h-[48px] w-full items-center justify-center rounded-lg bg-violet-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:bg-violet-400"
               >
@@ -208,13 +242,15 @@ const SkillLearningPlanner: React.FC<SkillLearningPlannerProps> = ({ resumeText,
     const downloadSkill = result.skill.replace(/\s/g, '_');
 
     return (
-      <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
+      <div data-qa="skill-learning-plan-tool" data-qa-tool-state="result" className="mx-auto max-w-7xl space-y-5 animate-fade-in">
         <SavedResultBar
           t={t}
           canSave={canSave}
           isSaved={fromSaved}
           savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
           onTryNext={resetResult}
+          onClearSaved={() => { clear(); setFromSaved(false); }}
         />
 
         <CardShell className="overflow-hidden">

@@ -42,6 +42,7 @@ import StagedLoader from './StagedLoader';
 import { useRecentApplications } from '../hooks/useRecentApplications';
 import { listAllActiveJobPostings, type JobPosting } from '../lib/recruitingData';
 import { saveInterviewSession, subscribeInterviewSessions, type InterviewSessionHistoryItem } from '../lib/interviewSessionHistory';
+import { parseToolJobContext, parseToolInterviewSeed } from '../lib/toolPrefill';
 import InterviewerAvatar from './InterviewerAvatar';
 import { DownloadButtons } from './tools/ToolUtils';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
@@ -49,6 +50,7 @@ import { ViewportAwareDialog } from './ViewportAwareDialog';
 interface InterviewSimulatorProps {
   resumeText: string;
   market: string;
+  initialInput?: string;
   onClose: () => void;
   t: (key: string) => string;
   session: Session | null;
@@ -192,11 +194,6 @@ const SAMPLE = {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-const circleDash = (value: number) => {
-    const pct = Math.max(0, Math.min(100, value));
-    return `${pct} 100`;
-};
-
 const historyTitle = (item: InterviewSessionHistoryItem): string => {
     const match = item.job_description.match(/^Job Title:\s*(.+)$/im);
     return (match?.[1] ?? '').trim() || 'Interview practice';
@@ -218,20 +215,34 @@ const MiniTimerRing: React.FC<{
     tone?: 'blue' | 'amber' | 'red' | 'emerald';
 }> = ({ value, max, label, tone = 'blue' }) => {
     const pct = max > 0 ? (value / max) * 100 : 0;
-    const stroke =
-        tone === 'red' ? 'stroke-red-400' :
-        tone === 'amber' ? 'stroke-amber-400' :
-        tone === 'emerald' ? 'stroke-emerald-400' :
-        'stroke-blue-400';
+    const color =
+        tone === 'red' ? '#f87171' :
+        tone === 'amber' ? '#fbbf24' :
+        tone === 'emerald' ? '#34d399' :
+        '#60a5fa';
     return (
-        <div className="relative h-24 w-24 shrink-0">
-            <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-                <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-slate-200 dark:stroke-white/10" strokeWidth="3.5" />
-                <circle cx="18" cy="18" r="15.9" fill="none" className={stroke} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={circleDash(pct)} />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+        <div
+            className="grid h-24 w-24 shrink-0 place-items-center rounded-full p-1.5"
+            style={{ background: `conic-gradient(${color} ${Math.max(0, Math.min(100, pct))}%, rgba(148, 163, 184, 0.22) 0)` }}
+        >
+            <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white text-center dark:bg-slate-900">
                 <span className="font-mono text-xl font-bold tabular-nums text-slate-950 dark:text-white">{fmtTime(value)}</span>
                 <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-white/45">{label}</span>
+            </div>
+        </div>
+    );
+};
+
+const ScoreRing: React.FC<{ value: number; color: string; className?: string }> = ({ value, color, className = 'h-28 w-28' }) => {
+    const pct = Math.max(0, Math.min(100, value));
+    return (
+        <div
+            className={`grid shrink-0 place-items-center rounded-full p-2 ${className}`}
+            style={{ background: `conic-gradient(${color} ${pct}%, rgba(148, 163, 184, 0.22) 0)` }}
+        >
+            <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white text-center dark:bg-slate-800">
+                <span className="text-3xl font-bold text-gray-800 dark:text-gray-100">{Math.round(value)}</span>
+                <span className="text-[10px] text-gray-400 dark:text-slate-500">/100</span>
             </div>
         </div>
     );
@@ -253,7 +264,7 @@ const AudioWave: React.FC<{ active?: boolean }> = ({ active }) => (
     </div>
 );
 
-const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, onClose, t, session, profile, navigateToPricing }) => {
+const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, market, initialInput = '', onClose, t, session, profile, navigateToPricing }) => {
     const isPaid = PAID_STATUSES.has(profile?.subscription_status ?? '');
     const sessionUserId = session?.user?.id ?? null;
     const [stage, setStage] = useState<'setup' | 'loading' | 'interviewing' | 'evaluating' | 'report'>('setup');
@@ -283,6 +294,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
 
     // ── Timed interview state ──
     const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
+    // Questions handed in from the Interview Prep tool (via initialInput). When
+    // present we skip server generation and interview on these evidence-ranked
+    // questions instead — the prep brief IS the question set.
+    const [seedQuestions, setSeedQuestions] = useState<InterviewQuestion[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [phase, setPhase] = useState<'prep' | 'answer'>('prep');
     const [prepLeft, setPrepLeft] = useState(PREP_SECONDS);
@@ -294,6 +309,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const answersRef = useRef<string[]>([]);
     const submittingRef = useRef(false);
     const evaluatingRef = useRef(false);
+    const consumedInitialInputRef = useRef('');
     // False once unmounted — guards setState after the long (≤190s) AI awaits below
     // (question generation / evaluation / unlock), so a late resolve never touches a
     // component the user has already closed.
@@ -306,10 +322,12 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const [report, setReport] = useState<InterviewSessionReport | null>(null);
     const [lockedReport, setLockedReport] = useState<LockedSessionReport | null>(null);
     const [unlocking, setUnlocking] = useState(false);
+    const unlockingRef = useRef(false);
     const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
     const [openBreakdown, setOpenBreakdown] = useState<number | null>(null);
     const [historyItems, setHistoryItems] = useState<InterviewSessionHistoryItem[]>([]);
     const [historyOpen, setHistoryOpen] = useState(true);
+    const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
     const savedReportKeyRef = useRef<string | null>(null);
     const [upgradePromptOpen, setUpgradePromptOpen] = useState(false);
 
@@ -323,6 +341,28 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const { applications } = useRecentApplications(session);
     const [postings, setPostings] = useState<JobPosting[]>([]);
     useEffect(() => {
+        const value = initialInput.trim();
+        if (!value || consumedInitialInputRef.current === value || stage !== 'setup') return;
+        const context = parseToolJobContext(value);
+        if (!context.jobTitle && !context.summary && !context.company) return;
+
+        consumedInitialInputRef.current = value;
+        if (context.jobTitle) setJobTitle(context.jobTitle);
+        if (context.summary) setJobDescription(context.summary);
+        if (context.responsibilities) setJobResponsibilities(context.responsibilities);
+        if (context.requiredQualifications) setJobRequirements(context.requiredQualifications);
+        if (context.company) {
+            setCompanyName(context.company);
+            setCompanyOpen(true);
+        }
+        // Interview Prep hands its evidence-ranked questions through the same
+        // payload; when present, interview on them instead of generating fresh.
+        const seeds = parseToolInterviewSeed(value);
+        setSeedQuestions(seeds.map((s) => ({ question: s.question, category: s.category || 'General', tip: '' })));
+        setError(null);
+    }, [initialInput, stage]);
+
+    useEffect(() => {
         let cancelled = false;
         listAllActiveJobPostings()
             .then((rows) => { if (!cancelled) setPostings(rows); })
@@ -333,6 +373,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     useEffect(() => {
         if (!sessionUserId) {
             setHistoryItems([]);
+            setSelectedHistoryId(null);
             return;
         }
         return subscribeInterviewSessions(
@@ -343,8 +384,21 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     }, [sessionUserId]);
 
     useEffect(() => {
+        if (selectedHistoryId && !historyItems.some((item) => item.id === selectedHistoryId)) {
+            setSelectedHistoryId(null);
+        }
+    }, [historyItems, selectedHistoryId]);
+
+    const selectedHistoryItem = selectedHistoryId
+        ? historyItems.find((item) => item.id === selectedHistoryId) ?? null
+        : null;
+
+    useEffect(() => {
         mountedRef.current = true;
-        return () => { mountedRef.current = false; };
+        return () => {
+            mountedRef.current = false;
+            unlockingRef.current = false;
+        };
     }, []);
 
     const companyNameSuggestions = Array.from(
@@ -429,17 +483,31 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         if (value.startsWith('job:')) {
             const posting = postings.find((p) => p.id === value.slice(4));
             if (!posting) return;
+            // The user is choosing a different job context, so any prep-brief seed
+            // no longer matches — drop it and generate fresh for the new context.
+            setSeedQuestions([]);
             setJobTitle(posting.title);
             if (posting.description) setJobDescription(posting.description);
             if (posting.company_name) setCompanyName(posting.company_name);
         } else if (value.startsWith('app:')) {
             const app = applications.find((a) => a.id === value.slice(4));
             if (!app) return;
+            setSeedQuestions([]);
             setJobTitle(app.job_title);
+            if (app.description) setJobDescription(app.description);
+            if (app.responsibilities) setJobResponsibilities(app.responsibilities);
+            if (app.required_qualifications) setJobRequirements(app.required_qualifications);
+            if (app.company_name) {
+                setCompanyName(app.company_name);
+                setCompanyOpen(true);
+            }
         }
     };
 
     const fillSample = () => {
+        // Loading the worked example replaces the setup context, so a prior
+        // prep-brief seed should no longer drive the interview.
+        setSeedQuestions([]);
         setInterviewType('technical');
         setJobTitle(SAMPLE.title);
         setJobDescription(SAMPLE.description);
@@ -534,9 +602,16 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     // ── Flow: setup → disclaimer → generate → timed questions → session report ──
     const handleStartClicked = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!jobTitle.trim()) { setError(t('mi_error_title_required')); return; }
-        if (!jobDescription.trim() && !jobResponsibilities.trim() && !jobRequirements.trim()) {
-            setError(t('mi_error_context_required')); return;
+        // When questions are seeded from Interview Prep, the prep brief IS the
+        // content: the job title rides in on the seed and a full job description
+        // is optional, so the from-scratch setup requirements don't apply. Without
+        // this, the headline Prep → Mock Interview handoff dead-ends here whenever
+        // no job description was entered (the common standalone case).
+        if (seedQuestions.length === 0) {
+            if (!jobTitle.trim()) { setError(t('mi_error_title_required')); return; }
+            if (!jobDescription.trim() && !jobResponsibilities.trim() && !jobRequirements.trim()) {
+                setError(t('mi_error_context_required')); return;
+            }
         }
         if (!session) { setError(t('error_login_required_interview')); return; }
         setError(null);
@@ -552,7 +627,11 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         savedReportKeyRef.current = null;
         const myToken = ++genTokenRef.current;
         try {
-            const generated = await generateInterviewQuestions(resumeText, assembleContext(), market);
+            // Prefer the evidence-ranked questions handed in from Interview Prep;
+            // fall back to fresh server generation when there is no seed.
+            const generated = seedQuestions.length > 0
+                ? seedQuestions.slice(0, 8)
+                : await generateInterviewQuestions(resumeText, assembleContext(), market);
             // Bail if the user cancelled/restarted while we were generating — otherwise
             // a cancelled generation would still yank them into the interview.
             if (!mountedRef.current || myToken !== genTokenRef.current) return;
@@ -672,7 +751,8 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     };
 
     const handleUnlock = async () => {
-        if (!lockedReport || unlocking) return;
+        if (!lockedReport || unlocking || unlockingRef.current) return;
+        unlockingRef.current = true;
         setUnlockConfirmOpen(false);
         setUnlocking(true);
         setError(null);
@@ -686,6 +766,7 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         } catch (err) {
             if (mountedRef.current) setError(err instanceof Error ? err.message : 'Unlock failed.');
         } finally {
+            unlockingRef.current = false;
             if (mountedRef.current) setUnlocking(false);
         }
     };
@@ -901,28 +982,32 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
 
     if (stage === 'loading') {
         return (
-            <StagedLoader
-                title={t('tool_mock_interview_starting_button')}
-                steps={[
-                    t('tool_mock_interview_loader_step1'),
-                    t('tool_mock_interview_loader_step2'),
-                    t('tool_mock_interview_loader_step3'),
-                ]}
-                onCancel={() => { genTokenRef.current += 1; setStage('setup'); }}
-                icon={<MessageSquare />}
-                accent="violet"
-            />
+            <div data-qa="interview-simulator" data-qa-interview-stage="loading">
+                <StagedLoader
+                    title={t('tool_mock_interview_starting_button')}
+                    steps={[
+                        t('tool_mock_interview_loader_step1'),
+                        t('tool_mock_interview_loader_step2'),
+                        t('tool_mock_interview_loader_step3'),
+                    ]}
+                    onCancel={() => { genTokenRef.current += 1; setStage('setup'); }}
+                    icon={<MessageSquare />}
+                    accent="violet"
+                />
+            </div>
         );
     }
 
     if (stage === 'evaluating') {
         return (
-            <StagedLoader
-                title={t('mi_report_title')}
-                steps={[t('mi_eval_step1'), t('mi_eval_step2'), t('mi_eval_step3')]}
-                icon={<ClipboardCheck />}
-                accent="violet"
-            />
+            <div data-qa="interview-simulator" data-qa-interview-stage="evaluating">
+                <StagedLoader
+                    title={t('mi_report_title')}
+                    steps={[t('mi_eval_step1'), t('mi_eval_step2'), t('mi_eval_step3')]}
+                    icon={<ClipboardCheck />}
+                    accent="violet"
+                />
+            </div>
         );
     }
 
@@ -936,7 +1021,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
         const progressPct = questions.length ? ((currentIndex + 1) / questions.length) * 100 : 0;
         const timerTone = urgent ? 'red' : phase === 'prep' ? 'amber' : 'blue';
         return (
-            <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-xl animate-fade-in dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50">
+            <div data-qa="interview-simulator" data-qa-interview-stage="interviewing" className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-xl animate-fade-in dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50">
                 <header className="flex flex-col gap-4 border-b border-slate-200 bg-white p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between dark:border-slate-700 dark:bg-slate-900">
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
@@ -1004,7 +1089,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                     {currentIndex + 1} / {questions.length}
                                 </span>
                             </div>
-                            <p className="mt-4 text-2xl font-semibold leading-tight text-slate-950 lg:text-3xl dark:text-slate-50">
+                            <p data-qa="mock-interview-question" className="mt-4 text-2xl font-semibold leading-tight text-slate-950 lg:text-3xl dark:text-slate-50">
                                 {q?.question}
                             </p>
                         </div>
@@ -1018,6 +1103,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                 </div>
                                 <button
                                     type="button"
+                                    data-qa="mock-interview-start-answering"
                                     onClick={startAnsweringNow}
                                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800"
                                 >
@@ -1052,6 +1138,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                     </div>
                                 </div>
                                 <textarea
+                                    data-qa="mock-interview-answer"
                                     ref={answerBoxRef}
                                     value={answerDraft}
                                     onChange={(e) => setAnswerDraft(e.target.value)}
@@ -1062,6 +1149,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                     <p className="text-xs text-slate-500">{t('mi_autosubmit_note')}</p>
                                     <button
                                         type="button"
+                                        data-qa="mock-interview-submit-answer"
                                         onClick={submitAnswer}
                                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800"
                                     >
@@ -1140,23 +1228,14 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
         if (lockedReport) {
             return (
                 <>
-                <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-6 sm:p-8 animate-fade-in space-y-6">
+                <div data-qa="interview-simulator" data-qa-interview-stage="report" className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-6 sm:p-8 animate-fade-in space-y-6">
                     <div className="flex flex-col items-center text-center gap-3">
-                        <div className="relative h-28 w-28">
-                            <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-                                <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-gray-200 dark:stroke-slate-700" strokeWidth="3.5" />
-                                <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-violet-500" strokeWidth="3.5" strokeLinecap="round"
-                                    strokeDasharray={`${Math.max(0, Math.min(100, lockedReport.preview.overallScore))} 100`} />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-3xl font-bold text-gray-800 dark:text-gray-100">{Math.round(lockedReport.preview.overallScore)}</span>
-                                <span className="text-[10px] text-gray-400 dark:text-slate-500">/100</span>
-                            </div>
-                        </div>
+                        <ScoreRing value={lockedReport.preview.overallScore} color="#8b5cf6" />
                         <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t('mi_locked_title')}</h3>
                         {lockedReport.preview.firstStrength && (
-                            <p className="text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-4 py-2 max-w-md">
-                                ✓ {lockedReport.preview.firstStrength}
+                            <p className="inline-flex max-w-md items-start gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-left text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                                <span>{lockedReport.preview.firstStrength}</span>
                             </p>
                         )}
                         <p className="text-sm text-gray-500 dark:text-slate-400 max-w-md">
@@ -1207,7 +1286,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
         }
         if (!report) {
             return (
-                <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-8 animate-fade-in text-center space-y-4">
+                <div data-qa="interview-simulator" data-qa-interview-stage="report" className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-8 animate-fade-in text-center space-y-4">
                     <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
                     <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                     <div className="flex justify-center gap-3">
@@ -1227,24 +1306,13 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
         }
         const verdictMeta = VERDICT_META[report.verdict?.toLowerCase?.() ?? ''] ?? VERDICT_META['leaning hire'];
         return (
-            <div className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-6 sm:p-8 animate-fade-in space-y-6 overflow-y-auto">
+            <div data-qa="interview-simulator" data-qa-interview-stage="report" className="bg-white dark:bg-slate-800/50 rounded-xl shadow-2xl w-full p-6 sm:p-8 animate-fade-in space-y-6 overflow-y-auto">
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     {/* score ring */}
-                    <div className="relative h-28 w-28 shrink-0">
-                        <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-                            <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-gray-200 dark:stroke-slate-700" strokeWidth="3.5" />
-                            <circle
-                                cx="18" cy="18" r="15.9" fill="none"
-                                className={report.overallScore >= 75 ? 'stroke-emerald-500' : report.overallScore >= 50 ? 'stroke-amber-500' : 'stroke-red-500'}
-                                strokeWidth="3.5" strokeLinecap="round"
-                                strokeDasharray={`${Math.max(0, Math.min(100, report.overallScore))} 100`}
-                            />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-3xl font-bold text-gray-800 dark:text-gray-100">{Math.round(report.overallScore)}</span>
-                            <span className="text-[10px] text-gray-400 dark:text-slate-500">/100</span>
-                        </div>
-                    </div>
+                    <ScoreRing
+                        value={report.overallScore}
+                        color={report.overallScore >= 75 ? '#10b981' : report.overallScore >= 50 ? '#f59e0b' : '#ef4444'}
+                    />
                     <div className="flex-1 text-center sm:text-left">
                         <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center justify-center sm:justify-start gap-2">
                             <Award className="h-5 w-5 text-violet-500" />
@@ -1256,7 +1324,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                 {t(verdictMeta.labelKey)}
                             </span>
                         </div>
-                        <p className="mt-3 text-sm text-gray-600 dark:text-slate-300 leading-relaxed">{report.summary}</p>
+                        <p data-qa="mock-interview-report-summary" className="mt-3 text-sm text-gray-600 dark:text-slate-300 leading-relaxed">{report.summary}</p>
                     </div>
                 </div>
 
@@ -1277,7 +1345,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
 
                 <div>
                     <h5 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-2">{t('mi_report_breakdown')}</h5>
-                    <div className="divide-y divide-gray-100 dark:divide-slate-700 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                    <div data-qa="mock-interview-report-breakdown" className="divide-y divide-gray-100 dark:divide-slate-700 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
                         {report.perQuestion.map((pq, i) => (
                             <div key={i} className="bg-white dark:bg-slate-800">
                                 <button
@@ -1336,7 +1404,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
 
     // ── Setup stage ───────────────────────────────────────────────────────────
     return (
-        <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-fade-in dark:border-slate-700 dark:bg-slate-900">
+        <div data-qa="interview-simulator" data-qa-interview-stage="setup" className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-fade-in dark:border-slate-700 dark:bg-slate-900">
             {showDisclaimer && (
                 <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
                     <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
@@ -1352,6 +1420,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         </ul>
                         <label className="mt-4 flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                             <input
+                                data-qa="mock-interview-disclaimer-checkbox"
                                 type="checkbox"
                                 checked={disclaimerChecked}
                                 onChange={(e) => setDisclaimerChecked(e.target.checked)}
@@ -1370,6 +1439,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                             <button
                                 type="button"
                                 disabled={!disclaimerChecked}
+                                data-qa="mock-interview-disclaimer-accept"
                                 onClick={beginInterview}
                                 className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900/50"
                             >
@@ -1400,6 +1470,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">3m answer</span>
                         <button
                             type="button"
+                            data-qa="mock-interview-try-example"
                             onClick={fillSample}
                             className="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
@@ -1420,6 +1491,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                     <div>
                         <label htmlFor="mi-job-title" className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Role target</label>
                         <input
+                            data-qa="mock-interview-job-title"
                             id="mi-job-title"
                             type="text"
                             className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
@@ -1429,6 +1501,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         />
                         {(postings.length > 0 || applications.length > 0) && (
                             <select
+                                data-qa="mock-interview-job-source"
                                 defaultValue=""
                                 onChange={(e) => handleJobSourcePick(e.target.value)}
                                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
@@ -1483,6 +1556,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         </summary>
                         <div className="mt-3 space-y-2">
                             <textarea
+                                data-qa="mock-interview-job-description"
                                 rows={3}
                                 className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                                 placeholder={t('mi_job_desc_placeholder')}
@@ -1492,6 +1566,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                             />
                             <div className="grid gap-2">
                                 <textarea
+                                    data-qa="mock-interview-job-responsibilities"
                                     rows={2}
                                     className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                                     placeholder={t('mi_job_resp_placeholder')}
@@ -1500,6 +1575,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                     aria-label={t('mi_job_resp_label')}
                                 />
                                 <textarea
+                                    data-qa="mock-interview-job-requirements"
                                     rows={2}
                                     className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                                     placeholder={t('mi_job_req_placeholder')}
@@ -1561,6 +1637,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                         {companyOpen && (
                             <div className="mt-3 grid gap-2">
                                 <input
+                                    data-qa="mock-interview-company-name"
                                     type="text"
                                     list="mi-company-names"
                                     className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
@@ -1663,7 +1740,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                             <span>{t('mi_flow_note')}</span>
                         </div>
                         {isPaid ? (
-                            <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800">
+                            <button data-qa="mock-interview-start" type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800">
                                 <PlayCircle className="h-4 w-4" />
                                 {t('tool_mock_interview_start_button')}
                             </button>
@@ -1711,7 +1788,19 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                         </div>
                                     ) : (
                                         historyItems.slice(0, 4).map((item) => (
-                                            <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+                                            <button
+                                                key={item.id}
+                                                type="button"
+                                                onClick={() => setSelectedHistoryId((current) => current === item.id ? null : item.id)}
+                                                aria-pressed={selectedHistoryId === item.id}
+                                                data-qa="mock-interview-history-item"
+                                                data-qa-selected={selectedHistoryId === item.id ? 'true' : 'false'}
+                                                className={`w-full rounded-xl border p-3 text-left transition ${
+                                                    selectedHistoryId === item.id
+                                                        ? 'border-blue-300 bg-blue-50 shadow-sm ring-2 ring-blue-500/10 dark:border-blue-800/70 dark:bg-blue-950/30'
+                                                        : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-slate-600 dark:hover:bg-slate-800'
+                                                }`}
+                                            >
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0">
                                                         <p className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">{historyTitle(item)}</p>
@@ -1727,8 +1816,77 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                                 {item.overall_summary && (
                                                     <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{item.overall_summary}</p>
                                                 )}
-                                            </div>
+                                            </button>
                                         ))
+                                    )}
+                                    {selectedHistoryItem && (
+                                        <div
+                                            data-qa="mock-interview-history-detail"
+                                            className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm animate-panel-expand dark:border-blue-900/50 dark:bg-slate-950"
+                                        >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-300">
+                                                        {t('mi_report_title')}
+                                                    </p>
+                                                    <h4 className="mt-1 truncate text-sm font-bold text-slate-950 dark:text-white">
+                                                        {historyTitle(selectedHistoryItem)}
+                                                    </h4>
+                                                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                                        {historyDate(selectedHistoryItem.started_at) || t('mi_history_recent')}
+                                                        {selectedHistoryItem.market_name ? ` · ${selectedHistoryItem.market_name}` : ''}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedHistoryId(null)}
+                                                    aria-label={t('tool_mock_interview_close_button')}
+                                                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                                                >
+                                                    <X className="h-4 w-4" aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                            {selectedHistoryItem.overall_summary && (
+                                                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/70">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                                        {t('mi_report_summary_h')}
+                                                    </p>
+                                                    <p data-qa="mock-interview-history-summary" className="mt-1 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                                                        {selectedHistoryItem.overall_summary}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            <div className="mt-3 space-y-2">
+                                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                                    {t('mi_report_breakdown')}
+                                                </p>
+                                                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                                                    {selectedHistoryItem.exchanges.map((exchange, index) => (
+                                                        <div
+                                                            key={`${selectedHistoryItem.id}-${index}`}
+                                                            data-qa="mock-interview-history-exchange"
+                                                            className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 dark:border-slate-800 dark:bg-slate-900/70"
+                                                        >
+                                                            <div className="flex items-start gap-2">
+                                                                <span className="inline-flex h-6 min-w-8 shrink-0 items-center justify-center rounded-md bg-white px-2 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">
+                                                                    {typeof exchange.score === 'number' ? Math.round(exchange.score) : `Q${index + 1}`}
+                                                                </span>
+                                                                <p className="font-semibold text-slate-800 dark:text-slate-100">{exchange.question}</p>
+                                                            </div>
+                                                            <p className="mt-2 text-slate-500 dark:text-slate-400">
+                                                                <span className="font-semibold text-slate-700 dark:text-slate-200">{t('mi_report_your_answer')}:</span>{' '}
+                                                                {exchange.answer?.trim() || t('mi_no_answer')}
+                                                            </p>
+                                                            {exchange.feedback && (
+                                                                <p className="mt-2 rounded-lg bg-white p-2 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-800">
+                                                                    {exchange.feedback}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             )}

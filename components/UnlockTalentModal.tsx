@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { LockKeyhole } from 'lucide-react';
 import type { UserProfile } from '../types';
 import { ethers } from 'ethers';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
@@ -18,9 +19,11 @@ interface UnlockTalentModalProps {
 }
 
 // NOTE: In a real app, this would be in a shared constants file.
-// A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
+// Reserved Sepolia-compatible address for the live credential unlock flow.
 const TALENT_NFT_CONTRACT_ADDRESS =
   '0x2A3b1A43842238321a22542a035921A362358189';
+
+const TALENT_NFT_PREVIEW_MODE = true;
 
 const TALENT_NFT_ABI = [
   'event ProfileUnlocked(uint256 indexed tokenId, address indexed employer, uint256 payment)',
@@ -57,6 +60,10 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
   React.useEffect(() => {
     let active = true;
     const fetchUnlockFee = async () => {
+      if (TALENT_NFT_PREVIEW_MODE) {
+        if (active) setUnlockFee(t('unlock_modal_fee_preview'));
+        return;
+      }
       if (!hasWallet) {
         if (active) setUnlockFee(t('unlock_modal_fee_unavailable'));
         return;
@@ -89,6 +96,17 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
     }
     if (!candidate.nft_token_id) {
       setError(t('unlock_error_invalid_token'));
+      return;
+    }
+    if (TALENT_NFT_PREVIEW_MODE) {
+      setIsPaying(true);
+      setError(null);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        if (mountedRef.current) onUnlocked(candidate);
+      } finally {
+        if (mountedRef.current) setIsPaying(false);
+      }
       return;
     }
     if (!hasWallet) {
@@ -148,20 +166,7 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
       <div className="rounded-xl bg-white shadow-2xl dark:bg-slate-800">
         <div className="p-6 text-center">
           <div className="w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-950 rounded-full flex items-center justify-center mb-4 border-4 border-white dark:border-slate-800 shadow-md">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-8 w-8 text-blue-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-              />
-            </svg>
+            <LockKeyhole className="h-8 w-8 text-blue-600 dark:text-blue-300" aria-hidden="true" />
           </div>
 
           <h3
@@ -189,7 +194,9 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
               </div>
             ) : canUnlock ? (
               <p className="text-gray-600 dark:text-gray-300">
-                {t('unlock_modal_desc')}
+                {TALENT_NFT_PREVIEW_MODE
+                  ? t('unlock_modal_desc_preview')
+                  : t('unlock_modal_desc')}
               </p>
             ) : (
               <p className="text-yellow-800 bg-yellow-50 p-3 rounded-md border border-yellow-200">
@@ -210,7 +217,9 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
               </p>
               {!hasWallet && (
                 <p className="mt-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
-                  {t('unlock_modal_wallet_missing')}
+                  {TALENT_NFT_PREVIEW_MODE
+                    ? t('unlock_modal_wallet_preview_note')
+                    : t('unlock_modal_wallet_missing')}
                 </p>
               )}
             </div>
@@ -246,10 +255,10 @@ const UnlockTalentModal: React.FC<UnlockTalentModalProps> = ({
             <button
               type="button"
               onClick={handleUnlock}
-              disabled={isPaying || !hasWallet}
+              disabled={isPaying || (!TALENT_NFT_PREVIEW_MODE && !hasWallet)}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:bg-blue-400"
             >
-              {!hasWallet
+              {!TALENT_NFT_PREVIEW_MODE && !hasWallet
                 ? t('unlock_modal_wallet_required')
                 : isPaying
                   ? t('unlock_modal_unlocking')

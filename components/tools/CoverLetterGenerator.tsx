@@ -7,7 +7,7 @@ import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { useApiStatus } from '../../contexts/ApiStatusContext';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { useRecentApplications } from '../../hooks/useRecentApplications';
+import { useRecentApplications, type RecentApplication } from '../../hooks/useRecentApplications';
 import type { AppSession as Session } from '../../lib/data';
 import {
   assessCoverLetterDraft,
@@ -20,6 +20,7 @@ interface CoverLetterGeneratorProps {
   resumeText: string;
   market: string;
   initialInput: string;
+  openTool: (tool: string, input?: string) => void;
   t: (key: string) => string;
   session: Session | null;
 }
@@ -83,6 +84,18 @@ const describeTextLength = (text: string, useChineseUnit = false) => {
   return `${countWords(trimmed).toLocaleString()} ${useChineseUnit ? '词' : 'words'}`;
 };
 
+const buildRecentApplicationContext = (app: RecentApplication) => {
+  const lines = [
+    `Job Title: ${app.job_title}`,
+    app.company_name ? `Company: ${app.company_name}` : '',
+    app.location ? `Location: ${app.location}` : '',
+    app.description ? `Posting summary:\n${app.description}` : '',
+    app.responsibilities ? `Responsibilities:\n${app.responsibilities}` : '',
+    app.required_qualifications ? `Required qualifications:\n${app.required_qualifications}` : '',
+  ].filter(Boolean);
+  return lines.join('\n\n');
+};
+
 const CardShell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
   <section className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
     {children}
@@ -96,17 +109,18 @@ const ChecklistItem: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   </li>
 );
 
-const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText, market, initialInput, t, session }) => {
+const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText, market, initialInput, openTool, t, session }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CoverLetterResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<CoverLetterResult>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<CoverLetterResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [jobDescription, setJobDescription] = useState(initialInput);
   const [editableResult, setEditableResult] = useState('');
   const { apiStatus } = useApiStatus();
   const { applications } = useRecentApplications(session);
   const lastAutoRunKey = useRef<string | null>(null);
+  const autoRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isChineseUi = /[\u3400-\u9fff]/.test(t('tool_cover_letter_generate_button'));
   const ui = {
     editTemplate: isChineseUi ? '你可以先编辑这个模板并导出，稍后再尝试生成。' : 'You can edit this template now and export it while generation is unavailable.',
@@ -121,6 +135,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     editableBeforeDownload: isChineseUi ? '生成后仍可编辑，再下载发送。' : 'Keeps the draft editable before download.',
     copyLetter: isChineseUi ? '复制求职信' : 'Copy letter',
     copied: isChineseUi ? '已复制' : 'Copied',
+    formatApplicationPacket: isChineseUi ? '整理申请包' : 'Format application packet',
     editableDraft: isChineseUi ? '可编辑草稿' : 'Editable draft',
     beforeSending: isChineseUi ? '发送前检查' : 'Before sending',
     reviewSpecifics: isChineseUi ? '确认细节后再发送' : 'Review the specifics',
@@ -142,13 +157,26 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
   useEffect(() => {
     setJobDescription(initialInput);
-    if (initialInput && resumeText?.trim()) {
-      const key = `${initialInput}|${resumeText.length}`;
+    if (!initialInput || !resumeText?.trim() || apiStatus !== 'online') {
+      return;
+    }
+    const key = `${initialInput}|${resumeText.length}`;
+    if (lastAutoRunKey.current === key) return;
+
+    autoRunTimerRef.current = setTimeout(() => {
+      autoRunTimerRef.current = null;
       if (lastAutoRunKey.current === key) return;
       lastAutoRunKey.current = key;
       void runTool(initialInput);
-    }
-  }, [initialInput, resumeText]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, 0);
+
+    return () => {
+      if (autoRunTimerRef.current) {
+        clearTimeout(autoRunTimerRef.current);
+        autoRunTimerRef.current = null;
+      }
+    };
+  }, [initialInput, resumeText, apiStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetResult = () => {
     setResult(null);
@@ -201,7 +229,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
         persist(nextResult);
       }
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -216,15 +244,12 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     if (!appId) return;
     const app = applications.find((application) => application.id === appId);
     if (!app) return;
-    setJobDescription((prev) => {
-      const titleLine = `Job Title: ${app.job_title}`;
-      if (prev.includes(titleLine)) return prev;
-      return titleLine + (prev ? `\n\n${prev}` : '');
-    });
+    setJobDescription(buildRecentApplicationContext(app));
+    setError(null);
   };
 
   const renderFallback = () => (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div data-qa="cover-letter-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-5">
       <CardShell className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="p-5 sm:p-6 lg:p-8">
@@ -259,7 +284,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   );
 
   const renderInput = () => (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div data-qa="cover-letter-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-5">
       <CardShell className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
           <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
@@ -278,6 +303,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
               <button
                 type="button"
                 onClick={handleTryExample}
+                data-qa="cover-letter-try-example"
                 className="inline-flex w-fit items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
               >
                 <Sparkles className="h-4 w-4" />
@@ -288,6 +314,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
                 <label className="min-w-0 sm:w-80">
                   <span className="sr-only">{t('tool_cover_letter_recent_apps_placeholder')}</span>
                   <select
+                    data-qa="cover-letter-recent-apps"
                     defaultValue=""
                     onChange={(event) => handleSelectRecentApp(event.target.value)}
                     className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
@@ -308,6 +335,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
             </label>
             <textarea
               id="cover-letter-job-description"
+              data-qa="cover-letter-job-description"
               className="mt-2 min-h-[280px] w-full resize-y rounded-xl border border-slate-300 bg-white p-4 text-sm leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
               placeholder={t('tool_cover_letter_placeholder')}
               value={jobDescription}
@@ -323,6 +351,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
             <button
               type="submit"
+              data-qa="cover-letter-generate"
               disabled={loading}
               className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400"
             >
@@ -380,14 +409,16 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     const validation = assessCoverLetterDraft(editableResult);
 
     return (
-      <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
+      <div data-qa="cover-letter-tool" data-qa-tool-state="result" className="mx-auto max-w-6xl space-y-5 animate-fade-in">
         {canExportCoverLetter(validation) && (
           <SavedResultBar
             t={t}
             canSave={canSave}
             isSaved={fromSaved}
             savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
             onTryNext={resetResult}
+            onClearSaved={() => { clear(); setFromSaved(false); }}
           />
         )}
         <CoverLetterQualityNotice validation={validation} />
@@ -416,6 +447,16 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
                   regenerateLabel={t('tool_cover_letter_generate_button')}
                   onRegenerate={() => void runTool(result.jobDescription || jobDescription)}
                 />
+                <button
+                  type="button"
+                  data-qa="cover-letter-open-resume-formatter"
+                  onClick={() => openTool('resume-formatter', editableResult)}
+                  disabled={!editableResult.trim()}
+                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <FileText className="h-4 w-4" />
+                  {ui.formatApplicationPacket}
+                </button>
               </div>
             </div>
           </div>
@@ -427,6 +468,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
               </label>
               <textarea
                 id="cover-letter-result"
+                data-qa="cover-letter-result"
                 value={editableResult}
                 onChange={(event) => setEditableResult(event.target.value)}
                 className="min-h-[620px] w-full resize-y rounded-xl border border-slate-200 bg-white p-5 font-serif text-base leading-8 text-slate-950 shadow-inner outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
@@ -490,10 +532,10 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
       <StagedLoader
         title={t('tool_cover_letter_generating_button')}
         steps={[
-          'Reading your resume',
-          'Matching the job requirements',
-          `Adapting for ${market}`,
-          'Writing the editable draft',
+          t('tool_cover_letter_loader_step1'),
+          t('tool_cover_letter_loader_step2'),
+          t('tool_cover_letter_loader_step3').replace('{market}', market),
+          t('tool_cover_letter_loader_step4'),
         ]}
         intervalMs={1600}
         onCancel={cancel}

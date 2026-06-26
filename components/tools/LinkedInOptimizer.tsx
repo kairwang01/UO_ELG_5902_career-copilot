@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, CheckCircle2, FileText, Link2, UserRound } from 'lucide-react';
 import { optimizeLinkedInProfile, optimizeLinkedInProfileFromText } from '../../services/aiClient';
 import type { LinkedInOptimization } from '../../types';
@@ -13,6 +13,7 @@ import {
   LinkedInExportGate,
   LinkedInQualityNotice,
 } from './LinkedInActions';
+import { parseToolLinkedInResumeContext } from '../../lib/toolPrefill';
 
 // (b) sample constant — profile-text tab only (never touches resumeText)
 const SAMPLE_PROFILE_TEXT =
@@ -21,32 +22,58 @@ const SAMPLE_PROFILE_TEXT =
 
 interface LinkedInOptimizerProps {
   resumeText: string;
+  initialInput?: string;
   market: string;
   t: (key: string) => string;
 }
 
-const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, market, t }) => {
+const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, initialInput = '', market, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LinkedInOptimization | null>(null);
-  const { canSave, saved, persist } = useToolResults<LinkedInOptimization>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<LinkedInOptimization>();
   const [fromSaved, setFromSaved] = useState(false);
   const [linkedinTab, setLinkedinTab] = useState<'resume' | 'profile'>('resume');
   const [linkedinProfileText, setLinkedinProfileText] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [additionalUrl, setAdditionalUrl] = useState('');
+  const [resumeOverrideText, setResumeOverrideText] = useState('');
+  const [resumeOverrideMarket, setResumeOverrideMarket] = useState('');
+  const [resumePrefillActive, setResumePrefillActive] = useState(false);
+  const consumedInitialInputRef = useRef('');
 
   // Track which mode was used so the error retry can call the right path
   const [lastMode, setLastMode] = useState<'resume' | 'profile'>('resume');
-  const hasResume = resumeText.trim().length > 0;
+  const resumeSourceText = resumeOverrideText.trim() || resumeText;
+  const resumeMarket = resumeOverrideMarket || market;
+  const hasResume = resumeSourceText.trim().length > 0;
   const profileTextReady = linkedinProfileText.trim().length > 0;
 
   useEffect(() => {
+    if (initialInput.trim()) return;
     if (saved && !result && canExportLinkedInOptimization(assessLinkedInOptimization(saved.result))) {
       setResult(saved.result);
       setFromSaved(true);
     }
-  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [saved, result, initialInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const value = initialInput.trim();
+    if (!value || consumedInitialInputRef.current === value) return;
+
+    const context = parseToolLinkedInResumeContext(value);
+    if (!context.formattedResume) return;
+
+    consumedInitialInputRef.current = value;
+    setResumeOverrideText(context.formattedResume);
+    setResumeOverrideMarket(context.targetMarket || '');
+    setResumePrefillActive(true);
+    setLinkedinTab('resume');
+    setLastMode('resume');
+    setResult(null);
+    setFromSaved(false);
+    setError(null);
+  }, [initialInput]);
 
   const runTool = async (options: {
     mode?: 'resume' | 'profile';
@@ -67,14 +94,14 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
         if (!profileText) throw new Error(t('tool_linkedin_optimizer_error_required'));
         apiResult = await optimizeLinkedInProfileFromText(
             profileText,
-            resumeText,
-            market,
+            resumeSourceText,
+            resumeMarket,
             options.customPrompt?.trim(),
             options.additionalUrl?.trim()
         );
       } else {
         if (!hasResume) throw new Error(t('tool_resume_required_error'));
-        apiResult = await optimizeLinkedInProfile(resumeText, market);
+        apiResult = await optimizeLinkedInProfile(resumeSourceText, resumeMarket);
       }
       if (!alive()) return;
       const validation = assessLinkedInOptimization(apiResult);
@@ -84,7 +111,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
         persist(apiResult);
       }
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -114,7 +141,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
   };
 
   const renderInput = () => (
-    <div className="animate-fade-in space-y-5">
+    <div data-qa="linkedin-optimizer-tool" data-qa-tool-state="input" className="animate-fade-in space-y-5">
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
@@ -125,6 +152,14 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
               {t('tool_linkedin_optimizer_intro_desc')}
             </p>
+            {resumePrefillActive && (
+              <p
+                data-qa="linkedin-optimizer-prefill-note"
+                className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-300"
+              >
+                {t('tool_linkedin_optimizer_prefill_resume_label')}
+              </p>
+            )}
           </div>
           <div className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
             hasResume
@@ -133,7 +168,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
           }`}>
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
             {hasResume
-              ? t('ob_resume_chars').replace('{n}', resumeText.trim().length.toLocaleString())
+              ? t('ob_resume_chars').replace('{n}', resumeSourceText.trim().length.toLocaleString())
               : t('tool_resume_required_error')}
           </div>
         </div>
@@ -198,6 +233,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
             <button
               type="button"
               onClick={handleResumeSubmit}
+              data-qa="linkedin-optimizer-generate-resume"
               disabled={loading || !hasResume}
               className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:text-white/90 dark:disabled:bg-blue-900/60 sm:w-auto"
             >
@@ -215,6 +251,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
               <button
                 type="button"
                 onClick={() => setLinkedinProfileText(SAMPLE_PROFILE_TEXT)}
+                data-qa="linkedin-optimizer-try-example"
                 className="shrink-0 text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
               >
                 {t('tool_try_example')}
@@ -228,6 +265,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
                 </label>
                 <textarea
                   id="linkedin-profile-text"
+                  data-qa="linkedin-profile-text"
                   className="mt-2 block h-44 w-full resize-y rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
                   placeholder={t('tool_linkedin_optimizer_profile_placeholder')}
                   value={linkedinProfileText}
@@ -262,6 +300,7 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
               </div>
               <button
                 type="submit"
+                data-qa="linkedin-optimizer-generate-profile"
                 disabled={loading || !profileTextReady}
                 className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:text-white/90 dark:disabled:bg-blue-900/60 sm:w-auto"
               >
@@ -276,8 +315,21 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
   );
 
   const renderResult = () => {
-    // (c) StagedLoader already has onCancel + icon + accent — preserved as-is
-    if (loading) return <StagedLoader title="Optimizing your profile" steps={["Reading your profile…","Identifying improvements…","Rewriting headline & summary…"]} onCancel={cancel} icon={<Link2 />} accent="cyan" />;
+    if (loading) {
+      return (
+        <StagedLoader
+          title={t('tool_linkedin_optimizer_loader_title')}
+          steps={[
+            t('tool_linkedin_optimizer_loader_step1'),
+            t('tool_linkedin_optimizer_loader_step2'),
+            t('tool_linkedin_optimizer_loader_step3'),
+          ]}
+          onCancel={cancel}
+          icon={<Link2 />}
+          accent="cyan"
+        />
+      );
+    }
 
     // (e) ERROR RETRY
     if (error) return <ToolError message={error} onRetry={handleRetry} retryLabel={t('tool_try_again')} />;
@@ -297,14 +349,16 @@ const LinkedInOptimizer: React.FC<LinkedInOptimizerProps> = ({ resumeText, marke
     const validation = assessLinkedInOptimization(result);
 
     return (
-      <div className="space-y-6 animate-fade-in">
+      <div data-qa="linkedin-optimizer-tool" data-qa-tool-state="result" className="space-y-6 animate-fade-in">
         {canExportLinkedInOptimization(validation) && (
           <SavedResultBar
             t={t}
             canSave={canSave}
             isSaved={fromSaved}
             savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
             onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+            onClearSaved={() => { clear(); setFromSaved(false); }}
           />
         )}
         <LinkedInQualityNotice validation={validation} />

@@ -56,7 +56,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.logs.col_latency': 'Latency',
   'api.docs.title': 'Documentation',
   'api.docs.body':
-    'Endpoint reference and request examples live with the user-facing API docs. End users issue personal keys from Account → API Access; the applications on this page are for partner-level integrations.',
+    'Endpoint reference and request examples live with the API docs. Personal keys can be enabled from account settings later; the applications on this page are for partner-level integrations.',
   'api.docs.link': 'Open API reference',
   'api.docs.endpoints': 'Gateway endpoints',
   'api.docs.auth_hint': 'Partners authenticate every request with their key:',
@@ -71,7 +71,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.secret.title': 'Copy your new key',
   'api.secret.warning': 'This secret is shown once. After closing, only the prefix remains visible.',
   'api.secret.copy': 'Copy',
-  'api.secret.copied': 'Copied ✓',
+  'api.secret.copied': 'Copied',
   'api.secret.confirm': 'I have stored this key',
   'api.revoke.confirm_prefix': 'Revoke',
   'api.revoke.confirm_suffix': 'Calls with this key stop working immediately. This cannot be undone.',
@@ -104,9 +104,9 @@ const ADMIN_TEXT: Record<string, string> = {
     'Application-side access by account type. Enforced by route guards and the server-side model tier gate (resolveProvider).',
 
   // ── Web3 settings panel ──
-  'web3.banner.title': 'Experimental module.',
+  'web3.banner.title': 'Preview module.',
   'web3.banner.body':
-    'Runs on the Sepolia testnet only. No real funds are involved and the core product never requires a wallet.',
+    'Runs as an optional Sepolia preview. The core product never requires a wallet.',
   'web3.toggle.title': 'Web3 identity module',
   'web3.toggle.desc':
     'Controls the candidate-facing surface: the wallet section in Account and the Identity & Wallet workspace view (Proof-of-Talent credential, staking, rewards). When off, both are hidden entirely — sign-in, payments and all AI features are unaffected.',
@@ -118,7 +118,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'web3.error.load': 'Could not load Web3 settings.',
   'web3.error.save': 'Could not save Web3 settings.',
   'web3.updated_prefix': 'Last updated',
-  'web3.usage.title': 'What Web3 is used for here',
+  'web3.usage.title': 'What this module covers',
   'web3.contract.title': 'Contract',
   'web3.contract.network': 'Network',
   'web3.contract.address': 'Proof-of-Talent',

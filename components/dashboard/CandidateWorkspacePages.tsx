@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import {
+  AlertTriangle,
   ArrowRight,
   Briefcase,
   CalendarCheck,
@@ -34,6 +35,8 @@ interface WorkspacePageProps {
   onOpenTool: (tool: string) => void;
   onViewChange: (view: WorkspaceView) => void;
   session?: Session | null;
+  profile?: UserProfile | null;
+  refreshProfile?: () => void;
 }
 
 const candidatePlanKeys = ['free', 'essentials', 'accelerator', 'executive'] as const;
@@ -512,7 +515,16 @@ export const ResumeReadinessPage: React.FC<WorkspacePageProps> = ({
   );
 };
 
-export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUploadResume, onOpenTool, onViewChange, session }) => {
+export const JobMatchPage: React.FC<WorkspacePageProps> = ({
+  resumeText,
+  t,
+  onUploadResume,
+  onOpenTool,
+  onViewChange,
+  session,
+  profile,
+  refreshProfile,
+}) => {
   const hasResume = resumeText.trim().length > 0;
 
   return (
@@ -526,7 +538,7 @@ export const JobMatchPage: React.FC<WorkspacePageProps> = ({ resumeText, t, onUp
         primaryLabel={hasResume ? t('ws_job_match_find_more') : t('ws_upload_resume')}
         onPrimary={() => (hasResume ? onOpenTool('opportunity-finder') : onUploadResume())}
       />
-      <CareerGoalsPanel t={t} />
+      <CareerGoalsPanel t={t} session={session ?? null} profile={profile ?? null} refreshProfile={refreshProfile} />
       <BrowseJobs session={session ?? null} t={t} onEditProfile={() => onViewChange('talent_profile')} />
 
       {!hasResume ? (
@@ -804,6 +816,7 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
   const isPending = currentStatus.startsWith('pending_');
   const hasActivePaidPlan = currentLevel > 0 && !isPending;
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const [planToConfirm, setPlanToConfirm] = useState<CandidatePlanKey | null>(null);
   const openingPortalRef = useRef(false);
 
@@ -811,11 +824,13 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
     if (openingPortal || openingPortalRef.current) return;
     openingPortalRef.current = true;
     setOpeningPortal(true);
+    setPortalError(null);
     try {
       const { url } = await createBillingPortalSession();
       window.location.assign(url);
     } catch {
       openingPortalRef.current = false;
+      setPortalError(t('portal_billing_portal_error'));
       setOpeningPortal(false);
     }
   };
@@ -876,11 +891,22 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
               <button
                 type="button"
                 onClick={handleManageSubscription}
+                aria-describedby={portalError ? 'workspace-billing-portal-error' : undefined}
                 disabled={openingPortal}
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 {openingPortal ? t('ws_billing_opening_portal') : t('ws_billing_manage_subscription')}
               </button>
+              {portalError && (
+                <div
+                  id="workspace-billing-portal-error"
+                  role="alert"
+                  className="mt-3 flex max-w-xl items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+                >
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{portalError}</span>
+                </div>
+              )}
             </div>
           )}
           {isPending && (

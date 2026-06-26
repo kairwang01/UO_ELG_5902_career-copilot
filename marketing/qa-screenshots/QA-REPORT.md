@@ -1,7 +1,7 @@
 # Beta Screenshot QA
 
-Generated: 2026-06-17T23:30:13.222Z
-Server: http://localhost:62534 (VITE_BETA_REDESIGN=true)
+Generated: 2026-06-26T14:40:53.666Z
+Server: http://localhost:64499 (VITE_BETA_REDESIGN=true)
 
 ## Summary
 
@@ -41,6 +41,7 @@ Server: http://localhost:62534 (VITE_BETA_REDESIGN=true)
 ### `/workspace` @ desktop — PASS
 - OK app shell route (no marketing marker)
 - OK no horizontal overflow
+- OK cookie banner avoids upload controls
 
 ### `/portal` @ desktop — PASS
 - OK app shell route (no marketing marker)
@@ -69,6 +70,7 @@ Server: http://localhost:62534 (VITE_BETA_REDESIGN=true)
 ### `/workspace` @ mobile — PASS
 - OK app shell route (no marketing marker)
 - OK no horizontal overflow
+- OK cookie banner avoids upload controls
 
 ### `/portal` @ mobile — PASS
 - OK app shell route (no marketing marker)

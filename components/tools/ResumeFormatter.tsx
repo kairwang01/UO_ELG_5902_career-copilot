@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle2, FileText, Globe2, Info } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { AlertTriangle, CheckCircle2, FileText, Globe2, Info, Link2 } from 'lucide-react';
 import { convertResumeFormat } from '../../services/aiClient';
 import type { FormattedResume } from '../../types';
 import StagedLoader from '../StagedLoader';
@@ -12,6 +12,7 @@ import ResumePreview from '../ResumePreview';
 import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle } from '../../lib/resumePreview';
 import { getMarketLocalLanguage, resolveOutputLanguageName, type OutputLanguageChoice } from '../../lib/resumeLanguage';
 import { ResumeFormatterDownloadGate } from './ResumeFormatterActions';
+import { buildLinkedInContextFromFormattedResume } from '../../lib/toolPrefill';
 
 const MARKET_HINT_KEY: Record<string, string> = {
   'Canada':         'resume_market_hint_canada',
@@ -41,13 +42,18 @@ type ReadinessItem = {
   severity: ReadinessSeverity;
 };
 
-const RESUME_FORMAT_ISSUE_LABELS: Record<string, string> = {
-  empty: 'No resume content was generated.',
-  photo_placeholder: 'A photo placeholder is still present.',
-  pipe_table: 'A table-like layout is still present.',
-  no_sections: 'The resume did not split into clear sections.',
-  overlong_header: 'The header area is still too dense.',
-  garbled_header: 'Contact details are still mixed into the name/header.',
+const localizedCopy = (t: (key: string) => string, key: string, fallback: string): string => {
+  const value = t(key);
+  return value === key ? fallback : value;
+};
+
+const RESUME_FORMAT_ISSUE_LABELS: Record<string, { key: string; fallback: string }> = {
+  empty: { key: 'quality_resume_empty', fallback: 'No resume content was generated.' },
+  photo_placeholder: { key: 'quality_resume_photo_placeholder', fallback: 'A photo placeholder is still present.' },
+  pipe_table: { key: 'quality_resume_pipe_table', fallback: 'A table-like layout is still present.' },
+  no_sections: { key: 'quality_resume_no_sections', fallback: 'The resume did not split into clear sections.' },
+  overlong_header: { key: 'quality_resume_overlong_header', fallback: 'The header area is still too dense.' },
+  garbled_header: { key: 'quality_resume_garbled_header', fallback: 'Contact details are still mixed into the name/header.' },
 };
 
 const readinessRank: Record<ReadinessSeverity, number> = {
@@ -65,10 +71,16 @@ const getReadinessState = (items: ReadinessItem[]): 'ready' | 'review' | 'regene
   return 'ready';
 };
 
-const getBlockingIssueSummary = (issues: string[]): string => {
+const resumeIssueLabel = (issue: string, t: (key: string) => string): string => {
+  const label = RESUME_FORMAT_ISSUE_LABELS[issue];
+  if (!label) return issue.replace(/_/g, ' ');
+  return localizedCopy(t, label.key, label.fallback);
+};
+
+const getBlockingIssueSummary = (issues: string[], t: (key: string) => string): string => {
   const blocking = issues.filter((issue) => issue !== 'sensitive_fields');
-  if (blocking.length === 0) return 'Standard sections and readable line breaks detected.';
-  return blocking.map((issue) => RESUME_FORMAT_ISSUE_LABELS[issue] || issue.replace(/_/g, ' ')).join(' ');
+  if (blocking.length === 0) return localizedCopy(t, 'quality_resume_standard_sections', 'Standard sections and readable line breaks detected.');
+  return blocking.map((issue) => resumeIssueLabel(issue, t)).join(' ');
 };
 
 const buildReadinessItems = (
@@ -82,30 +94,32 @@ const buildReadinessItems = (
   return [
     {
       id: 'market-style',
-      label: 'Market style',
+      label: localizedCopy(t, 'tool_resume_readiness_market_style', 'Market style'),
       description: `${t(marketStyle.labelKey)} · ${marketStyle.pageSize.toUpperCase()}`,
       severity: 'pass',
     },
     {
       id: 'structure',
-      label: 'Document structure',
-      description: getBlockingIssueSummary(validation.issues),
+      label: localizedCopy(t, 'tool_resume_readiness_structure', 'Document structure'),
+      description: getBlockingIssueSummary(validation.issues, t),
       severity: blockingIssues.length > 0 ? 'block' : 'pass',
     },
     {
       id: 'privacy',
-      label: 'Privacy check',
+      label: localizedCopy(t, 'tool_resume_readiness_privacy', 'Privacy check'),
       description: validation.issues.includes('sensitive_fields')
-        ? 'Review personal fields such as birth date, nationality, gender, or visa status before sending.'
-        : 'No obvious protected personal fields detected.',
+        ? localizedCopy(t, 'tool_resume_readiness_privacy_review', 'Review personal fields such as birth date, nationality, gender, or visa status before sending.')
+        : localizedCopy(t, 'tool_resume_readiness_privacy_pass', 'No obvious protected personal fields detected.'),
       severity: validation.issues.includes('sensitive_fields') ? 'review' : 'pass',
     },
     {
       id: 'target-market',
-      label: 'Current target',
+      label: localizedCopy(t, 'tool_resume_readiness_target', 'Current target'),
       description: targetMarket === generatedMarket
-        ? `Download will match the generated ${generatedMarket} version.`
-        : `Preview is still ${generatedMarket}. Generate again before downloading a ${targetMarket} version.`,
+        ? localizedCopy(t, 'tool_resume_readiness_target_match', 'Download will match the generated {market} version.').replace('{market}', generatedMarket)
+        : localizedCopy(t, 'tool_resume_readiness_target_mismatch', 'Preview is still {generatedMarket}. Generate again before downloading a {targetMarket} version.')
+          .replace('{generatedMarket}', generatedMarket)
+          .replace('{targetMarket}', targetMarket),
       severity: targetMarket === generatedMarket ? 'pass' : 'review',
     },
   ];
@@ -131,16 +145,18 @@ const readinessItemTone = (severity: ReadinessSeverity): string => {
 
 interface ResumeFormatterProps {
   resumeText: string;
+  initialInput?: string;
   market: string;
   onClose: () => void;
+  openTool: (tool: string, input?: string) => void;
   t: (key: string) => string;
 }
 
-const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t }) => {
+const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialInput = '', market, openTool, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FormattedResume | null>(null);
-  const { canSave, saved, persist } = useToolResults<FormattedResume>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<FormattedResume>();
   const [fromSaved, setFromSaved] = useState(false);
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [coverLetterForFormatting, setCoverLetterForFormatting] = useState('');
@@ -148,6 +164,8 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const [outputLanguage, setOutputLanguage] = useState<OutputLanguageChoice>(
     () => (getMarketLocalLanguage(market) ? 'local' : 'en'),
   );
+  const [coverLetterPrefillActive, setCoverLetterPrefillActive] = useState(false);
+  const consumedInitialInputRef = useRef('');
 
   const changeTargetMarket = (next: string) => {
     setTargetMarket(next);
@@ -157,12 +175,26 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
   const hasResume = resumeText.trim().length > 0;
 
   useEffect(() => {
+    if (initialInput.trim()) return;
     if (!saved || result) return;
     if (saved.result.targetMarket) setTargetMarket(saved.result.targetMarket);
     if (saved.result.outputLanguage) setOutputLanguage(saved.result.outputLanguage);
     setResult(saved.result);
     setFromSaved(true);
-  }, [saved, result]);
+  }, [saved, result, initialInput]);
+
+  useEffect(() => {
+    const value = initialInput.trim();
+    if (!value || consumedInitialInputRef.current === value) return;
+
+    consumedInitialInputRef.current = value;
+    setIncludeCoverLetter(true);
+    setCoverLetterForFormatting(value);
+    setCoverLetterPrefillActive(true);
+    setResult(null);
+    setFromSaved(false);
+    setError(null);
+  }, [initialInput]);
 
   const runTool = async (options: { coverLetter?: string } = {}) => {
     if (!resumeText?.trim()) {
@@ -190,7 +222,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
         persist(normalizedResult);
       }
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -316,12 +348,25 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
             {includeCoverLetter ? (
               <div className="mt-4 animate-fade-in space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <label htmlFor="cover-letter-text" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {t('tool_resume_formatter_cover_letter_label')}
-                  </label>
+                  <div>
+                    <label htmlFor="cover-letter-text" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {t('tool_resume_formatter_cover_letter_label')}
+                    </label>
+                    {coverLetterPrefillActive && (
+                      <p
+                        data-qa="resume-formatter-prefill-note"
+                        className="mt-1 text-xs font-medium text-blue-700 dark:text-blue-300"
+                      >
+                        {localizedCopy(t, 'tool_resume_formatter_prefill_label', 'Imported from Cover Letter')}
+                      </p>
+                    )}
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setCoverLetterForFormatting(SAMPLE_COVER_LETTER)}
+                    onClick={() => {
+                      setCoverLetterForFormatting(SAMPLE_COVER_LETTER);
+                      setCoverLetterPrefillActive(false);
+                    }}
                     className="shrink-0 text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
                   >
                     {t('tool_try_example')}
@@ -329,11 +374,15 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
                 </div>
                 <textarea
                   id="cover-letter-text"
+                  data-qa="resume-formatter-cover-letter"
                   rows={8}
                   className="block w-full resize-y rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
                   placeholder={t('tool_resume_formatter_cover_letter_placeholder')}
                   value={coverLetterForFormatting}
-                  onChange={(e) => setCoverLetterForFormatting(e.target.value)}
+                  onChange={(e) => {
+                    setCoverLetterForFormatting(e.target.value);
+                    setCoverLetterPrefillActive(false);
+                  }}
                 />
               </div>
             ) : (
@@ -357,6 +406,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
           <button
             type="button"
             onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
+            data-qa="resume-formatter-generate"
             disabled={loading || !hasResume}
             className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:text-white/90 dark:disabled:bg-blue-900/60 sm:mt-0 sm:w-auto"
           >
@@ -370,20 +420,27 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
 
   const renderResult = () => {
     // (c) StagedLoader already has onCancel + icon + accent — preserved as-is
-    if (loading) return <StagedLoader title="Reformatting your resume" steps={["Reading your resume…","Reformatting the layout…","Polishing the final document…"]} onCancel={cancel} icon={<FileText />} accent="blue" />;
+    if (loading) return (
+      <StagedLoader
+        title={localizedCopy(t, 'tool_resume_formatter_loader_title', 'Reformatting your resume')}
+        steps={[
+          localizedCopy(t, 'tool_resume_formatter_loader_step1', 'Reading your resume...'),
+          localizedCopy(t, 'tool_resume_formatter_loader_step2', 'Reformatting the layout...'),
+          localizedCopy(t, 'tool_resume_formatter_loader_step3', 'Polishing the final document...'),
+        ]}
+        onCancel={cancel}
+        icon={<FileText />}
+        accent="blue"
+      />
+    );
 
     // (e) ERROR RETRY
     if (error) return (
-      <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-4 space-y-3">
-        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-        <button
-          type="button"
-          onClick={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
-        >
-          {t('tool_try_again')}
-        </button>
-      </div>
+      <ToolError
+        message={error}
+        onRetry={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
+        retryLabel={t('tool_try_again')}
+      />
     );
 
     if (!result) return null;
@@ -395,14 +452,27 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
     const readinessItems = buildReadinessItems(validation, generatedMarket, targetMarket, marketStyle, t);
     const readinessState = getReadinessState(readinessItems);
     const readinessHeadline = readinessState === 'ready'
-      ? 'Ready to download'
+      ? localizedCopy(t, 'tool_resume_readiness_ready_title', 'Ready to download')
       : readinessState === 'review'
-        ? 'Review before downloading'
-        : 'Regenerate before downloading';
+        ? localizedCopy(t, 'tool_resume_readiness_review_title', 'Review before downloading')
+        : localizedCopy(t, 'tool_resume_readiness_regenerate_title', 'Regenerate before downloading');
+    const readinessBadge = readinessState === 'ready'
+      ? localizedCopy(t, 'tool_resume_readiness_badge_ready', 'Ready')
+      : readinessState === 'review'
+        ? localizedCopy(t, 'tool_resume_readiness_badge_review', 'Review')
+        : localizedCopy(t, 'tool_resume_readiness_badge_regenerate', 'Regenerate');
     return (
       <div className="space-y-4 animate-fade-in">
         {validation.status !== 'needs_regen' && (
-          <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }} />
+          <SavedResultBar
+            t={t}
+            canSave={canSave}
+            isSaved={fromSaved}
+            savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
+            onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
+            onClearSaved={() => { clear(); setFromSaved(false); }}
+          />
         )}
 
         {/* Post-generation validator gate: don't present a garbled/blob output as final. */}
@@ -436,7 +506,9 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
             <h4 className="text-lg font-bold dark:text-gray-100">{t('tool_resume_formatter_results_title')} {t('tool_resume_formatter_results_for').replace('{market}', generatedMarket)}</h4>
             {targetMarket !== generatedMarket && (
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Current preview is still the {generatedMarket} version. Generate again to create a {targetMarket} version.
+                {localizedCopy(t, 'tool_resume_formatter_preview_mismatch', 'Current preview is still the {generatedMarket} version. Generate again to create a {targetMarket} version.')
+                  .replace('{generatedMarket}', generatedMarket)
+                  .replace('{targetMarket}', targetMarket)}
               </p>
             )}
           </div>
@@ -448,13 +520,27 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
             onRegenerate={() => runTool({ coverLetter: includeCoverLetter ? coverLetterForFormatting : undefined })}
             t={t}
           />
+          <button
+            type="button"
+            data-qa="resume-formatter-open-linkedin"
+            disabled={validation.status === 'needs_regen'}
+            onClick={() => openTool('linkedin-optimizer', buildLinkedInContextFromFormattedResume({
+              ...result,
+              formattedText,
+              targetMarket: generatedMarket,
+            }, generatedMarket))}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <Link2 className="h-4 w-4" aria-hidden="true" />
+            {localizedCopy(t, 'tool_resume_formatter_open_linkedin_button', 'Optimize LinkedIn')}
+          </button>
         </div>
 
         <section
           className={`rounded-xl border p-3 shadow-sm ${readinessPanelTone(readinessState)}`}
           data-qa="resume-formatter-readiness"
           data-qa-readiness-state={readinessState}
-          aria-label="Resume download readiness"
+          aria-label={localizedCopy(t, 'tool_resume_readiness_aria', 'Resume download readiness')}
         >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
@@ -470,12 +556,12 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, market, t
               </div>
               <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
                 {readinessState === 'ready'
-                  ? 'This draft passed the format checks we can verify automatically.'
-                  : 'The preview stays available, but resolve the flagged items before sending it to employers.'}
+                  ? localizedCopy(t, 'tool_resume_readiness_ready_desc', 'This draft passed the format checks we can verify automatically.')
+                  : localizedCopy(t, 'tool_resume_readiness_flagged_desc', 'The preview stays available, but resolve the flagged items before sending it to employers.')}
               </p>
             </div>
             <span className={`inline-flex w-fit shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${readinessBadgeTone(readinessState)}`}>
-              {readinessState}
+              {readinessBadge}
             </span>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">

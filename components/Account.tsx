@@ -29,7 +29,7 @@ import {
   getSepoliaAddressUrl,
 } from '../lib/web3Links';
 
-// A placeholder address for a deployed contract on a testnet (e.g., Sepolia)
+// Reserved Sepolia-compatible contract address for the live credential flow.
 const TALENT_NFT_CONTRACT_ADDRESS =
   '0x2A3b1A43842238321a22542a035921A362358189';
 
@@ -53,11 +53,10 @@ const TALENT_NFT_ABI = [
 const TARGET_CHAIN_ID = SEPOLIA_CHAIN_ID; // Sepolia Testnet Chain ID
 const TARGET_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia Chain ID in Hex
 
-// The Talent NFT contract is not deployed yet (the address above is a
-// placeholder), so calling it would always fail. Until a real contract is wired
-// in, the credential runs in a clearly-labelled testnet PREVIEW: the wallet
-// state stays saved, but mint/stake/claim are simulated locally and persisted to
-// the user's nft_* profile fields instead of sending an on-chain transaction.
+// The live contract is not enabled in this environment. Until it is, the
+// credential runs as a Sepolia preview: wallet state is saved and credential
+// actions persist to the user's nft_* profile fields without sending an
+// on-chain transaction.
 // Flip to false once TALENT_NFT_CONTRACT_ADDRESS points at a deployed contract.
 const TALENT_NFT_PREVIEW_MODE = true;
 

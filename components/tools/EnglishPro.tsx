@@ -1,11 +1,14 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Languages } from 'lucide-react';
+import { BookOpen, FileText, Headphones, Languages, Loader2, Mic, Play, Sparkles, Square } from 'lucide-react';
 import { data, type AppSession as Session } from '../../lib/data';
 import { analyzeEnglishProficiency, analyzeSpokenEnglish, analyzeEnglishReading, evaluateReadingComprehension, analyzeEnglishListening, generateReadingPracticePassage, generateSpeakingTopics, generateVocabularyFlashcards } from '../../services/aiClient';
 import type { EnglishProResult, SpokenEnglishAnalysisResult, EnglishReadingAnalysisResult, ReadingEvaluation, EnglishListeningAnalysisResult, ReadingPracticePassage, VocabularyFlashcard, UserProfile, VocabularyItem, ComprehensionQuestion } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
+import ConfirmActionDialog from '../ConfirmActionDialog';
+import { SavedResultBar, ToolError } from './ToolUtils';
+import { useToolResults } from '../../contexts/ToolResultsContext';
 
 const ENGLISH_PRO_TOPICS = [
     "Write an email to a colleague asking for an update on a project.",
@@ -25,6 +28,7 @@ const IELTS_BANDS = ['5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5', '9.
 
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const isSpeechSupported = !!SpeechRecognition;
+type PendingDiscardAction = 'hub' | 'reading-options';
 
 interface EnglishProProps {
     t: (key: string) => string;
@@ -32,6 +36,38 @@ interface EnglishProProps {
     profile: UserProfile | null;
     refreshProfile: () => void;
 }
+
+type EnglishProSavedResult =
+    | {
+        mode: 'written';
+        targetIeltsBand: string;
+        nativeLanguage: string;
+        prompt: string;
+        result: EnglishProResult;
+    }
+    | {
+        mode: 'spoken';
+        targetIeltsBand: string;
+        topic?: string | null;
+        transcript: string;
+        result: SpokenEnglishAnalysisResult;
+    }
+    | {
+        mode: 'reading';
+        targetIeltsBand: string;
+        sourceText: string;
+        result: EnglishReadingAnalysisResult | ReadingPracticePassage;
+        answers?: string[];
+        evaluation?: ReadingEvaluation[] | null;
+    }
+    | {
+        mode: 'listening';
+        targetIeltsBand: string;
+        clipId: number;
+        clipText: string;
+        transcription: string;
+        result: EnglishListeningAnalysisResult;
+    };
 
 const isSameDay = (date1: Date, date2: Date) => {
     return date1.getFullYear() === date2.getFullYear() &&
@@ -71,8 +107,11 @@ const speechErrorKey = (code?: string): string => {
 
 const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshProfile }) => {
     const { loading, begin, end, cancel } = useCancellableLoading();
+    const { canSave, saved, saveState, persist, clear } = useToolResults<EnglishProSavedResult>();
     const [error, setError] = useState<string | null>(null);
     const [practiceMode, setPracticeMode] = useState<'hub' | 'written' | 'spoken' | 'reading' | 'listening'>('hub');
+    const [pendingDiscardAction, setPendingDiscardAction] = useState<PendingDiscardAction | null>(null);
+    const [fromSaved, setFromSaved] = useState(false);
     
     // Gamification State
     const [streakData, setStreakData] = useState({ count: 0, lastPracticeDate: '' });
@@ -119,6 +158,59 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     const [listeningResult, setListeningResult] = useState<EnglishListeningAnalysisResult | null>(null);
     const [currentClip, setCurrentClip] = useState(LISTENING_CLIPS[0]);
     const [userTranscription, setUserTranscription] = useState('');
+
+    const hasPracticeResult = Boolean(
+        writtenResult ||
+        spokenResult ||
+        readingComprehensionResult ||
+        flashcards.length > 0 ||
+        listeningResult
+    );
+
+    useEffect(() => {
+        if (!saved || hasPracticeResult) return;
+        const snapshot = saved.result;
+        setFromSaved(true);
+        setError(null);
+        if (snapshot.targetIeltsBand) setTargetIeltsBand(snapshot.targetIeltsBand);
+
+        if (snapshot.mode === 'written') {
+            setPracticeMode('written');
+            setNativeLanguage(snapshot.nativeLanguage || SUPPORTED_LANGUAGES[0]);
+            setWrittenInput(snapshot.prompt || '');
+            setOriginalWrittenInput(snapshot.prompt || '');
+            setWrittenResult(snapshot.result);
+            return;
+        }
+
+        if (snapshot.mode === 'spoken') {
+            setPracticeMode('spoken');
+            setCurrentTopic(snapshot.topic ?? null);
+            setTranscript(snapshot.transcript || snapshot.result.transcript || '');
+            setSpokenResult(snapshot.result);
+            return;
+        }
+
+        if (snapshot.mode === 'reading') {
+            setPracticeMode('reading');
+            setReadingSubMode('comprehension');
+            setReadingUserInput(snapshot.sourceText || '');
+            setReadingComprehensionResult(snapshot.result);
+            setUserAnswers(snapshot.answers ?? []);
+            setReadingEvaluation(snapshot.evaluation ?? null);
+            return;
+        }
+
+        if (snapshot.mode === 'listening') {
+            setPracticeMode('listening');
+            setCurrentClip(LISTENING_CLIPS.find((clip) => clip.id === snapshot.clipId) ?? {
+                id: snapshot.clipId,
+                text: snapshot.clipText,
+            });
+            setUserTranscription(snapshot.transcription || '');
+            setListeningResult(snapshot.result);
+        }
+    }, [hasPracticeResult, saved]);
     
     // --- Gamification Logic ---
     useEffect(() => {
@@ -196,7 +288,47 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
     }, [session, profile, refreshProfile, dailyGoalComplete]);
 
 
+    const resetReadingState = useCallback(() => {
+        setReadingSubMode('select');
+        setReadingComprehensionResult(null);
+        setReadingEvaluation(null);
+        setUserAnswers([]);
+        setReadingUserInput('');
+        setFlashcards([]);
+        setCurrentCardIndex(0);
+        setFlashcardScore(0);
+        setSelectedFlashcardAnswer(null);
+        setIsFlashcardAnswered(false);
+        setFromSaved(false);
+    }, []);
+
+    const hasDiscardableReadingProgress = useCallback(() => {
+        if (practiceMode !== 'reading' || readingSubMode === 'select') return false;
+        const hasAnswerDraft = userAnswers.some((answer) => answer.trim().length > 0);
+        const hasFlashcardProgress = flashcards.length > 0 && (currentCardIndex > 0 || isFlashcardAnswered || selectedFlashcardAnswer !== null || flashcardScore > 0);
+        return Boolean(
+            readingUserInput.trim() ||
+            readingComprehensionResult ||
+            readingEvaluation ||
+            hasAnswerDraft ||
+            hasFlashcardProgress
+        );
+    }, [
+        currentCardIndex,
+        flashcardScore,
+        flashcards.length,
+        isFlashcardAnswered,
+        practiceMode,
+        readingComprehensionResult,
+        readingEvaluation,
+        readingSubMode,
+        readingUserInput,
+        selectedFlashcardAnswer,
+        userAnswers,
+    ]);
+
     const handleStartNewPractice = () => {
+        setPendingDiscardAction(null);
         cancel();
         // Stop any live mic + narration before returning to the hub. Disarm onend
         // first so stop()'s 'end' event doesn't fire a paid analysis on the way out.
@@ -209,14 +341,57 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
         setError(null);
         setPracticeMode('hub');
         // Reset all sub-modes and results
-        setReadingSubMode('select');
+        resetReadingState();
         setWrittenResult(null);
         setSpokenResult(null);
-        setReadingComprehensionResult(null);
-        setReadingEvaluation(null);
         setListeningResult(null);
-        setFlashcards([]);
+        setFromSaved(false);
     };
+
+    const requestStartNewPractice = () => {
+        if (hasDiscardableReadingProgress()) {
+            setPendingDiscardAction('hub');
+            return;
+        }
+        handleStartNewPractice();
+    };
+
+    const requestReadingOptions = () => {
+        if (hasDiscardableReadingProgress()) {
+            setPendingDiscardAction('reading-options');
+            return;
+        }
+        resetReadingState();
+    };
+
+    const confirmDiscardProgress = () => {
+        const action = pendingDiscardAction;
+        setPendingDiscardAction(null);
+        if (action === 'hub') handleStartNewPractice();
+        if (action === 'reading-options') resetReadingState();
+    };
+
+    const persistEnglishProResult = useCallback((snapshot: EnglishProSavedResult) => {
+        setFromSaved(false);
+        persist(snapshot);
+    }, [persist]);
+
+    const handleClearSavedResult = useCallback(() => {
+        clear();
+        setFromSaved(false);
+    }, [clear]);
+
+    const renderSavedResultBar = (onTryNext: () => void) => (
+        <SavedResultBar
+            t={t}
+            canSave={canSave}
+            isSaved={fromSaved}
+            savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
+            onTryNext={onTryNext}
+            onClearSaved={handleClearSavedResult}
+        />
+    );
     
     // --- Tool API Calls ---
     
@@ -228,8 +403,15 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             const res = await analyzeEnglishProficiency(writtenInput, nativeLanguage, targetIeltsBand);
             if (!alive()) return;
             setWrittenResult(res);
+            persistEnglishProResult({
+                mode: 'written',
+                targetIeltsBand,
+                nativeLanguage,
+                prompt: writtenInput,
+                result: res,
+            });
             await handlePracticeCompletion(alive);
-        } catch (err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        } catch (err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
     
@@ -241,10 +423,17 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             const res = await analyzeSpokenEnglish(finalTranscript, duration, targetIeltsBand);
             if (!alive()) return;
             setSpokenResult(res);
+            persistEnglishProResult({
+                mode: 'spoken',
+                targetIeltsBand,
+                topic: currentTopic,
+                transcript: finalTranscript,
+                result: res,
+            });
             await handlePracticeCompletion(alive);
-        } catch (err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        } catch (err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
-    }, [targetIeltsBand, handlePracticeCompletion, begin, end]);
+    }, [targetIeltsBand, currentTopic, persistEnglishProResult, handlePracticeCompletion, begin, end]);
 
     // Speech recognition setup
     useEffect(() => {
@@ -376,8 +565,16 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             if (!alive()) return;
             setReadingComprehensionResult(res);
             setReadingSubMode('comprehension');
+            persistEnglishProResult({
+                mode: 'reading',
+                targetIeltsBand,
+                sourceText: readingUserInput,
+                result: res,
+                answers: [],
+                evaluation: null,
+            });
             await handlePracticeCompletion(alive);
-        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
 
@@ -388,7 +585,15 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             if (!alive()) return;
             setReadingComprehensionResult(res);
             setReadingSubMode('comprehension');
-        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+            persistEnglishProResult({
+                mode: 'reading',
+                targetIeltsBand,
+                sourceText: '',
+                result: res,
+                answers: [],
+                evaluation: null,
+            });
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
 
@@ -405,8 +610,16 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             const evaluation = await evaluateReadingComprehension(textToUse, res.comprehensionQuestions, normalizedAnswers);
             if (!alive()) return;
             setReadingEvaluation(evaluation);
+            persistEnglishProResult({
+                mode: 'reading',
+                targetIeltsBand,
+                sourceText: readingUserInput,
+                result: res,
+                answers: normalizedAnswers,
+                evaluation,
+            });
             await handlePracticeCompletion(alive);
-        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
 
@@ -419,7 +632,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             setCurrentCardIndex(0);
             setFlashcardScore(0);
             setReadingSubMode('flashcards');
-        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
 
@@ -431,8 +644,16 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             const res = await analyzeEnglishListening(currentClip.text, userTranscription, targetIeltsBand);
             if (!alive()) return;
             setListeningResult(res);
+            persistEnglishProResult({
+                mode: 'listening',
+                targetIeltsBand,
+                clipId: currentClip.id,
+                clipText: currentClip.text,
+                transcription: userTranscription,
+                result: res,
+            });
             await handlePracticeCompletion(alive);
-        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : 'An error occurred.'); }
+        } catch(err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
     
@@ -443,29 +664,50 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">{content}</div>
         </div>
     );
+
+    const renderModeCard = ({
+        title,
+        description,
+        icon,
+        onClick,
+        dataQa,
+        disabled = false,
+        children,
+    }: {
+        title: string;
+        description: string;
+        icon: React.ReactNode;
+        onClick: () => void;
+        dataQa: string;
+        disabled?: boolean;
+        children?: React.ReactNode;
+    }) => (
+        <button
+            onClick={onClick}
+            data-qa={dataQa}
+            disabled={disabled}
+            className="group min-h-[132px] rounded-lg border border-gray-200 bg-white p-5 text-left transition duration-150 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-500 dark:focus:ring-offset-slate-900"
+        >
+            <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-700 transition-colors group-hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:group-hover:bg-blue-900/50">
+                {icon}
+            </span>
+            <span className="block text-base font-semibold text-gray-900 dark:text-gray-100">{title}</span>
+            <span className="mt-1 block text-sm leading-6 text-gray-600 dark:text-gray-300">{description}</span>
+            {children}
+        </button>
+    );
     
     const renderPracticeHub = () => (
         <div className="space-y-6">
-            <div className="p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/60 rounded-lg text-center">
-                 <div className="flex justify-center items-center gap-4">
-                    <div className="relative">
-                        <svg className="w-16 h-16" viewBox="0 0 100 100">
-                            <circle className="text-gray-200" strokeWidth="8" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50"/>
-                            <circle
-                                className="text-amber-500"
-                                strokeWidth="8"
-                                strokeDasharray="283"
-                                strokeDashoffset={283 - (streakData.count / 7) * 283}
-                                strokeLinecap="round"
-                                fill="transparent"
-                                r="45"
-                                cx="50"
-                                cy="50"
-                                style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }}
-                            />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-3xl font-bold text-amber-600">{streakData.count}</span>
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 text-center dark:border-blue-800/60 dark:bg-blue-900/20">
+                 <div className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:text-left">
+                    <div
+                        aria-label={`${streakData.count} ${t('tool_english_pro_streak_title')}`}
+                        className="relative h-16 w-16 shrink-0 rounded-full bg-[conic-gradient(#f59e0b_var(--streak-angle),#e5e7eb_0deg)] dark:bg-[conic-gradient(#fbbf24_var(--streak-angle),#334155_0deg)]"
+                        style={{ '--streak-angle': `${(Math.min(Math.max(streakData.count, 0), 7) / 7) * 360}deg` } as React.CSSProperties}
+                    >
+                        <div className="absolute inset-2 flex items-center justify-center rounded-full bg-blue-50 dark:bg-slate-900">
+                            <span className="text-3xl font-bold text-amber-600 dark:text-amber-300">{streakData.count}</span>
                         </div>
                     </div>
                     <div>
@@ -485,22 +727,34 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button onClick={() => setPracticeMode('written')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_written_title')}</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_english_pro_written_desc')}</p>
-                </button>
-                 <button onClick={() => setPracticeMode('spoken')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_spoken_title')}</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_english_pro_spoken_desc')}</p>
-                </button>
-                 <button onClick={() => setPracticeMode('reading')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_reading_title')}</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_english_pro_reading_desc')}</p>
-                </button>
-                 <button onClick={() => setPracticeMode('listening')} className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500">
-                    <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_listening_title')}</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{t('tool_english_pro_listening_desc')}</p>
-                </button>
+                {renderModeCard({
+                    title: t('tool_english_pro_written_title'),
+                    description: t('tool_english_pro_written_desc'),
+                    icon: <FileText className="h-5 w-5" aria-hidden="true" />,
+                    onClick: () => setPracticeMode('written'),
+                    dataQa: 'english-pro-mode-written',
+                })}
+                {renderModeCard({
+                    title: t('tool_english_pro_spoken_title'),
+                    description: t('tool_english_pro_spoken_desc'),
+                    icon: <Mic className="h-5 w-5" aria-hidden="true" />,
+                    onClick: () => setPracticeMode('spoken'),
+                    dataQa: 'english-pro-mode-spoken',
+                })}
+                {renderModeCard({
+                    title: t('tool_english_pro_reading_title'),
+                    description: t('tool_english_pro_reading_desc'),
+                    icon: <BookOpen className="h-5 w-5" aria-hidden="true" />,
+                    onClick: () => setPracticeMode('reading'),
+                    dataQa: 'english-pro-mode-reading',
+                })}
+                {renderModeCard({
+                    title: t('tool_english_pro_listening_title'),
+                    description: t('tool_english_pro_listening_desc'),
+                    icon: <Headphones className="h-5 w-5" aria-hidden="true" />,
+                    onClick: () => setPracticeMode('listening'),
+                    dataQa: 'english-pro-mode-listening',
+                })}
             </div>
         </div>
     );
@@ -519,14 +773,18 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                      <div>
                         <label htmlFor="email-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('tool_english_pro_prompt_label')}</label>
                          <p className="text-xs text-gray-500 dark:text-gray-400">{t('tool_english_pro_prompt_desc')}</p>
-                        <div className="flex flex-wrap gap-2 my-2">{ENGLISH_PRO_TOPICS.map((topic, i) => <button key={i} onClick={() => setWrittenInput(t(`tool_english_pro_topic_${i + 1}`))} className="text-xs bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 p-2 rounded-md">{t(`tool_english_pro_topic_${i + 1}`)}</button>)}</div>
-                        <textarea id="email-text" value={writtenInput} onChange={e => setWrittenInput(e.target.value)} rows={8} className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm" placeholder={t('tool_english_pro_placeholder')} />
+                        <div className="flex flex-wrap gap-2 my-2">{ENGLISH_PRO_TOPICS.map((topic, i) => <button key={i} data-qa={`english-pro-written-topic-${i + 1}`} onClick={() => setWrittenInput(t(`tool_english_pro_topic_${i + 1}`))} className="text-xs bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 p-2 rounded-md">{t(`tool_english_pro_topic_${i + 1}`)}</button>)}</div>
+                        <textarea id="email-text" data-qa="english-pro-written-input" value={writtenInput} onChange={e => setWrittenInput(e.target.value)} rows={8} className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm" placeholder={t('tool_english_pro_placeholder')} />
                     </div>
-                    <button onClick={runWrittenTool} disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">{loading ? t('tool_english_pro_analyzing_button') : t('tool_english_pro_analyze_button')}</button>
+                    <button onClick={runWrittenTool} data-qa="english-pro-written-analyze" disabled={loading} className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg">{loading ? t('tool_english_pro_analyzing_button') : t('tool_english_pro_analyze_button')}</button>
                 </>
             ) : (
-                <div className="space-y-4">
+                <div data-qa="english-pro-written-result" className="space-y-4">
                     <h4 className="font-bold text-lg text-center text-gray-900 dark:text-gray-100">{t('tool_english_pro_results_title')}</h4>
+                    {renderSavedResultBar(() => {
+                        setWrittenResult(null);
+                        setFromSaved(false);
+                    })}
                     {renderResultCard(t('tool_english_pro_cefr_label'), <p className="font-bold text-blue-600 dark:text-blue-400 text-xl">{writtenResult.overallBand.level} <span className="text-sm font-normal text-gray-600 dark:text-gray-400">- {writtenResult.overallBand.description}</span></p>)}
                     {writtenResult.culturalTip && renderResultCard(t('tool_english_pro_cultural_tip'), <p>{writtenResult.culturalTip}</p>)}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -536,10 +794,10 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                     {renderResultCard(t('tool_english_pro_feedback_label'), (
                         <ul className="space-y-3">{writtenResult.improvementAreas.map((area, i) => <li key={i}><strong>{area.category}:</strong> <span className="line-through text-red-600">{area.originalText}</span> &rarr; <span className="text-green-600">{area.suggestion}</span><br/><em className="text-xs text-gray-500 dark:text-gray-400">{area.explanation}</em></li>)}</ul>
                     ))}
-                    <button onClick={() => setWrittenResult(null)} className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300">{t('tool_english_pro_practice_again_button')}</button>
+                    <button onClick={() => { setWrittenResult(null); setFromSaved(false); }} className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300">{t('tool_english_pro_practice_again_button')}</button>
                 </div>
             )}
-            <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
+            <button onClick={requestStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
         </div>
     );
     
@@ -562,10 +820,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                             className="mt-3 text-sm bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 py-1.5 px-3 rounded-md disabled:opacity-50 flex items-center gap-2"
                         >
                             {isFetchingTopic && (
-                                <svg className="animate-spin h-3.5 w-3.5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                                </svg>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" aria-hidden="true" />
                             )}
                             {currentTopic ? t('tool_english_pro_spoken_new_topic') : t('tool_english_pro_spoken_get_topic')}
                         </button>
@@ -586,9 +841,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                         : 'bg-blue-700 hover:bg-blue-800 focus:ring-blue-300'
                                 }`}
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                </svg>
+                                <Mic className="h-7 w-7" aria-hidden="true" />
                                 <span className="text-xs">{isListening ? t('tool_english_pro_spoken_stop_mic') : t('tool_english_pro_spoken_start_mic')}</span>
                             </button>
                             {isListening && (
@@ -608,6 +861,11 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             ) : (
                 <div className="space-y-4">
                     <h4 className="font-bold text-lg text-center text-gray-900 dark:text-gray-100">{t('tool_english_pro_spoken_results_title')}</h4>
+                    {renderSavedResultBar(() => {
+                        setSpokenResult(null);
+                        setTranscript('');
+                        setFromSaved(false);
+                    })}
 
                     {/* Scores row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -643,14 +901,14 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                     ))}
 
                     <button
-                        onClick={() => { setSpokenResult(null); setTranscript(''); }}
+                        onClick={() => { setSpokenResult(null); setTranscript(''); setFromSaved(false); }}
                         className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300"
                     >
                         {t('tool_english_pro_practice_again_button')}
                     </button>
                 </div>
             )}
-            <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
+            <button onClick={requestStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
         </div>
     );
 
@@ -679,6 +937,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                             <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 space-y-3">
                                 <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_english_pro_reading_paste_text')}</h5>
                                 <textarea
+                                    data-qa="english-pro-reading-input"
                                     value={readingUserInput}
                                     onChange={e => setReadingUserInput(e.target.value)}
                                     rows={4}
@@ -688,6 +947,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                 <button
                                     onClick={runReadingAnalysis}
                                     disabled={loading || !readingUserInput.trim()}
+                                    data-qa="english-pro-reading-analyze"
                                     className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2 px-4 rounded-lg text-sm"
                                 >
                                     {loading ? t('tool_english_pro_analyzing_button') : t('tool_english_pro_reading_analyze_button')}
@@ -696,10 +956,16 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         </div>
                     </>
                 ) : (
-                    <div className="space-y-4">
+                    <div data-qa="english-pro-reading-result" className="space-y-4">
+                        {renderSavedResultBar(() => {
+                            setReadingComprehensionResult(null);
+                            setReadingEvaluation(null);
+                            setUserAnswers([]);
+                            setFromSaved(false);
+                        })}
                         {/* Passage */}
                         {renderResultCard(t('tool_english_pro_reading_passage'), (
-                            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                            <p data-qa="english-pro-reading-passage" className="whitespace-pre-wrap text-sm leading-relaxed">
                                 {practiceResult?.passage ?? readingUserInput}
                             </p>
                         ))}
@@ -722,7 +988,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
                         {/* Summary (analyzed text only) */}
                         {!practiceResult?.passage && (practiceResult as EnglishReadingAnalysisResult | null)?.summary
-                            ? renderResultCard(t('tool_english_pro_summary'), <p>{(practiceResult as EnglishReadingAnalysisResult).summary}</p>)
+                            ? renderResultCard(t('tool_english_pro_summary'), <p data-qa="english-pro-reading-summary">{(practiceResult as EnglishReadingAnalysisResult).summary}</p>)
                             : null
                         }
 
@@ -734,6 +1000,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                         <p className="font-medium text-gray-800 dark:text-gray-100">{i + 1}. {q.question}</p>
                                         {!readingEvaluation ? (
                                             <input
+                                                data-qa={`english-pro-reading-answer-${i + 1}`}
                                                 type="text"
                                                 value={userAnswers[i] ?? ''}
                                                 onChange={e => {
@@ -745,7 +1012,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                                 className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm text-sm px-3 py-1.5"
                                             />
                                         ) : (
-                                            <div className={`p-3 rounded-md text-sm ${readingEvaluation[i]?.isCorrect ? 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700'}`}>
+                                            <div data-qa={`english-pro-reading-evaluation-${i + 1}`} className={`p-3 rounded-md text-sm ${readingEvaluation[i]?.isCorrect ? 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700'}`}>
                                                 <p className="font-semibold">{readingEvaluation[i]?.isCorrect ? t('tool_english_pro_correct') : t('tool_english_pro_incorrect')}</p>
                                                 <p className="text-gray-600 dark:text-gray-300">{readingEvaluation[i]?.feedback}</p>
                                                 {!readingEvaluation[i]?.isCorrect && (
@@ -768,6 +1035,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                             <button
                                 onClick={checkReadingAnswers}
                                 disabled={loading}
+                                data-qa="english-pro-reading-check"
                                 className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg"
                             >
                                 {loading ? t('tool_english_pro_checking_button') : t('tool_english_pro_reading_check_answers')}
@@ -775,14 +1043,15 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         ) : (
                             <>
                                 {readingEvaluation && (
-                                    <p className="text-center text-sm text-gray-600 dark:text-gray-300">
+                                    <p data-qa="english-pro-reading-evaluation-summary" className="text-center text-sm text-gray-600 dark:text-gray-300">
                                         {t('tool_english_pro_reading_results_summary')
                                             .replace('{correct}', String(readingEvaluation.filter(e => e.isCorrect).length))
                                             .replace('{total}', String(readingEvaluation.length))}
                                     </p>
                                 )}
                                 <button
-                                    onClick={() => { setReadingComprehensionResult(null); setReadingEvaluation(null); setUserAnswers([]); setReadingUserInput(''); }}
+                                    onClick={() => { setReadingComprehensionResult(null); setReadingEvaluation(null); setUserAnswers([]); setReadingUserInput(''); setFromSaved(false); }}
+                                    data-qa="english-pro-reading-practice-again"
                                     className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300"
                                 >
                                     {t('tool_english_pro_reading_practice_again')}
@@ -890,22 +1159,22 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
             <div className="space-y-4">
                 {readingSubMode === 'select' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <button
-                            onClick={() => setReadingSubMode('comprehension')}
-                            className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500"
-                        >
-                            <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_reading_comprehension_title')}</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{t('tool_english_pro_reading_comprehension_desc')}</p>
-                        </button>
-                        <button
-                            onClick={generateFlashcards}
-                            disabled={loading}
-                            className="p-6 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg text-left hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-500 disabled:opacity-60"
-                        >
-                            <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t('tool_english_pro_reading_flashcards_title')}</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{t('tool_english_pro_reading_flashcards_desc')}</p>
-                            {loading && <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">{t('tool_english_pro_generating_button')}</p>}
-                        </button>
+                        {renderModeCard({
+                            title: t('tool_english_pro_reading_comprehension_title'),
+                            description: t('tool_english_pro_reading_comprehension_desc'),
+                            icon: <BookOpen className="h-5 w-5" aria-hidden="true" />,
+                            onClick: () => setReadingSubMode('comprehension'),
+                            dataQa: 'english-pro-reading-comprehension',
+                        })}
+                        {renderModeCard({
+                            title: t('tool_english_pro_reading_flashcards_title'),
+                            description: t('tool_english_pro_reading_flashcards_desc'),
+                            icon: <Sparkles className="h-5 w-5" aria-hidden="true" />,
+                            onClick: generateFlashcards,
+                            dataQa: 'english-pro-reading-flashcards',
+                            disabled: loading,
+                            children: loading && <span className="mt-2 block text-xs text-blue-600 dark:text-blue-400">{t('tool_english_pro_generating_button')}</span>,
+                        })}
                     </div>
                 )}
                 {readingSubMode === 'comprehension' && renderComprehensionSubMode()}
@@ -913,13 +1182,14 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
                 {readingSubMode !== 'select' && (
                     <button
-                        onClick={() => { setReadingSubMode('select'); setReadingComprehensionResult(null); setReadingEvaluation(null); setUserAnswers([]); setReadingUserInput(''); setFlashcards([]); }}
+                        onClick={requestReadingOptions}
+                        data-qa="english-pro-reading-back-options"
                         className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                     >
                         {t('tool_english_pro_back_to_reading')}
                     </button>
                 )}
-                <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
+                <button onClick={requestStartNewPractice} data-qa="english-pro-reading-back-hub" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
             </div>
         );
     };
@@ -988,13 +1258,9 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                 className={`flex items-center gap-2 ${isPlaying ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-700 hover:bg-blue-800'} disabled:bg-gray-400 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-colors`}
                             >
                                 {isPlaying ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                        <rect x="6" y="6" width="12" height="12" rx="1.5" />
-                                    </svg>
+                                    <Square className="h-5 w-5 fill-current" aria-hidden="true" />
                                 ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M8 5v14l11-7z"/>
-                                    </svg>
+                                    <Play className="h-5 w-5 fill-current" aria-hidden="true" />
                                 )}
                                 {isPlaying ? t('tool_english_pro_listening_stop') : t('tool_english_pro_listening_play_audio')}
                             </button>
@@ -1007,6 +1273,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_english_pro_listening_desc')}</label>
                             <textarea
+                                data-qa="english-pro-listening-transcription"
                                 value={userTranscription}
                                 onChange={e => setUserTranscription(e.target.value)}
                                 rows={4}
@@ -1018,18 +1285,24 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         <button
                             onClick={runListeningAnalysis}
                             disabled={loading || !userTranscription.trim()}
+                            data-qa="english-pro-listening-check"
                             className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-bold py-2.5 px-4 rounded-lg"
                         >
                             {loading ? t('tool_english_pro_analyzing_button') : t('tool_english_pro_listening_check_button')}
                         </button>
                     </>
                 ) : (
-                    <div className="space-y-4">
+                    <div data-qa="english-pro-listening-result" className="space-y-4">
                         <h4 className="font-bold text-lg text-center text-gray-900 dark:text-gray-100">{t('tool_english_pro_listening_results_title')}</h4>
+                        {renderSavedResultBar(() => {
+                            setUserTranscription('');
+                            setListeningResult(null);
+                            setFromSaved(false);
+                        })}
 
                         {/* Similarity score */}
                         {renderResultCard(t('tool_english_pro_listening_similarity_score'), (
-                            <p className="text-4xl font-bold text-blue-600 dark:text-blue-400">
+                            <p data-qa="english-pro-listening-score" className="text-4xl font-bold text-blue-600 dark:text-blue-400">
                                 {listeningResult.similarityScore}<span className="text-base font-normal text-gray-500 dark:text-gray-400">%</span>
                             </p>
                         ))}
@@ -1037,10 +1310,10 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                         {/* Side-by-side versions */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {renderResultCard(t('tool_english_pro_listening_your_version'), (
-                                <p className="whitespace-pre-wrap text-sm">{listeningResult.diffView}</p>
+                                <p data-qa="english-pro-listening-diff" className="whitespace-pre-wrap text-sm">{listeningResult.diffView}</p>
                             ))}
                             {renderResultCard(t('tool_english_pro_listening_correct_version'), (
-                                <p className="whitespace-pre-wrap text-sm">{listeningResult.originalTranscript}</p>
+                                <p data-qa="english-pro-listening-original" className="whitespace-pre-wrap text-sm">{listeningResult.originalTranscript}</p>
                             ))}
                         </div>
 
@@ -1058,22 +1331,24 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                 setCurrentClip(LISTENING_CLIPS[nextIndex]);
                                 setUserTranscription('');
                                 setListeningResult(null);
+                                setFromSaved(false);
                             }}
+                            data-qa="english-pro-listening-try-another"
                             className="w-full text-sm py-2 px-4 border-2 border-dashed dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300"
                         >
                             {t('tool_english_pro_listening_try_another')}
                         </button>
                     </div>
                 )}
-                <button onClick={handleStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
+                <button onClick={requestStartNewPractice} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('tool_english_pro_back_to_hub')}</button>
             </div>
         );
     };
 
     // Main component return
     return (
-        <div className="p-4 bg-gray-50 dark:bg-slate-900 rounded-lg animate-fade-in">
-            {error && <div className="text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20 p-3 rounded-md text-sm mb-4">{error}</div>}
+        <div data-qa="english-pro-tool" data-qa-english-mode={practiceMode} className="p-4 bg-gray-50 dark:bg-slate-900 rounded-lg animate-fade-in">
+            {error && <div className="mb-4"><ToolError message={error} /></div>}
             {loading ? (
                 <StagedLoader
                     icon={<Languages />}
@@ -1098,6 +1373,18 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                     {practiceMode === 'listening' && renderListeningMode()}
                 </>
             )}
+            <ConfirmActionDialog
+                open={pendingDiscardAction !== null}
+                dataQa="english-pro-discard-confirm"
+                title={t('tool_english_pro_discard_title')}
+                description={t('tool_english_pro_discard_desc')}
+                cancelLabel={t('tool_english_pro_discard_cancel')}
+                confirmLabel={t('tool_english_pro_discard_confirm')}
+                tone="danger"
+                onOpenChange={(open) => { if (!open) setPendingDiscardAction(null); }}
+                onCancel={() => setPendingDiscardAction(null)}
+                onConfirm={confirmDiscardProgress}
+            />
         </div>
     );
 };

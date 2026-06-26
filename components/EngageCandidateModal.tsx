@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link2, X } from 'lucide-react';
 import type { UserProfile } from '../types';
 import ResumePreview from './ResumePreview';
 import OutreachModal from './OutreachModal';
@@ -38,8 +39,8 @@ const EngageCandidateModal: React.FC<EngageCandidateModalProps> = ({ candidate, 
                     <h3 id="engage-candidate-title" className="text-xl font-bold text-gray-800 dark:text-gray-100">
                         {t('engage_candidate_title').replace('{n}', String(candidate.index + 1))}
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full p-1" aria-label={t('engage_close_aria')}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-blue-400/40" aria-label={t('engage_close_aria')}>
+                        <X className="h-6 w-6" aria-hidden="true" />
                     </button>
                 </div>
                 <div className="flex-grow overflow-y-auto p-6 space-y-6">
@@ -52,7 +53,7 @@ const EngageCandidateModal: React.FC<EngageCandidateModalProps> = ({ candidate, 
                         <div>
                             <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2">{t('engage_web3_title')}</h4>
                             <div className="p-3 bg-gray-50 dark:bg-slate-700 rounded-lg border dark:border-slate-600 flex items-center gap-3">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                <Link2 className="h-6 w-6 text-blue-600 flex-shrink-0" aria-hidden="true" />
                                 <div>
                                     <p className="text-xs text-gray-500">{t('engage_wallet_address')}</p>
                                     <a href={walletUrl} target="_blank" rel="noopener noreferrer" className="font-mono text-sm text-blue-600 hover:underline break-all">

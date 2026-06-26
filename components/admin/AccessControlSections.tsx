@@ -1,4 +1,5 @@
 import React from 'react';
+import { Check } from 'lucide-react';
 import { Card, SectionHeading, tableCell, tableHead, tableRow } from './adminUi';
 import { at } from './adminText';
 import {
@@ -58,7 +59,9 @@ export const PermissionMatrix: React.FC = () => (
                 return (
                   <td key={role} className={`${tableCell} text-center`}>
                     {allowed ? (
-                      <span className="text-emerald-600" aria-label={`${ROLE_LABELS[role]} allowed`}>✓</span>
+                      <span className="inline-flex justify-center text-emerald-600" aria-label={`${ROLE_LABELS[role]} allowed`}>
+                        <Check className="h-4 w-4" aria-hidden="true" />
+                      </span>
                     ) : (
                       <span className="text-gray-300" aria-label={`${ROLE_LABELS[role]} not allowed`}>—</span>
                     )}

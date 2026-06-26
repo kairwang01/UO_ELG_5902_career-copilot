@@ -60,6 +60,7 @@ Stop when one full expanded round finds:
    - affected role/flow.
 2. Run broad static search excluding translations:
    - `rg "await|\\.then\\(|setTimeout|setInterval|onSnapshot|addEventListener|finally|savingRef|loadingRef" components hooks lib --glob '!**/localization/**' --glob '!**/public/localization/**'`
+   - `npm run scan:functional-bugs -- --include-duplicate-submit` for the maintained duplicate-submit candidate scanner.
 3. Bucket matches into `FUNC-*`, `L10N-*`, `UX-*`, or `QA-*`.
 4. Manually prove each `FUNC-*` candidate:
    - stale result can write state;
@@ -71,7 +72,8 @@ Stop when one full expanded round finds:
    - `active`/`cancelled` for one effect;
    - run id refs for superseded requests;
    - cleanup for timers/listeners/subscriptions;
-   - synchronous ref latch for duplicate-submit.
+   - synchronous ref latch for duplicate-submit;
+   - centralized action guards such as `startAiAction()` when a form already owns a shared AI-action mutex.
 6. Run TypeScript after each effective fix round.
 7. Run another scan round if any same-class `FUNC-*` defect was fixed.
 8. Finish with build/tests and a round summary.
@@ -87,4 +89,3 @@ Each round must report:
 - `Fixes`: exact surfaces changed.
 - `Verification`: commands run.
 - `Decision`: continue or stop, with reason.
-

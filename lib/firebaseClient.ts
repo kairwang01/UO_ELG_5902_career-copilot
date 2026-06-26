@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
+import { connectStorageEmulator, getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -23,6 +24,7 @@ if (missingFirebaseConfig.length > 0) {
 export const app = initializeApp(firebaseConfig);
 export const firebaseAuth = getAuth(app);
 export const firestoreDb = getFirestore(app);
+export const firebaseStorage = getStorage(app);
 export const firebaseFunctions = getFunctions(
   app,
   import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1',
@@ -53,6 +55,11 @@ if (
     firebaseFunctions,
     import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST || '127.0.0.1',
     Number(import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_PORT || 5001),
+  );
+  connectStorageEmulator(
+    firebaseStorage,
+    import.meta.env.VITE_FIREBASE_STORAGE_EMULATOR_HOST || '127.0.0.1',
+    Number(import.meta.env.VITE_FIREBASE_STORAGE_EMULATOR_PORT || 9197),
   );
   globalThis.__careerCopilotFirebaseEmulatorsConnected = true;
 }

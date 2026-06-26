@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Check, SlidersHorizontal, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { SiteLayout } from '../components/SiteLayout';
 import { SiteButton } from '../components/SiteButton';
@@ -9,21 +10,18 @@ import { useSiteSession } from '../hooks/useSiteSession';
 import { employerAddOnPlans, employerPlans, jobseekerPlans, planKey, type BetaPlanConfig } from '../config/pricingPlans';
 import { CREDIT_PACKS } from '../../config/credits';
 
-/**
- * Literal copy for LLM/model access — intentionally not i18n keys so every
- * locale gets readable English text instead of raw key fallbacks.
- */
+// Literal copy for model access; kept short so pricing cards stay readable in every locale.
 const PLAN_LLM_COPY: Record<string, string> = {
-  js_free:       'Standard AI · 10 runs/day',
+  js_free:       'Standard model · 10 runs/day',
   js_essentials: 'Full career toolkit · credits still meter usage',
   js_accelerator:'Higher monthly credits · active-search workflow',
   js_executive:  'Largest credit pool · priority support',
-  emp_free:      'Standard AI model',
-  emp_starter:   'Bring your own LLM API (custom endpoint)',
-  emp_growth:    'Bring your own LLM API (custom endpoint)',
-  emp_team:      'Bring your own LLM API (custom endpoint)',
-  emp_single_post: 'AI-powered candidate matching',
-  emp_job_pack:    'AI-powered candidate matching',
+  emp_free:      'Standard matching model',
+  emp_starter:   'Custom model endpoint supported',
+  emp_growth:    'Custom model endpoint supported',
+  emp_team:      'Custom model endpoint supported',
+  emp_single_post: 'Candidate matching included',
+  emp_job_pack:    'Candidate matching included',
 };
 
 interface PlanGridProps {
@@ -68,13 +66,17 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, ctaHref, t }) => (
         <ul className="mt-5 text-sm space-y-3 flex-1 text-[var(--site-text-muted)]">
           {Array.from({ length: plan.featureCount }, (_, i) => (
             <li key={i} className="flex gap-2.5">
-              <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--site-ready-bg)] text-[10px] font-bold text-[var(--site-ready)]">✓</span>
+              <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--site-ready-bg)] text-[var(--site-ready)]">
+                <Check className="h-3 w-3" aria-hidden="true" strokeWidth={2.5} />
+              </span>
               <span>{t(planKey(plan.id, `f${i + 1}` as `f${number}`))}</span>
             </li>
           ))}
           {PLAN_LLM_COPY[plan.id] && (
             <li className="flex gap-2.5">
-              <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold text-blue-500">✦</span>
+              <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-500">
+                <SlidersHorizontal className="h-3 w-3" aria-hidden="true" strokeWidth={2.5} />
+              </span>
               <span className="text-[var(--site-text-muted)]">{PLAN_LLM_COPY[plan.id]}</span>
             </li>
           )}
@@ -130,7 +132,7 @@ export const PricingPage: React.FC = () => {
             className="shrink-0 rounded p-1 hover:bg-amber-100 transition-colors"
             aria-label="Dismiss"
           >
-            ✕
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       )}

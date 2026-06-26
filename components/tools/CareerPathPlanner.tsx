@@ -10,6 +10,7 @@ import {
   Info,
   Layers3,
   Lightbulb,
+  Loader2,
   Network,
   Target,
 } from 'lucide-react';
@@ -17,10 +18,11 @@ import { generateCareerPath, generateSkillBridgeProject } from '../../services/a
 import type { CareerPathResult, RoadmapActionableStep, SkillBridgeProject } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { DownloadButtons, SavedResultBar } from './ToolUtils';
+import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import type { AppSession as Session } from '../../lib/data';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
+import { buildLearningPlanContextFromSkillGap } from '../../lib/toolPrefill';
 
 interface CareerPathPlannerProps {
   resumeText: string;
@@ -72,7 +74,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SavedCareerPathResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<SavedCareerPathResult>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<SavedCareerPathResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [desiredRole, setDesiredRole] = useState('');
 
@@ -124,6 +126,10 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
     }
   };
 
+  const openLearningPlanForGap = (gap: CareerPathResult['overallSkillGaps'][number], targetRole?: string) => {
+    openTool('skill-learning-plan', buildLearningPlanContextFromSkillGap(gap, targetRole));
+  };
+
   const runTool = async (input: string) => {
     const targetRole = input.trim();
     if (!targetRole) {
@@ -146,7 +152,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
       setFromSaved(false);
       persist(nextResult);
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -189,7 +195,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   };
 
   const renderInput = () => (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div data-qa="career-path-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-5">
       <CardShell className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
           <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
@@ -213,6 +219,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                   <button
                     type="button"
                     onClick={() => setDesiredRole(SAMPLE_ROLE)}
+                    data-qa="career-path-try-example"
                     className="text-sm font-semibold text-blue-700 transition hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                   >
                     {t('try_example')}
@@ -220,6 +227,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                 </div>
                 <input
                   id="career-path-target-role"
+                  data-qa="career-path-target-role"
                   type="text"
                   className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                   placeholder={t('tool_career_path_placeholder')}
@@ -238,22 +246,17 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
               )}
 
               {error && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300" role="alert">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="leading-relaxed">{error}</p>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:hover:bg-red-900/30"
-                    >
-                      {t('try_again')}
-                    </button>
-                  </div>
-                </div>
+                <ToolError
+                  message={error}
+                  onRetry={() => void runTool(desiredRole)}
+                  retryLabel={t('try_again')}
+                  retryDisabled={loading}
+                />
               )}
 
               <button
                 type="submit"
+                data-qa="career-path-generate"
                 disabled={loading}
                 className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-400"
               >
@@ -320,7 +323,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
             {generatedProject && (
               <div className="mt-4 space-y-4">
                 <div>
-                  <h4 className="font-semibold text-slate-950 dark:text-slate-100">{generatedProject.projectTitle}</h4>
+                  <h4 data-qa="career-path-generated-project-title" className="font-semibold text-slate-950 dark:text-slate-100">{generatedProject.projectTitle}</h4>
                   <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{generatedProject.objective}</p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
@@ -341,6 +344,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                 </div>
                 <button
                   type="button"
+                  data-qa="career-path-add-project-to-portfolio"
                   onClick={() => openTool('website-builder', JSON.stringify(generatedProject))}
                   className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
                 >
@@ -370,13 +374,15 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
     const firstRoadmapPhase = roadmap[0] ?? null;
 
     return (
-      <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
+      <div data-qa="career-path-tool" data-qa-tool-state="result" className="mx-auto max-w-7xl space-y-5 animate-fade-in">
         <SavedResultBar
           t={t}
           canSave={canSave}
           isSaved={fromSaved}
           savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
           onTryNext={resetResult}
+          onClearSaved={() => { clear(); setFromSaved(false); }}
         />
 
         <CardShell className="overflow-hidden">
@@ -429,14 +435,31 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                 </p>
               </div>
               {primaryGap && (
-                <button
-                  type="button"
-                  onClick={() => handleGenerateProject(primaryGap.skill)}
-                  disabled={generatingProjectForSkill === primaryGap.skill}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-wait disabled:bg-emerald-400"
-                >
-                  {generatingProjectForSkill === primaryGap.skill ? '...' : t('tool_career_path_project_button')}
-                </button>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openLearningPlanForGap(primaryGap, targetRole)}
+                    data-qa="career-path-build-learning-plan"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800"
+                  >
+                    <BookOpen className="h-4 w-4" aria-hidden="true" />
+                    {t('tool_career_path_learning_plan_button')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateProject(primaryGap.skill)}
+                    disabled={generatingProjectForSkill === primaryGap.skill}
+                    data-qa="career-path-generate-project"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-wait disabled:bg-emerald-400"
+                  >
+                    {generatingProjectForSkill === primaryGap.skill ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        <span>{t('tool_career_path_project_generating_button')}</span>
+                      </>
+                    ) : t('tool_career_path_project_button')}
+                  </button>
+                </div>
               )}
             </div>
           </CardShell>
@@ -456,17 +479,34 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                   <div key={gap.skill} className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-amber-950 dark:text-amber-100">{gap.skill}</p>
+                        <p data-qa="career-path-gap-skill" className="font-semibold text-amber-950 dark:text-amber-100">{gap.skill}</p>
                         <p className="mt-2 text-sm leading-relaxed text-amber-900 dark:text-amber-200">{gap.reason}</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleGenerateProject(gap.skill)}
-                        disabled={generatingProjectForSkill === gap.skill}
-                        className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-800 dark:bg-slate-950 dark:text-amber-200 dark:hover:bg-amber-950/30"
-                      >
-                        {generatingProjectForSkill === gap.skill ? '...' : t('tool_career_path_project_button')}
-                      </button>
+                      <div className="flex shrink-0 flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openLearningPlanForGap(gap, targetRole)}
+                          data-qa="career-path-build-learning-plan"
+                          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-950 dark:text-violet-200 dark:hover:bg-violet-950/30"
+                        >
+                          <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                          {t('tool_career_path_learning_plan_button')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateProject(gap.skill)}
+                          disabled={generatingProjectForSkill === gap.skill}
+                          data-qa="career-path-generate-project"
+                          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-800 dark:bg-slate-950 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                        >
+                          {generatingProjectForSkill === gap.skill ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              <span>{t('tool_career_path_project_generating_button')}</span>
+                            </>
+                          ) : t('tool_career_path_project_button')}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -574,7 +614,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
             <EmptyResultBlock
               icon={Info}
               title={t('tool_career_path_roadmap_title')}
-              description="No roadmap phases were returned. Try generating again with a narrower role, level, and industry."
+              description={t('tool_career_path_empty_roadmap_desc')}
             />
           )}
         </CardShell>

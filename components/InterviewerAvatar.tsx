@@ -41,13 +41,7 @@ export const InterviewerAvatar: React.FC<InterviewerAvatarProps> = ({ speaking, 
         {imageUrl ? (
           <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
         ) : (
-          /* Built-in professional silhouette (until a portrait is provided) */
-          <svg viewBox="0 0 100 100" className="h-full w-full text-slate-400 dark:text-slate-500" aria-hidden="true">
-            <circle cx="50" cy="38" r="17" fill="currentColor" />
-            <path d="M50 58c-17 0-29 9.5-32 24.5V100h64V82.5C79 67.5 67 58 50 58z" fill="currentColor" />
-            {/* collar + tie to read as "interviewer" */}
-            <path d="M50 62l-7 8 7 16 7-16z" className="text-blue-600 dark:text-blue-400" fill="currentColor" />
-          </svg>
+          <img src="/interviewer.jpg" alt={name} className="h-full w-full object-cover" />
         )}
 
         {/* approximate "mouth" — animated voice bars over the lower face while speaking */}

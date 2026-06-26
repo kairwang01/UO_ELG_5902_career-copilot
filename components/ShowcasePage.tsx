@@ -178,6 +178,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
   const deleteButton = (portfolio: SavedPortfolio, className = '') => (
     <button
       type="button"
+      data-qa="showcase-delete-button"
       onClick={(event) => {
         event.stopPropagation();
         requestDelete(portfolio);
@@ -202,7 +203,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
       maxWidth={448}
       zIndex={100}
     >
-      <div className="rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+      <div data-qa="showcase-delete-dialog" className="rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900">
         <div className="flex items-start gap-4">
           <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300">
             <Trash2 className="h-5 w-5" />
@@ -217,6 +218,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
+            data-qa="showcase-delete-cancel"
             onClick={() => setDeleteTarget(null)}
             disabled={Boolean(deletingId)}
             className="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -225,6 +227,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
           </button>
           <button
             type="button"
+            data-qa="showcase-delete-confirm"
             onClick={() => void confirmDelete()}
             disabled={Boolean(deletingId)}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm shadow-red-600/20 transition hover:bg-red-700 disabled:opacity-60"
@@ -239,9 +242,10 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
 
   if (selected) {
     return (
-      <div className="space-y-5">
+      <div data-qa="showcase-detail-view" className="space-y-5">
         <button
           type="button"
+          data-qa="showcase-back-to-list"
           onClick={() => { setSelected(null); setSelectedHtml(''); }}
           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
@@ -249,7 +253,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
           {t('showcase_back_to_list')}
         </button>
         {selectedLoading ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+          <div data-qa="showcase-detail-loading" className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
             {t('showcase_loading')}
           </div>
         ) : selectedHtml ? (
@@ -289,6 +293,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
           <button
             type="button"
             onClick={() => switchTab('mine')}
+            data-qa="showcase-tab-mine"
             className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${activeTab === 'mine' ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-950 dark:text-blue-300' : 'text-gray-600 hover:text-gray-950 dark:text-slate-400 dark:hover:text-white'}`}
           >
             <Globe className="h-4 w-4" />
@@ -297,6 +302,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
           <button
             type="button"
             onClick={() => switchTab('build')}
+            data-qa="showcase-tab-build"
             className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${activeTab === 'build' ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-950 dark:text-blue-300' : 'text-gray-600 hover:text-gray-950 dark:text-slate-400 dark:hover:text-white'}`}
           >
             <Sparkles className="h-4 w-4" />
@@ -313,7 +319,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
 
       {activeTab === 'mine' ? (
         loading ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+          <div data-qa="showcase-list-loading" className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
             {t('showcase_loading')}
           </div>
         ) : portfolios.length > 0 ? (
@@ -331,6 +337,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
                 <button
                   type="button"
                   onClick={() => void openPortfolio(portfolio)}
+                  data-qa="showcase-saved-card"
                   className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <TemplateCover theme={portfolio.theme} title={portfolio.name} />
@@ -346,7 +353,7 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
             ))}
           </div>
         ) : (
-          <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
+          <div data-qa="showcase-empty-state" className="rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
             <h3 className="text-lg font-bold text-gray-950 dark:text-gray-100">{t('showcase_empty_title')}</h3>
             <p className="mx-auto mt-2 max-w-xl text-sm text-gray-600 dark:text-slate-400">{t('showcase_empty_desc')}</p>
             <button
@@ -378,10 +385,11 @@ const ShowcasePage: React.FC<ShowcasePageProps> = ({ resumeText, session, profil
       {deleteConfirmDialog}
       <ConfirmActionDialog
         open={Boolean(pendingTab)}
-        title="Discard unsaved changes?"
+        title={t('showcase_unsaved_leave_title')}
         description={t('showcase_unsaved_leave_confirm')}
+        dataQa="showcase-unsaved-leave-dialog"
         cancelLabel={t('showcase_delete_cancel')}
-        confirmLabel="Leave without saving"
+        confirmLabel={t('showcase_unsaved_leave_button')}
         tone="danger"
         onOpenChange={(open) => {
           if (!open) setPendingTab(null);

@@ -1,12 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { BriefcaseBusiness, Building2, MapPin, MessageSquareText, Target, Users } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { BriefcaseBusiness, Building2, Mail, MapPin, MessageSquareText, Target, Users } from 'lucide-react';
 import { generateNetworkingStrategy } from '../../services/aiClient';
 import type { NetworkingStrategyResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
-import { SavedResultBar } from './ToolUtils';
+import { SavedResultBar, ToolError } from './ToolUtils';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
+import { buildEmailContextFromNetworkingSuggestion, parseToolJobContext } from '../../lib/toolPrefill';
 import {
   assessNetworkingStrategy,
   buildNetworkingDownloadText,
@@ -18,6 +19,8 @@ import {
 
 interface NetworkingAssistantProps {
   resumeText: string;
+  initialInput?: string;
+  openTool: (tool: string, input?: string) => void;
   market: string;
   t: (key: string) => string;
 }
@@ -31,6 +34,11 @@ type SavedNetworkingStrategyResult = NetworkingStrategyResult & {
 const SAMPLE_COMPANY = 'Shopify';
 const SAMPLE_ROLE = 'Senior Software Engineer';
 const SAMPLE_LOCATION = 'Ottawa, ON';
+
+const localizedCopy = (t: (key: string) => string, key: string, fallback: string): string => {
+  const value = t(key);
+  return value === key ? fallback : value;
+};
 
 const CardShell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
   <section className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
@@ -48,19 +56,22 @@ const MetricTile: React.FC<{ label: string; value: string | number; icon: React.
   </div>
 );
 
-const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, market, t }) => {
+const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, initialInput = '', openTool, market, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SavedNetworkingStrategyResult | null>(null);
-  const { canSave, saved, persist } = useToolResults<SavedNetworkingStrategyResult>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<SavedNetworkingStrategyResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [targetCompany, setTargetCompany] = useState('');
   const [targetRole, setTargetRole] = useState('');
   const [targetLocation, setTargetLocation] = useState('');
+  const [prefillActive, setPrefillActive] = useState(false);
+  const consumedInitialInputRef = useRef('');
 
   const suggestions = useMemo(() => deriveSmartSuggestions(resumeText), [resumeText]);
 
   useEffect(() => {
+    if (initialInput.trim()) return;
     if (saved && !result && canExportNetworkingStrategy(assessNetworkingStrategy(saved.result))) {
       setResult(saved.result);
       setFromSaved(true);
@@ -68,7 +79,24 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
       if (saved.result.targetRole) setTargetRole(saved.result.targetRole);
       if (saved.result.targetLocation) setTargetLocation(saved.result.targetLocation);
     }
-  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [saved, result, initialInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const value = initialInput.trim();
+    if (!value || consumedInitialInputRef.current === value) return;
+
+    const context = parseToolJobContext(value);
+    if (!context.jobTitle && !context.company && !context.location) return;
+
+    consumedInitialInputRef.current = value;
+    if (context.company) setTargetCompany(context.company);
+    if (context.jobTitle) setTargetRole(context.jobTitle);
+    if (context.location) setTargetLocation(context.location);
+    setPrefillActive(true);
+    setResult(null);
+    setFromSaved(false);
+    setError(null);
+  }, [initialInput]);
 
   const resetResult = () => {
     setResult(null);
@@ -80,6 +108,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
     setTargetCompany(SAMPLE_COMPANY);
     setTargetRole(SAMPLE_ROLE);
     setTargetLocation(SAMPLE_LOCATION);
+    setPrefillActive(false);
   };
 
   const runTool = async (companyInput: string, roleInput: string, locationInput: string) => {
@@ -114,7 +143,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
         persist(nextResult);
       }
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -143,7 +172,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
   };
 
   const renderInput = () => (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div data-qa="networking-assistant-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-5">
       <CardShell className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
           <form onSubmit={handleSubmit} className="min-w-0 p-5 sm:p-6 lg:p-8">
@@ -159,6 +188,15 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
             </p>
 
             <div className="mt-7 grid gap-4 sm:grid-cols-2">
+              {prefillActive && (
+                <div
+                  data-qa="networking-assistant-prefill-note"
+                  className="sm:col-span-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200"
+                >
+                  {localizedCopy(t, 'tool_networking_assistant_prefill_label', 'Imported from selected opportunity')}
+                </div>
+              )}
+
               <div className="sm:col-span-1">
                 <label htmlFor="networking-target-company" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                   {t('tool_networking_assistant_company_label')}
@@ -168,10 +206,14 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
                   <input
                     type="text"
                     id="networking-target-company"
+                    data-qa="networking-target-company"
                     className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                     placeholder={t('tool_networking_assistant_company_placeholder')}
                     value={targetCompany}
-                    onChange={(event) => setTargetCompany(event.target.value)}
+                    onChange={(event) => {
+                      setTargetCompany(event.target.value);
+                      setPrefillActive(false);
+                    }}
                     required
                   />
                 </div>
@@ -186,10 +228,14 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
                   <input
                     type="text"
                     id="networking-target-location"
+                    data-qa="networking-target-location"
                     className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                     placeholder={t('tool_networking_assistant_location_placeholder')}
                     value={targetLocation}
-                    onChange={(event) => setTargetLocation(event.target.value)}
+                    onChange={(event) => {
+                      setTargetLocation(event.target.value);
+                      setPrefillActive(false);
+                    }}
                     required
                   />
                 </div>
@@ -203,6 +249,7 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
                   <button
                     type="button"
                     onClick={fillExample}
+                    data-qa="networking-assistant-try-example"
                     className="text-sm font-semibold text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
                   >
                     {t('try_example')}
@@ -224,10 +271,14 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
                   <input
                     type="text"
                     id="networking-target-role"
+                    data-qa="networking-target-role"
                     className="block min-h-[48px] w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                     placeholder={t('tool_networking_assistant_role_placeholder')}
                     value={targetRole}
-                    onChange={(event) => setTargetRole(event.target.value)}
+                    onChange={(event) => {
+                      setTargetRole(event.target.value);
+                      setPrefillActive(false);
+                    }}
                     required
                   />
                 </div>
@@ -235,22 +286,19 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
             </div>
 
             {error && (
-              <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300" role="alert">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="leading-relaxed">{error}</p>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:hover:bg-red-900/30"
-                  >
-                    {t('try_again')}
-                  </button>
-                </div>
+              <div className="mt-5">
+                <ToolError
+                  message={error}
+                  onRetry={() => void runTool(targetCompany, targetRole, targetLocation)}
+                  retryLabel={t('try_again')}
+                  retryDisabled={loading}
+                />
               </div>
             )}
 
             <button
               type="submit"
+              data-qa="networking-assistant-generate"
               disabled={loading}
               className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-lg bg-sky-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-400"
             >
@@ -300,9 +348,17 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
     const validation = assessNetworkingStrategy(result);
 
     return (
-      <div className="mx-auto max-w-7xl space-y-5 animate-fade-in">
+      <div data-qa="networking-assistant-tool" data-qa-tool-state="result" className="mx-auto max-w-7xl space-y-5 animate-fade-in">
         {canExportNetworkingStrategy(validation) && (
-          <SavedResultBar t={t} canSave={canSave} isSaved={fromSaved} savedAt={saved?.savedAt ?? null} onTryNext={resetResult} />
+          <SavedResultBar
+            t={t}
+            canSave={canSave}
+            isSaved={fromSaved}
+            savedAt={saved?.savedAt ?? null}
+            saveState={saveState}
+            onTryNext={resetResult}
+            onClearSaved={() => { clear(); setFromSaved(false); }}
+          />
         )}
         <NetworkingQualityNotice validation={validation} />
 
@@ -346,14 +402,18 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
 
         <div className="grid gap-5 lg:grid-cols-2">
           {contacts.map((suggestion, index) => (
-            <article key={`${suggestion.contactType}-${index}`} className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <article
+              key={`${suggestion.contactType}-${index}`}
+              data-qa="networking-contact-card"
+              className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+            >
               <div className="flex items-start gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-700 text-sm font-semibold text-white">
                   {index + 1}
                 </span>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t('tool_networking_assistant_contact_label')}</p>
-                  <h3 className="mt-1 break-words text-lg font-semibold text-slate-950 dark:text-slate-100">{suggestion.contactType}</h3>
+                  <h3 data-qa="networking-contact-type" className="mt-1 break-words text-lg font-semibold text-slate-950 dark:text-slate-100">{suggestion.contactType}</h3>
                 </div>
               </div>
 
@@ -370,8 +430,25 @@ const NetworkingAssistant: React.FC<NetworkingAssistantProps> = ({ resumeText, m
                     text={suggestion.outreachMessage || ''}
                     label={t('tool_networking_assistant_copy_button')}
                   />
+                  <button
+                    type="button"
+                    data-qa={`networking-open-email-${index}`}
+                    disabled={!canExportNetworkingStrategy(validation)}
+                    onClick={() => openTool('email-crafter', buildEmailContextFromNetworkingSuggestion({
+                      contactType: suggestion.contactType,
+                      company,
+                      role,
+                      location,
+                      reason: suggestion.reason,
+                      outreachMessage: suggestion.outreachMessage,
+                    }))}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    {t('tool_networking_assistant_draft_email_button')}
+                  </button>
                 </div>
-                <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                <p data-qa="networking-outreach-message" className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                   {suggestion.outreachMessage}
                 </p>
               </div>

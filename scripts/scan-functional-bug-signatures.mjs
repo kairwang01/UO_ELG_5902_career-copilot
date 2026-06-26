@@ -48,6 +48,35 @@ function classifyLine(line) {
   return null;
 }
 
+const NON_LATCH_REF_NAMES = new Set([
+  'mountedRef',
+  'isMountedRef',
+  'endRef',
+  'scrollRef',
+  'fileInputRef',
+  'videoRef',
+  'canvasRef',
+  'menuRef',
+  'jdPanelRef',
+  'answerBoxRef',
+]);
+
+function hasDuplicateSubmitGuard(block) {
+  const refNames = [...block.matchAll(/\b([A-Za-z0-9_]+Ref)\.current/g)].map((match) => match[1]);
+  const hasLatchRef = refNames.some((name) => {
+    if (NON_LATCH_REF_NAMES.has(name)) return false;
+    if (/TimerRef$/i.test(name)) return false;
+    return /(saving|submitting|inFlight|loading|busy|run|apply|scorecard|password|plan|sending|opening|extracting|anonymizing|pitching|prepping|confirming|downloading|generating|upload|hidden|ids|save|copy|paying|creating|processing|unlocking)/i.test(name);
+  });
+  if (hasLatchRef) return true;
+
+  // Some larger forms centralize the synchronous guard in a helper such as
+  // startAiAction("description"), which internally checks a ref before any await.
+  if (/if\s*\(\s*!?start[A-Za-z0-9_]*Action\(/.test(block)) return true;
+
+  return /set[A-Za-z0-9_]*(Saving|Submitting|Loading|Busy|Paying|Creating|Parsing|Prefilling|Processing|Opening|Copying)\(true\)/.test(block);
+}
+
 const findings = [];
 for (const root of ROOTS) {
   for (const file of walk(root)) {
@@ -72,9 +101,7 @@ for (const root of ROOTS) {
         const startLine = text.slice(0, match.index).split(/\r?\n/).length;
         const block = lines.slice(startLine - 1, startLine + 80).join('\n');
         const hasNetworkOrWrite = /await\s+[A-Za-z0-9_.]+\(|await\s+(data|api|admin|set|update|create|delete|remove|save|send|confirm|schedule|upsert)/.test(block);
-        const hasLatch = /(savingRef|submittingRef|inFlightRef|loadingRef|busyRef|runRef|applyInFlightRef|scorecardSavingRef|passwordSavingRef|planSavingRef)\.current/.test(block);
-        const hasImmediateDisable = /set[A-Za-z0-9_]*(Saving|Submitting|Loading|Busy|Paying|Creating|Parsing|Prefilling|Processing)\(true\)/.test(block);
-        if (!hasNetworkOrWrite || hasLatch || hasImmediateDisable) continue;
+        if (!hasNetworkOrWrite || hasDuplicateSubmitGuard(block)) continue;
         findings.push({
           file: relative(process.cwd(), file),
           line: startLine,

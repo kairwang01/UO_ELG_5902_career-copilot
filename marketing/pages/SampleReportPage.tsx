@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Check } from 'lucide-react';
 import { SiteLayout } from '../components/SiteLayout';
 import { ReportPreview } from '../components/ReportPreview';
 import { InterviewFeedbackPreview } from '../components/InterviewFeedbackPreview';
@@ -78,7 +79,9 @@ const ReportGenerationState: React.FC<{ activeStep: number; onSkip: () => void }
             >
               <div className="flex items-center gap-2">
                 {isDone ? (
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[var(--site-ready)]">✓</span>
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white text-[var(--site-ready)]">
+                    <Check className="h-3 w-3" aria-hidden="true" strokeWidth={2.5} />
+                  </span>
                 ) : isActive ? (
                   <span className="h-4 w-4 rounded-full border-2 border-[var(--site-border)] border-t-[var(--site-action)] animate-spin" />
                 ) : (
@@ -255,7 +258,9 @@ export const SampleReportPage: React.FC = () => {
               <ul className="space-y-3 text-sm leading-6 text-[var(--site-text)]">
                 {strengths.map((item) => (
                   <li key={item} className="flex gap-3">
-                    <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-[var(--site-ready)]">✓</span>
+                    <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[var(--site-ready)]">
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" strokeWidth={2.5} />
+                    </span>
                     <span>{item}</span>
                   </li>
                 ))}

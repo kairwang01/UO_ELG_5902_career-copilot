@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Check, ChevronDown, CircleHelp, Search, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Calendar, Check, ChevronDown, CircleHelp, RotateCcw, Search, Star, X, Zap } from 'lucide-react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
 import { AdminAccessDenied, AdminVerifying, resolveRoleWithFallback } from './AdminAccessGate';
@@ -213,7 +213,7 @@ const DEFAULT_PLAN_QUOTAS: Record<AdminPlanKey, AdminPlanQuota> = {
 const TOOL_KEYS = Object.keys(TOOL_CREDIT_COSTS).sort();
 
 const PROMPT_GROUP_HELP: Record<string, string> = {
-  'Tool prompts': 'Prompts used by generic AI tools routed through aiProxy/toolRegistry, usually tied to a visible tool or helper step.',
+  'Tool prompts': 'Prompts used by model-backed tools routed through aiProxy/toolRegistry, usually tied to a visible tool or helper step.',
   'Handler prompts': 'Prompts used by dedicated backend handlers with their own auth, credit, or workflow logic, such as resume analysis, coach, cover letters, career path, and interviews.',
 };
 
@@ -360,8 +360,8 @@ const PROMPT_META: Record<string, { module: string; purpose: string }> = {
     purpose: 'Drafts a client-facing pitch email for a candidate, optionally tied to a job description.',
   },
   generateCandidatePrepKit: {
-    module: 'Agency Hub',
-    purpose: 'Identifies weak spots, key projects, and likely questions for candidate interview prep.',
+    module: 'Agency Hub + Interview Prep',
+    purpose: 'Shared prep-kit prompt. Agency Hub uses the flat weak-spots/key-projects/predicted-questions summary; the candidate Interview Prep tool uses the evidence-driven layer (evidence-ranked questions, resume anchors, project follow-up chains, gap risks, practice plan).',
   },
   handler_resume_analysis: {
     module: 'Resume Analysis',
@@ -1723,7 +1723,7 @@ const AdminPortal: React.FC = () => {
             role="alert"
             className="flex items-start gap-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg text-sm"
           >
-            <span className="mt-0.5 text-red-600 shrink-0">✕</span>
+            <X className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden="true" />
             <span>{error}</span>
             <button
               type="button"
@@ -1731,7 +1731,7 @@ const AdminPortal: React.FC = () => {
               className="ml-auto text-red-600 hover:text-red-800 transition-colors shrink-0"
               aria-label="Dismiss error"
             >
-              ✕
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         )}
@@ -1793,9 +1793,12 @@ const AdminPortal: React.FC = () => {
                     </div>
                   ) : (
                     <div role="alert" className="rounded-lg border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-800 dark:text-red-200">
-                      <p className="font-semibold">⚠ No AI provider keys are configured — all AI tools are currently failing.</p>
+                      <p className="flex items-start gap-2 font-semibold">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>No provider keys are configured — generation tools are currently failing.</span>
+                      </p>
                       <p className="mt-1 text-red-700 dark:text-red-300">
-                        A super-admin must add a provider key under <span className="font-medium">Models &amp; Keys</span> (or set it in the functions environment). AI recovers within ~60s of saving.
+                        A super-admin must add a provider key under <span className="font-medium">Models &amp; Keys</span> (or set it in the functions environment). Services recover within ~60s of saving.
                       </p>
                       {hasAdminPermission(role, 'admin.models.read') && (
                         <button
@@ -1812,7 +1815,7 @@ const AdminPortal: React.FC = () => {
 
                 {(dashboard.users_truncated || dashboard.week_usage_truncated) && (
                   <p className="text-xs text-amber-700 flex items-center gap-1.5">
-                    <span>⚠</span>
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                     Showing partial data
                     {dashboard.users_truncated ? ' · user count capped at 2,000' : ''}
                     {dashboard.week_usage_truncated ? ' · usage aggregates capped at 5,000 events' : ''}
@@ -1874,13 +1877,13 @@ const AdminPortal: React.FC = () => {
                             <span role="status" aria-live="polite">
                               {defaultModelToast?.ok && (
                                 <span className="text-[11px] text-emerald-700 flex items-center gap-1">
-                                  <span aria-hidden="true">✓</span>
+                                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
                                   {defaultModelToast.ok}
                                 </span>
                               )}
                               {defaultModelToast?.err && (
                                 <span className="text-[11px] text-red-600 flex items-center gap-1">
-                                  <span aria-hidden="true">✕</span>
+                                  <X className="h-3.5 w-3.5" aria-hidden="true" />
                                   {defaultModelToast.err}
                                 </span>
                               )}
@@ -1928,7 +1931,7 @@ const AdminPortal: React.FC = () => {
                               </span>
                               {chain.map((chainId) => (
                                 <React.Fragment key={chainId}>
-                                  <span className="text-gray-400" aria-hidden="true">→</span>
+                                  <ArrowRight className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
                                   <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded font-mono">
                                     {models.find((m) => m.id === chainId)?.label ?? chainId}
                                   </span>
@@ -2175,7 +2178,7 @@ const AdminPortal: React.FC = () => {
 
                     <div className="flex items-center gap-2 pt-1 flex-wrap">
                       <button type="button" disabled={ts.state === 'running'} onClick={runTest} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-xs font-medium text-gray-700 dark:text-gray-200 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed">
-                        {ts.state === 'running' ? (<span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />) : (<span aria-hidden="true">⚡</span>)}
+                        {ts.state === 'running' ? (<span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />) : (<Zap className="h-3.5 w-3.5" aria-hidden="true" />)}
                         Test connection
                       </button>
                       <SaveButton onClick={save} loading={loading} label="Save" />
@@ -2183,8 +2186,9 @@ const AdminPortal: React.FC = () => {
 
                     {ts.state === 'done' && (
                       <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${ts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800/50' : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800/50'}`}>
-                        <span className="font-medium">
-                          {ts.ok ? `✓ Connected` : `✗ Failed`}
+                        <span className="inline-flex items-center gap-1.5 font-medium">
+                          {ts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
+                          {ts.ok ? 'Connected' : 'Failed'}
                           {ts.ok && ts.latencyMs !== undefined ? ` · ${ts.latencyMs}ms` : ''}
                         </span>
                         {ts.ok && ts.text && (<span className="text-emerald-700 dark:text-emerald-300 font-mono text-[11px] truncate" title={ts.text}>reply: {ts.text}</span>)}
@@ -2361,12 +2365,13 @@ const AdminPortal: React.FC = () => {
                                       onClick={runKeyTest}
                                       className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
                                     >
-                                      {kts.state === 'running' ? <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" /> : '⚡'}
+                                      {kts.state === 'running' ? <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" /> : <Zap className="h-3 w-3" aria-hidden="true" />}
                                       {t('admin.model.test_key')}
                                     </button>
                                     {kts.state === 'done' && (
-                                      <span className={kts.ok ? 'text-emerald-600' : 'text-red-600'}>
-                                        {kts.ok ? `✓${kts.latencyMs !== undefined ? ` ${kts.latencyMs}ms` : ''}` : '✗'}
+                                      <span className={`inline-flex items-center gap-1 ${kts.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                                        {kts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
+                                        {kts.ok && kts.latencyMs !== undefined ? `${kts.latencyMs}ms` : null}
                                       </span>
                                     )}
                                   </li>
@@ -2513,7 +2518,7 @@ const AdminPortal: React.FC = () => {
                             {fts.state === 'running' ? (
                               <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
                             ) : (
-                              <span aria-hidden="true">⚡</span>
+                              <Zap className="h-3.5 w-3.5" aria-hidden="true" />
                             )}
                             Test connection
                           </button>
@@ -2521,8 +2526,9 @@ const AdminPortal: React.FC = () => {
                         </div>
                         {fts.state === 'done' && (
                           <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${fts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                            <span className="font-medium">
-                              {fts.ok ? `✓ Connected` : `✗ Failed`}
+                            <span className="inline-flex items-center gap-1.5 font-medium">
+                              {fts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
+                              {fts.ok ? 'Connected' : 'Failed'}
                               {fts.ok && fts.latencyMs !== undefined ? ` · ${fts.latencyMs}ms` : ''}
                             </span>
                             {fts.ok && fts.text && (
@@ -2555,26 +2561,30 @@ const AdminPortal: React.FC = () => {
                 </div>
                 {setDefaultFeedback?.ok && (
                   <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400">
-                    <span aria-hidden="true">✓</span>
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
                     {setDefaultFeedback.ok}
                     <button
                       type="button"
                       onClick={() => setSetDefaultFeedback(null)}
                       className="ml-auto text-emerald-600 hover:text-emerald-800 focus:outline-none"
                       aria-label="Dismiss"
-                    >✕</button>
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
                   </div>
                 )}
                 {setDefaultFeedback?.err && (
                   <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
-                    <span aria-hidden="true">✕</span>
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
                     {setDefaultFeedback.err}
                     <button
                       type="button"
                       onClick={() => setSetDefaultFeedback(null)}
                       className="ml-auto text-red-600 hover:text-red-800 focus:outline-none"
                       aria-label="Dismiss"
-                    >✕</button>
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
                   </div>
                 )}
 
@@ -2720,7 +2730,7 @@ const AdminPortal: React.FC = () => {
                               <td className="px-5 py-3 whitespace-nowrap">
                                 {m.id === defaultModelId ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700">
-                                    <span aria-hidden="true">★</span>
+                                    <Star className="h-3 w-3 fill-current" aria-hidden="true" />
                                     {t('admin.model.default_badge')}
                                   </span>
                                 ) : (
@@ -2746,7 +2756,7 @@ const AdminPortal: React.FC = () => {
                                     onClick={runRowTest}
                                     className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
                                   >
-                                    <span aria-hidden="true">⚡</span> Test
+                                    <Zap className="h-3 w-3" aria-hidden="true" /> Test
                                   </button>
                                 )}
                                 {rts.state === 'running' && (
@@ -2760,17 +2770,19 @@ const AdminPortal: React.FC = () => {
                                     className={`inline-flex flex-col gap-0.5 text-[11px] ${rts.ok ? 'text-emerald-700' : 'text-red-600'}`}
                                   >
                                     <span className="font-medium flex items-center gap-1">
-                                      {rts.ok ? '✓' : '✗'}
-                                      {rts.ok
-                                        ? `ok${rts.latencyMs !== undefined ? ` · ${rts.latencyMs}ms` : ''}`
-                                        : 'failed'}
+                                      {rts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
+                                      <span>
+                                        {rts.ok
+                                          ? `ok${rts.latencyMs !== undefined ? ` · ${rts.latencyMs}ms` : ''}`
+                                          : 'failed'}
+                                      </span>
                                       <button
                                         type="button"
                                         onClick={runRowTest}
                                         title="Re-test"
                                         className="ml-1 text-gray-400 hover:text-gray-600 text-[10px] leading-none focus:outline-none"
                                       >
-                                        ↺
+                                        <RotateCcw className="h-3 w-3" aria-hidden="true" />
                                       </button>
                                     </span>
                                     {rts.ok && rts.text && (
@@ -3028,13 +3040,13 @@ const AdminPortal: React.FC = () => {
                                   {/* Inline feedback */}
                                   {feedback?.ok && (
                                     <p className="text-xs text-emerald-700 flex items-center gap-1.5">
-                                      <span aria-hidden="true">✓</span>
+                                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
                                       {feedback.ok}
                                     </p>
                                   )}
                                   {feedback?.err && (
                                     <p className="text-xs text-red-600 flex items-center gap-1.5">
-                                      <span aria-hidden="true">✕</span>
+                                      <X className="h-3.5 w-3.5" aria-hidden="true" />
                                       {feedback.err}
                                     </p>
                                   )}
@@ -3390,7 +3402,7 @@ const AdminPortal: React.FC = () => {
                         <th key={f.key} className="text-left py-2 px-3 font-medium" title={f.tip}>
                           <span className="inline-flex items-center gap-1">
                             {f.header}
-                            <span aria-hidden="true" className="text-gray-300 cursor-help">ⓘ</span>
+                            <CircleHelp className="h-3 w-3 cursor-help text-gray-300" aria-hidden="true" />
                           </span>
                         </th>
                       ))}
@@ -3437,7 +3449,7 @@ const AdminPortal: React.FC = () => {
 
             <Card className="p-5 space-y-4">
               <div>
-                <SectionHeading>AI tools</SectionHeading>
+                <SectionHeading>Tool access</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   Disable tools, edit credit prices, and choose which plans can run them.
                 </p>
@@ -4028,10 +4040,10 @@ const AdminPortal: React.FC = () => {
                   {inviteLoading ? 'Inviting...' : t('admin.admins.invite_btn')}
                 </button>
                 {inviteFeedback?.ok && (
-                  <p className="text-xs text-emerald-700 flex items-center gap-1.5"><span>✓</span>{inviteFeedback.ok}</p>
+                  <p className="text-xs text-emerald-700 flex items-center gap-1.5"><Check className="h-3.5 w-3.5" aria-hidden="true" />{inviteFeedback.ok}</p>
                 )}
                 {inviteFeedback?.err && (
-                  <p className="text-xs text-red-600 flex items-center gap-1.5"><span>✕</span>{inviteFeedback.err}</p>
+                  <p className="text-xs text-red-600 flex items-center gap-1.5"><X className="h-3.5 w-3.5" aria-hidden="true" />{inviteFeedback.err}</p>
                 )}
                 </div>
               </details>

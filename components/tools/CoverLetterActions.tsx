@@ -4,7 +4,9 @@ import {
   BlockedRegenerateButton,
   canExportQualityGate,
   QualityGateNotice,
+  type QualityCopyFn,
   type QualityValidationStatus,
+  useQualityGateCopy,
 } from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
@@ -57,17 +59,19 @@ export const assessCoverLetterDraft = (text: string): CoverLetterValidation => {
 export const canExportCoverLetter = (validation: CoverLetterValidation): boolean =>
   canExportQualityGate(validation);
 
-export const coverLetterIssueLabel = (issue: string): string => {
-  const labels: Record<string, string> = {
-    empty: 'No cover letter text was generated.',
-    too_short: 'The draft is too short to send.',
-    placeholder: 'Placeholders are still present.',
-    template_language: 'Template instructions are still visible.',
-    thin_structure: 'The draft needs a clearer opening, body, and close.',
-    unfinished_ending: 'The draft appears unfinished.',
-    too_long: 'The draft is long; trim it before sending.',
+export const coverLetterIssueLabel = (issue: string, copy?: QualityCopyFn): string => {
+  const labels: Record<string, { key: string; fallback: string }> = {
+    empty: { key: 'quality_cover_letter_empty', fallback: 'No cover letter text was generated.' },
+    too_short: { key: 'quality_cover_letter_too_short', fallback: 'The draft is too short to send.' },
+    placeholder: { key: 'quality_issue_placeholder', fallback: 'Placeholders are still present.' },
+    template_language: { key: 'quality_issue_template_language', fallback: 'Template instructions are still visible.' },
+    thin_structure: { key: 'quality_cover_letter_thin_structure', fallback: 'The draft needs a clearer opening, body, and close.' },
+    unfinished_ending: { key: 'quality_cover_letter_unfinished_ending', fallback: 'The draft appears unfinished.' },
+    too_long: { key: 'quality_cover_letter_too_long', fallback: 'The draft is long; trim it before sending.' },
   };
-  return labels[issue] || issue.replace(/_/g, ' ');
+  const label = labels[issue];
+  if (!label) return issue.replace(/_/g, ' ');
+  return copy ? copy(label.key, label.fallback) : label.fallback;
 };
 
 interface CoverLetterExportGateProps {
@@ -110,14 +114,15 @@ interface CoverLetterQualityNoticeProps {
 }
 
 export const CoverLetterQualityNotice: React.FC<CoverLetterQualityNoticeProps> = ({ validation }) => {
+  const copy = useQualityGateCopy();
   return (
     <QualityGateNotice
       validation={validation}
       dataQa="cover-letter-quality-notice"
       statusDataAttribute="data-qa-cover-letter-quality"
-      blockingTitle="Fix this draft before exporting"
-      warningTitle="Review before sending"
-      issueLabel={coverLetterIssueLabel}
+      blockingTitle={copy('quality_draft_blocking_title', 'Fix this draft before exporting')}
+      warningTitle={copy('quality_draft_warning_title', 'Review before sending')}
+      issueLabel={(issue) => coverLetterIssueLabel(issue, copy)}
       warningIcon={Copy}
     />
   );

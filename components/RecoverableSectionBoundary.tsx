@@ -49,6 +49,7 @@ class RecoverableSectionBoundary extends Component<RecoverableSectionBoundaryPro
     return (
       <div
         role="alert"
+        data-qa="recoverable-section-error"
         className="flex h-full min-h-[360px] items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-5 py-8 text-center text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100"
       >
         <div className="max-w-md">

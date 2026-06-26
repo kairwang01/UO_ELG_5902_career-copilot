@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
@@ -36,17 +37,11 @@ export const SiteMobileNav: React.FC = () => {
       <button
         type="button"
         aria-expanded={open}
-        aria-label="Menu"
+        aria-label={open ? 'Close menu' : 'Open menu'}
         onClick={() => setOpen(!open)}
         className="p-2 -mr-2 text-[var(--site-text)] min-h-[44px] min-w-[44px]"
       >
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          {open ? (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          ) : (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          )}
-        </svg>
+        {open ? <X className="h-6 w-6" aria-hidden="true" /> : <Menu className="h-6 w-6" aria-hidden="true" />}
       </button>
       {open && (
         <nav className="absolute left-0 right-0 top-16 border-b border-[var(--site-border)] bg-[var(--site-surface)] px-4 shadow-sm z-40">

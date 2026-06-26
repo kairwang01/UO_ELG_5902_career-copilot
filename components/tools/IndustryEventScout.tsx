@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileSearch,
   Globe2,
+  Mail,
   MapPin,
   Search,
   UsersRound,
@@ -16,11 +17,13 @@ import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
+import { buildEmailContextFromIndustryEvent } from '../../lib/toolPrefill';
 
 const SAMPLE_FIELD = 'Artificial Intelligence';
 const SAMPLE_LOCATION = 'Toronto, Canada';
 
 interface IndustryEventScoutProps {
+  openTool: (tool: string, input?: string) => void;
   t: (key: string) => string;
 }
 
@@ -64,11 +67,11 @@ const getHostName = (url: string) => {
   }
 };
 
-const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
+const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ openTool, t }) => {
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EventScoutResultWithContext | null>(null);
-  const { canSave, saved, persist } = useToolResults<EventScoutResultWithContext>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<EventScoutResultWithContext>();
   const [fromSaved, setFromSaved] = useState(false);
   const [field, setField] = useState('');
   const [location, setLocation] = useState('');
@@ -99,6 +102,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
     sources: t('tool_event_scout_sources_label'),
     sourceFallback: isChineseUi ? '来源' : 'Source',
     visit: t('tool_event_scout_visit_link'),
+    draftEmail: t('tool_event_scout_draft_email_button'),
     newSearch: t('tool_event_scout_new_search_button'),
   };
 
@@ -175,7 +179,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
       setFromSaved(false);
       persist(nextResult);
     } catch (err) {
-      if (alive()) setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
       if (alive()) end();
     }
@@ -198,7 +202,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
     const fieldReady = Boolean(field.trim());
     const locationReady = Boolean(location.trim());
     return (
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div data-qa="industry-event-scout-tool" data-qa-tool-state="input" className="mx-auto max-w-6xl space-y-6">
         <CardShell className="overflow-hidden">
           <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_360px]">
             <div className="p-5 sm:p-6">
@@ -218,6 +222,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
                 <button
                   type="button"
                   onClick={handleTryExample}
+                  data-qa="industry-event-scout-try-example"
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   <Search className="h-4 w-4" />
@@ -235,6 +240,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
                     <input
                       type="text"
                       id="field-of-interest"
+                      data-qa="industry-event-scout-field"
                       value={field}
                       onChange={(event) => setField(event.target.value)}
                       required
@@ -252,6 +258,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
                     <input
                       type="text"
                       id="event-location"
+                      data-qa="industry-event-scout-location"
                       value={location}
                       onChange={(event) => setLocation(event.target.value)}
                       required
@@ -272,6 +279,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
                 <button
                   type="button"
                   onClick={runTool}
+                  data-qa="industry-event-scout-generate"
                   disabled={loading}
                   className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 dark:disabled:bg-blue-900"
                 >
@@ -320,7 +328,11 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
     const typeInfo = eventTypeConfig[eventType] ?? eventTypeConfig.other;
     const host = getHostName(event.url);
     return (
-      <article key={`${event.eventName}-${index}`} className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <article
+        key={`${event.eventName}-${index}`}
+        data-qa="industry-event-card"
+        className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      >
         <div className="flex items-start justify-between gap-4">
           <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${typeInfo.chip}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${typeInfo.dot}`} />
@@ -328,7 +340,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
           </span>
           {host && <span className="max-w-[140px] truncate text-xs font-medium text-slate-400">{host}</span>}
         </div>
-        <h3 className="mt-4 text-lg font-semibold leading-snug text-slate-950 dark:text-slate-50">{event.eventName}</h3>
+        <h3 data-qa="industry-event-name" className="mt-4 text-lg font-semibold leading-snug text-slate-950 dark:text-slate-50">{event.eventName}</h3>
         <div className="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-400">
           <div className="flex gap-2">
             <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
@@ -339,16 +351,27 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
             <span>{event.location}</span>
           </div>
         </div>
-        <p className="mt-4 flex-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{event.summary}</p>
-        <a
-          href={event.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-5 inline-flex items-center gap-2 self-start rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 dark:border-slate-700 dark:text-blue-300 dark:hover:bg-blue-950/30"
-        >
-          {ui.visit}
-          <ExternalLink className="h-4 w-4" />
-        </a>
+        <p data-qa="industry-event-summary" className="mt-4 flex-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{event.summary}</p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <a
+            href={event.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950/30"
+          >
+            {ui.visit}
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <button
+            type="button"
+            data-qa="industry-event-draft-email"
+            onClick={() => openTool('email-crafter', buildEmailContextFromIndustryEvent(event, result?.field || field))}
+            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <Mail className="h-3.5 w-3.5" />
+            {ui.draftEmail}
+          </button>
+        </div>
       </article>
     );
   };
@@ -359,13 +382,15 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
     const scope = [result.field || field, result.locationQuery || location].filter(Boolean).join(' · ');
 
     return (
-      <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
+      <div data-qa="industry-event-scout-tool" data-qa-tool-state="result" className="mx-auto max-w-6xl space-y-5 animate-fade-in">
         <SavedResultBar
           t={t}
           canSave={canSave}
           isSaved={fromSaved}
           savedAt={saved?.savedAt ?? null}
+          saveState={saveState}
           onTryNext={resetResult}
+          onClearSaved={() => { clear(); setFromSaved(false); }}
         />
 
         <CardShell className="overflow-hidden">
@@ -465,9 +490,9 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ t }) => {
       <StagedLoader
         title={t('tool_event_scout_searching_button')}
         steps={[
-          isChineseUi ? '整理行业与地点信号…' : 'Reading the field and location…',
-          isChineseUi ? '查找可信活动来源…' : 'Finding credible event sources…',
-          isChineseUi ? '筛选值得优先关注的机会…' : 'Shortlisting events worth your time…',
+          t('tool_event_scout_loader_step1'),
+          t('tool_event_scout_loader_step2'),
+          t('tool_event_scout_loader_step3'),
         ]}
         onCancel={cancel}
         icon={<CalendarDays />}

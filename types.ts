@@ -88,6 +88,13 @@ export interface UserProfile {
   resume_file_path?: string | null;
   resume_file_size?: number | null;
   resume_file_uploaded_at?: string | null;
+  job_preferences?: {
+    status: 'active' | 'open' | 'browsing' | 'not_looking';
+    roles: string;
+    locations: string;
+    salaryMin: string;
+    availability: string;
+  } | null;
   preferred_language: string | null;
   wallet_address: string | null;
   nft_minted: boolean | null;
@@ -348,10 +355,82 @@ export interface VocabularyFlashcard {
   distractors: string[]; // 2 or 3 incorrect definitions
 }
 
+// How well a predicted question / chain is grounded in real evidence. This is
+// the core honesty signal that separates an evidence-driven prep brief from a
+// generic AI-invented question bank: "source-backed" requires a real provided
+// source (interview report / job posting), "inferred" is a reasoned guess from
+// the resume + role, "weak" is a low-confidence stretch.
+export type PrepEvidenceLevel = 'source-backed' | 'inferred' | 'weak';
+
+export interface PrepResumeAnchor {
+  /** Short label for the project / role / accomplishment, e.g. "RAG search pipeline". */
+  label: string;
+  /** What in the resume backs this anchor (the evidence the candidate can point to). */
+  evidence: string;
+  /** Why it matters for the target role — the hook the candidate should lead with. */
+  relevance: string;
+}
+
+export interface PrepRankedQuestion {
+  question: string;
+  /** Behavioural | Technical | System Design | Domain | Culture-fit | … (free text, normalized in UI). */
+  category: string;
+  /** Why this question is likely for THIS role + resume. */
+  rationale: string;
+  /** Best-effort frequency signal — how often this comes up for the role. */
+  frequency: 'high' | 'medium' | 'low';
+  /** Best-effort timeliness signal — recent loops vs. evergreen vs. dated. */
+  recency: 'recent' | 'evergreen' | 'older';
+  evidenceLevel: PrepEvidenceLevel;
+  /** Optional tie back to a PrepResumeAnchor.label when the question targets a project. */
+  anchorLabel?: string;
+}
+
+export interface PrepFollowUpChain {
+  /** The resume project / skill being drilled into. */
+  anchor: string;
+  /** Root question first, then progressively deeper follow-ups an interviewer would ask. */
+  questions: string[];
+  /** What a sharp interviewer is really probing for down this chain. */
+  watchFor: string;
+}
+
+export interface PrepGapRisk {
+  /** The under-evidenced skill / requirement. */
+  area: string;
+  /** How this gap could hurt in the interview. */
+  risk: string;
+  /** A concrete, honest recovery — bridge to adjacent experience or a realistic learning step. */
+  mitigation: string;
+  severity: 'high' | 'medium' | 'low';
+}
+
+export interface PrepSourceRef {
+  label: string;
+  kind: 'job-description' | 'user-note' | 'resume' | 'inferred';
+  detail?: string;
+}
+
+// Shared by the agency Candidate Prep Kit (AgencyHub — flat arrays only) and the
+// candidate-facing Interview Prep tool (the evidence-driven layer below). The
+// three flat arrays stay required so existing agency rendering and any saved
+// kits keep working; the richer fields are optional and only populated for the
+// candidate flow.
 export interface CandidatePrepKit {
     weakSpots: string[];
     keyProjects: string[];
     predictedQuestions: string[];
+    // ---- Evidence-driven candidate-facing layer (optional) ----
+    targetRole?: string;
+    targetCompany?: string;
+    /** Honest one-line note on how grounded this kit is (e.g. "Mostly inferred — add interview reports for stronger prep"). */
+    sourceCoverage?: string;
+    resumeAnchors?: PrepResumeAnchor[];
+    rankedQuestions?: PrepRankedQuestion[];
+    followUpChains?: PrepFollowUpChain[];
+    gapRisks?: PrepGapRisk[];
+    practicePlan?: string[];
+    sourceRefs?: PrepSourceRef[];
 }
 
 export interface BulkAnalysisItem {

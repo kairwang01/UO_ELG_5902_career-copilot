@@ -3,8 +3,8 @@
  * HTML lives in Storage so large generated pages do not hit Firestore's 1 MiB limit.
  */
 import { collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, getStorage, ref, uploadString } from 'firebase/storage';
-import { firestoreDb, app } from '../lib/firebaseClient';
+import { deleteObject, getDownloadURL, ref, uploadString } from 'firebase/storage';
+import { firestoreDb, firebaseStorage } from '../lib/firebaseClient';
 
 export interface SavedPortfolio {
   id: string;
@@ -68,7 +68,7 @@ export async function savePortfolio(uid: string, input: SavePortfolioInput): Pro
 
   const id = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
   const htmlPath = `portfolio-sites/${uid}/${id}/showcase.html`;
-  const storageRef = ref(getStorage(app), htmlPath);
+  const storageRef = ref(firebaseStorage, htmlPath);
 
   await uploadString(storageRef, input.htmlContent, 'raw', { contentType: 'text/html; charset=utf-8' });
   try {
@@ -99,7 +99,7 @@ export async function savePortfolio(uid: string, input: SavePortfolioInput): Pro
 }
 
 export async function loadPortfolioHtml(htmlPath: string): Promise<string> {
-  const url = await getDownloadURL(ref(getStorage(app), htmlPath));
+  const url = await getDownloadURL(ref(firebaseStorage, htmlPath));
   const response = await fetch(url, { credentials: 'omit' });
   if (!response.ok) throw new Error('Could not load saved portfolio.');
   return response.text();
@@ -108,5 +108,5 @@ export async function loadPortfolioHtml(htmlPath: string): Promise<string> {
 export async function deleteSavedPortfolio(uid: string, portfolio: SavedPortfolio): Promise<void> {
   if (!uid) return;
   await deleteDoc(doc(firestoreDb, 'users', uid, 'portfolios', portfolio.id));
-  await deleteObject(ref(getStorage(app), portfolio.html_path)).catch(() => undefined);
+  await deleteObject(ref(firebaseStorage, portfolio.html_path)).catch(() => undefined);
 }

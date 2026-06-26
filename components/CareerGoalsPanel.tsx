@@ -1,11 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Target } from 'lucide-react';
-import { useJobPreferences, prefsSummaryLine } from '../hooks/useJobPreferences';
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Loader2, Target } from 'lucide-react';
+import { useJobPreferences, normalizeJobPreferences, prefsSummaryLine } from '../hooks/useJobPreferences';
 import type { JobPreferences } from '../hooks/useJobPreferences';
+import { data } from '../lib/data';
+import type { AppSession as Session } from '../lib/data';
+import type { UserProfile } from '../types';
 
 interface CareerGoalsPanelProps {
   t?: (key: string) => string;
+  session?: Session | null;
+  profile?: UserProfile | null;
+  refreshProfile?: () => void;
 }
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 type StatusOption = {
   value: JobPreferences['status'];
@@ -48,12 +56,12 @@ const LOCATION_SUGGESTIONS = [
   'London', 'Berlin', 'Paris', 'Singapore', 'Tokyo', 'Sydney',
 ];
 
-const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
+const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp, session, profile, refreshProfile }) => {
   // Identity fallback — returns the English label for the key when no t() provided
   const t = tProp ?? ((key: string) => {
     const map: Record<string, string> = {
       goals_panel_title:      'Career Goals',
-      goals_panel_desc:       'Set your job-seeking preferences to guide your AI job search.',
+      goals_panel_desc:       'Set your job-seeking preferences to guide role recommendations.',
       goals_status_active:    'Actively looking',
       goals_status_open:      'Open to opportunities',
       goals_status_browsing:  'Just browsing',
@@ -68,35 +76,82 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
       goals_label_availability: 'Availability',
       goals_placeholder_availability: 'e.g. 2 weeks notice',
       goals_save_button:      'Save',
-      goals_saved_flash:      'Saved ✓',
-      goals_feeds_ai:         'Saved on this device and used to guide job matches, filters, and outreach prep.',
+      goals_saving_button:    'Saving...',
+      goals_saved_flash:      'Saved',
+      goals_saved_to_account: 'Saved to your account',
+      goals_saved_locally:    'Saved on this device',
+      goals_save_failed:      'Saved here, but account sync failed: {error}',
+      goals_feeds_ai:         'Used to guide job matches, filters, and outreach prep.',
       goals_no_prefs:         'No preferences set yet.',
     };
     return map[key] ?? key;
   });
 
-  const { prefs: storedPrefs, save } = useJobPreferences();
+  const { prefs: storedPrefs, save } = useJobPreferences({ accountPrefs: profile?.job_preferences ?? null });
   const [isExpanded, setIsExpanded] = useState(!storedPrefs);
   const [form, setForm] = useState<JobPreferences>(storedPrefs ?? DEFAULT_PREFS);
-  const [savedFlash, setSavedFlash] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveError, setSaveError] = useState('');
+  const [hasEdited, setHasEdited] = useState(false);
   const savedFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef(false);
 
   useEffect(() => () => {
     if (savedFlashTimerRef.current) clearTimeout(savedFlashTimerRef.current);
+    saveInFlightRef.current = false;
   }, []);
 
-  const handleSave = () => {
-    save(form);
-    setSavedFlash(true);
-    setIsExpanded(false);
-    if (savedFlashTimerRef.current) clearTimeout(savedFlashTimerRef.current);
-    savedFlashTimerRef.current = setTimeout(() => setSavedFlash(false), 2000);
+  useEffect(() => {
+    if (!storedPrefs || hasEdited) return;
+    setForm(storedPrefs);
+    if (saveState !== 'saving') setIsExpanded(false);
+  }, [storedPrefs, hasEdited, saveState]);
+
+  const patchForm = (patch: Partial<JobPreferences>) => {
+    setHasEdited(true);
+    setSaveState('idle');
+    setSaveError('');
+    setForm((f) => ({ ...f, ...patch }));
+  };
+
+  const handleSave = async () => {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    try {
+      const nextPrefs = normalizeJobPreferences(form) ?? form;
+      const uid = session?.user?.id;
+      save(nextPrefs);
+      setForm(nextPrefs);
+      setHasEdited(false);
+      setSaveError('');
+      setSaveState(uid ? 'saving' : 'saved');
+
+      if (uid) {
+        const { error } = await data.profiles.update(uid, {
+          job_preferences: nextPrefs,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+        await refreshProfile?.();
+      }
+
+      setSaveState('saved');
+      setIsExpanded(false);
+      if (savedFlashTimerRef.current) clearTimeout(savedFlashTimerRef.current);
+      savedFlashTimerRef.current = setTimeout(() => setSaveState('idle'), 2200);
+    } catch (error) {
+      setSaveState('error');
+      setSaveError(error instanceof Error ? error.message : 'Please try again.');
+      setIsExpanded(true);
+    } finally {
+      saveInFlightRef.current = false;
+    }
   };
 
   const summary = storedPrefs ? prefsSummaryLine(storedPrefs) : null;
 
   return (
-    <section className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+    <section data-qa="career-goals-panel" className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
       {/* Header / collapsed row */}
       <button
         type="button"
@@ -148,7 +203,8 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setForm((f) => ({ ...f, status: opt.value }))}
+                    onClick={() => patchForm({ status: opt.value })}
+                    data-qa={`career-goals-status-${opt.value}`}
                     className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors
                       ${isActive
                         ? 'border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
@@ -172,10 +228,11 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
               </label>
               <input
                 id="cg-roles"
+                data-qa="career-goals-roles"
                 type="text"
                 list="cg-role-suggestions"
                 value={form.roles}
-                onChange={(e) => setForm((f) => ({ ...f, roles: e.target.value }))}
+                onChange={(e) => patchForm({ roles: e.target.value })}
                 placeholder={t('goals_placeholder_roles')}
                 className="w-full rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
               />
@@ -191,10 +248,11 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
               </label>
               <input
                 id="cg-locations"
+                data-qa="career-goals-locations"
                 type="text"
                 list="cg-location-suggestions"
                 value={form.locations}
-                onChange={(e) => setForm((f) => ({ ...f, locations: e.target.value }))}
+                onChange={(e) => patchForm({ locations: e.target.value })}
                 placeholder={t('goals_placeholder_locations')}
                 className="w-full rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
               />
@@ -210,12 +268,13 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
               </label>
               <input
                 id="cg-salary"
+                data-qa="career-goals-salary"
                 type="number"
                 min="0"
                 step="1000"
                 inputMode="numeric"
                 value={form.salaryMin}
-                onChange={(e) => setForm((f) => ({ ...f, salaryMin: e.target.value }))}
+                onChange={(e) => patchForm({ salaryMin: e.target.value })}
                 placeholder={t('goals_placeholder_salary')}
                 className="w-full rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
               />
@@ -229,9 +288,10 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
               </label>
               <input
                 id="cg-availability"
+                data-qa="career-goals-availability"
                 type="text"
                 value={form.availability}
-                onChange={(e) => setForm((f) => ({ ...f, availability: e.target.value }))}
+                onChange={(e) => patchForm({ availability: e.target.value })}
                 placeholder={t('goals_placeholder_availability')}
                 className="w-full rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
               />
@@ -239,14 +299,32 @@ const CareerGoalsPanel: React.FC<CareerGoalsPanelProps> = ({ t: tProp }) => {
           </div>
 
           {/* Footer */}
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <p className="text-xs text-gray-500 dark:text-gray-400">{t('goals_feeds_ai')}</p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t('goals_feeds_ai')}</p>
+              {saveState === 'saved' && (
+                <p data-qa="career-goals-save-status" className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  {session?.user?.id ? t('goals_saved_to_account') : t('goals_saved_locally')}
+                </p>
+              )}
+              {saveState === 'error' && (
+                <p data-qa="career-goals-save-status" className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-300">
+                  <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t('goals_save_failed').replace('{error}', saveError || 'Please try again.')}
+                </p>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleSave}
-              className="inline-flex items-center gap-1.5 rounded-md bg-blue-700 hover:bg-blue-800 px-4 py-1.5 text-sm font-semibold text-white transition-colors"
+              data-qa="career-goals-save"
+              disabled={saveState === 'saving'}
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-blue-700 hover:bg-blue-800 px-4 py-1.5 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:bg-blue-400"
             >
-              {savedFlash ? t('goals_saved_flash') : t('goals_save_button')}
+              {saveState === 'saving' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {saveState === 'saved' && <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+              {saveState === 'saving' ? t('goals_saving_button') : saveState === 'saved' ? t('goals_saved_flash') : t('goals_save_button')}
             </button>
           </div>
         </div>
