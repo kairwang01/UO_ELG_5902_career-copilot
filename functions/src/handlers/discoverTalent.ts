@@ -28,6 +28,7 @@ import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
 import { buildCandidateMatchContext, normalizeTalentProfile, talentProfileToMatchText } from "../utils/talentProfile";
+import { getWeb3ConfigImpl } from "./web3Config";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -93,9 +94,7 @@ function toSafe(c: CandidateRow, parsed: {
   };
 }
 
-export const discoverTalentFunction = onCall({ invoker: "public" }, async (request) => {
-  const uid = requireAuth(request);
-
+export async function discoverTalentImpl(uid: string, data: Record<string, unknown> = {}) {
   // Business-only gate: this endpoint reads candidate resumes server-side, so it
   // must never be callable by candidate accounts.
   const meSnap = await db.collection("users").doc(uid).get();
@@ -104,7 +103,7 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
     throw new HttpsError("permission-denied", "Talent discovery is available to business accounts only.");
   }
 
-  const raw = (request.data ?? {}) as { jobDescription?: unknown };
+  const raw = (data ?? {}) as { jobDescription?: unknown };
   const jobDescription = typeof raw.jobDescription === "string" ? raw.jobDescription.trim() : "";
   if (jobDescription.length > MAX_JD_CHARS) {
     throw new HttpsError("invalid-argument", `jobDescription must be ≤ ${MAX_JD_CHARS} characters.`);
@@ -112,6 +111,10 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
 
   // Observability only — uncharged tool, never capped (see recordObservedToolRun).
   void recordObservedToolRun(uid, "discover-talent");
+
+  // The admin Web3 switch is the product contract: when disabled, the product
+  // must not surface verified/staked talent signals from persisted nft_* fields.
+  const web3Enabled = (await getWeb3ConfigImpl()).enabled;
 
   // Admin-SDK candidate scan (clients are rules-blocked from this read by design).
   const snap = await db
@@ -139,7 +142,7 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
       return {
         id: d.id,
         candidate_text: buildCandidateMatchContext(resumeText, profileText),
-        nft_staked: data.nft_staked === true,
+        nft_staked: web3Enabled && data.nft_staked === true,
       };
     })
     .filter((c) => c.candidate_text.trim().length >= MIN_CONTEXT_CHARS);
@@ -187,4 +190,9 @@ export const discoverTalentFunction = onCall({ invoker: "public" }, async (reque
   }
 
   return { candidates, scanned: pool.length, eligible: withContext.length };
+}
+
+export const discoverTalentFunction = onCall({ invoker: "public" }, async (request) => {
+  const uid = requireAuth(request);
+  return discoverTalentImpl(uid, request.data ?? {});
 });
