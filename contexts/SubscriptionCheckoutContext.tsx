@@ -25,6 +25,9 @@ const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.trim()
 const stripePromise: Promise<Stripe | null> | null = stripePublishableKey
   ? loadStripe(stripePublishableKey)
   : null;
+const CHECKOUT_REFRESH_DELAYS_MS = [0, 1500, 4000, 8000] as const;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const useSubscriptionCheckout = (): SubscriptionCheckoutContextValue => {
   const ctx = useContext(SubscriptionCheckoutContext);
@@ -107,11 +110,20 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
         const handler = completeHandlerRef.current;
         closeCheckout();
         if (handler) {
-          await handler();
+          addToast('Payment received. Updating your plan…', 'info');
+          try {
+            for (const delay of CHECKOUT_REFRESH_DELAYS_MS) {
+              if (delay > 0) await wait(delay);
+              await handler();
+            }
+            addToast('Checkout complete. Your plan will update as soon as Stripe confirms it.', 'success');
+          } catch {
+            addToast('Payment was submitted. Refresh this page if the plan does not update shortly.', 'info');
+          }
         }
       },
     }),
-    [clientSecret, closeCheckout],
+    [addToast, clientSecret, closeCheckout],
   );
 
   return (
