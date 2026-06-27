@@ -104,12 +104,23 @@ const detectSpeechLocale = (text: string, market = ''): Exclude<SpeechLocale, 'a
     return 'en-US';
 };
 
-const splitSpeechText = (text: string): string[] => {
+const isCjkSpeechLocale = (locale: string): boolean => /^(zh|ja|ko)\b/i.test(locale);
+
+const joinSpeechSegments = (segments: Array<string | null | undefined>, locale: string): string => {
+    const clean = segments.map((segment) => (segment ?? '').trim()).filter(Boolean);
+    return isCjkSpeechLocale(locale) ? clean.join('') : clean.join(' ');
+};
+
+const splitSpeechText = (text: string, locale = 'en-US'): string[] => {
     const sentences: string[] = [];
     let current = '';
+    const cjk = isCjkSpeechLocale(locale);
+    const hardBreaks = cjk ? '。！？.!?' : '.!?';
+    const softBreaks = cjk ? '，、；;：:' : '';
     for (const char of text.replace(/\s+/g, ' ').trim()) {
         current += char;
-        if ('。！？.!?'.includes(char)) {
+        const shouldBreak = hardBreaks.includes(char) || (softBreaks.includes(char) && current.length >= 34);
+        if (shouldBreak) {
             const sentence = current.trim();
             if (sentence) sentences.push(sentence);
             current = '';
@@ -117,13 +128,14 @@ const splitSpeechText = (text: string): string[] => {
     }
     if (current.trim()) sentences.push(current.trim());
     const chunks: string[] = [];
+    const maxLength = cjk ? 72 : 160;
     for (const sentence of sentences.length ? sentences : [text.trim()]) {
-        if (sentence.length <= 180) {
+        if (sentence.length <= maxLength) {
             chunks.push(sentence);
             continue;
         }
-        for (let i = 0; i < sentence.length; i += 160) {
-            chunks.push(sentence.slice(i, i + 160));
+        for (let i = 0; i < sentence.length; i += maxLength) {
+            chunks.push(sentence.slice(i, i + maxLength));
         }
     }
     return chunks;
@@ -394,6 +406,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const [confirmEndEarly, setConfirmEndEarly] = useState(false);
     const [speechLocale, setSpeechLocale] = useState<SpeechLocale>('auto');
     const recognitionRef = useRef<any>(null);
+    const speechRunRef = useRef(0);
+    const dictationBaseRef = useRef('');
+    const dictationFinalRef = useRef('');
+    const dictationInterimRef = useRef('');
     const answerBoxRef = useRef<HTMLTextAreaElement>(null);
 
     // Job sources: recent applications + platform postings (one fetch on mount)
@@ -508,25 +524,39 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
     const speak = (text: string, onDone?: () => void) => {
         const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
         if (!synth) { onDone?.(); return; } // no TTS → don't block the prep timer
+        const runId = ++speechRunRef.current;
+        const finish = () => {
+            if (speechRunRef.current !== runId) return;
+            setAvatarSpeaking(false);
+            onDone?.();
+        };
         try {
             const start = () => {
-                const chunks = splitSpeechText(text);
+                if (speechRunRef.current !== runId) return;
+                const chunks = splitSpeechText(text, activeSpeechLocale);
                 const voice = pickVoice(activeSpeechLocale);
                 const speakChunk = (index: number) => {
-                    if (index >= chunks.length) {
-                        setAvatarSpeaking(false);
-                        onDone?.();
-                        return;
-                    }
+                    if (speechRunRef.current !== runId) return;
+                    if (index >= chunks.length) { finish(); return; }
                     const u = new SpeechSynthesisUtterance(chunks[index]);
                     u.lang = activeSpeechLocale;
                     u.rate = activeSpeechLocale.startsWith('zh') || activeSpeechLocale === 'ja-JP' || activeSpeechLocale === 'ko-KR' ? 0.92 : 1;
                     if (voice) u.voice = voice;
-                    u.onstart = () => setAvatarSpeaking(true);
+                    u.onstart = () => {
+                        if (speechRunRef.current === runId) setAvatarSpeaking(true);
+                    };
                     // onDone fires when the whole question has finished being read aloud,
                     // which is when the 15s prep clock should start.
                     u.onend = () => speakChunk(index + 1);
-                    u.onerror = () => { setAvatarSpeaking(false); onDone?.(); };
+                    u.onerror = (event) => {
+                        if (speechRunRef.current !== runId) return;
+                        const error = (event as SpeechSynthesisErrorEvent).error;
+                        if (error === 'canceled' || error === 'interrupted') return;
+                        // Some browser voices fail on a single long or mixed-script
+                        // chunk. Skip only that chunk so the prep timer is not stuck
+                        // and later chunks can still be read.
+                        speakChunk(index + 1);
+                    };
                     synth.speak(u);
                 };
                 speakChunk(0);
@@ -539,9 +569,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             } else {
                 start();
             }
-        } catch { onDone?.(); /* TTS unsupported — don't block the prep timer */ }
+        } catch { finish(); /* TTS unsupported — don't block the prep timer */ }
     };
     const cancelSpeech = () => {
+        speechRunRef.current += 1;
         try { window.speechSynthesis.cancel(); } catch { /* noop */ }
         setAvatarSpeaking(false);
     };
@@ -628,16 +659,34 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         recognitionRef.current.interimResults = true;
         recognitionRef.current.lang = activeSpeechLocale;
 
+        const renderDictation = () => {
+            const committed = joinSpeechSegments(
+                [dictationBaseRef.current, dictationFinalRef.current],
+                activeSpeechLocale,
+            );
+            return joinSpeechSegments([committed, dictationInterimRef.current], activeSpeechLocale);
+        };
+
         recognitionRef.current.onresult = (event: any) => {
+            const finalSegments: string[] = [];
+            const interimSegments: string[] = [];
             for (let i = event.resultIndex; i < event.results.length; ++i) {
+                const transcript = event.results[i][0].transcript.trim();
+                if (!transcript) continue;
                 if (event.results[i].isFinal) {
-                    const transcript = event.results[i][0].transcript.trim();
-                    setAnswerDraft(prev => {
-                        if (!prev.trim()) return transcript;
-                        return `${prev.trimEnd()} ${transcript}`;
-                    });
+                    finalSegments.push(transcript);
+                } else {
+                    interimSegments.push(transcript);
                 }
             }
+            if (finalSegments.length) {
+                dictationFinalRef.current = joinSpeechSegments(
+                    [dictationFinalRef.current, joinSpeechSegments(finalSegments, activeSpeechLocale)],
+                    activeSpeechLocale,
+                );
+            }
+            dictationInterimRef.current = joinSpeechSegments(interimSegments, activeSpeechLocale);
+            setAnswerDraft(renderDictation());
         };
 
         recognitionRef.current.onerror = (event: any) => {
@@ -648,7 +697,17 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
 
         // The engine can stop on its own (silence/network/timeout); reset the
         // mic indicator so it never shows a live mic after dictation stopped.
-        recognitionRef.current.onend = () => setIsListening(false);
+        recognitionRef.current.onend = () => {
+            if (dictationInterimRef.current) {
+                dictationFinalRef.current = joinSpeechSegments(
+                    [dictationFinalRef.current, dictationInterimRef.current],
+                    activeSpeechLocale,
+                );
+                dictationInterimRef.current = '';
+                setAnswerDraft(renderDictation());
+            }
+            setIsListening(false);
+        };
 
         return () => {
             try { recognitionRef.current?.abort?.(); } catch { /* noop */ }
@@ -670,6 +729,10 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
             stopListening();
         } else {
             try {
+                dictationBaseRef.current = answerDraft.trimEnd();
+                dictationFinalRef.current = '';
+                dictationInterimRef.current = '';
+                if (recognitionRef.current) recognitionRef.current.lang = activeSpeechLocale;
                 recognitionRef.current?.start?.();
                 setIsListening(true);
             } catch (err) {
@@ -1215,11 +1278,13 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                         <div className="flex min-w-0 flex-1 items-center gap-3">
                                             <AudioWave active={isListening} />
                                             <span className="hidden text-xs font-semibold text-slate-600 sm:inline dark:text-slate-300">
-                                                {isListening ? `Listening · ${activeSpeechOption?.label ?? activeSpeechLocale}` : `Voice · ${activeSpeechOption?.label ?? activeSpeechLocale}`}
+                                                {isListening
+                                                    ? `${t('mi_speech_listening')} · ${activeSpeechOption?.label ?? activeSpeechLocale}`
+                                                    : `${t('mi_speech_voice')} · ${activeSpeechOption?.label ?? activeSpeechLocale}`}
                                             </span>
                                         </div>
                                         <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                                            <span>Speech</span>
+                                            <span>{t('mi_speech_label')}</span>
                                             <select
                                                 value={speechLocale}
                                                 onChange={(event) => {
@@ -1239,7 +1304,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                                     </div>
                                     {speechLocale === 'auto' && (
                                         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                                            Auto is using {activeSpeechOption?.label ?? activeSpeechLocale} for this question.
+                                            {t('mi_speech_auto_using')} {activeSpeechOption?.label ?? activeSpeechLocale}
                                         </p>
                                     )}
                                 </div>

@@ -3596,5 +3596,9 @@
   "showcase_delete_success": "作品集已删除。",
   "showcase_delete_failed": "无法删除此作品集，请重试。",
   "tool_resume_formatter_saved_versions": "已保存版本：{markets}",
-  "tool_resume_formatter_saved_market_hint": "已保存 {market} 版本，切换后会自动加载。"
+  "tool_resume_formatter_saved_market_hint": "已保存 {market} 版本，切换后会自动加载。",
+  "mi_speech_label": "回答语言",
+  "mi_speech_voice": "语音",
+  "mi_speech_listening": "正在听",
+  "mi_speech_auto_using": "自动识别为："
 }
