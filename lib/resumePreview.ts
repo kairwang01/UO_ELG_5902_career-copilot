@@ -492,13 +492,56 @@ export interface ResumeValidationOptions {
 
 const ENGLISH_SECTION_LINE_REGEX = /^\s*(?:SUMMARY|PROFILE|OBJECTIVE|PERSONAL STATEMENT|EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EMPLOYMENT HISTORY|PROJECTS|EDUCATION|SKILLS|CERTIFICATIONS|LANGUAGES)\s*$/im;
 const LATIN_WORD_REGEX = /\b[A-Za-z][A-Za-z'-]{2,}\b/g;
+const UNICODE_WORD_REGEX = /\p{L}[\p{L}'’-]{1,}/gu;
 const CJK_CHAR_REGEX = new RegExp(`[${CJKISH}]`, 'g');
 const KANA_CHAR_REGEX = /[\u3040-\u30ff]/g;
 const TECHNICAL_LATIN_ALLOWLIST = new Set([
   'api', 'apis', 'ats', 'ai', 'llm', 'mvp', 'gpa', 'sql', 'python', 'javascript', 'typescript',
   'react', 'vue', 'node', 'jira', 'scrum', 'agile', 'github', 'git', 'figma', 'cloud', 'aws',
   'azure', 'html', 'css', 'ux', 'ui', 'crm', 'erp', 'saas', 'kpi', 'okr',
+  'linkedin', 'career', 'copilot', 'university', 'ottawa', 'alberta',
 ]);
+
+const ENGLISH_PROSE_SIGNALS = new Set([
+  'and', 'with', 'for', 'from', 'that', 'this', 'the', 'into', 'across', 'between',
+  'candidate', 'experience', 'experienced', 'management', 'managed', 'project', 'product',
+  'development', 'developed', 'software', 'team', 'teams', 'user', 'users', 'research',
+  'analysis', 'collaboration', 'professional', 'summary', 'education', 'skills',
+  'responsible', 'improved', 'supported', 'delivered', 'created', 'built', 'led',
+]);
+
+const TARGET_LANGUAGE_SIGNALS: Record<string, Set<string>> = {
+  french: new Set([
+    'et', 'avec', 'pour', 'dans', 'des', 'les', 'une', 'un', 'du', 'de', 'la', 'le',
+    'profil', 'expérience', 'expériences', 'compétences', 'formation', 'projets',
+    'professionnelle', 'professionnel', 'gestion', 'gestionnaire', 'développement',
+    'équipe', 'équipes', 'ingénieur', 'ingénieurs', 'données', 'analyse', 'collaboration',
+    'interfonctionnelle', 'réalisations', 'certifications', 'langues',
+  ]),
+  german: new Set([
+    'und', 'mit', 'für', 'der', 'die', 'das', 'den', 'dem', 'ein', 'eine', 'einer',
+    'im', 'in', 'von', 'zu', 'als', 'profil', 'berufserfahrung', 'erfahrung',
+    'kenntnisse', 'fähigkeiten', 'ausbildung', 'projekte', 'zertifikate',
+    'projektmanagement', 'entwicklung', 'team', 'teams', 'datenanalyse',
+    'zusammenarbeit', 'softwareentwicklung',
+  ]),
+  vietnamese: new Set([
+    'và', 'với', 'cho', 'trong', 'của', 'các', 'một', 'những', 'đã', 'từ',
+    'kinh', 'nghiệm', 'kỹ', 'năng', 'học', 'vấn', 'dự', 'án', 'chuyên',
+    'nghiệp', 'phát', 'triển', 'quản', 'lý', 'đội', 'nhóm', 'dữ', 'liệu',
+    'phân', 'tích', 'hợp', 'tác', 'chứng', 'chỉ', 'ngôn', 'ngữ',
+  ]),
+};
+
+const extractLanguageWords = (text: string): string[] => (
+  (text.match(UNICODE_WORD_REGEX) ?? [])
+    .map((word) => word.toLowerCase())
+    .filter((word) => !TECHNICAL_LATIN_ALLOWLIST.has(word))
+);
+
+const countSetHits = (words: string[], set: Set<string>): number => (
+  words.reduce((count, word) => count + (set.has(word) ? 1 : 0), 0)
+);
 
 const countLanguageSignalWords = (text: string): number => {
   const sanitized = text
@@ -529,8 +572,30 @@ const hasTargetLanguageMismatch = (cleaned: string, outputLanguage?: string | nu
     return cjkChars < 80 || kanaChars < 8 || latinSignalWords > Math.max(22, cjkChars * 0.22);
   }
 
-  // For Latin-script local languages, avoid brittle dictionary checks; catching
-  // English section headings is the high-confidence failure mode.
+  const targetKey = language.includes('french')
+    ? 'french'
+    : language.includes('german')
+      ? 'german'
+      : language.includes('vietnamese')
+        ? 'vietnamese'
+        : '';
+
+  if (targetKey) {
+    const words = extractLanguageWords(cleaned);
+    const englishHits = countSetHits(words, ENGLISH_PROSE_SIGNALS);
+    const targetHits = countSetHits(words, TARGET_LANGUAGE_SIGNALS[targetKey]);
+    const meaningfulWords = words.length;
+
+    // High-confidence failure: a long Latin-script draft with almost no target
+    // language signal but many English prose/function words. Proper nouns and
+    // technical terms are removed above, so this targets model failures like a
+    // France/Germany/Vietnam resume that kept English paragraphs.
+    return (
+      (meaningfulWords >= 45 && targetHits < 5 && englishHits >= 8)
+      || (englishHits >= 14 && targetHits > 0 && englishHits >= targetHits * 2.5)
+    );
+  }
+
   return false;
 };
 

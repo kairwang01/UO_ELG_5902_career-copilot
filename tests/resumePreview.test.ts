@@ -186,4 +186,22 @@ describe('ResumePreview parsing', () => {
     expect(result.status).not.toBe('needs_regen');
     expect(result.issues).not.toContain('language_mismatch');
   });
+
+  it('blocks a French-target resume that keeps English prose', () => {
+    const text = 'Kai Wang\nOttawa, Canada\nkai@example.com\n\nPROFIL\nProject management candidate with a background in computer science and electrical engineering. Experienced in software development, user research, data analysis, and cross-functional team collaboration.\n\nFORMATION\nUniversity of Ottawa — M.Eng. Electrical and Computer Engineering.\n\nEXPÉRIENCE\nCareer CoPilot — Product Operations Lead\n- Led a 6-person engineering team and improved delivery workflow across AI career tools.';
+
+    const result = assessFormattedResume(text, { outputLanguage: 'French' });
+
+    expect(result.status).toBe('needs_regen');
+    expect(result.issues).toContain('language_mismatch');
+  });
+
+  it('allows French resumes with technical proper nouns', () => {
+    const text = 'Kai Wang\nOttawa, Canada\nkai@example.com\n\nPROFIL\nCandidat en gestion de projet avec une double compétence en informatique et en génie électrique. Expérience en développement logiciel, recherche utilisateur, analyse de données et collaboration interfonctionnelle.\n\nFORMATION\nUniversité d’Ottawa (University of Ottawa) — M.Eng. en génie électrique et informatique.\n\nEXPÉRIENCE\nCareer CoPilot — Responsable produit\n- A coordonné une équipe de 6 ingénieurs et amélioré les processus de livraison avec Jira, Python et SQL.';
+
+    const result = assessFormattedResume(text, { outputLanguage: 'French' });
+
+    expect(result.status).not.toBe('needs_regen');
+    expect(result.issues).not.toContain('language_mismatch');
+  });
 });
