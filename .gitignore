@@ -49,4 +49,9 @@ firestore-debug.log
 # Coverage reports (npm run test:coverage)
 coverage/
 
+# Runtime smoke/browser artifacts
+.playwright-cli/
+output/
+test-results/
+
 .firebase/

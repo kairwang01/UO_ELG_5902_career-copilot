@@ -29,7 +29,7 @@ const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 type BillingAudience = "candidate" | "business";
 type CheckoutMode = "subscription" | "payment";
 
-interface CheckoutPlan {
+export interface CheckoutPlan {
   plan: string;
   audience: BillingAudience;
   mode: CheckoutMode;
@@ -272,6 +272,59 @@ type CheckoutSessionResult =
   | { mode: "hosted"; url: string; id: string; simulated?: boolean }
   | { mode: "embedded"; clientSecret: string; id: string };
 
+export function buildCheckoutSessionParams(input: {
+  uid: string;
+  plan: CheckoutPlan;
+  price: string;
+  baseUrl: string;
+  email?: string | null;
+  useEmbeddedCheckout: boolean;
+}): Stripe.Checkout.SessionCreateParams {
+  const baseSessionParams: Stripe.Checkout.SessionCreateParams = {
+    mode: input.plan.mode,
+    customer_email: input.email ?? undefined,
+    client_reference_id: input.uid,
+    line_items: [{ price: input.price, quantity: 1 }],
+    metadata: {
+      uid: input.uid,
+      plan_key: input.plan.plan,
+      audience: input.plan.audience,
+    },
+    ...(input.plan.mode === "subscription"
+      ? {
+          subscription_data: {
+            metadata: {
+              uid: input.uid,
+              plan_key: input.plan.plan,
+              audience: input.plan.audience,
+            },
+          },
+        }
+      : {}),
+  };
+
+  if (input.useEmbeddedCheckout) {
+    return {
+      ...baseSessionParams,
+      ui_mode: "embedded_page",
+      // Keep checkout fully in-app. Stripe's embedded Checkout supports
+      // `never`, which disables redirect-based payment methods and removes
+      // the need for a return_url, so the top-level app is not sent to
+      // /workspace/billing or /portal after a card payment.
+      redirect_on_completion: "never",
+    };
+  }
+
+  const successPath = input.plan.audience === "business" ? "/portal?checkout=success" : "/workspace/billing?checkout=success";
+  const cancelPath = input.plan.audience === "business" ? "/pricing?audience=employer&checkout=cancel" : "/pricing?checkout=cancel";
+  return {
+    ...baseSessionParams,
+    ui_mode: "hosted_page",
+    success_url: `${input.baseUrl}${successPath}`,
+    cancel_url: `${input.baseUrl}${cancelPath}`,
+  };
+}
+
 export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request): Promise<CheckoutSessionResult> => {
   const uid = requireAuth(request);
   const data = (request.data ?? {}) as CreateCheckoutRequest;
@@ -295,49 +348,15 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
   const baseUrl = resolveAppBaseUrl(request.rawRequest);
   const stripe = getStripe();
   const email = stringOrNull(request.auth?.token.email);
-  const successPath = plan.audience === "business" ? "/portal?checkout=success" : "/workspace/billing?checkout=success";
-  const cancelPath = plan.audience === "business" ? "/pricing?audience=employer&checkout=cancel" : "/pricing?checkout=cancel";
-  const baseSessionParams: Stripe.Checkout.SessionCreateParams = {
-    mode: plan.mode,
-    customer_email: email ?? undefined,
-    client_reference_id: uid,
-    line_items: [{ price, quantity: 1 }],
-    metadata: {
-      uid,
-      plan_key: plan.plan,
-      audience: plan.audience,
-    },
-    ...(plan.mode === "subscription"
-      ? {
-          subscription_data: {
-            metadata: {
-              uid,
-              plan_key: plan.plan,
-              audience: plan.audience,
-            },
-          },
-        }
-      : {}),
-  };
-
-  const session = await stripe.checkout.sessions.create(
-    useEmbeddedCheckout
-      ? {
-          ...baseSessionParams,
-          ui_mode: "embedded_page",
-          // Keep checkout fully in-app. Stripe's embedded Checkout supports
-          // `never`, which disables redirect-based payment methods and removes
-          // the need for a return_url, so the top-level app is not sent to
-          // /workspace/billing or /portal after a card payment.
-          redirect_on_completion: "never",
-        }
-      : {
-          ...baseSessionParams,
-          ui_mode: "hosted_page",
-          success_url: `${baseUrl}${successPath}`,
-          cancel_url: `${baseUrl}${cancelPath}`,
-        },
-  );
+  const sessionParams = buildCheckoutSessionParams({
+    uid,
+    plan,
+    price,
+    baseUrl,
+    email,
+    useEmbeddedCheckout,
+  });
+  const session = await stripe.checkout.sessions.create(sessionParams);
 
   if (useEmbeddedCheckout) {
     if (!session.client_secret) {
