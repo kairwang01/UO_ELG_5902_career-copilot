@@ -1263,6 +1263,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     </div>
   );
 
+  const workspaceMainWidthClass = dashboardView === 'resume'
+    ? 'max-w-[1360px]'
+    : dashboardView === 'interview'
+      ? 'max-w-[1440px]'
+      : 'max-w-6xl';
+
   const renderEmployerShell = () => {
     if (!session || !profile || !isEmployer) return null;
 
@@ -1422,7 +1428,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             className="flex-1 overflow-y-auto bg-slate-50 px-6 pb-[calc(1.5rem+var(--cookie-consent-bottom-space,0px))] pt-6 transition-[padding-bottom] duration-200 dark:bg-slate-950 md:px-10 md:pb-10 md:pt-10"
             data-qa-workspace-view={dashboardView}
           >
-            <div className="max-w-6xl mx-auto" data-tour="main">
+            <div className={`${workspaceMainWidthClass} mx-auto`} data-tour="main">
               {isUpdatingResume && (dashboardView === 'dashboard' || dashboardView === 'resume') ? (
                 <div className="mt-4 animate-slide-in-up">
                   <div className="text-center mb-10">

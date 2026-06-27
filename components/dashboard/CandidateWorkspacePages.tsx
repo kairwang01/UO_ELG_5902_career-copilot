@@ -514,7 +514,7 @@ const StickyResumePreviewPanel: React.FC<{
         resumeText={resumeText}
         market={market}
         t={t}
-        heightClassName="h-[520px] sm:h-[620px] xl:h-[min(700px,72vh)]"
+        heightClassName="h-[520px] sm:h-[640px] xl:h-[calc(100dvh-290px)] xl:min-h-[620px] xl:max-h-[780px]"
       />
     </Panel>
 
