@@ -264,8 +264,9 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
 
         **Key Instructions:**
         1. **Formatting & Structure:** Reformat the entire resume to follow common professional standards and ATS best practices for **{{marketName}}**. This includes section order, date format, page density, and contact conventions.
-        2. **Language & Tone:** Write the ENTIRE resume in **{{outputLanguage}}**, translating all content faithfully from the source. Localize organization and institution names too: render employers and schools/universities in their official or widely-used **{{outputLanguage}}** name, with the original name in parentheses on first mention so it stays verifiable (e.g. "北京大学 (Peking University)" or "Toyota Motor (トヨタ自動車)"). Keep PERSONAL names in their original script (add a transliteration only if **{{marketName}}** expects one); a globally well-known brand may stay in its common local form. Adapt spelling, date conventions, and professional register to **{{marketName}}**.
-        3. **Content Optimization:** Rephrase bullets toward action + scope + impact. Quantify only where the source gives the number. Prefer concrete scope over inflated adjectives when no metric exists.
+        2. **Language & Tone:** Write the ENTIRE resume in **{{outputLanguage}}**, translating all section headings and all narrative content faithfully from the source. If **{{outputLanguage}}** is not English, do NOT leave English headings such as SUMMARY, EXPERIENCE, EDUCATION, SKILLS, PROJECTS, PROFILE, or LANGUAGES in the output. Localize organization and institution names too: render employers and schools/universities in their official or widely-used **{{outputLanguage}}** name, with the original name in parentheses on first mention so it stays verifiable (e.g. "北京大学 (Peking University)" or "Toyota Motor (トヨタ自動車)"). Keep PERSONAL names in their original script (add a transliteration only if **{{marketName}}** expects one); URLs, emails, phone numbers, exact product names, programming languages, and technical tools may remain in their standard written form. Adapt spelling, date conventions, and professional register to **{{marketName}}**.
+        3. **Line-break discipline:** Every contact field, section heading, role/school entry, and bullet must be on its own line. Do not produce one long paragraph. Do not attach the first section heading to the contact line. Do not output localized labels inline with a sentence such as "PROFIL Gestionnaire..." or "摘要 Project manager..."; the label must be alone on its own line.
+        4. **Content Optimization:** Rephrase bullets toward action + scope + impact. Quantify only where the source gives the number. Prefer concrete scope over inflated adjectives when no metric exists.
 
         --- COUNTRY FORMAT RULES ---
         Apply the SINGLE rule whose market matches **{{marketName}}** — this drives the template (section order, length, date format, and photo/personal-data norms), so the layout must visibly differ by country, not reuse one default. If **{{marketName}}** is not listed below, apply that country's own prevailing professional resume conventions (do NOT fall back to a US layout).
@@ -298,6 +299,7 @@ Return JSON matching the required schema. Omit any field you cannot fill from th
         3. The first section heading is on its own line. It is not attached to a contact line.
         4. No photo placeholder, fake personal field, pipe table, markdown table, or country-form template labels remain.
         5. The document has at least two real resume sections after the header.
+        6. If **{{outputLanguage}}** is not English, no English section heading remains and the main prose is in **{{outputLanguage}}**.
 
         Produce only the final, localized document text — no commentary or notes.
       `,

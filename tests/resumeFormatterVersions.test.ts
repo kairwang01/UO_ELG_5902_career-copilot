@@ -31,9 +31,26 @@ describe('resumeFormatterVersions', () => {
       outputLanguage: 'en',
     });
 
-    expect(library.activeMarket).toBe('United Kingdom');
+    expect(library.activeMarket).toBe('United Kingdom::en');
     expect(getSavedResumeFormatterVersion(library, 'Canada')?.formattedText).toBe('Canada resume');
     expect(getSavedResumeFormatterVersion(library, 'United Kingdom')?.formattedText).toBe('UK resume');
+  });
+
+  it('stores separate language versions for the same market', () => {
+    const franceEnglish = upsertResumeFormatterVersion(null, {
+      formattedText: 'France English resume',
+      targetMarket: 'France',
+      outputLanguage: 'en',
+    });
+    const library = upsertResumeFormatterVersion(franceEnglish, {
+      formattedText: 'CV français',
+      targetMarket: 'France',
+      outputLanguage: 'local',
+    });
+
+    expect(getSavedResumeFormatterVersion(library, 'France', 'en')?.formattedText).toBe('France English resume');
+    expect(getSavedResumeFormatterVersion(library, 'France', 'local')?.formattedText).toBe('CV français');
+    expect(getPreferredResumeFormatterVersion(library, 'France', 'local')?.formattedText).toBe('CV français');
   });
 
   it('loads the requested market before falling back to the active market', () => {
@@ -68,7 +85,7 @@ describe('resumeFormatterVersions', () => {
       },
     );
 
-    const remaining = removeResumeFormatterVersion(library, 'United Kingdom');
+    const remaining = removeResumeFormatterVersion(library, 'United Kingdom', 'en');
     expect(remaining).not.toBeNull();
     expect(getSavedResumeFormatterVersion(remaining, 'United Kingdom')).toBeNull();
     expect(getSavedResumeFormatterVersion(remaining, 'Canada')?.formattedText).toBe('Canada resume');

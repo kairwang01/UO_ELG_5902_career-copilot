@@ -486,13 +486,61 @@ export interface ResumeValidation {
   issues: string[];
 }
 
+export interface ResumeValidationOptions {
+  outputLanguage?: string | null;
+}
+
+const ENGLISH_SECTION_LINE_REGEX = /^\s*(?:SUMMARY|PROFILE|OBJECTIVE|PERSONAL STATEMENT|EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EMPLOYMENT HISTORY|PROJECTS|EDUCATION|SKILLS|CERTIFICATIONS|LANGUAGES)\s*$/im;
+const LATIN_WORD_REGEX = /\b[A-Za-z][A-Za-z'-]{2,}\b/g;
+const CJK_CHAR_REGEX = new RegExp(`[${CJKISH}]`, 'g');
+const KANA_CHAR_REGEX = /[\u3040-\u30ff]/g;
+const TECHNICAL_LATIN_ALLOWLIST = new Set([
+  'api', 'apis', 'ats', 'ai', 'llm', 'mvp', 'gpa', 'sql', 'python', 'javascript', 'typescript',
+  'react', 'vue', 'node', 'jira', 'scrum', 'agile', 'github', 'git', 'figma', 'cloud', 'aws',
+  'azure', 'html', 'css', 'ux', 'ui', 'crm', 'erp', 'saas', 'kpi', 'okr',
+]);
+
+const countLanguageSignalWords = (text: string): number => {
+  const sanitized = text
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/[\w.+-]+@[\w.-]+\.\w+/g, ' ')
+    .replace(/[+\d][+\d\s().-]{6,}/g, ' ');
+  const words: string[] = sanitized.match(LATIN_WORD_REGEX) ?? [];
+  return words
+    .filter((word) => !TECHNICAL_LATIN_ALLOWLIST.has(word.toLowerCase()))
+    .length;
+};
+
+const hasTargetLanguageMismatch = (cleaned: string, outputLanguage?: string | null): boolean => {
+  const language = (outputLanguage ?? '').toLowerCase();
+  if (!language || language === 'english' || language.includes('same language')) return false;
+
+  if (ENGLISH_SECTION_LINE_REGEX.test(cleaned)) return true;
+
+  const latinSignalWords = countLanguageSignalWords(cleaned);
+  const cjkChars = (cleaned.match(CJK_CHAR_REGEX) ?? []).length;
+
+  if (language.includes('chinese')) {
+    return cjkChars < 80 || latinSignalWords > Math.max(18, cjkChars * 0.18);
+  }
+
+  if (language.includes('japanese')) {
+    const kanaChars = (cleaned.match(KANA_CHAR_REGEX) ?? []).length;
+    return cjkChars < 80 || kanaChars < 8 || latinSignalWords > Math.max(22, cjkChars * 0.22);
+  }
+
+  // For Latin-script local languages, avoid brittle dictionary checks; catching
+  // English section headings is the high-confidence failure mode.
+  return false;
+};
+
 // Post-generation gate for the resume formatter. The prompt is a *request* not to emit
 // tables / photo placeholders / fabricated personal fields; this is the *enforcement*.
 // Run on the (already display-cleaned) output: if it is still a garbled blob — no
 // parseable sections, a surviving photo placeholder, or a multi-row pipe table — return
 // `needs_regen` so the UI offers a clean re-run instead of presenting broken output as
 // final. Source-plausible personal fields downgrade to a non-blocking `warn`.
-export const assessFormattedResume = (text: string): ResumeValidation => {
+export const assessFormattedResume = (text: string, options: ResumeValidationOptions = {}): ResumeValidation => {
   const cleaned = cleanResumeDisplay(text || '');
   if (!cleaned.trim()) return { status: 'needs_regen', issues: ['empty'] };
 
@@ -521,6 +569,10 @@ export const assessFormattedResume = (text: string): ResumeValidation => {
   const parsedHeader = parseResumeHeader(topBlock?.content ?? '');
   if (parsedHeader.name.length > 90 || hasHeaderFieldInsideName(parsedHeader.name)) {
     issues.push('garbled_header');
+  }
+
+  if (hasTargetLanguageMismatch(cleaned, options.outputLanguage)) {
+    issues.push('language_mismatch');
   }
 
   // Protected / sensitive fields the formatter must not fabricate (soft — the source

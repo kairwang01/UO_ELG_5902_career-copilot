@@ -168,4 +168,22 @@ describe('ResumePreview parsing', () => {
     expect(header.name.length).toBeGreaterThan(0);
     expect(sections.filter((section) => section.title !== 'Header').length).toBeGreaterThanOrEqual(2);
   });
+
+  it('blocks a Chinese-target resume that still reads mostly in English', () => {
+    const text = '王铂凯\n13022547015 | jackson@example.com | https://kairwang.cloud\nSUMMARY\nProject management candidate with a background in computer science and electrical engineering. Experienced in agile development, user research, data analysis, and cross-functional collaboration.\nEDUCATION\nUniversity of Ottawa — M.Eng. Electrical and Computer Engineering.\nPROJECTS\nCareer CoPilot — Led product workflow improvements across AI career tools.';
+
+    const result = assessFormattedResume(text, { outputLanguage: 'Simplified Chinese' });
+
+    expect(result.status).toBe('needs_regen');
+    expect(result.issues).toContain('language_mismatch');
+  });
+
+  it('allows Chinese resumes with standard technical proper nouns', () => {
+    const text = '王铂凯\n渥太华，加拿大\n13022547015\njackson@example.com\nhttps://kairwang.cloud\n\n综合能力概述\n项目管理候选人，具备计算机科学与电气工程背景，熟悉 Agile、Jira、Python 和 SQL，在跨团队协作与数据分析中有实践经验。\n\n教育背景\n渥太华大学 (University of Ottawa)\n电气与计算机工程硕士\n\n项目经历\nCareer CoPilot\n- 协调产品、前端和数据工作，推动简历分析、模拟面试和职业规划模块迭代。';
+
+    const result = assessFormattedResume(text, { outputLanguage: 'Simplified Chinese' });
+
+    expect(result.status).not.toBe('needs_regen');
+    expect(result.issues).not.toContain('language_mismatch');
+  });
 });

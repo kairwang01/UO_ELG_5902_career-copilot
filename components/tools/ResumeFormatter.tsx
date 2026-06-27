@@ -14,9 +14,11 @@ import { getMarketLocalLanguage, resolveOutputLanguageName, type OutputLanguageC
 import { ResumeFormatterDownloadGate } from './ResumeFormatterActions';
 import { buildLinkedInContextFromFormattedResume } from '../../lib/toolPrefill';
 import {
+  getResumeVersionDisplayLabel,
   getPreferredResumeFormatterVersion,
   getResumeFormatterVersions,
   getSavedResumeFormatterVersion,
+  normalizeResumeVersionKey,
   removeResumeFormatterVersion,
   type ResumeFormatterSavedResult,
   upsertResumeFormatterVersion,
@@ -62,6 +64,7 @@ const RESUME_FORMAT_ISSUE_LABELS: Record<string, { key: string; fallback: string
   no_sections: { key: 'quality_resume_no_sections', fallback: 'The resume did not split into clear sections.' },
   overlong_header: { key: 'quality_resume_overlong_header', fallback: 'The header area is still too dense.' },
   garbled_header: { key: 'quality_resume_garbled_header', fallback: 'Contact details are still mixed into the name/header.' },
+  language_mismatch: { key: 'quality_resume_language_mismatch', fallback: 'The draft still contains too much content outside the selected output language.' },
 };
 
 const readinessRank: Record<ReadinessSeverity, number> = {
@@ -177,13 +180,27 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
   const savedHydratedRef = useRef(false);
 
   const changeTargetMarket = (next: string) => {
+    const nextLanguage = getMarketLocalLanguage(next) ? 'local' : 'en';
     setTargetMarket(next);
-    setOutputLanguage(getMarketLocalLanguage(next) ? 'local' : 'en');
-    const savedVersion = getSavedResumeFormatterVersion(saved?.result, next);
+    setOutputLanguage(nextLanguage);
+    const savedVersion = getSavedResumeFormatterVersion(saved?.result, next, nextLanguage);
     if (savedVersion) {
       setResult(savedVersion);
       setFromSaved(true);
       setError(null);
+    }
+  };
+
+  const changeOutputLanguage = (next: OutputLanguageChoice) => {
+    setOutputLanguage(next);
+    const savedVersion = getSavedResumeFormatterVersion(saved?.result, targetMarket, next);
+    if (savedVersion) {
+      setResult(savedVersion);
+      setFromSaved(true);
+      setError(null);
+    } else if (result) {
+      setResult(null);
+      setFromSaved(false);
     }
   };
 
@@ -193,7 +210,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
     if (initialInput.trim()) return;
     if (savedHydratedRef.current) return;
     if (!saved || result) return;
-    const savedVersion = getPreferredResumeFormatterVersion(saved.result, targetMarket);
+    const savedVersion = getPreferredResumeFormatterVersion(saved.result, targetMarket, outputLanguage);
     if (!savedVersion) {
       savedHydratedRef.current = true;
       return;
@@ -231,7 +248,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
       const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter, languageName);
       if (!alive()) return;
       const formattedText = cleanResumeDisplay(apiResult.formattedText);
-      const validation = assessFormattedResume(formattedText);
+      const validation = assessFormattedResume(formattedText, { outputLanguage: languageName });
       const normalizedResult = {
         ...apiResult,
         formattedText,
@@ -261,7 +278,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
         <select
           id={`output-language-${idSuffix}`}
           value={outputLanguage}
-          onChange={(e) => setOutputLanguage(e.target.value as OutputLanguageChoice)}
+          onChange={(e) => changeOutputLanguage(e.target.value as OutputLanguageChoice)}
           className="mt-2 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
           data-qa="resume-formatter-output-language"
           data-qa-output-language={outputLanguage}
@@ -470,10 +487,11 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
     const formattedText = cleanResumeDisplay(result.formattedText);
     const generatedMarket = result.targetMarket || targetMarket;
     const marketStyle = getResumeMarketStyle(generatedMarket);
-    const validation = assessFormattedResume(formattedText);
+    const validation = assessFormattedResume(formattedText, { outputLanguage: resolveOutputLanguageName(generatedMarket, result.outputLanguage ?? outputLanguage) });
     const savedVersions = getResumeFormatterVersions(saved?.result, generatedMarket);
-    const savedMarketNames = Object.keys(savedVersions);
-    const currentVersionSaved = Boolean(savedVersions[generatedMarket]);
+    const savedMarketNames = Array.from(new Set(Object.keys(savedVersions).map(getResumeVersionDisplayLabel)));
+    const currentVersionKey = normalizeResumeVersionKey(generatedMarket, result.outputLanguage ?? outputLanguage);
+    const currentVersionSaved = Boolean(savedVersions[currentVersionKey] ?? savedVersions[generatedMarket]);
     const readinessItems = buildReadinessItems(validation, generatedMarket, targetMarket, marketStyle, t);
     const readinessState = getReadinessState(readinessItems);
     const readinessHeadline = readinessState === 'ready'
@@ -497,7 +515,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
             saveState={saveState}
             onTryNext={() => { setResult(null); setFromSaved(false); setError(null); }}
             onClearSaved={currentVersionSaved ? () => {
-              const nextLibrary = removeResumeFormatterVersion(saved?.result, generatedMarket);
+              const nextLibrary = removeResumeFormatterVersion(saved?.result, generatedMarket, result.outputLanguage ?? outputLanguage);
               if (!nextLibrary) {
                 clear();
                 setResult(null);
@@ -505,7 +523,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
                 return;
               }
               persist(nextLibrary);
-              const nextVersion = getPreferredResumeFormatterVersion(nextLibrary, targetMarket);
+              const nextVersion = getPreferredResumeFormatterVersion(nextLibrary, targetMarket, outputLanguage);
               if (nextVersion) {
                 setTargetMarket(nextVersion.targetMarket || targetMarket);
                 setOutputLanguage(nextVersion.outputLanguage || (getMarketLocalLanguage(nextVersion.targetMarket || targetMarket) ? 'local' : 'en'));
@@ -672,7 +690,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
               {SUPPORTED_MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
             {renderLanguageToggle('result')}
-            {getSavedResumeFormatterVersion(saved?.result, targetMarket) && targetMarket !== generatedMarket && (
+            {getSavedResumeFormatterVersion(saved?.result, targetMarket, outputLanguage) && targetMarket !== generatedMarket && (
               <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-200">
                 {localizedCopy(t, 'tool_resume_formatter_saved_market_hint', 'A saved {market} version is available and will load automatically.')
                   .replace('{market}', targetMarket)}
