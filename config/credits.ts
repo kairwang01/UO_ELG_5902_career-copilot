@@ -1,9 +1,4 @@
 
-// Stripe links are placeholders for one-time purchases
-const STRIPE_CREDIT_PACK_100_LINK = 'https://buy.stripe.com/test_...';
-const STRIPE_CREDIT_PACK_500_LINK = 'https://buy.stripe.com/test_...';
-const STRIPE_CREDIT_PACK_1000_LINK = 'https://buy.stripe.com/test_...';
-
 // CANONICAL per-tool credit prices. The server mirrors these in
 // functions/src/credits/schema.ts (separate build, not a shared import) — when a
 // price changes here, update that file too.
@@ -59,7 +54,6 @@ export const CREDIT_PACKS = [
         credits: 150,
         price: '$3',
         priceDescription: 'one-time purchase',
-        stripeLink: STRIPE_CREDIT_PACK_100_LINK,
     },
     {
         key: 'pack_500',
@@ -67,7 +61,6 @@ export const CREDIT_PACKS = [
         credits: 600,
         price: '$9',
         priceDescription: 'one-time purchase (25% off)',
-        stripeLink: STRIPE_CREDIT_PACK_500_LINK,
     },
     {
         key: 'pack_1000',
@@ -75,7 +68,6 @@ export const CREDIT_PACKS = [
         credits: 1200,
         price: '$15',
         priceDescription: 'one-time purchase (38% off)',
-        stripeLink: STRIPE_CREDIT_PACK_1000_LINK,
     },
 ];
 

@@ -61,7 +61,6 @@ export interface Plan {
   annualPrice?: string;
   features: string[];
   analysisLimit: number;
-  stripeLink?: string;
   creditsPerMonth: number;
 }
 
