@@ -53,6 +53,28 @@ describe('resumeFormatterVersions', () => {
     expect(getPreferredResumeFormatterVersion(library, 'France', 'local')?.formattedText).toBe('CV français');
   });
 
+  it('does not load a saved English version when the local-language version is requested', () => {
+    const library = upsertResumeFormatterVersion(null, {
+      formattedText: 'France English resume',
+      targetMarket: 'France',
+      outputLanguage: 'en',
+    });
+
+    expect(getSavedResumeFormatterVersion(library, 'France', 'local')).toBeNull();
+    expect(getPreferredResumeFormatterVersion(library, 'France', 'local')).toBeNull();
+  });
+
+  it('does not load a saved local-language version when English is requested', () => {
+    const library = upsertResumeFormatterVersion(null, {
+      formattedText: 'CV français',
+      targetMarket: 'France',
+      outputLanguage: 'local',
+    });
+
+    expect(getSavedResumeFormatterVersion(library, 'France', 'en')).toBeNull();
+    expect(getPreferredResumeFormatterVersion(library, 'France', 'en')).toBeNull();
+  });
+
   it('loads the requested market before falling back to the active market', () => {
     const library = upsertResumeFormatterVersion(
       upsertResumeFormatterVersion(null, {
@@ -69,6 +91,24 @@ describe('resumeFormatterVersions', () => {
 
     expect(getPreferredResumeFormatterVersion(library, 'Canada')?.formattedText).toBe('Canada resume');
     expect(getPreferredResumeFormatterVersion(library, 'Germany')?.formattedText).toBe('Japan resume');
+  });
+
+  it('falls back only to a same-language active version', () => {
+    const library = upsertResumeFormatterVersion(
+      upsertResumeFormatterVersion(null, {
+        formattedText: 'Canada English resume',
+        targetMarket: 'Canada',
+        outputLanguage: 'en',
+      }),
+      {
+        formattedText: 'CV japonais',
+        targetMarket: 'Japan',
+        outputLanguage: 'local',
+      },
+    );
+
+    expect(getPreferredResumeFormatterVersion(library, 'Germany', 'local')?.formattedText).toBe('CV japonais');
+    expect(getPreferredResumeFormatterVersion(library, 'Germany', 'en')?.formattedText).toBe('Canada English resume');
   });
 
   it('removes one market without deleting the other saved markets', () => {

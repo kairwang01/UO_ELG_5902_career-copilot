@@ -34,6 +34,15 @@ export const normalizeResumeVersionKey = (
 
 export const getResumeVersionDisplayLabel = (key: string): string => key.split('::')[0] || key;
 
+const versionMatchesLanguage = (
+  version: FormattedResume | undefined,
+  outputLanguage?: FormattedResume['outputLanguage'] | null,
+): version is FormattedResume => {
+  if (!version) return false;
+  if (outputLanguage == null) return true;
+  return version.outputLanguage == null || version.outputLanguage === outputLanguage;
+};
+
 export const isResumeFormatterVersionLibrary = (value: unknown): value is ResumeFormatterVersionLibrary => (
   Boolean(value)
   && typeof value === 'object'
@@ -81,8 +90,11 @@ export const getSavedResumeFormatterVersion = (
   const versionKey = normalizeResumeVersionKey(targetMarket, outputLanguage);
   const marketKey = normalizeResumeMarketKey(targetMarket);
   return versions[versionKey]
-    ?? versions[marketKey]
-    ?? Object.entries(versions).find(([key]) => getResumeVersionDisplayLabel(key) === marketKey)?.[1]
+    ?? (versionMatchesLanguage(versions[marketKey], outputLanguage) ? versions[marketKey] : undefined)
+    ?? Object.entries(versions).find(([key, version]) => (
+      getResumeVersionDisplayLabel(key) === marketKey
+      && versionMatchesLanguage(version, outputLanguage)
+    ))?.[1]
     ?? null;
 };
 
@@ -94,16 +106,19 @@ export const getPreferredResumeFormatterVersion = (
   const versions = getResumeFormatterVersions(savedResult, targetMarket);
   const marketKey = normalizeResumeMarketKey(targetMarket);
   const target = versions[normalizeResumeVersionKey(targetMarket, outputLanguage)]
-    ?? versions[marketKey]
-    ?? Object.entries(versions).find(([key]) => getResumeVersionDisplayLabel(key) === marketKey)?.[1];
+    ?? (versionMatchesLanguage(versions[marketKey], outputLanguage) ? versions[marketKey] : undefined)
+    ?? Object.entries(versions).find(([key, version]) => (
+      getResumeVersionDisplayLabel(key) === marketKey
+      && versionMatchesLanguage(version, outputLanguage)
+    ))?.[1];
   if (target) return target;
 
   if (isResumeFormatterVersionLibrary(savedResult) && savedResult.activeMarket) {
     const active = versions[normalizeResumeMarketKey(savedResult.activeMarket)];
-    if (active) return active;
+    if (versionMatchesLanguage(active, outputLanguage)) return active;
   }
 
-  return Object.values(versions)[0] ?? null;
+  return Object.values(versions).find((version) => versionMatchesLanguage(version, outputLanguage)) ?? null;
 };
 
 export const upsertResumeFormatterVersion = (
