@@ -363,6 +363,8 @@ const ResumeFixQueue: React.FC<{
       : localized;
   });
   const visibleFixes = localizedImprovements;
+  const primaryFixes = visibleFixes.slice(0, 3);
+  const secondaryFixes = visibleFixes.slice(3);
   const visibleSummary = hasEnglishSavedReport
     ? '这份报告正文是之前用英文生成的旧结果。请点击“更新简历”重新生成中文版报告；下方已先将可识别的标题和标签转为中文。'
     : summary;
@@ -388,8 +390,8 @@ const ResumeFixQueue: React.FC<{
         </div>
       )}
       {visibleFixes.length > 0 ? (
-        <div className="max-h-[620px] space-y-3 overflow-y-auto pr-1">
-          {visibleFixes.map((issue, index) => (
+        <div className="space-y-3">
+          {primaryFixes.map((issue, index) => (
             <article
               key={`${issue.area}-${index}`}
               className="rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-blue-200 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-blue-800 dark:hover:bg-blue-900/20"
@@ -410,6 +412,38 @@ const ResumeFixQueue: React.FC<{
               </div>
             </article>
           ))}
+          {secondaryFixes.length > 0 && (
+            <details className="group rounded-lg border border-dashed border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <span>{formatWorkspaceCopy(t('ws_resume_priority_fixes'), { count: secondaryFixes.length })}</span>
+                <span className="text-xs text-slate-500 transition group-open:rotate-180 dark:text-slate-400">⌄</span>
+              </summary>
+              <div className="mt-3 max-h-[360px] space-y-3 overflow-y-auto pr-1">
+                {secondaryFixes.map((issue, index) => {
+                  const absoluteIndex = index + primaryFixes.length;
+                  return (
+                    <article
+                      key={`${issue.area}-${absoluteIndex}`}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60"
+                    >
+                      <div className="flex gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
+                          {String(absoluteIndex + 1).padStart(2, '0')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <p className="font-semibold text-slate-950 dark:text-slate-100">{issue.area || t('ws_resume_improvement_fallback')}</p>
+                            <StatusPill tone="neutral">{t('workspace_priority_medium')}</StatusPill>
+                          </div>
+                          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{issue.suggestion}</p>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </details>
+          )}
         </div>
       ) : (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
@@ -459,7 +493,7 @@ const StickyResumePreviewPanel: React.FC<{
   t: (key: string) => string;
   onOpenFormatter: () => void;
 }> = ({ resumeText, market, strengths = [], keywords = [], t, onOpenFormatter }) => (
-  <aside className="xl:sticky xl:top-6">
+  <aside className="space-y-3 xl:sticky xl:top-6">
     <Panel
       title={t('ws_resume_preview_title')}
       description={formatWorkspaceCopy(t('ws_resume_preview_desc'), { market })}
@@ -474,43 +508,49 @@ const StickyResumePreviewPanel: React.FC<{
         </button>
       }
     >
-      <ResumePreview resumeText={resumeText} market={market} t={t} />
-      {(strengths.length > 0 || keywords.length > 0) && (
-        <div className="mt-4 grid gap-3">
-          {strengths.length > 0 && (
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">{t('ws_resume_strengths_title')}</p>
-              {isChineseWorkspace(t) && strengths.some(isMostlyEnglish) ? (
-                <p className="mt-2 text-sm leading-relaxed text-emerald-950 dark:text-emerald-100">
-                  当前优势描述来自旧英文报告。重新运行简历分析后，这里会显示完整中文优势摘要。
-                </p>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  {strengths.slice(0, 3).map((strength) => (
-                    <div key={strength} className="flex gap-2 text-sm leading-relaxed text-emerald-950 dark:text-emerald-100">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
-                      <span>{strength}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {keywords.length > 0 && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('ws_resume_keywords_title')}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {keywords.slice(0, 10).map((keyword) => (
-                  <StatusPill key={keyword} tone="ready">
-                    {isChineseWorkspace(t) ? localizeResumeKeywordForChinese(keyword) : keyword}
-                  </StatusPill>
+      <ResumePreview
+        resumeText={resumeText}
+        market={market}
+        t={t}
+        heightClassName="h-[520px] sm:h-[620px] xl:h-[min(700px,72vh)]"
+      />
+    </Panel>
+
+    {(strengths.length > 0 || keywords.length > 0) && (
+      <div className="grid gap-3">
+        {strengths.length > 0 && (
+          <section className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-3 shadow-sm dark:border-emerald-900/40 dark:bg-emerald-950/20">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">{t('ws_resume_strengths_title')}</p>
+            {isChineseWorkspace(t) && strengths.some(isMostlyEnglish) ? (
+              <p className="mt-2 text-sm leading-relaxed text-emerald-950 dark:text-emerald-100">
+                当前优势描述来自旧英文报告。重新运行简历分析后，这里会显示完整中文优势摘要。
+              </p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {strengths.slice(0, 2).map((strength) => (
+                  <div key={strength} className="flex gap-2 text-sm leading-relaxed text-emerald-950 dark:text-emerald-100">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                    <span>{strength}</span>
+                  </div>
                 ))}
               </div>
+            )}
+          </section>
+        )}
+        {keywords.length > 0 && (
+          <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('ws_resume_keywords_title')}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {keywords.slice(0, 8).map((keyword) => (
+                <StatusPill key={keyword} tone="ready">
+                  {isChineseWorkspace(t) ? localizeResumeKeywordForChinese(keyword) : keyword}
+                </StatusPill>
+              ))}
             </div>
-          )}
-        </div>
-      )}
-    </Panel>
+          </section>
+        )}
+      </div>
+    )}
   </aside>
 );
 
