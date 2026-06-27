@@ -29,7 +29,7 @@ const createCheckoutSessionCallable = httpsCallable<
 >(firebaseFunctions, 'createCheckoutSession');
 
 const confirmSimulatedCheckoutCallable = httpsCallable<
-  { planKey: string },
+  { planKey: string; sessionId?: string },
   SubscriptionUpdateResult
 >(firebaseFunctions, 'confirmSimulatedCheckout');
 
@@ -62,11 +62,27 @@ export async function createEmbeddedSubscriptionCheckout(planKey: string): Promi
 /**
  * Confirms a SIMULATED (demo/test) checkout — only works when the backend has
  * BILLING_SIMULATION enabled. Runs the same entitlement activation a real Stripe
- * webhook would, so the resulting plan/role/credits are identical.
+ * webhook would, so the resulting plan/role/credits are identical. `sessionId` is the
+ * simulated checkout session id (used for credit-pack purchase idempotency).
  */
-export async function confirmSimulatedCheckout(planKey: string): Promise<SubscriptionUpdateResult> {
-  const result = await confirmSimulatedCheckoutCallable({ planKey });
+export async function confirmSimulatedCheckout(planKey: string, sessionId?: string): Promise<SubscriptionUpdateResult> {
+  const result = await confirmSimulatedCheckoutCallable({ planKey, ...(sessionId ? { sessionId } : {}) });
   return result.data;
+}
+
+/**
+ * Starts an embedded checkout for a one-off credit pack. Same callable as the
+ * subscription path — the backend routes by pack key to a payment-mode session that
+ * grants credits without changing the buyer's plan or role.
+ */
+export async function createEmbeddedCreditPackCheckout(packKey: string): Promise<CheckoutSessionResult> {
+  const result = await createCheckoutSessionCallable({ planKey: packKey, uiMode: 'embedded' });
+  return result.data;
+}
+
+/** Confirms a SIMULATED credit-pack purchase (demo/test only). `sessionId` dedupes repeat confirms. */
+export async function confirmSimulatedCreditPack(packKey: string, sessionId?: string): Promise<SubscriptionUpdateResult> {
+  return confirmSimulatedCheckout(packKey, sessionId);
 }
 
 const createBillingPortalSessionCallable = httpsCallable<

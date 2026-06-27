@@ -14,7 +14,7 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { requireAuth } from "../middleware/auth";
-import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
+import { USERS_COLLECTION, USER_FIELDS, CREDIT_PACK_CREDITS } from "../credits/schema";
 import { applySubscriptionSelection } from "./setSubscriptionStatus";
 
 if (!admin.apps.length) {
@@ -23,6 +23,106 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const BILLING_COLLECTION = "billing";
+// Server-only ledger of completed one-off credit-pack purchases, keyed by the Stripe
+// (or simulated) checkout session id. Its sole job is idempotency: a webhook retry or
+// a double-confirm of the SAME session must never grant a pack's credits twice.
+const CREDIT_PURCHASES_COLLECTION = "credit_purchases";
+
+/**
+ * One-off credit packs. `credits` mirrors functions/src/credits/schema.ts
+ * (CANONICAL: frontend config/credits.ts). `priceEnv` is the Stripe Price id env
+ * var used for real (non-simulated) checkout. Packs use mode "payment" — they grant
+ * credits once and never change the buyer's role or subscription plan.
+ */
+const CREDIT_PACK_PLANS: Record<string, { credits: number; priceEnv: string }> = {
+  pack_100: { credits: CREDIT_PACK_CREDITS.pack_100, priceEnv: "STRIPE_PRICE_PACK_100" },
+  pack_500: { credits: CREDIT_PACK_CREDITS.pack_500, priceEnv: "STRIPE_PRICE_PACK_500" },
+  pack_1000: { credits: CREDIT_PACK_CREDITS.pack_1000, priceEnv: "STRIPE_PRICE_PACK_1000" },
+};
+
+function isCreditPackKey(key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(CREDIT_PACK_PLANS, key);
+}
+
+export interface CreditPackResult {
+  status: "active";
+  subscription_status: string;
+  role: string;
+  credits: number;
+  credits_added: number;
+  pack_key: string;
+  grant_source: "paid";
+}
+
+/**
+ * Grants a one-off credit pack to `uid`. Idempotent on `checkoutSessionId`: the first
+ * call for a session increments the balance and records a ledger doc; any later call
+ * for the same session is a no-op that returns the current balance. This is the
+ * payment-mode analogue of activateStripeEntitlement and is shared by both the Stripe
+ * webhook (checkout.session.completed, mode=payment) and the simulated confirm path.
+ */
+export async function activateCreditPackEntitlement(input: {
+  uid: string;
+  packKey: string;
+  checkoutSessionId: string;
+}): Promise<CreditPackResult> {
+  const pack = CREDIT_PACK_PLANS[input.packKey];
+  if (!input.uid || !pack || !input.checkoutSessionId) {
+    throw new HttpsError("invalid-argument", "Invalid credit-pack entitlement payload.");
+  }
+  const userRef = db.collection(USERS_COLLECTION).doc(input.uid);
+  const ledgerRef = db.collection(CREDIT_PURCHASES_COLLECTION).doc(input.checkoutSessionId);
+  const now = FieldValue.serverTimestamp();
+
+  return db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    const ledgerSnap = await tx.get(ledgerRef);
+    if (!userSnap.exists) {
+      throw new HttpsError("failed-precondition", "No user account to credit.");
+    }
+    const rawBase = userSnap.get(USER_FIELDS.credits);
+    const baseCredits = Number.isFinite(Number(rawBase)) ? Number(rawBase) : 0;
+    const subscriptionStatus = (userSnap.get(USER_FIELDS.subscriptionStatus) as string) ?? "free";
+    const role = (userSnap.get(USER_FIELDS.role) as string) ?? "candidate";
+
+    // Already granted for this checkout session — return the balance unchanged.
+    if (ledgerSnap.exists) {
+      return {
+        status: "active",
+        subscription_status: subscriptionStatus,
+        role,
+        credits: baseCredits,
+        credits_added: 0,
+        pack_key: input.packKey,
+        grant_source: "paid",
+      };
+    }
+
+    const newCredits = baseCredits + pack.credits;
+    tx.set(
+      userRef,
+      { [USER_FIELDS.credits]: newCredits, [USER_FIELDS.updatedAt]: now },
+      { merge: true },
+    );
+    tx.set(ledgerRef, {
+      uid: input.uid,
+      pack_key: input.packKey,
+      credits_added: pack.credits,
+      checkout_session_id: input.checkoutSessionId,
+      provider: "stripe",
+      created_at: now,
+    });
+    return {
+      status: "active",
+      subscription_status: subscriptionStatus,
+      role,
+      credits: newCredits,
+      credits_added: pack.credits,
+      pack_key: input.packKey,
+      grant_source: "paid",
+    };
+  });
+}
 const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
 const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 
@@ -328,8 +428,54 @@ export function buildCheckoutSessionParams(input: {
 export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request): Promise<CheckoutSessionResult> => {
   const uid = requireAuth(request);
   const data = (request.data ?? {}) as CreateCheckoutRequest;
-  const plan = normalizeCheckoutPlan(data.planKey);
   const useEmbeddedCheckout = data.uiMode === "embedded";
+
+  // One-off credit packs take a separate payment-mode path (no plan/role change).
+  const packKey = typeof data.planKey === "string" ? data.planKey.trim() : "";
+  if (isCreditPackKey(packKey)) {
+    const pack = CREDIT_PACK_PLANS[packKey];
+
+    if (billingSimulationEnabled()) {
+      const simId = `sim_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const params = new URLSearchParams({ pack: packKey, kind: "credit_pack", sim: simId });
+      return { mode: "hosted", url: `/billing/checkout?${params.toString()}`, id: simId, simulated: true };
+    }
+
+    const packPrice = process.env[pack.priceEnv];
+    if (!packPrice) {
+      throw new HttpsError("failed-precondition", `${pack.priceEnv} is not configured.`);
+    }
+    const baseUrl = resolveAppBaseUrl(request.rawRequest);
+    const stripe = getStripe();
+    const email = stringOrNull(request.auth?.token.email);
+    const packSessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: "payment",
+      customer_email: email ?? undefined,
+      client_reference_id: uid,
+      line_items: [{ price: packPrice, quantity: 1 }],
+      metadata: { uid, kind: "credit_pack", pack_key: packKey, audience: "candidate" },
+      ...(useEmbeddedCheckout
+        ? { ui_mode: "embedded_page" as const, redirect_on_completion: "never" as const }
+        : {
+            ui_mode: "hosted_page" as const,
+            success_url: `${baseUrl}/workspace/billing?checkout=success`,
+            cancel_url: `${baseUrl}/workspace/billing?checkout=cancel`,
+          }),
+    };
+    const packSession = await stripe.checkout.sessions.create(packSessionParams);
+    if (useEmbeddedCheckout) {
+      if (!packSession.client_secret) {
+        throw new HttpsError("internal", "Stripe did not return an embedded Checkout client secret.");
+      }
+      return { mode: "embedded", clientSecret: packSession.client_secret, id: packSession.id };
+    }
+    if (!packSession.url) {
+      throw new HttpsError("internal", "Stripe did not return a Checkout URL.");
+    }
+    return { mode: "hosted", url: packSession.url, id: packSession.id };
+  }
+
+  const plan = normalizeCheckoutPlan(data.planKey);
 
   // Simulation mode: return an in-app fake-checkout URL with the same { url, id }
   // shape the client already consumes (window.location.assign). No Stripe keys or
@@ -373,6 +519,12 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
 
 interface ConfirmSimulatedCheckoutRequest {
   planKey: string;
+  /**
+   * The simulated checkout session id returned by createCheckoutSession. Used only
+   * for credit packs, as the idempotency key so confirming the same pack checkout
+   * twice grants once. (Subscriptions are idempotent via credit_renewals.)
+   */
+  sessionId?: string;
 }
 
 /**
@@ -385,6 +537,17 @@ export async function confirmSimulatedCheckoutImpl(uid: string, data: ConfirmSim
   if (!billingSimulationEnabled()) {
     throw new HttpsError("failed-precondition", "Billing simulation is not enabled.");
   }
+
+  // Credit packs grant a one-off credit amount via the payment-mode entitlement path.
+  const packKey = typeof data?.planKey === "string" ? data.planKey.trim() : "";
+  if (isCreditPackKey(packKey)) {
+    // Prefer the client-supplied checkout session id so a double-confirm of the same
+    // checkout is deduped; fall back to a per-call id so a missing one still grants.
+    const sessionId =
+      stringOrNull(data?.sessionId) ?? `sim_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    return activateCreditPackEntitlement({ uid, packKey, checkoutSessionId: sessionId });
+  }
+
   const plan = normalizeCheckoutPlan(data?.planKey);
   const simId = `sim_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   return activateStripeEntitlement({
@@ -468,6 +631,18 @@ export const createBillingPortalSessionFunction = onCall((request) =>
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const uid = stringOrNull(session.metadata?.uid) ?? stringOrNull(session.client_reference_id);
+
+  // One-off credit-pack purchase (mode=payment) — grant credits, no plan/role change.
+  if (session.metadata?.kind === "credit_pack") {
+    const packKey = stringOrNull(session.metadata?.pack_key);
+    if (!uid || !packKey || !isCreditPackKey(packKey)) {
+      logger.warn("stripeWebhook: credit_pack checkout missing/invalid metadata", { session: session.id });
+      return;
+    }
+    await activateCreditPackEntitlement({ uid, packKey, checkoutSessionId: session.id });
+    return;
+  }
+
   const plan = stringOrNull(session.metadata?.plan_key);
   const audience = session.metadata?.audience;
   if (!uid || !plan || (audience !== "candidate" && audience !== "business")) {

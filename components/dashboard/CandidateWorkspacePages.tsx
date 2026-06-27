@@ -22,7 +22,9 @@ import { getApplicationStatusLabelKey } from '../../lib/applicationPipeline';
 import type { AppSession as Session } from '../../lib/data';
 import type { AnalysisResult, Improvement, UserProfile } from '../../types';
 import { ALL_PLANS, PLAN_HIERARCHY } from '../../config';
+import { CREDIT_PACKS } from '../../config/credits';
 import { createBillingPortalSession } from '../../services/subscriptionClient';
+import { useSubscriptionCheckout } from '../../contexts/SubscriptionCheckoutContext';
 import PlanChangeConfirmDialog from '../billing/PlanChangeConfirmDialog';
 
 type WorkspaceView = 'dashboard' | 'resume' | 'talent_profile' | 'jobs' | 'interview' | 'plan' | 'toolkit' | 'billing';
@@ -926,6 +928,8 @@ interface CandidateBillingPageProps {
   onSelectPlan: (planKey: CandidatePlanKey) => void;
   savingPlan: CandidatePlanKey | null;
   onViewPricing: () => void;
+  /** Refreshes the profile/credits after a successful purchase (subscription or pack). */
+  onPurchaseComplete?: () => Promise<void> | void;
 }
 
 const normalizePlanStatus = (status: string) => status.replace('pending_biz_', '').replace('pending_', '');
@@ -948,7 +952,23 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
   onSelectPlan,
   savingPlan,
   onViewPricing,
+  onPurchaseComplete,
 }) => {
+  const { startCreditPackCheckout } = useSubscriptionCheckout();
+  const [buyingPack, setBuyingPack] = useState<string | null>(null);
+
+  const handleBuyPack = async (packKey: string) => {
+    if (buyingPack) return;
+    setBuyingPack(packKey);
+    try {
+      // Resolves once the in-app checkout dialog opens; the dialog then drives
+      // confirmation and calls onPurchaseComplete to refresh the credit balance.
+      await startCreditPackCheckout(packKey, { onComplete: onPurchaseComplete });
+    } finally {
+      setBuyingPack(null);
+    }
+  };
+
   const currentStatus = profile.subscription_status || 'free';
   const currentPlanKey = normalizePlanStatus(currentStatus) as CandidatePlanKey;
   const currentPlan = ALL_PLANS[currentPlanKey] ?? ALL_PLANS.free;
@@ -1134,6 +1154,34 @@ export const CandidateBillingPage: React.FC<CandidateBillingPageProps> = ({
           })}
         </div>
       </Panel>
+
+      <Panel title={t('ws_billing_packs_title')} description={t('ws_billing_packs_desc')}>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {CREDIT_PACKS.map((pack) => (
+            <article
+              key={pack.key}
+              className="flex flex-col rounded-lg border border-slate-200 bg-white p-5 text-center dark:border-slate-800 dark:bg-slate-900"
+            >
+              <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">{pack.name}</p>
+              <p className="mt-2 text-3xl font-bold text-slate-950 dark:text-slate-100">
+                {pack.credits.toLocaleString()}
+                <span className="ml-1 text-base font-medium text-slate-500 dark:text-slate-400">CR</span>
+              </p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{pack.price}</p>
+              <button
+                type="button"
+                onClick={() => handleBuyPack(pack.key)}
+                disabled={buyingPack !== null}
+                className="mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-700 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"
+              >
+                {buyingPack === pack.key && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {t('ws_billing_buy_pack')}
+              </button>
+            </article>
+          ))}
+        </div>
+      </Panel>
+
       <PlanChangeConfirmDialog
         open={Boolean(planToConfirm)}
         onOpenChange={(open) => {

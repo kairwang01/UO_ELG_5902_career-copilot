@@ -72,4 +72,37 @@ describe('confirmSimulatedCheckout', () => {
     await expect(confirmSimulatedCheckoutImpl('emp3', { planKey: 'not_a_plan' }))
       .rejects.toThrow(/unsupported paid plan/i);
   });
+
+  it('grants a one-off credit pack without changing plan or role', async () => {
+    process.env.BILLING_SIMULATION = 'true';
+    await seedUser('cand2'); // 100 credits, free candidate
+
+    const res = await confirmSimulatedCheckoutImpl('cand2', { planKey: 'pack_500', sessionId: 'sess_A' });
+    expect(res.status).toBe('active');
+    expect(res.subscription_status).toBe('free'); // plan unchanged
+    expect(res.role).toBe('candidate'); // role unchanged
+    expect(res.credits).toBe(100 + 600); // pack_500 = 600 credits
+
+    const user = (await db.collection('users').doc('cand2').get()).data()!;
+    expect(user.credits).toBe(700);
+    expect(user.subscription_status).toBe('free');
+    // no subscription entitlement is written for a pack
+    expect((await db.collection('billing').doc('cand2').get()).exists).toBe(false);
+  });
+
+  it('is idempotent per checkout session — a repeat confirm does not double-grant', async () => {
+    process.env.BILLING_SIMULATION = 'true';
+    await seedUser('cand3');
+
+    const first = await confirmSimulatedCheckoutImpl('cand3', { planKey: 'pack_500', sessionId: 'sess_B' });
+    expect(first.credits).toBe(700);
+    const repeat = await confirmSimulatedCheckoutImpl('cand3', { planKey: 'pack_500', sessionId: 'sess_B' });
+    expect(repeat.credits).toBe(700); // same session → no extra grant
+    expect(repeat.credits_added).toBe(0);
+
+    // a NEW checkout session grants again
+    const second = await confirmSimulatedCheckoutImpl('cand3', { planKey: 'pack_500', sessionId: 'sess_C' });
+    expect(second.credits).toBe(1300);
+    expect((await db.collection('users').doc('cand3').get()).data()!.credits).toBe(1300);
+  });
 });

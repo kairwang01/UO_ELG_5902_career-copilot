@@ -67,3 +67,17 @@ export const TOOL_CREDIT_COSTS: Record<string, number> = {
   "skill-learning-plan": 50,
   "industry-event-scout": 50,
 } as const;
+
+/**
+ * One-off credit packs (separate from subscription plans).
+ *
+ * CANONICAL SOURCE: the frontend `config/credits.ts` CREDIT_PACKS table. This is a
+ * deliberate mirror (the two TypeScript projects build separately — see the note on
+ * TOOL_CREDIT_COSTS above). If a pack's credit amount changes, update BOTH files.
+ * Buying a pack grants these credits one time; it does NOT change role or plan.
+ */
+export const CREDIT_PACK_CREDITS: Record<string, number> = {
+  pack_100: 150,
+  pack_500: 600,
+  pack_1000: 1200,
+} as const;

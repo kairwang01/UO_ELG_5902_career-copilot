@@ -10,8 +10,11 @@
  *   5. repeated confirmation does not double-grant same-period credits,
  *   6. subscription management opens the simulated portal,
  *   7. simulated cancel downgrades without wiping existing credits,
- *   8. business checkout promotes/keeps employer role and grants business credits,
- *   9. business cancel preserves the employer portal role.
+ *   8. one-off credit-pack purchase grants credits without changing plan/role,
+ *      is idempotent on the checkout session (no double-grant), and a NEW
+ *      checkout session grants again,
+ *   9. business checkout promotes/keeps employer role and grants business credits,
+ *  10. business cancel preserves the employer portal role.
  */
 import { spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
@@ -217,6 +220,37 @@ async function main() {
     await assertUser(candidateUid, { role: 'candidate', subscription_status: 'free', credits: expectedCandidateCredits });
     await assertBilling(candidateUid, { active: false, status: 'cancelled_simulated' });
     console.log('  ✓ candidate simulated cancel downgrades plan and preserves credits');
+
+    // --- One-off credit packs (SCRUM-55): grant credits, never change plan/role ---
+    const PACK_500_CREDITS = 600; // mirror of config/credits.ts CREDIT_PACKS pack_500
+    const creditsBeforePack = expectedCandidateCredits; // plan unchanged by cancel
+
+    const packCheckout = await candidateCreateCheckout({ planKey: 'pack_500' });
+    assert(packCheckout.data.simulated === true, `Expected simulated pack checkout: ${JSON.stringify(packCheckout.data)}`);
+    assert(typeof packCheckout.data.id === 'string' && packCheckout.data.id.startsWith('sim_'), `Unexpected pack sim id: ${packCheckout.data.id}`);
+    const packUrl = new URL(packCheckout.data.url, 'http://localhost');
+    assert(packUrl.pathname === '/billing/checkout', `Unexpected pack checkout path: ${packCheckout.data.url}`);
+    assert(packUrl.searchParams.get('pack') === 'pack_500', `Unexpected pack key: ${packCheckout.data.url}`);
+    assert(packUrl.searchParams.get('kind') === 'credit_pack', `Unexpected pack kind: ${packCheckout.data.url}`);
+    console.log('  ✓ simulated credit-pack checkout session returned');
+
+    const packGrant = await candidateConfirmCheckout({ planKey: 'pack_500', sessionId: packCheckout.data.id });
+    assert(packGrant.data.credits === creditsBeforePack + PACK_500_CREDITS, `Pack did not grant credits: ${JSON.stringify(packGrant.data)}`);
+    assert(packGrant.data.subscription_status === 'free', `Pack must not change plan: ${JSON.stringify(packGrant.data)}`);
+    assert(packGrant.data.role === 'candidate', `Pack must not change role: ${JSON.stringify(packGrant.data)}`);
+    await assertUser(candidateUid, { role: 'candidate', subscription_status: 'free', credits: creditsBeforePack + PACK_500_CREDITS });
+    console.log('  ✓ credit-pack confirm grants credits without changing plan or role');
+
+    const packRepeat = await candidateConfirmCheckout({ planKey: 'pack_500', sessionId: packCheckout.data.id });
+    assert(packRepeat.data.credits === creditsBeforePack + PACK_500_CREDITS, `Repeat pack confirm double-granted: ${JSON.stringify(packRepeat.data)}`);
+    await assertUser(candidateUid, { credits: creditsBeforePack + PACK_500_CREDITS });
+    console.log('  ✓ repeated credit-pack confirm (same session) does not double-grant');
+
+    const packCheckout2 = await candidateCreateCheckout({ planKey: 'pack_500' });
+    const packGrant2 = await candidateConfirmCheckout({ planKey: 'pack_500', sessionId: packCheckout2.data.id });
+    assert(packGrant2.data.credits === creditsBeforePack + 2 * PACK_500_CREDITS, `New pack checkout did not grant again: ${JSON.stringify(packGrant2.data)}`);
+    await assertUser(candidateUid, { credits: creditsBeforePack + 2 * PACK_500_CREDITS });
+    console.log('  ✓ a new credit-pack checkout session grants again');
 
     const employerCheckout = await employerCreateCheckout({ planKey: 'pending_biz_pro' });
     assertSimulatedCheckout(employerCheckout, 'pro', 'business');

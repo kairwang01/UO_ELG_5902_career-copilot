@@ -4,8 +4,11 @@ import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { CreditCard, Loader2, ShieldCheck } from 'lucide-react';
 import {
   createEmbeddedSubscriptionCheckout,
+  createEmbeddedCreditPackCheckout,
   confirmSimulatedCheckout,
+  confirmSimulatedCreditPack,
 } from '../services/subscriptionClient';
+import { CREDIT_PACKS } from '../config/credits';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useToast } from '../components/Toast';
 
@@ -15,8 +18,17 @@ interface StartSubscriptionCheckoutOptions {
   onComplete?: CheckoutCompleteHandler;
 }
 
+/** A simulated checkout awaiting in-app confirmation (BILLING_SIMULATION only). */
+interface SimulatedCheckoutItem {
+  kind: 'plan' | 'pack';
+  key: string;
+  label: string;
+  sessionId: string | null;
+}
+
 interface SubscriptionCheckoutContextValue {
   startSubscriptionCheckout: (planKey: string, options?: StartSubscriptionCheckoutOptions) => Promise<void>;
+  startCreditPackCheckout: (packKey: string, options?: StartSubscriptionCheckoutOptions) => Promise<void>;
 }
 
 const SubscriptionCheckoutContext = createContext<SubscriptionCheckoutContextValue | null>(null);
@@ -41,7 +53,7 @@ export const useSubscriptionCheckout = (): SubscriptionCheckoutContextValue => {
 export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { addToast } = useToast();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [simulatedPlanKey, setSimulatedPlanKey] = useState<string | null>(null);
+  const [simulatedItem, setSimulatedItem] = useState<SimulatedCheckoutItem | null>(null);
   const [isOpening, setIsOpening] = useState(false);
   const [isConfirmingSimulated, setIsConfirmingSimulated] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -50,7 +62,7 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
 
   const closeCheckout = useCallback(() => {
     setClientSecret(null);
-    setSimulatedPlanKey(null);
+    setSimulatedItem(null);
     setCheckoutError(null);
     setIsConfirmingSimulated(false);
     completeHandlerRef.current = null;
@@ -75,8 +87,14 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
     }
   }, [addToast, closeCheckout]);
 
-  const startSubscriptionCheckout = useCallback(
-    async (planKey: string, options?: StartSubscriptionCheckoutOptions) => {
+  const beginCheckout = useCallback(
+    async (
+      kind: 'plan' | 'pack',
+      key: string,
+      label: string,
+      create: (key: string) => Promise<{ mode?: 'hosted' | 'embedded'; clientSecret?: string; simulated?: boolean; id?: string }>,
+      options?: StartSubscriptionCheckoutOptions,
+    ) => {
       if (isOpening || openingRef.current) return;
       openingRef.current = true;
       setIsOpening(true);
@@ -84,17 +102,17 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
       completeHandlerRef.current = options?.onComplete ?? null;
 
       try {
-        const embedded = await createEmbeddedSubscriptionCheckout(planKey);
-        if (embedded.mode === 'embedded' && embedded.clientSecret) {
+        const session = await create(key);
+        if (session.mode === 'embedded' && session.clientSecret) {
           if (!stripePromise) {
             throw new Error('Embedded checkout is not configured. Add VITE_STRIPE_PUBLISHABLE_KEY and rebuild the frontend.');
           }
-          setClientSecret(embedded.clientSecret);
+          setClientSecret(session.clientSecret);
           return;
         }
 
-        if (embedded.mode === 'hosted' && embedded.simulated) {
-          setSimulatedPlanKey(planKey);
+        if (session.mode === 'hosted' && session.simulated) {
+          setSimulatedItem({ kind, key, label, sessionId: session.id ?? null });
           return;
         }
 
@@ -112,18 +130,37 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
     [addToast, isOpening],
   );
 
+  const startSubscriptionCheckout = useCallback(
+    (planKey: string, options?: StartSubscriptionCheckoutOptions) =>
+      beginCheckout('plan', planKey, `${cleanPlanLabel(planKey)} plan`, createEmbeddedSubscriptionCheckout, options),
+    [beginCheckout],
+  );
+
+  const startCreditPackCheckout = useCallback(
+    (packKey: string, options?: StartSubscriptionCheckoutOptions) => {
+      const pack = CREDIT_PACKS.find((p) => p.key === packKey);
+      const label = pack ? `${pack.name} · ${pack.credits.toLocaleString()} credits` : 'credit pack';
+      return beginCheckout('pack', packKey, label, createEmbeddedCreditPackCheckout, options);
+    },
+    [beginCheckout],
+  );
+
   const handleConfirmSimulatedCheckout = useCallback(async () => {
-    if (!simulatedPlanKey || isConfirmingSimulated) return;
+    if (!simulatedItem || isConfirmingSimulated) return;
     setIsConfirmingSimulated(true);
     setCheckoutError(null);
     try {
-      await confirmSimulatedCheckout(simulatedPlanKey);
+      if (simulatedItem.kind === 'pack') {
+        await confirmSimulatedCreditPack(simulatedItem.key, simulatedItem.sessionId ?? undefined);
+      } else {
+        await confirmSimulatedCheckout(simulatedItem.key);
+      }
       await runCompleteHandler();
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : 'Checkout could not be confirmed.');
       setIsConfirmingSimulated(false);
     }
-  }, [isConfirmingSimulated, runCompleteHandler, simulatedPlanKey]);
+  }, [isConfirmingSimulated, runCompleteHandler, simulatedItem]);
 
   const embeddedOptions = useMemo(
     () => ({
@@ -138,10 +175,10 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
     [clientSecret, runCompleteHandler],
   );
 
-  const dialogOpen = Boolean(clientSecret || simulatedPlanKey);
+  const dialogOpen = Boolean(clientSecret || simulatedItem);
 
   return (
-    <SubscriptionCheckoutContext.Provider value={{ startSubscriptionCheckout }}>
+    <SubscriptionCheckoutContext.Provider value={{ startSubscriptionCheckout, startCreditPackCheckout }}>
       {children}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeCheckout(); }}>
         <DialogContent maxWidth="md" className="p-0 sm:p-0">
@@ -156,7 +193,7 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
               <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
                 <EmbeddedCheckout className="min-h-[500px]" />
               </EmbeddedCheckoutProvider>
-            ) : simulatedPlanKey ? (
+            ) : simulatedItem ? (
               <div className="flex min-h-[500px] items-center justify-center px-3">
                 <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
@@ -164,10 +201,12 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
                     Sandbox checkout
                   </div>
                   <h3 className="mt-4 text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-                    Confirm {cleanPlanLabel(simulatedPlanKey)} plan
+                    Confirm {simulatedItem.label}
                   </h3>
                   <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    This test payment updates your plan inside the app. No card is charged and no full-page checkout opens.
+                    {simulatedItem.kind === 'pack'
+                      ? 'This test payment adds the credits to your balance inside the app. No card is charged and no full-page checkout opens.'
+                      : 'This test payment updates your plan inside the app. No card is charged and no full-page checkout opens.'}
                   </p>
                   <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
