@@ -14,6 +14,8 @@
  *   9. business cancel preserves the employer portal role.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInWithEmailAndPassword } from 'firebase/auth';
@@ -23,7 +25,7 @@ const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 const { DEFAULT_PLAN_QUOTAS } = require('../functions/lib/admin/quotaDefaults.js');
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const PASSWORD = 'QaSeed!2026';
 const CANDIDATE_EMAIL = 'candidate@careercopilot.test';
@@ -90,7 +92,7 @@ function assert(condition, message) {
 }
 
 async function seedBillingFixture() {
-  await run(process.execPath, ['scripts/seed-emulator.mjs']);
+  await run((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs']);
   const [candidate, employer] = await Promise.all([
     adminAuth.getUserByEmail(CANDIDATE_EMAIL),
     adminAuth.getUserByEmail(EMPLOYER_EMAIL),

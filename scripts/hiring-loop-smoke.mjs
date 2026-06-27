@@ -12,6 +12,8 @@
  * write regressions are isolated from model/provider availability.
  */
 import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInWithEmailAndPassword } from 'firebase/auth';
@@ -19,6 +21,8 @@ import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/
 
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const PASSWORD = 'QaSeed!2026';
@@ -66,8 +70,8 @@ async function signInClient(email, appName) {
 
 async function runSeedScript() {
   await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['scripts/seed-emulator.mjs'], {
-      cwd: new URL('..', import.meta.url).pathname.replace(/\/$/, ''),
+    const child = spawn((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs'], {
+      cwd: ROOT,
       env: process.env,
       stdio: 'inherit',
     });

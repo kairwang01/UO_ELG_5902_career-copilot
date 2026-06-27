@@ -7,10 +7,12 @@
  * expected in-app view without horizontal overflow or console errors.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_URL = process.env.NAVIGATION_SMOKE_BASE_URL || 'http://127.0.0.1:4181';
 const PASSWORD = 'QaSeed!2026';
 const CANDIDATE_EMAIL = 'candidate@careercopilot.test';
@@ -331,7 +333,7 @@ async function assertAdminMobile(browser) {
 }
 
 async function main() {
-  await run(process.execPath, ['scripts/seed-emulator.mjs']);
+  await run((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs']);
 
   const vite = startVite();
   try {

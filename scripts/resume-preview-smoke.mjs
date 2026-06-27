@@ -7,6 +7,8 @@
  * cleanups from regressing into a giant one-line blob with photo/table fields.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
@@ -14,7 +16,7 @@ import { chromium } from 'playwright';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_URL = process.env.RESUME_PREVIEW_SMOKE_BASE_URL || 'http://127.0.0.1:4182';
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const PASSWORD = 'QaSeed!2026';
@@ -271,7 +273,7 @@ async function expectButtonEnabled(page, selector, label) {
 }
 
 async function main() {
-  await run(process.execPath, ['scripts/seed-emulator.mjs']);
+  await run((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs']);
 
   const vite = startVite();
   try {

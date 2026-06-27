@@ -6,8 +6,10 @@
  * runner aggregates the results so CI / pre-deploy can gate on a single command.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const SMOKES = [
   ['auth-routing', 'scripts/auth-routing-smoke.mjs'],
@@ -19,11 +21,12 @@ const SMOKES = [
   ['overlays', 'scripts/overlay-collision-smoke.mjs'],
   ['navigation-ui', 'scripts/navigation-ui-smoke.mjs'],
   ['resume-preview', 'scripts/resume-preview-smoke.mjs'],
+  ['web3-preview', 'scripts/web3-preview-smoke.mjs'],
 ];
 
 function runSmoke(script) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [script], { cwd: REPO_ROOT, env: process.env, stdio: 'inherit' });
+    const child = spawn((process.env.NODE_BINARY || 'node'), [script], { cwd: REPO_ROOT, env: process.env, stdio: 'inherit' });
     child.on('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });
 }

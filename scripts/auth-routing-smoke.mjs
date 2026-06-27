@@ -9,10 +9,12 @@
  *   4. asserts the product shell selected by CareerApp.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_URL = process.env.AUTH_SMOKE_BASE_URL || 'http://127.0.0.1:4174';
 const PASSWORD = 'QaSeed!2026';
 const ARTIFACT_DIR = `${ROOT}/output/playwright`;
@@ -120,7 +122,7 @@ async function signInAndAssertShell(browser, scenario) {
 }
 
 async function main() {
-  await run(process.execPath, ['scripts/seed-emulator.mjs']);
+  await run((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs']);
 
   const vite = startVite();
   try {

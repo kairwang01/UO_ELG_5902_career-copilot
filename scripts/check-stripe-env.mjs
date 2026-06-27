@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_PATH = resolve(ROOT, 'functions/.env');
 
 const REQUIRED_PRICE_KEYS = [

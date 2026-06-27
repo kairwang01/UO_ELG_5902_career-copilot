@@ -399,7 +399,7 @@ const Account: React.FC<AccountProps> = ({
         setNftStaked(newValues.nft_staked);
         setNftEarnings(newValues.nft_earnings);
 
-        await data.profiles.update(session.user.id, newValues);
+        await updateProfileOrThrow(newValues);
       } else {
         const newValues = {
           nft_minted: false,
@@ -413,7 +413,7 @@ const Account: React.FC<AccountProps> = ({
         setNftStaked(newValues.nft_staked);
         setNftEarnings(newValues.nft_earnings);
 
-        await data.profiles.update(session.user.id, newValues);
+        await updateProfileOrThrow(newValues);
       }
       if (!isCurrentRun()) return;
       setWeb3Notice(null); // Clear info message on successful sync
@@ -721,6 +721,9 @@ const Account: React.FC<AccountProps> = ({
   };
 
   const getWeb3ActionErrorText = (error: unknown, fallbackKey: string): string => {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
     const code = typeof error === 'object' && error !== null && 'code' in error
       ? (error as { code?: unknown }).code
       : undefined;
@@ -728,6 +731,11 @@ const Account: React.FC<AccountProps> = ({
       return t('account_web3_connection_rejected');
     }
     return t(fallbackKey);
+  };
+
+  const updateProfileOrThrow = async (patch: Partial<UserProfile>) => {
+    const { error } = await data.profiles.update(session.user.id, patch);
+    if (error) throw new Error(error.message);
   };
 
   const getSignerForSavedWallet = async (): Promise<ethers.JsonRpcSigner | null> => {
@@ -787,7 +795,7 @@ const Account: React.FC<AccountProps> = ({
         const newTokenId = previewTokenIdFor(walletAddress);
         setTokenId(newTokenId);
         setNftMinted(true);
-        await data.profiles.update(session.user.id, {
+        await updateProfileOrThrow({
           nft_minted: true,
           nft_token_id: newTokenId,
         });
@@ -840,7 +848,7 @@ const Account: React.FC<AccountProps> = ({
         const newTokenId = Number(parsedLog.args.tokenId);
         setTokenId(newTokenId);
         setNftMinted(true);
-        await data.profiles.update(session.user.id, {
+        await updateProfileOrThrow({
           nft_minted: true,
           nft_token_id: newTokenId,
         });
@@ -879,7 +887,7 @@ const Account: React.FC<AccountProps> = ({
       });
       try {
         setNftStaked(newStakedStatus);
-        await data.profiles.update(session.user.id, { nft_staked: newStakedStatus });
+        await updateProfileOrThrow({ nft_staked: newStakedStatus });
         if (!mountedRef.current) return;
         setWeb3Notice({
           type: 'success',
@@ -930,7 +938,7 @@ const Account: React.FC<AccountProps> = ({
       if (!mountedRef.current) return;
 
       setNftStaked(newStakedStatus);
-      await data.profiles.update(session.user.id, {
+      await updateProfileOrThrow({
         nft_staked: newStakedStatus,
       });
       if (!mountedRef.current) return;
@@ -991,7 +999,7 @@ const Account: React.FC<AccountProps> = ({
       if (!mountedRef.current) return;
       setNftEarnings(newEarnings);
 
-      await data.profiles.update(session.user.id, {
+      await updateProfileOrThrow({
         nft_earnings: newEarnings,
       });
       if (!mountedRef.current) return;

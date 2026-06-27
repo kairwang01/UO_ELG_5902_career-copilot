@@ -8,10 +8,12 @@
  *   4. no checked viewport creates horizontal overflow.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_URL = process.env.DIALOG_SMOKE_BASE_URL || 'http://127.0.0.1:4179';
 const PASSWORD = 'QaSeed!2026';
 const CANDIDATE_EMAIL = 'candidate@careercopilot.test';
@@ -238,7 +240,7 @@ async function assertTalentProfilePrefill(browser) {
 }
 
 async function main() {
-  await run(process.execPath, ['scripts/seed-emulator.mjs']);
+  await run((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs']);
 
   const vite = startVite();
   try {

@@ -133,6 +133,39 @@ describe('user-doc trust boundary', () => {
     await assertSucceeds(updateDoc(doc(db, 'users', 'cand1'),
       { resume_text: 'x'.repeat(2000), resume_file_name: 'cv.pdf', updated_at: ts() }));
   });
+  it('candidate CAN update Web3 credential fields on an extended profile doc', async () => {
+    await seed('cand1', {
+      ...CANDIDATE,
+      phone: '+1 555 0135',
+      location: 'Ottawa, ON',
+      linkedin: 'https://www.linkedin.com/in/casey-candidate',
+      github: 'https://github.com/casey-candidate',
+      wallet_address: '0x1111111111111111111111111111111111111111',
+      nft_minted: false,
+      nft_staked: false,
+      nft_token_id: null,
+      nft_earnings: 0,
+    });
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', 'cand1'), {
+      nft_minted: true,
+      nft_token_id: 51153,
+      updated_at: ts(),
+    }));
+  });
+  it('candidate CANNOT use a Web3 update to self-escalate role', async () => {
+    await seed('cand1', {
+      ...CANDIDATE,
+      wallet_address: '0x1111111111111111111111111111111111111111',
+      nft_minted: false,
+    });
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'cand1'), {
+      role: 'employer',
+      nft_minted: true,
+      updated_at: ts(),
+    }));
+  });
   it('employer CAN update its own company_* fields', async () => {
     await seed('emp1', EMPLOYER);
     const db = testEnv.authenticatedContext('emp1').firestore();

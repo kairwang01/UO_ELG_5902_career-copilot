@@ -247,6 +247,23 @@ service cloud.firestore {
         optionalTimestamp(data, "updated_at");
     }
 
+    function validWeb3UserProfileUpdate(data) {
+      return data.diff(resource.data).affectedKeys().hasOnly([
+          "wallet_address",
+          "nft_minted",
+          "nft_staked",
+          "nft_token_id",
+          "nft_earnings",
+          "updated_at"
+        ]) &&
+        optionalString(data, "wallet_address", 128) &&
+        optionalBool(data, "nft_minted") &&
+        optionalBool(data, "nft_staked") &&
+        optionalNumber(data, "nft_token_id", 0, 1000000000) &&
+        optionalNumber(data, "nft_earnings", 0, 1000000) &&
+        optionalTimestamp(data, "updated_at");
+    }
+
     function validCareerPath(data) {
       return data.keys().hasOnly([
           "desired_role",
@@ -521,8 +538,9 @@ service cloud.firestore {
       allow update: if isOwner(userId)
         && unchanged(["credits", "subscription_status", "created_at", "custom_provider", "role"])
         && (
-          validUser(request.resource.data) ||
-          validLegacyUserProfileUpdate(request.resource.data)
+          validLegacyUserProfileUpdate(request.resource.data) ||
+          validWeb3UserProfileUpdate(request.resource.data) ||
+          validUser(request.resource.data)
         )
         && candidateCompanyFieldsUnchanged();
 

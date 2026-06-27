@@ -9,6 +9,8 @@
  *   5. employer unlocks the consented packet through the real callable.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mkdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
@@ -19,7 +21,7 @@ import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_URL = process.env.SOURCING_SMOKE_BASE_URL || 'http://127.0.0.1:4175';
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const PASSWORD = 'QaSeed!2026';
@@ -136,7 +138,7 @@ async function clearOutreachFor(employerUid, candidateUid) {
 }
 
 async function seedSourcingFixture() {
-  await run(process.execPath, ['scripts/seed-emulator.mjs']);
+  await run((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs']);
 
   const [candidate, employer] = await Promise.all([
     adminAuth.getUserByEmail(CANDIDATE_EMAIL),

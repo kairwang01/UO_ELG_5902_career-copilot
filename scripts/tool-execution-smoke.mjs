@@ -6,6 +6,8 @@
  * representative set of candidate tools, without touching a live LLM provider.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { mkdir } from 'node:fs/promises';
@@ -14,7 +16,7 @@ import { chromium } from 'playwright';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const BASE_URL = process.env.TOOL_EXECUTION_SMOKE_BASE_URL || 'http://127.0.0.1:4183';
 const PASSWORD = 'QaSeed!2026';
@@ -145,7 +147,7 @@ function adminApp() {
 }
 
 async function seedCandidate() {
-  await run(process.execPath, ['scripts/seed-emulator.mjs']);
+  await run((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs']);
   adminApp();
   const user = await admin.auth().getUserByEmail(CANDIDATE_EMAIL);
   const toolResults = await admin.firestore().collection('users').doc(user.uid).collection('tool_results').get();

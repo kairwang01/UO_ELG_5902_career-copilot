@@ -14,6 +14,8 @@
  * of scope (covered separately when a provider key is available).
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
@@ -22,6 +24,8 @@ const PROJECT_ID = process.env.GCLOUD_PROJECT || 'demo-careercopilot';
 const PASSWORD = 'QaSeed!2026';
 const CANDIDATE_EMAIL = 'candidate@careercopilot.test';
 const MAX_PAYLOAD_CHARS = 100_000;
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9199';
@@ -51,8 +55,8 @@ function initClientApp(name) {
 
 async function runSeedScript() {
   await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['scripts/seed-emulator.mjs'], {
-      cwd: new URL('..', import.meta.url).pathname.replace(/\/$/, ''),
+    const child = spawn((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs'], {
+      cwd: ROOT,
       env: process.env,
       stdio: 'inherit',
     });

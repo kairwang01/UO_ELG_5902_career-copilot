@@ -5,6 +5,8 @@
  * profile write has actually persisted. Runs only against Firebase emulators.
  */
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mkdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
@@ -12,7 +14,7 @@ import { chromium } from 'playwright';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_URL = process.env.ACCOUNT_PROFILE_SMOKE_BASE_URL || 'http://127.0.0.1:4184';
 const PASSWORD = 'QaSeed!2026';
 const CANDIDATE_EMAIL = 'candidate@careercopilot.test';
@@ -154,7 +156,7 @@ async function assertAccountProfileSave(browser, db, uid) {
 }
 
 async function main() {
-  await run(process.execPath, ['scripts/seed-emulator.mjs']);
+  await run((process.env.NODE_BINARY || 'node'), ['scripts/seed-emulator.mjs']);
 
   if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
   const auth = admin.auth();
