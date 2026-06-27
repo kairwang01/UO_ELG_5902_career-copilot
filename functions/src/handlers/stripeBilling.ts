@@ -404,14 +404,19 @@ export function buildCheckoutSessionParams(input: {
   };
 
   if (input.useEmbeddedCheckout) {
+    const returnPath = input.plan.audience === "business"
+      ? "/portal?checkout=return&session_id={CHECKOUT_SESSION_ID}"
+      : "/workspace/billing?checkout=return&session_id={CHECKOUT_SESSION_ID}";
     return {
       ...baseSessionParams,
       ui_mode: "embedded_page",
-      // Keep checkout fully in-app. Stripe's embedded Checkout supports
-      // `never`, which disables redirect-based payment methods and removes
-      // the need for a return_url, so the top-level app is not sent to
-      // /workspace/billing or /portal after a card payment.
-      redirect_on_completion: "never",
+      // Keep the normal card flow inside the app: Stripe calls the embedded
+      // Checkout onComplete callback instead of navigating the whole window.
+      // We start with card-only Checkout to avoid redirect-based payment methods
+      // opening a global return flow.
+      payment_method_types: ["card"],
+      redirect_on_completion: "if_required",
+      return_url: `${input.baseUrl}${returnPath}`,
     };
   }
 
@@ -455,7 +460,12 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
       line_items: [{ price: packPrice, quantity: 1 }],
       metadata: { uid, kind: "credit_pack", pack_key: packKey, audience: "candidate" },
       ...(useEmbeddedCheckout
-        ? { ui_mode: "embedded_page" as const, redirect_on_completion: "never" as const }
+        ? {
+            ui_mode: "embedded_page" as const,
+            payment_method_types: ["card"] as const,
+            redirect_on_completion: "if_required" as const,
+            return_url: `${baseUrl}/workspace/billing?checkout=return&session_id={CHECKOUT_SESSION_ID}`,
+          }
         : {
             ui_mode: "hosted_page" as const,
             success_url: `${baseUrl}/workspace/billing?checkout=success`,

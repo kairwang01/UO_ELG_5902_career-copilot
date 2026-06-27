@@ -185,7 +185,7 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
           <DialogHeader className="border-b border-slate-200 px-5 py-4 text-left dark:border-slate-700">
             <DialogTitle className="text-lg">Secure checkout</DialogTitle>
             <DialogDescription className="not-sr-only text-sm text-slate-500 dark:text-slate-400">
-              Complete payment in this window. Your plan updates after Stripe confirms the payment.
+              Complete payment in this window. It closes automatically after confirmation.
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-[540px] px-2 py-3 sm:px-4">

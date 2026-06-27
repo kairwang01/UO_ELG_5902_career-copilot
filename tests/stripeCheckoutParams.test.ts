@@ -19,7 +19,7 @@ const businessPlan: CheckoutPlan = {
 };
 
 describe('buildCheckoutSessionParams', () => {
-  it('keeps embedded checkout fully in-app without return redirects', () => {
+  it('keeps embedded checkout in-app for card payments and uses return URL only as fallback', () => {
     const params = buildCheckoutSessionParams({
       uid: 'uid_123',
       plan: candidatePlan,
@@ -30,8 +30,9 @@ describe('buildCheckoutSessionParams', () => {
     }) as Record<string, unknown>;
 
     expect(params.ui_mode).toBe('embedded_page');
-    expect(params.redirect_on_completion).toBe('never');
-    expect(params.return_url).toBeUndefined();
+    expect(params.payment_method_types).toEqual(['card']);
+    expect(params.redirect_on_completion).toBe('if_required');
+    expect(params.return_url).toBe('https://career-copilot-a3168.web.app/workspace/billing?checkout=return&session_id={CHECKOUT_SESSION_ID}');
     expect(params.success_url).toBeUndefined();
     expect(params.cancel_url).toBeUndefined();
     expect(params.customer_email).toBe('candidate@example.com');
