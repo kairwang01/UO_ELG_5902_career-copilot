@@ -1,9 +1,10 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from '@stripe/react-stripe-js';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
-import { Loader2 } from 'lucide-react';
+import { CreditCard, Loader2, ShieldCheck } from 'lucide-react';
 import {
   createEmbeddedSubscriptionCheckout,
+  confirmSimulatedCheckout,
 } from '../services/subscriptionClient';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useToast } from '../components/Toast';
@@ -27,6 +28,7 @@ const stripePromise: Promise<Stripe | null> | null = stripePublishableKey
 const CHECKOUT_REFRESH_DELAYS_MS = [0, 1500, 4000, 8000] as const;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const cleanPlanLabel = (planKey: string) => planKey.replace(/^pending_biz_/, '').replace(/^pending_/, '').replaceAll('_', ' ');
 
 export const useSubscriptionCheckout = (): SubscriptionCheckoutContextValue => {
   const ctx = useContext(SubscriptionCheckoutContext);
@@ -39,16 +41,39 @@ export const useSubscriptionCheckout = (): SubscriptionCheckoutContextValue => {
 export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { addToast } = useToast();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [simulatedPlanKey, setSimulatedPlanKey] = useState<string | null>(null);
   const [isOpening, setIsOpening] = useState(false);
+  const [isConfirmingSimulated, setIsConfirmingSimulated] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const openingRef = useRef(false);
   const completeHandlerRef = useRef<CheckoutCompleteHandler | null>(null);
 
   const closeCheckout = useCallback(() => {
     setClientSecret(null);
+    setSimulatedPlanKey(null);
     setCheckoutError(null);
+    setIsConfirmingSimulated(false);
     completeHandlerRef.current = null;
   }, []);
+
+  const runCompleteHandler = useCallback(async () => {
+    const handler = completeHandlerRef.current;
+    closeCheckout();
+    if (!handler) {
+      addToast('Checkout complete.', 'success');
+      return;
+    }
+    addToast('Payment received. Updating your plan…', 'info');
+    try {
+      for (const delay of CHECKOUT_REFRESH_DELAYS_MS) {
+        if (delay > 0) await wait(delay);
+        await handler();
+      }
+      addToast('Checkout complete. Your plan will update as soon as Stripe confirms it.', 'success');
+    } catch {
+      addToast('Payment was submitted. Refresh this page if the plan does not update shortly.', 'info');
+    }
+  }, [addToast, closeCheckout]);
 
   const startSubscriptionCheckout = useCallback(
     async (planKey: string, options?: StartSubscriptionCheckoutOptions) => {
@@ -59,13 +84,17 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
       completeHandlerRef.current = options?.onComplete ?? null;
 
       try {
-        if (!stripePromise) {
-          throw new Error('Embedded checkout is not configured. Add VITE_STRIPE_PUBLISHABLE_KEY and rebuild the frontend.');
-        }
-
         const embedded = await createEmbeddedSubscriptionCheckout(planKey);
         if (embedded.mode === 'embedded' && embedded.clientSecret) {
+          if (!stripePromise) {
+            throw new Error('Embedded checkout is not configured. Add VITE_STRIPE_PUBLISHABLE_KEY and rebuild the frontend.');
+          }
           setClientSecret(embedded.clientSecret);
+          return;
+        }
+
+        if (embedded.mode === 'hosted' && embedded.simulated) {
+          setSimulatedPlanKey(planKey);
           return;
         }
 
@@ -83,6 +112,19 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
     [addToast, isOpening],
   );
 
+  const handleConfirmSimulatedCheckout = useCallback(async () => {
+    if (!simulatedPlanKey || isConfirmingSimulated) return;
+    setIsConfirmingSimulated(true);
+    setCheckoutError(null);
+    try {
+      await confirmSimulatedCheckout(simulatedPlanKey);
+      await runCompleteHandler();
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : 'Checkout could not be confirmed.');
+      setIsConfirmingSimulated(false);
+    }
+  }, [isConfirmingSimulated, runCompleteHandler, simulatedPlanKey]);
+
   const embeddedOptions = useMemo(
     () => ({
       fetchClientSecret: async () => {
@@ -90,29 +132,18 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
         return clientSecret;
       },
       onComplete: async () => {
-        const handler = completeHandlerRef.current;
-        closeCheckout();
-        if (handler) {
-          addToast('Payment received. Updating your plan…', 'info');
-          try {
-            for (const delay of CHECKOUT_REFRESH_DELAYS_MS) {
-              if (delay > 0) await wait(delay);
-              await handler();
-            }
-            addToast('Checkout complete. Your plan will update as soon as Stripe confirms it.', 'success');
-          } catch {
-            addToast('Payment was submitted. Refresh this page if the plan does not update shortly.', 'info');
-          }
-        }
+        await runCompleteHandler();
       },
     }),
-    [addToast, clientSecret, closeCheckout],
+    [clientSecret, runCompleteHandler],
   );
+
+  const dialogOpen = Boolean(clientSecret || simulatedPlanKey);
 
   return (
     <SubscriptionCheckoutContext.Provider value={{ startSubscriptionCheckout }}>
       {children}
-      <Dialog open={Boolean(clientSecret)} onOpenChange={(open) => { if (!open) closeCheckout(); }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeCheckout(); }}>
         <DialogContent maxWidth="md" className="p-0 sm:p-0">
           <DialogHeader className="border-b border-slate-200 px-5 py-4 text-left dark:border-slate-700">
             <DialogTitle className="text-lg">Secure checkout</DialogTitle>
@@ -125,6 +156,37 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
               <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
                 <EmbeddedCheckout className="min-h-[500px]" />
               </EmbeddedCheckoutProvider>
+            ) : simulatedPlanKey ? (
+              <div className="flex min-h-[500px] items-center justify-center px-3">
+                <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                    <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                    Sandbox checkout
+                  </div>
+                  <h3 className="mt-4 text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                    Confirm {cleanPlanLabel(simulatedPlanKey)} plan
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                    This test payment updates your plan inside the app. No card is charged and no full-page checkout opens.
+                  </p>
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <CreditCard className="h-4 w-4 text-blue-600" aria-hidden="true" />
+                      Test payment method
+                    </div>
+                    <p className="mt-2 font-mono text-sm text-slate-600 dark:text-slate-300">4242 4242 4242 4242</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleConfirmSimulatedCheckout}
+                    disabled={isConfirmingSimulated}
+                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {isConfirmingSimulated && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                    {isConfirmingSimulated ? 'Confirming…' : 'Confirm test payment'}
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="flex min-h-[500px] items-center justify-center text-sm text-slate-500">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />

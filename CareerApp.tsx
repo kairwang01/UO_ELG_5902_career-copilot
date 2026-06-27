@@ -12,7 +12,7 @@ import { data } from './lib/data';
 import { logToolUsage, logResumeAnalysis } from './lib/analytics';
 import { setUserSubscription } from './services/subscriptionClient';
 import { useLocalization } from './hooks/useLocalization';
-import { ToastProvider, useToast } from './components/Toast';
+import { useToast } from './components/Toast';
 import { useCredits } from './contexts/CreditsContext';
 import { useApiStatus } from './contexts/ApiStatusContext';
 import { useModalBehavior } from './hooks/useModalBehavior';
@@ -62,7 +62,7 @@ import {
 import { decideWorkspaceShell } from './lib/access/navigationDecisions';
 import { decideSessionTransition } from './lib/access/sessionTransitions';
 import { useSession } from './contexts/SessionContext';
-import { SubscriptionCheckoutProvider, useSubscriptionCheckout } from './contexts/SubscriptionCheckoutContext';
+import { useSubscriptionCheckout } from './contexts/SubscriptionCheckoutContext';
 import { ALL_TOOLS_CONFIG } from './constants/tools';
 import './marketing/site-theme.css';
 
@@ -1607,11 +1607,7 @@ interface AppWrapperProps {
 // Api/Credits/Settings providers come from SiteApp (the only mount point), so the
 // workspace shares one state instance with the marketing shell instead of shadowing it.
 const AppWrapper: React.FC<AppWrapperProps> = ({ entry }) => (
-    <ToastProvider>
-      <SubscriptionCheckoutProvider>
-        <AppContent entry={entry} />
-      </SubscriptionCheckoutProvider>
-    </ToastProvider>
+    <AppContent entry={entry} />
 );
 
 export default AppWrapper;

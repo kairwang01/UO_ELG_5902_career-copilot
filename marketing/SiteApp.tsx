@@ -6,6 +6,8 @@ import { SessionProvider } from '../contexts/SessionContext';
 import { SiteRouter } from './SiteRouter';
 import { MarketingI18nProvider } from './contexts/MarketingI18nContext';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { ToastProvider } from '../components/Toast';
+import { SubscriptionCheckoutProvider } from '../contexts/SubscriptionCheckoutContext';
 
 // After a deploy, a returning tab may hold stale lazy-chunk URLs; importing one
 // 404s and React throws a blank-screen "Failed to fetch dynamically imported
@@ -28,11 +30,15 @@ const SiteApp: React.FC = () => (
     <ApiStatusProvider>
       <CreditsProvider>
         <MarketingI18nProvider>
-          <BrowserRouter>
-            <SessionProvider>
-              <SiteRouter />
-            </SessionProvider>
-          </BrowserRouter>
+          <ToastProvider>
+            <SubscriptionCheckoutProvider>
+              <BrowserRouter>
+                <SessionProvider>
+                  <SiteRouter />
+                </SessionProvider>
+              </BrowserRouter>
+            </SubscriptionCheckoutProvider>
+          </ToastProvider>
         </MarketingI18nProvider>
       </CreditsProvider>
     </ApiStatusProvider>
