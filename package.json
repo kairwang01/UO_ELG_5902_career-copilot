@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "marketing:qa": "node marketing/scripts/screenshot-qa.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-careercopilot \"vitest run tests/firestore.rules.test.ts\"",
-    "test:callables": "firebase emulators:exec --only firestore --project demo-careercopilot \"vitest run tests/jobPostings.callable.test.ts\""
+    "test:callables": "firebase emulators:exec --only firestore --project demo-careercopilot \"vitest run tests/jobPostings.callable.test.ts\"",
+    "loadtest:baseline": "npm --prefix functions run build && E2E_LLM_STUB=true firebase emulators:exec --only functions,auth,firestore --project demo-careercopilot \"node loadtest/setup-and-run.mjs\""
   },
   "dependencies": {
     "@cucumber/cucumber": "^12.2.0",

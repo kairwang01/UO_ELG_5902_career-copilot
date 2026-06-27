@@ -58,6 +58,85 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // ---------------------------------------------------------------------------
+// E2E / load-test LLM stub
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic, offline LLM provider used for end-to-end and load testing.
+ *
+ * Activated ONLY when the environment variable `E2E_LLM_STUB` is truthy
+ * (e.g. "true" / "1"). It NEVER reaches a real provider, so it has no network
+ * latency and no API key requirement — every call returns immediately.
+ *
+ * IMPORTANT: stub latency ≠ real provider latency. With the stub enabled, a
+ * load test measures only the application + transport overhead (auth verify,
+ * credit transaction, request/response handling) — it does NOT measure the
+ * real LLM round-trip. Real end-to-end M3 latency against the live community
+ * LLM router is measured separately (see SCRUM-45). See loadtest/README.md.
+ *
+ * Why it satisfies arbitrary handlers:
+ *  - When `responseSchema` is supplied (analyzeResume, most callables), it
+ *    synthesises a minimal object that conforms to that JSON schema, so the
+ *    handler's `result.raw` consumer gets a well-typed value.
+ *  - When no schema is supplied, it returns deterministic JSON text that the
+ *    tolerant parsers (e.g. aiProxy.tryParseJson) can consume.
+ */
+class StubLLMProvider implements LLMProvider {
+  readonly name = "stub";
+
+  async generate(req: LLMRequest): Promise<LLMResult> {
+    const text = JSON.stringify({ stub: true, note: "E2E_LLM_STUB response" });
+    const raw = req.responseSchema
+      ? synthesizeFromSchema(req.responseSchema as JsonSchema)
+      : { stub: true, note: "E2E_LLM_STUB response" };
+    return { text, raw, model: "stub", usage: { inputTokens: 0, outputTokens: 0 } };
+  }
+}
+
+interface JsonSchema {
+  type?: string;
+  properties?: Record<string, JsonSchema>;
+  items?: JsonSchema;
+  enum?: unknown[];
+}
+
+/**
+ * Builds a minimal value that structurally satisfies a (Gemini-style) JSON
+ * schema. Deterministic — same schema always yields the same shape. Only the
+ * subset of JSON-schema used by this codebase's responseSchema definitions is
+ * supported (object / array / string / number / integer / boolean / enum).
+ */
+function synthesizeFromSchema(schema: JsonSchema | undefined): unknown {
+  if (!schema || typeof schema !== "object") return null;
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) return schema.enum[0];
+  switch (schema.type) {
+    case "object": {
+      const out: Record<string, unknown> = {};
+      for (const [key, prop] of Object.entries(schema.properties ?? {})) {
+        out[key] = synthesizeFromSchema(prop);
+      }
+      return out;
+    }
+    case "array":
+      return schema.items ? [synthesizeFromSchema(schema.items)] : [];
+    case "number":
+    case "integer":
+      return 0;
+    case "boolean":
+      return false;
+    case "string":
+    default:
+      return "stub";
+  }
+}
+
+/** True when the deterministic load-test LLM stub is enabled. */
+export function isLlmStubEnabled(): boolean {
+  const v = (process.env.E2E_LLM_STUB ?? "").toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+// ---------------------------------------------------------------------------
 // Tier types
 // ---------------------------------------------------------------------------
 
@@ -784,6 +863,13 @@ export async function resolveProvider(
   uid: string,
   requestedModelId?: string
 ): Promise<LLMProvider> {
+  // E2E / load-test short-circuit: return the deterministic offline stub before
+  // touching any real provider, Firestore registry, or API key. Tier gating and
+  // credit deduction still run in the handler — only the LLM call itself is stubbed.
+  if (isLlmStubEnabled()) {
+    return new StubLLMProvider();
+  }
+
   // Warm the platform-config cache FIRST so the (sync) key/model getters used by
   // buildProvider() read admin-configured Firestore values instead of a cold cache.
   await ensurePlatformCaches();
