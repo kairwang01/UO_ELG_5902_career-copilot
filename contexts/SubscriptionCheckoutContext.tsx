@@ -4,7 +4,6 @@ import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { Loader2 } from 'lucide-react';
 import {
   createEmbeddedSubscriptionCheckout,
-  createSubscriptionCheckout,
 } from '../services/subscriptionClient';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useToast } from '../components/Toast';
@@ -51,14 +50,6 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
     completeHandlerRef.current = null;
   }, []);
 
-  const redirectToHostedCheckout = useCallback(async (planKey: string) => {
-    const hosted = await createSubscriptionCheckout(planKey);
-    if (!hosted.url) {
-      throw new Error('Checkout is unavailable. Please try again.');
-    }
-    window.location.assign(hosted.url);
-  }, []);
-
   const startSubscriptionCheckout = useCallback(
     async (planKey: string, options?: StartSubscriptionCheckoutOptions) => {
       if (isOpening || openingRef.current) return;
@@ -69,27 +60,16 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
 
       try {
         if (!stripePromise) {
-          await redirectToHostedCheckout(planKey);
+          throw new Error('Embedded checkout is not configured. Add VITE_STRIPE_PUBLISHABLE_KEY and rebuild the frontend.');
+        }
+
+        const embedded = await createEmbeddedSubscriptionCheckout(planKey);
+        if (embedded.mode === 'embedded' && embedded.clientSecret) {
+          setClientSecret(embedded.clientSecret);
           return;
         }
 
-        try {
-          const embedded = await createEmbeddedSubscriptionCheckout(planKey);
-          if (embedded.mode === 'embedded' && embedded.clientSecret) {
-            setClientSecret(embedded.clientSecret);
-            return;
-          }
-          if (embedded.url) {
-            window.location.assign(embedded.url);
-            return;
-          }
-        } catch (embeddedError) {
-          // Older deployed functions or incomplete Stripe config may not support
-          // embedded Checkout yet. Keep the purchase path open via hosted Checkout.
-          console.warn('Embedded Checkout unavailable, falling back to hosted Checkout.', embeddedError);
-        }
-
-        await redirectToHostedCheckout(planKey);
+        throw new Error('Embedded checkout is unavailable. Please try again after billing configuration is deployed.');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Checkout could not be started.';
         setCheckoutError(message);
@@ -100,12 +80,15 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
         setIsOpening(false);
       }
     },
-    [addToast, isOpening, redirectToHostedCheckout],
+    [addToast, isOpening],
   );
 
   const embeddedOptions = useMemo(
     () => ({
-      clientSecret,
+      fetchClientSecret: async () => {
+        if (!clientSecret) throw new Error('Checkout session is not ready.');
+        return clientSecret;
+      },
       onComplete: async () => {
         const handler = completeHandlerRef.current;
         closeCheckout();
@@ -130,20 +113,20 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
     <SubscriptionCheckoutContext.Provider value={{ startSubscriptionCheckout }}>
       {children}
       <Dialog open={Boolean(clientSecret)} onOpenChange={(open) => { if (!open) closeCheckout(); }}>
-        <DialogContent maxWidth="lg" className="p-0 sm:p-0">
+        <DialogContent maxWidth="md" className="p-0 sm:p-0">
           <DialogHeader className="border-b border-slate-200 px-5 py-4 text-left dark:border-slate-700">
             <DialogTitle className="text-lg">Secure checkout</DialogTitle>
             <DialogDescription className="not-sr-only text-sm text-slate-500 dark:text-slate-400">
               Complete payment in this window. Your plan updates after Stripe confirms the payment.
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-[560px] px-3 py-4 sm:px-5">
+          <div className="min-h-[540px] px-2 py-3 sm:px-4">
             {clientSecret && stripePromise ? (
               <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
-                <EmbeddedCheckout className="min-h-[520px]" />
+                <EmbeddedCheckout className="min-h-[500px]" />
               </EmbeddedCheckoutProvider>
             ) : (
-              <div className="flex min-h-[520px] items-center justify-center text-sm text-slate-500">
+              <div className="flex min-h-[500px] items-center justify-center text-sm text-slate-500">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 Loading checkout…
               </div>

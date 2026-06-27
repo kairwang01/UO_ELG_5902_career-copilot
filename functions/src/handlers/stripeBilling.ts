@@ -297,7 +297,6 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
   const email = stringOrNull(request.auth?.token.email);
   const successPath = plan.audience === "business" ? "/portal?checkout=success" : "/workspace/billing?checkout=success";
   const cancelPath = plan.audience === "business" ? "/pricing?audience=employer&checkout=cancel" : "/pricing?checkout=cancel";
-  const returnPath = plan.audience === "business" ? "/portal?checkout=return" : "/workspace/billing?checkout=return";
   const baseSessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: plan.mode,
     customer_email: email ?? undefined,
@@ -326,8 +325,11 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
       ? {
           ...baseSessionParams,
           ui_mode: "embedded_page",
-          return_url: `${baseUrl}${returnPath}&session_id={CHECKOUT_SESSION_ID}`,
-          redirect_on_completion: "if_required",
+          // Keep checkout fully in-app. Stripe's embedded Checkout supports
+          // `never`, which disables redirect-based payment methods and removes
+          // the need for a return_url, so the top-level app is not sent to
+          // /workspace/billing or /portal after a card payment.
+          redirect_on_completion: "never",
         }
       : {
           ...baseSessionParams,
