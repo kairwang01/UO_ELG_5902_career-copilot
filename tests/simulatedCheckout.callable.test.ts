@@ -98,7 +98,7 @@ describe('confirmSimulatedCheckout', () => {
     expect(first.credits).toBe(700);
     const repeat = await confirmSimulatedCheckoutImpl('cand3', { planKey: 'pack_500', sessionId: 'sess_B' });
     expect(repeat.credits).toBe(700); // same session → no extra grant
-    expect(repeat.credits_added).toBe(0);
+    expect((repeat as { credits_added?: number }).credits_added).toBe(0);
 
     // a NEW checkout session grants again
     const second = await confirmSimulatedCheckoutImpl('cand3', { planKey: 'pack_500', sessionId: 'sess_C' });
