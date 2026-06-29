@@ -3036,6 +3036,7 @@
   "ws_billing_manage_subscription": "Quản lý gói đăng ký",
   "ws_billing_opening_portal": "Đang mở…",
   "ws_billing_cancel_success": "Gói đăng ký của bạn đã được hủy.",
+  "ws_billing_portal_returned": "Thông tin thanh toán của bạn đã được cập nhật.",
   "ws_billing_title": "Quản lý kế hoạch tìm việc của bạn",
   "ws_billing_desc": "Xem lại tín dụng, trạng thái gói hiện tại và nâng cấp hoặc chuyển đổi cấp độ mà không cần rời khỏi không gian làm việc.",
   "ws_billing_view_public_pricing": "Xem giá công khai",

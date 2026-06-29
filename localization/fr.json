@@ -3036,6 +3036,7 @@
   "ws_billing_manage_subscription": "Gérer l'abonnement",
   "ws_billing_opening_portal": "Ouverture…",
   "ws_billing_cancel_success": "Ton abonnement a été annulé.",
+  "ws_billing_portal_returned": "Tes informations de facturation sont à jour.",
   "ws_billing_title": "Gérer ton forfait de chercheur d'emploi",
   "ws_billing_desc": "Consultez tes crédits et le statut de ton forfait actuel, puis effectuez une mise à niveau ou changez de palier sans quitter l'espace de travail.",
   "ws_billing_view_public_pricing": "Voir la tarification publique",

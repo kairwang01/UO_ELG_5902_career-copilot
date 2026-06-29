@@ -3036,6 +3036,7 @@
   "ws_billing_manage_subscription": "サブスクリプションを管理",
   "ws_billing_opening_portal": "開いています…",
   "ws_billing_cancel_success": "サブスクリプションを解約しました。",
+  "ws_billing_portal_returned": "請求情報は最新の状態です。",
   "ws_billing_title": "求職者プランを管理する",
   "ws_billing_desc": "ワークスペースを離れることなく、クレジット、現在のプランのステータスを確認し、階層をアップグレードまたは切り替えます。",
   "ws_billing_view_public_pricing": "公開価格を表示する",

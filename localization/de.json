@@ -3036,6 +3036,7 @@
   "ws_billing_manage_subscription": "Abo verwalten",
   "ws_billing_opening_portal": "Wird geöffnet…",
   "ws_billing_cancel_success": "dein Abonnement wurde gekündigt.",
+  "ws_billing_portal_returned": "Deine Zahlungsdaten sind auf dem neuesten Stand.",
   "ws_billing_title": "Verwalten du deinen Arbeitssuchendenplan",
   "ws_billing_desc": "Überprüfe Credits, den aktuellen Planstatus und upgraden oder wechseln du die Stufen, ohne den Arbeitsbereich zu verlassen.",
   "ws_billing_view_public_pricing": "Öffentliche Preise anzeigen",

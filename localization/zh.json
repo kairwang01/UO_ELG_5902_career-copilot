@@ -2754,6 +2754,7 @@
   "ws_billing_manage_subscription": "管理订阅",
   "ws_billing_opening_portal": "正在打开…",
   "ws_billing_cancel_success": "你的订阅已取消。",
+  "ws_billing_portal_returned": "您的账单信息已是最新。",
   "ws_billing_title": "管理求职者套餐",
   "ws_billing_desc": "在工作区内查看积分、当前套餐状态，并升级或切换订阅层级。",
   "ws_billing_view_public_pricing": "查看公开价格页",
