@@ -7,6 +7,7 @@ import BrandLogo from '../BrandLogo';
 export interface AdminNavItem {
   id: string;
   label: string;
+  superOnly?: boolean;
 }
 
 interface AdminShellProps {
@@ -78,14 +79,19 @@ const AdminShell: React.FC<AdminShellProps> = ({
                 type="button"
                 onClick={() => onTabChange(tb.id)}
                 data-qa={`admin-nav-${tb.id}`}
-                className={`w-full text-left px-3 py-2.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 ${
+                className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 ${
                   active
                     ? 'bg-white/15 text-white'
                     : 'text-blue-100/80 hover:bg-white/10 hover:text-white'
                 }`}
                 aria-current={active ? 'page' : undefined}
               >
-                {tb.label}
+                <span className="truncate">{tb.label}</span>
+                {tb.superOnly && (
+                  <span className="shrink-0 rounded bg-amber-300/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100 ring-1 ring-amber-200/30">
+                    Super
+                  </span>
+                )}
               </button>
             );
           })}

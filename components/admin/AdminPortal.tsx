@@ -1546,19 +1546,19 @@ const AdminPortal: React.FC = () => {
   // Visibility is driven by the central registry (lib/access/permissions.ts);
   // the server re-checks every action regardless of what renders here.
 
-  const allTabs: { id: Tab; label: string; visible: boolean }[] = [
+  const allTabs: { id: Tab; label: string; visible: boolean; superOnly?: boolean }[] = [
     { id: 'dashboard', label: 'Dashboard', visible: hasAdminPermission(role, 'admin.dashboard.read') },
-    { id: 'ai', label: 'Models & Keys', visible: hasAdminPermission(role, 'admin.models.read') },
-    { id: 'prompts', label: 'Prompts', visible: hasAdminPermission(role, 'admin.prompts.read') },
+    { id: 'ai', label: 'Models & Keys', visible: hasAdminPermission(role, 'admin.models.read'), superOnly: true },
+    { id: 'prompts', label: 'Prompts', visible: hasAdminPermission(role, 'admin.prompts.read'), superOnly: true },
     { id: 'quotas', label: 'Quotas', visible: hasAdminPermission(role, 'admin.quotas.read') },
     { id: 'users', label: 'Users', visible: hasAdminPermission(role, 'admin.users.read') },
-    { id: 'admins', label: 'Access Control', visible: canReadAdmins },
-    { id: 'apiplatform', label: 'API Platform', visible: hasAdminPermission(role, 'admin.apiplatform.read') },
-    { id: 'web3', label: 'Web3', visible: hasAdminPermission(role, 'admin.web3.manage') },
+    { id: 'admins', label: 'Access Control', visible: canReadAdmins, superOnly: true },
+    { id: 'apiplatform', label: 'API Platform', visible: hasAdminPermission(role, 'admin.apiplatform.read'), superOnly: true },
+    { id: 'web3', label: 'Web3', visible: hasAdminPermission(role, 'admin.web3.manage'), superOnly: true },
     { id: 'audit', label: 'Audit Log', visible: hasAdminPermission(role, 'admin.audit.read') },
   ];
 
-  const tabs = allTabs.filter((t) => t.visible).map(({ id, label }) => ({ id, label }));
+  const tabs = allTabs.filter((t) => t.visible).map(({ id, label, superOnly }) => ({ id, label, superOnly }));
 
   const refreshForTab = () => {
     if (tab === 'dashboard') { loadDashboard(); loadModels(); }
