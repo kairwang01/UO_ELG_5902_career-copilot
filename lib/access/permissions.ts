@@ -39,6 +39,7 @@ export type AdminPermission =
   | 'admin.admins.manage'
   | 'admin.apiplatform.read'
   | 'admin.apiplatform.manage'
+  | 'admin.billing.manage'
   | 'admin.web3.manage';
 
 const REVIEWER_PERMISSIONS: AdminPermission[] = [
@@ -68,6 +69,7 @@ const SUPER_PERMISSIONS: AdminPermission[] = [
   'admin.keys.rotate',
   'admin.admins.manage',
   'admin.apiplatform.manage',
+  'admin.billing.manage',
   'admin.web3.manage',
 ];
 
@@ -86,7 +88,7 @@ export const hasAdminPermission = (
 export const ADMIN_ROLE_DESCRIPTIONS: Record<AdminRole, string> = {
   reviewer: 'Read-only oversight: platform dashboard and the audit trail.',
   admin: 'Day-to-day operations: users, credits, subscriptions, prompts (drafts), quotas.',
-  super: 'Full control: everything above plus model routing, provider keys, prompt publishing, admin invitations, API platform and Web3 settings.',
+  super: 'Full control: everything above plus model routing, provider keys, prompt publishing, admin invitations, API platform, billing and Web3 settings.',
 };
 
 /**
@@ -108,6 +110,7 @@ export const ADMIN_PERMISSION_MATRIX: { label: string; permission: AdminPermissi
   { label: 'Invite / remove admins', permission: 'admin.admins.manage' },
   { label: 'View API platform usage', permission: 'admin.apiplatform.read' },
   { label: 'Manage API platform', permission: 'admin.apiplatform.manage' },
+  { label: 'Manage billing controls', permission: 'admin.billing.manage' },
   { label: 'Manage Web3 settings', permission: 'admin.web3.manage' },
 ];
 

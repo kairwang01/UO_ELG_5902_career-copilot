@@ -126,7 +126,7 @@ const STRINGS: Record<string, string> = {
 };
 const t = (key: string) => STRINGS[key] ?? key;
 
-type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'apiplatform' | 'web3' | 'audit';
+type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'billing' | 'apiplatform' | 'web3' | 'audit';
 type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
 
 // Keep this in sync with admin page behavior, role permissions, and sidebar changes.
@@ -171,6 +171,12 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     roles: {
       super: 'Invite, remove, and update console users; view permission matrices.',
       admin: 'View reviewer accounts.',
+    },
+  },
+  billing: {
+    description: 'Feature in development. This page is a placeholder for user subscription and top-up controls.',
+    roles: {
+      super: 'Access the in-development subscription and top-up control surface.',
     },
   },
   apiplatform: {
@@ -1620,6 +1626,7 @@ const AdminPortal: React.FC = () => {
     { id: 'quotas', label: 'Quotas', visible: hasAdminPermission(role, 'admin.quotas.read'), help: ADMIN_TAB_HELP.quotas },
     { id: 'users', label: 'Users', visible: hasAdminPermission(role, 'admin.users.read'), help: ADMIN_TAB_HELP.users },
     { id: 'admins', label: 'Access Control', visible: canReadAdmins, superOnly: true, help: ADMIN_TAB_HELP.admins },
+    { id: 'billing', label: 'Billing', visible: hasAdminPermission(role, 'admin.billing.manage'), superOnly: true, help: ADMIN_TAB_HELP.billing },
     { id: 'apiplatform', label: 'API Platform', visible: hasAdminPermission(role, 'admin.apiplatform.read'), superOnly: true, help: ADMIN_TAB_HELP.apiplatform },
     { id: 'web3', label: 'Web3', visible: hasAdminPermission(role, 'admin.web3.manage'), superOnly: true, help: ADMIN_TAB_HELP.web3 },
     { id: 'audit', label: 'Audit Log', visible: hasAdminPermission(role, 'admin.audit.read'), help: ADMIN_TAB_HELP.audit },
@@ -4202,6 +4209,18 @@ const AdminPortal: React.FC = () => {
         )}
 
         {/* ── WEB3 SETTINGS (experimental) ──────────────────────────────── */}
+        {tab === 'billing' && hasAdminPermission(role, 'admin.billing.manage') && (
+          <Card>
+            <div className="px-5 py-4 border-b border-gray-200">
+              <SectionHeading>Billing controls</SectionHeading>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Subscription and top-up controls are in development.
+              </p>
+            </div>
+            <EmptyState message="User subscription and recharge management will be available here." />
+          </Card>
+        )}
+
         {tab === 'web3' && hasAdminPermission(role, 'admin.web3.manage') && (
           <Web3SettingsPanel />
         )}
