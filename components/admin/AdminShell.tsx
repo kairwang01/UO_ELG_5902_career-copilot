@@ -136,7 +136,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
       </aside>
 
       {/* Main column */}
-      <div className="flex-1 flex h-screen flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex h-screen flex-col min-w-0 overflow-hidden" data-admin-light>
         {/* Top bar */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">

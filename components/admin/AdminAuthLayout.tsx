@@ -48,7 +48,7 @@ const AdminAuthLayout: React.FC<AdminAuthLayoutProps> = ({ title, subtitle, chil
     </aside>
 
     {/* Form column */}
-    <main className="flex-1 flex flex-col min-h-0">
+    <main className="flex-1 flex flex-col min-h-0" data-admin-light>
       <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
         <div className="w-full max-w-[400px]">
           <header className="mb-8">

@@ -135,6 +135,103 @@ html.dark :where(input, textarea, select):-webkit-autofill:focus {
   -webkit-text-fill-color: rgb(243 244 246);
 }
 
+/* Admin light surfaces must stay readable even when html.dark is set. */
+[data-admin-light] {
+  color-scheme: light;
+  color: rgb(17 24 39);
+}
+
+html.dark [data-admin-light] :is(input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea, select),
+[data-admin-light] :is(input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea, select) {
+  background-color: rgb(255 255 255) !important;
+  color: rgb(17 24 39) !important;
+  -webkit-text-fill-color: rgb(17 24 39) !important;
+  caret-color: rgb(17 24 39) !important;
+}
+
+html.dark [data-admin-light] :is(input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea, select):disabled,
+[data-admin-light] :is(input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea, select):disabled {
+  color: rgb(55 65 81) !important;
+  -webkit-text-fill-color: rgb(55 65 81) !important;
+  opacity: 1 !important;
+}
+
+html.dark [data-admin-light] :is(input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea)::placeholder,
+[data-admin-light] :is(input:not([type='button']):not([type='submit']):not([type='reset']):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea)::placeholder {
+  color: rgb(75 85 99) !important;
+  opacity: 1 !important;
+}
+
+html.dark [data-admin-light] :is(input, textarea, select):-webkit-autofill,
+html.dark [data-admin-light] :is(input, textarea, select):-webkit-autofill:hover,
+html.dark [data-admin-light] :is(input, textarea, select):-webkit-autofill:focus,
+[data-admin-light] :is(input, textarea, select):-webkit-autofill,
+[data-admin-light] :is(input, textarea, select):-webkit-autofill:hover,
+[data-admin-light] :is(input, textarea, select):-webkit-autofill:focus {
+  -webkit-text-fill-color: rgb(17 24 39) !important;
+  box-shadow: 0 0 0 1000px rgb(255 255 255) inset !important;
+}
+
+[data-admin-light] :where(.dark\:text-gray-100, .dark\:text-gray-200, .dark\:text-slate-100, .dark\:text-slate-200) {
+  color: rgb(17 24 39);
+}
+
+[data-admin-light] :where(.dark\:text-gray-300, .dark\:text-gray-400, .dark\:text-slate-300, .dark\:text-slate-400, .dark\:text-slate-500) {
+  color: rgb(75 85 99);
+}
+
+[data-admin-light] :where(.text-gray-400, .text-gray-500, .text-slate-400, .text-slate-500) {
+  color: rgb(75 85 99);
+}
+
+[data-admin-light] :where(.text-gray-600, .text-slate-600) {
+  color: rgb(55 65 81);
+}
+
+[data-admin-light] :where(.dark\:bg-gray-800, .dark\:bg-gray-900, .dark\:bg-slate-800, .dark\:bg-slate-900) {
+  background-color: rgb(249 250 251);
+}
+
+[data-admin-light] :where(.dark\:bg-red-950, .dark\:bg-red-950\/30, .dark\:bg-red-900\/20) {
+  background-color: rgb(254 242 242);
+}
+
+[data-admin-light] :where(.dark\:bg-amber-950, .dark\:bg-amber-900) {
+  background-color: rgb(255 251 235);
+}
+
+[data-admin-light] :where(.dark\:bg-emerald-900, .dark\:bg-emerald-900\/20, .dark\:bg-emerald-900\/40) {
+  background-color: rgb(236 253 245);
+}
+
+[data-admin-light] :where(.dark\:bg-blue-900, .dark\:bg-blue-900\/30) {
+  background-color: rgb(239 246 255);
+}
+
+[data-admin-light] :where(.dark\:bg-indigo-900\/30, .dark\:bg-indigo-900\/40, .dark\:bg-indigo-900\/50) {
+  background-color: rgb(238 242 255);
+}
+
+[data-admin-light] :where(.dark\:bg-violet-900, .dark\:bg-violet-900\/30) {
+  background-color: rgb(245 243 255);
+}
+
+[data-admin-light] :where(.dark\:border-gray-600, .dark\:border-gray-700, .dark\:border-slate-600, .dark\:border-slate-700) {
+  border-color: rgb(229 231 235);
+}
+
+[data-admin-light] :where(.dark\:border-red-800, .dark\:border-red-800\/50, .dark\:border-red-800\/60) {
+  border-color: rgb(254 202 202);
+}
+
+[data-admin-light] :where(.dark\:border-amber-800) {
+  border-color: rgb(253 230 138);
+}
+
+[data-admin-light] :where(.dark\:border-emerald-800\/50) {
+  border-color: rgb(167 243 208);
+}
+
 /* Prose styles for AI-generated content (was in index.html <style>) */
 .prose {
   --tw-prose-body: #374151;
