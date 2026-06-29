@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { CircleHelp, RefreshCw } from 'lucide-react';
 import { SITE_ROUTES } from '../../config/site';
 import BrandLogo from '../BrandLogo';
+
+export type AdminNavHelp = {
+  description: string;
+  roles?: Partial<Record<'super' | 'admin' | 'reviewer', string>>;
+};
 
 export interface AdminNavItem {
   id: string;
   label: string;
   superOnly?: boolean;
+  help?: AdminNavHelp;
 }
 
 interface AdminShellProps {
@@ -56,9 +62,26 @@ const AdminShell: React.FC<AdminShellProps> = ({
   onSignOut,
   children,
 }) => {
-  const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? 'Console';
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef<HTMLDivElement | null>(null);
+  const activeItem = tabs.find((t) => t.id === activeTab);
+  const activeLabel = activeItem?.label ?? 'Console';
+  const activeHelp = activeItem?.help;
   const displayName = userName || userEmail || 'Admin';
   const roleLabel = adminRole ? adminRole.replace(/^\w/, (c) => c.toUpperCase()) : 'Admin';
+
+  useEffect(() => {
+    setHelpOpen(false);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!helpOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!helpRef.current?.contains(event.target as Node)) setHelpOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick);
+  }, [helpOpen]);
 
   return (
     <div className="h-screen overflow-hidden bg-[#f0f2f5] flex" data-qa-shell="admin" data-qa-admin-tab={activeTab}>
@@ -117,8 +140,38 @@ const AdminShell: React.FC<AdminShellProps> = ({
         {/* Top bar */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="text-base font-semibold text-gray-900 truncate">{activeLabel}</h1>
+            <div ref={helpRef} className="relative min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate text-base font-semibold text-gray-900">{activeLabel}</h1>
+                {activeHelp && (
+                  <button
+                    type="button"
+                    onClick={() => setHelpOpen((open) => !open)}
+                    className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    aria-label={`${activeLabel} help`}
+                    aria-expanded={helpOpen}
+                  >
+                    <CircleHelp className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+              {helpOpen && activeHelp && (
+                <div className="absolute left-0 top-full z-20 mt-2 w-[min(88vw,24rem)] rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-lg">
+                  <p className="font-medium text-gray-900">{activeHelp.description}</p>
+                  {activeHelp.roles && (
+                    <dl className="mt-3 space-y-2">
+                      {(['super', 'admin', 'reviewer'] as const).map((role) => (
+                        activeHelp.roles?.[role] ? (
+                          <div key={role}>
+                            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{role}</dt>
+                            <dd className="mt-0.5 text-gray-700">{activeHelp.roles[role]}</dd>
+                          </div>
+                        ) : null
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              )}
               {lastRefreshed && (
                 <p className="text-[11px] text-gray-500 mt-0.5 hidden sm:block">
                   Last updated {lastRefreshed.toLocaleTimeString()}

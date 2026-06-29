@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Calendar, Check, ChevronDown, CircleHelp, Ro
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
 import { AdminAccessDenied, AdminVerifying, resolveRoleWithFallback } from './AdminAccessGate';
-import AdminShell from './AdminShell';
+import AdminShell, { type AdminNavHelp } from './AdminShell';
 import {
   ActionBadge,
   AuditDetails,
@@ -128,6 +128,73 @@ const t = (key: string) => STRINGS[key] ?? key;
 
 type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'apiplatform' | 'web3' | 'audit';
 type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
+
+// Keep this in sync with admin page behavior, role permissions, and sidebar changes.
+const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
+  dashboard: {
+    description: 'Overview of platform health, usage, revenue, and model routing status.',
+    roles: {
+      super: 'View dashboard data and change the default model routing.',
+      admin: 'View dashboard data.',
+      reviewer: 'View dashboard data.',
+    },
+  },
+  ai: {
+    description: 'Manage model routing, provider keys, fallback chains, and model testing.',
+    roles: {
+      super: 'View and edit models, provider keys, defaults, and routing settings.',
+    },
+  },
+  prompts: {
+    description: 'Review and maintain tool and handler prompts used by AI features.',
+    roles: {
+      super: 'Edit drafts, publish versions, and roll back prompt history.',
+      admin: 'View prompts and save draft changes.',
+    },
+  },
+  quotas: {
+    description: 'Manage plan quotas, credit grants, run limits, and tool credit costs.',
+    roles: {
+      super: 'View and update quotas.',
+      admin: 'View and update quotas.',
+    },
+  },
+  users: {
+    description: 'Search users, inspect usage, adjust credits, and override subscriptions.',
+    roles: {
+      super: 'View users, adjust credits, override subscriptions, and manage admin access.',
+      admin: 'View users, adjust credits, and override subscriptions.',
+    },
+  },
+  admins: {
+    description: 'Control console access and review product/admin permission matrices.',
+    roles: {
+      super: 'Invite, remove, and update console users; view permission matrices.',
+      admin: 'View reviewer accounts.',
+    },
+  },
+  apiplatform: {
+    description: 'Manage API platform applications, keys, usage, and quotas.',
+    roles: {
+      super: 'View and manage API applications and keys.',
+      admin: 'View API platform usage and applications.',
+    },
+  },
+  web3: {
+    description: 'Feature in development. This page is a placeholder for Web3 runtime settings.',
+    roles: {
+      super: 'Access the in-development Web3 settings surface.',
+    },
+  },
+  audit: {
+    description: 'Read the latest admin action log for operational review.',
+    roles: {
+      super: 'View audit log entries.',
+      admin: 'View audit log entries.',
+      reviewer: 'View audit log entries.',
+    },
+  },
+};
 
 /** Per-key/model test result: key is a provider slug ('gemini'|'kairllm'|'deepseek') or a model id. */
 type TestStatus = { state: 'idle' } | { state: 'running' } | ({ state: 'done' } & TestModelResult);
@@ -1546,19 +1613,19 @@ const AdminPortal: React.FC = () => {
   // Visibility is driven by the central registry (lib/access/permissions.ts);
   // the server re-checks every action regardless of what renders here.
 
-  const allTabs: { id: Tab; label: string; visible: boolean; superOnly?: boolean }[] = [
-    { id: 'dashboard', label: 'Dashboard', visible: hasAdminPermission(role, 'admin.dashboard.read') },
-    { id: 'ai', label: 'Models & Keys', visible: hasAdminPermission(role, 'admin.models.read'), superOnly: true },
-    { id: 'prompts', label: 'Prompts', visible: hasAdminPermission(role, 'admin.prompts.read'), superOnly: true },
-    { id: 'quotas', label: 'Quotas', visible: hasAdminPermission(role, 'admin.quotas.read') },
-    { id: 'users', label: 'Users', visible: hasAdminPermission(role, 'admin.users.read') },
-    { id: 'admins', label: 'Access Control', visible: canReadAdmins, superOnly: true },
-    { id: 'apiplatform', label: 'API Platform', visible: hasAdminPermission(role, 'admin.apiplatform.read'), superOnly: true },
-    { id: 'web3', label: 'Web3', visible: hasAdminPermission(role, 'admin.web3.manage'), superOnly: true },
-    { id: 'audit', label: 'Audit Log', visible: hasAdminPermission(role, 'admin.audit.read') },
+  const allTabs: { id: Tab; label: string; visible: boolean; superOnly?: boolean; help: AdminNavHelp }[] = [
+    { id: 'dashboard', label: 'Dashboard', visible: hasAdminPermission(role, 'admin.dashboard.read'), help: ADMIN_TAB_HELP.dashboard },
+    { id: 'ai', label: 'Models & Keys', visible: hasAdminPermission(role, 'admin.models.read'), superOnly: true, help: ADMIN_TAB_HELP.ai },
+    { id: 'prompts', label: 'Prompts', visible: hasAdminPermission(role, 'admin.prompts.read'), superOnly: true, help: ADMIN_TAB_HELP.prompts },
+    { id: 'quotas', label: 'Quotas', visible: hasAdminPermission(role, 'admin.quotas.read'), help: ADMIN_TAB_HELP.quotas },
+    { id: 'users', label: 'Users', visible: hasAdminPermission(role, 'admin.users.read'), help: ADMIN_TAB_HELP.users },
+    { id: 'admins', label: 'Access Control', visible: canReadAdmins, superOnly: true, help: ADMIN_TAB_HELP.admins },
+    { id: 'apiplatform', label: 'API Platform', visible: hasAdminPermission(role, 'admin.apiplatform.read'), superOnly: true, help: ADMIN_TAB_HELP.apiplatform },
+    { id: 'web3', label: 'Web3', visible: hasAdminPermission(role, 'admin.web3.manage'), superOnly: true, help: ADMIN_TAB_HELP.web3 },
+    { id: 'audit', label: 'Audit Log', visible: hasAdminPermission(role, 'admin.audit.read'), help: ADMIN_TAB_HELP.audit },
   ];
 
-  const tabs = allTabs.filter((t) => t.visible).map(({ id, label, superOnly }) => ({ id, label, superOnly }));
+  const tabs = allTabs.filter((t) => t.visible).map(({ id, label, superOnly, help }) => ({ id, label, superOnly, help }));
 
   const refreshForTab = () => {
     if (tab === 'dashboard') { loadDashboard(); loadModels(); }
