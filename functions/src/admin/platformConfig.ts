@@ -5,6 +5,7 @@
 
 import * as admin from "firebase-admin";
 import {
+  AppConfigDoc,
   LlmConfigDoc,
   ModelEntry,
   ModelsDoc,
@@ -30,6 +31,7 @@ let llmCache: LlmConfigDoc | null = null;
 let quotasCache: QuotasDoc | null = null;
 let modelsCache: ModelsDoc | null = null;
 let promptsCache: Record<string, string> | null = null;
+let appCache: AppConfigDoc | null = null;
 let cacheAt = 0;
 const TTL_MS = 60_000;
 
@@ -40,11 +42,12 @@ export function maskSecret(value: string | undefined): string {
 }
 
 export async function refreshPlatformCaches(): Promise<void> {
-  const [llmSnap, quotasSnap, modelsSnap, promptsSnap] = await Promise.all([
+  const [llmSnap, quotasSnap, modelsSnap, promptsSnap, appSnap] = await Promise.all([
     db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.llm).get(),
     db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.quotas).get(),
     db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.models).get(),
     db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.prompts).get(),
+    db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.app).get(),
   ]);
   llmCache = llmSnap.exists ? (llmSnap.data() as LlmConfigDoc) : {};
   quotasCache = quotasSnap.exists ? (quotasSnap.data() as QuotasDoc) : {};
@@ -52,6 +55,7 @@ export async function refreshPlatformCaches(): Promise<void> {
   promptsCache = promptsSnap.exists
     ? (promptsSnap.data() as Record<string, string>)
     : {};
+  appCache = appSnap.exists ? (appSnap.data() as AppConfigDoc) : {};
   cacheAt = Date.now();
 }
 
@@ -61,6 +65,7 @@ export async function ensurePlatformCaches(): Promise<void> {
     quotasCache &&
     modelsCache &&
     promptsCache !== null &&
+    appCache !== null &&
     Date.now() - cacheAt < TTL_MS
   )
     return;
@@ -82,6 +87,15 @@ export function getGeminiModel(): string {
 export function getGeminiFallbackModel(): string | undefined {
   const model = llmCache?.gemini_fallback_model || process.env.GEMINI_FALLBACK_MODEL;
   return model?.trim() || undefined;
+}
+
+/**
+ * Returns the canonical public base URL from platform_config/app.app_base_url
+ * (trimmed), or undefined when unset. Requires ensurePlatformCaches() to have run.
+ */
+export function getAppBaseUrl(): string | undefined {
+  const value = appCache?.app_base_url;
+  return value?.trim() || undefined;
 }
 
 export function getOpportunityUseGoogleSearch(): boolean {

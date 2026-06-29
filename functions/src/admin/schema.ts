@@ -9,6 +9,7 @@ export const PLATFORM_DOCS = {
   models: "models",
   prompts: "prompts",
   web3: "web3",
+  app: "app",
 } as const;
 
 /**
@@ -176,6 +177,12 @@ export interface AccessDoc {
   admin_uids?: string[];
   /** Sprint-3 RBAC: uid → AdminEntry map. */
   admins?: Record<string, import("../admin/roles").AdminEntry>;
+}
+
+/** Firestore shape of platform_config/app — non-secret app-level config. */
+export interface AppConfigDoc {
+  /** Canonical public base URL, e.g. https://copilot.kairwang.cloud */
+  app_base_url?: string;
 }
 
 export interface UsageEventDoc {
