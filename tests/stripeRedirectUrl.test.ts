@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { resolveAppBaseUrl } from '../functions/src/handlers/stripeBilling';
+import { refreshPlatformCaches } from '../functions/src/admin/platformConfig';
+import * as adminApp from '../functions/node_modules/firebase-admin';
+
+if (!adminApp.apps.length) {
+  process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+  adminApp.initializeApp({ projectId: 'demo-careercopilot' });
+}
+const fsdb = adminApp.firestore();
 
 /**
  * Guards the fix for the reported bug: Stripe checkout/portal links returned the
@@ -64,5 +72,27 @@ describe('resolveAppBaseUrl — checkout/return base URL', () => {
 
   it('falls back to canonical when there is no origin or referer', () => {
     expect(resolveAppBaseUrl(req())).toBe('https://career-copilot-a3168.web.app');
+  });
+});
+
+describe('resolveAppBaseUrl — Firestore canonical (platform_config/app)', () => {
+  afterEach(async () => {
+    await fsdb.collection('platform_config').doc('app').delete().catch(() => {});
+    await refreshPlatformCaches();
+  });
+
+  it('allow-lists the Firestore canonical host so a request from it returns to it', async () => {
+    delete process.env.APP_BASE_URL;
+    process.env.GCLOUD_PROJECT = 'career-copilot-a3168';
+    await fsdb.collection('platform_config').doc('app').set({ app_base_url: 'https://copilot.kairwang.cloud' });
+    await refreshPlatformCaches();
+    expect(resolveAppBaseUrl(req('https://copilot.kairwang.cloud'))).toBe('https://copilot.kairwang.cloud');
+  });
+
+  it('falls back to the Firestore canonical for a non-allow-listed origin', async () => {
+    delete process.env.APP_BASE_URL;
+    await fsdb.collection('platform_config').doc('app').set({ app_base_url: 'https://copilot.kairwang.cloud' });
+    await refreshPlatformCaches();
+    expect(resolveAppBaseUrl(req('https://evil.example.com'))).toBe('https://copilot.kairwang.cloud');
   });
 });

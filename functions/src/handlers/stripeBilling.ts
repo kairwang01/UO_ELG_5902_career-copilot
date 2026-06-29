@@ -16,6 +16,7 @@ import Stripe from "stripe";
 import { requireAuth } from "../middleware/auth";
 import { USERS_COLLECTION, USER_FIELDS, CREDIT_PACK_CREDITS } from "../credits/schema";
 import { applySubscriptionSelection } from "./setSubscriptionStatus";
+import { ensurePlatformCaches, getAppBaseUrl } from "../admin/platformConfig";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -185,7 +186,8 @@ function billingSimulationEnabled(): boolean {
 }
 
 function appBaseUrl(): string {
-  const value = process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || process.env.WEB_APP_URL;
+  const value = getAppBaseUrl()
+    || process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || process.env.WEB_APP_URL;
   if (!value) {
     throw new HttpsError("failed-precondition", "APP_BASE_URL is not configured.");
   }
@@ -200,7 +202,8 @@ function appBaseUrl(): string {
  */
 function allowedRedirectHosts(): Set<string> {
   const hosts = new Set<string>();
-  const canonical = process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || process.env.WEB_APP_URL;
+  const canonical = getAppBaseUrl()
+    || process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || process.env.WEB_APP_URL;
   if (canonical) {
     try { hosts.add(new URL(canonical).host); } catch { /* ignore malformed config */ }
   }
@@ -431,6 +434,7 @@ export function buildCheckoutSessionParams(input: {
 }
 
 export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request): Promise<CheckoutSessionResult> => {
+  await ensurePlatformCaches();
   const uid = requireAuth(request);
   const data = (request.data ?? {}) as CreateCheckoutRequest;
   const useEmbeddedCheckout = data.uiMode === "embedded";
@@ -636,8 +640,10 @@ export async function createBillingPortalSessionImpl(uid: string, baseUrl?: stri
 // touches Stripe, and real mode reads STRIPE_SECRET_KEY via the process.env fallback in
 // getStripe()/secretOrEnv — so it deploys without requiring the secret to exist in
 // Secret Manager. Wire STRIPE_SECRET_KEY into the functions env when going live.
-export const createBillingPortalSessionFunction = onCall((request) =>
-  createBillingPortalSessionImpl(requireAuth(request), resolveAppBaseUrl(request.rawRequest)));
+export const createBillingPortalSessionFunction = onCall(async (request) => {
+  await ensurePlatformCaches();
+  return createBillingPortalSessionImpl(requireAuth(request), resolveAppBaseUrl(request.rawRequest));
+});
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const uid = stringOrNull(session.metadata?.uid) ?? stringOrNull(session.client_reference_id);
