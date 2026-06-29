@@ -18,6 +18,7 @@ import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { classifyTransition, renderInterviewProgressEmail } from "../email/interviewProgress";
+import { ensurePlatformCaches, getAppBaseUrl } from "../admin/platformConfig";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -25,8 +26,13 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// Where the candidate logs in to view "My Applications". Overridable per env.
-const APP_BASE_URL = process.env.APP_BASE_URL || "https://uottawa-5902-demo-copilot.kairwang.cloud";
+// Where the candidate logs in to view "My Applications". Resolved from Firestore
+// platform_config/app at runtime, with env var and hardcoded fallback.
+function resolveAppBaseUrlForEmail(): string {
+  return (getAppBaseUrl()
+    || process.env.APP_BASE_URL
+    || "https://copilot.kairwang.cloud").replace(/\/$/, "");
+}
 
 // Firestore doc ids can't contain "/"; keep them tidy and deterministic.
 const safeId = (s: string): string => s.replace(/[^A-Za-z0-9_-]/g, "_");
@@ -43,6 +49,7 @@ export const onApplicationStatusChangeFunction = onDocumentUpdated(
   "job_applications/{appId}",
   async (event) => {
     try {
+      await ensurePlatformCaches();
       const before = event.data?.before?.data();
       const after = event.data?.after?.data();
 
@@ -127,7 +134,7 @@ export const onApplicationStatusChangeFunction = onDocumentUpdated(
             location,
             status,
             appId,
-            baseUrl: APP_BASE_URL,
+            baseUrl: resolveAppBaseUrlForEmail(),
           });
           // Idempotent enqueue: one email per (application, status) even on retries.
           await db
