@@ -110,7 +110,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
                 aria-current={active ? 'page' : undefined}
               >
                 <span className="truncate">{tb.label}</span>
-                {tb.superOnly && (
+                {adminRole === 'super' && tb.superOnly && (
                   <span className="shrink-0 rounded bg-amber-300/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100 ring-1 ring-amber-200/30">
                     Super
                   </span>
