@@ -110,19 +110,20 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
           await startSubscriptionCheckout(pendingPlanKey);
           return;
         }
-        if (!mountedRef.current) return;
-
         if (profileError) {
-          setError(`${t('auth_profile_setup_failed')} ${profileError.message}`);
+          if (mountedRef.current) setError(`${t('auth_profile_setup_failed')} ${profileError.message}`);
         } else {
           // (pending_payment is handled above, before the mount guard.)
           // Send a verification email (non-blocking, production-readiness step).
+          // Deliberately NOT gated on mountedRef — the auth listener unmounts this
+          // modal the instant the account is created, so gating this on mount state
+          // was silently skipping every verification email.
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
               await sendEmailVerification(firebaseAuth.currentUser);
             }
-          } catch {
-            // non-fatal — verification can be re-triggered later
+          } catch (err) {
+            console.warn('sendEmailVerification failed:', err);
           }
           // The account was successfully created. Swallow any transient error from
           // the post-signup callback (e.g. refreshProfile network failure) so the

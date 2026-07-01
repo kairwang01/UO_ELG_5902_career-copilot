@@ -263,10 +263,8 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           await startSubscriptionCheckout(planKeyForServer);
           return;
         }
-        if (!mountedRef.current) return;
-
         if (profileError) {
-          setError(t('auth_profile_created_setup_failed').replace('{error}', profileError.message));
+          if (mountedRef.current) setError(t('auth_profile_created_setup_failed').replace('{error}', profileError.message));
         } else {
           // (pending_payment is handled above, before the mount guard.)
           // Best-effort: set Firebase Auth displayName (non-fatal if it fails).
@@ -279,12 +277,15 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           }
           // Send a verification email. Non-blocking: the account is usable now,
           // but confirming ownership is the expected production-readiness step.
+          // Deliberately NOT gated on mountedRef — the auth listener unmounts this
+          // modal the instant the account is created (see note above), so gating
+          // this on mount state was silently skipping every verification email.
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
               await sendEmailVerification(firebaseAuth.currentUser);
             }
-          } catch {
-            // non-fatal — the user can re-trigger verification later
+          } catch (err) {
+            console.warn('sendEmailVerification failed:', err);
           }
           // (markOnboardingPending now runs above, before the unmount-prone awaits.)
           // The auth listener navigates away (unmounting this modal) the instant
