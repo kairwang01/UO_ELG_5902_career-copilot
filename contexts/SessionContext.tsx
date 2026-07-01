@@ -20,7 +20,7 @@ export interface SiteSessionState {
    */
   sessionResolved: boolean;
   isAdmin: boolean;
-  /** Employer role OR a business subscription plan. */
+  /** Employer product role. */
   isBusiness: boolean;
 }
 

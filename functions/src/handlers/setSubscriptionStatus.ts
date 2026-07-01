@@ -45,10 +45,12 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 /** Candidate subscription plans (mirror of config.ts ALL_PLANS keys). */
-const CANDIDATE_PLANS = new Set(["free", "essentials", "accelerator", "executive"]);
+export const CANDIDATE_PLANS = new Set(["free", "essentials", "accelerator", "executive"]);
 
 /** Business / employer plans (mirror of businessPlans.ts + legacy add-ons). */
-const BUSINESS_PLANS = new Set(["free", "starter", "growth", "pro", "single_post", "job_pack"]);
+export const BUSINESS_PLANS = new Set(["free", "starter", "growth", "pro", "single_post", "job_pack"]);
+
+export const ALL_SUBSCRIPTION_PLANS = new Set([...CANDIDATE_PLANS, ...BUSINESS_PLANS]);
 
 const INITIAL_CREDITS = 150;
 
@@ -74,6 +76,18 @@ function cleanName(raw: unknown, maxLen: number): string | null {
   return trimmed.slice(0, maxLen);
 }
 
+function timestampMillis(value: unknown): number | null {
+  if (value && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
 /**
  * Normalizes a raw planKey into a bare plan name, stripping the
  * "pending_" / "pending_biz_" routing prefixes the frontend adds.
@@ -89,6 +103,21 @@ function normalizePlanKey(raw: string): { plan: string; audience: "candidate" | 
     return { plan: raw, audience: "business" };
   }
   return { plan: raw, audience: "candidate" };
+}
+
+export function isPlanAllowedForRole(role: string | undefined, plan: string): boolean {
+  if (role === "candidate") return CANDIDATE_PLANS.has(plan);
+  if (role === "employer") return BUSINESS_PLANS.has(plan);
+  if (role === "agency") return plan === "free";
+  return false;
+}
+
+export function assertPlanAllowedForRole(role: string | undefined, plan: string): void {
+  if (isPlanAllowedForRole(role, plan)) return;
+  throw new HttpsError(
+    "failed-precondition",
+    `The ${plan} subscription tier is not available for ${role ?? "unknown"} accounts. Use the account's original product role.`
+  );
 }
 
 /** Server-only entitlement/intent doc (same collection grantMonthlyCredits gates on).
@@ -144,10 +173,7 @@ export async function applySubscriptionSelection(
 
   const { plan, audience } = normalizePlanKey(rawKey);
 
-  if (
-    (audience === "candidate" && !CANDIDATE_PLANS.has(plan)) ||
-    (audience === "business" && !BUSINESS_PLANS.has(plan))
-  ) {
+  if ((audience === "candidate" && !CANDIDATE_PLANS.has(plan)) || !ALL_SUBSCRIPTION_PLANS.has(plan)) {
     throw new HttpsError("invalid-argument", `Unknown plan key: ${rawKey}`);
   }
 
@@ -177,6 +203,35 @@ export async function applySubscriptionSelection(
     const renewalSnap = await tx.get(renewalRef);
     const billingSnap = isPrivileged ? await tx.get(billingRef) : null;
     const now = FieldValue.serverTimestamp();
+    const existingRole = snap.exists ? (snap.get(USER_FIELDS.role) ?? "candidate") : undefined;
+    const createdAtMs = snap.exists ? timestampMillis(snap.get(USER_FIELDS.createdAt)) : null;
+    const isFreshDefaultCandidateDoc =
+      snap.exists &&
+      existingRole === "candidate" &&
+      Boolean(companyName) &&
+      (snap.get(USER_FIELDS.subscriptionStatus) ?? "free") === "free" &&
+      createdAtMs !== null &&
+      Date.now() - createdAtMs < 2 * 60 * 1000 &&
+      !snap.get("resume_text") &&
+      !snap.get(USER_FIELDS.companyName);
+    const signupBusinessRole =
+      audience === "business" &&
+      (!snap.exists || isFreshDefaultCandidateDoc);
+    const resolvedRole = existingRole ?? (audience === "business" ? "employer" : "candidate");
+
+    if (audience === "business" && existingRole === "candidate" && !signupBusinessRole) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Candidate accounts cannot be switched to employer plans. Register a separate employer account."
+      );
+    }
+    if (audience === "candidate" && plan !== "free" && existingRole === "employer") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Employer accounts cannot be switched to candidate paid plans. Register a separate candidate account."
+      );
+    }
+    assertPlanAllowedForRole(signupBusinessRole ? "employer" : resolvedRole, plan);
 
     const entitled = !!(billingSnap?.exists && billingSnap.get("active") === true);
 
@@ -196,7 +251,7 @@ export async function applySubscriptionSelection(
       if (!snap.exists) {
         const doc: Record<string, unknown> = {
           [USER_FIELDS.credits]: INITIAL_CREDITS,
-          [USER_FIELDS.role]: "candidate",
+          [USER_FIELDS.role]: resolvedRole,
           [USER_FIELDS.subscriptionStatus]: "free",
           [USER_FIELDS.createdAt]: now,
           [USER_FIELDS.updatedAt]: now,
@@ -206,6 +261,7 @@ export async function applySubscriptionSelection(
         tx.set(userRef, doc, { merge: true });
       } else {
         const patch: Record<string, unknown> = { [USER_FIELDS.updatedAt]: now };
+        if (signupBusinessRole) patch[USER_FIELDS.role] = "employer";
         if (fullName && !snap.get(USER_FIELDS.fullName)) patch[USER_FIELDS.fullName] = fullName;
         if (companyName && !snap.get(USER_FIELDS.companyName)) patch[USER_FIELDS.companyName] = companyName;
         tx.set(userRef, patch, { merge: true });
@@ -214,7 +270,7 @@ export async function applySubscriptionSelection(
         status: "pending_payment",
         subscription_status: snap.exists ? (snap.get(USER_FIELDS.subscriptionStatus) ?? "free") : "free",
         credits: snap.exists ? (Number(snap.get(USER_FIELDS.credits)) || 0) : INITIAL_CREDITS,
-        role: snap.exists ? (snap.get(USER_FIELDS.role) ?? "candidate") : "candidate",
+        role: signupBusinessRole ? "employer" : resolvedRole,
         pending_plan: plan,
       };
     }
@@ -279,7 +335,7 @@ export async function applySubscriptionSelection(
     // and a fresh grant is persisted in the same atomic write.
     patch[USER_FIELDS.credits] = newCredits;
     if (snap.get(USER_FIELDS.createdAt) == null) patch[USER_FIELDS.createdAt] = now;
-    if (audience === "business") patch[USER_FIELDS.role] = "employer";
+    if (signupBusinessRole) patch[USER_FIELDS.role] = "employer";
     // Backfill name/org from signup only when the doc doesn't already carry one,
     // so a later plan change can never wipe a name the user has since edited.
     if (fullName && !snap.get(USER_FIELDS.fullName)) patch[USER_FIELDS.fullName] = fullName;
@@ -294,7 +350,7 @@ export async function applySubscriptionSelection(
       status: "active",
       subscription_status: plan,
       credits: newCredits,
-      role: audience === "business" ? "employer" : snap.get(USER_FIELDS.role),
+      role: signupBusinessRole ? "employer" : resolvedRole,
       grant_source: grantSource,
     };
   });

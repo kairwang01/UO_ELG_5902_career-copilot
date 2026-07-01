@@ -67,8 +67,8 @@ describe('Stripe entitlements activate billing-gated plans', () => {
     });
   });
 
-  it('activates a business plan and promotes the user to employer', async () => {
-    await seedUser('emp-stripe');
+  it('activates a business plan for an employer account', async () => {
+    await seedUser('emp-stripe', { role: 'employer' });
 
     const res = await activateStripeEntitlement({
       uid: 'emp-stripe',
@@ -90,8 +90,26 @@ describe('Stripe entitlements activate billing-gated plans', () => {
     expect(user.credits).toBe(20100);
   });
 
+  it('rejects business plan activation for candidate accounts', async () => {
+    await seedUser('cand-business-stripe');
+
+    await expect(activateStripeEntitlement({
+      uid: 'cand-business-stripe',
+      plan: 'pro',
+      audience: 'business',
+      stripeCustomerId: 'cus_employer',
+      stripeSubscriptionId: 'sub_employer',
+      checkoutSessionId: 'cs_employer',
+      checkoutMode: 'subscription',
+    })).rejects.toThrow(/candidate accounts cannot buy employer plans/i);
+
+    const user = (await db.collection('users').doc('cand-business-stripe').get()).data()!;
+    expect(user.role).toBe('candidate');
+    expect(user.subscription_status).toBe('free');
+  });
+
   it('deactivates a canceled subscription without demoting an employer out of the portal role', async () => {
-    await seedUser('cancel-stripe');
+    await seedUser('cancel-stripe', { role: 'employer' });
     await activateStripeEntitlement({
       uid: 'cancel-stripe',
       plan: 'starter',

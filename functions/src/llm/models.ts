@@ -195,22 +195,14 @@ export function tierFromSubscription(status: string | undefined): Tier {
 
 /**
  * Returns true if the user qualifies for business-tier features (BYOA custom
- * provider). Business = role employer OR business subscription plan.
+ * provider). Product role is authoritative; stale business tiers on candidate
+ * accounts must not unlock employer-only features.
  */
 export function isBusinessUser(
   role: string | undefined,
   subscriptionStatus: string | undefined
 ): boolean {
-  if (role === "employer") return true;
-  if (
-    subscriptionStatus === "starter" ||
-    subscriptionStatus === "growth" ||
-    subscriptionStatus === "pro" ||
-    subscriptionStatus === "single_post" ||
-    subscriptionStatus === "job_pack"
-  )
-    return true;
-  return false;
+  return role === "employer";
 }
 
 /**
@@ -768,7 +760,7 @@ export interface CustomProviderConfig {
  * Disabled models are treated as non-existent.
  *
  * Business custom provider flow:
- *   - User must be business (role employer OR biz subscription).
+ *   - User must be business (role employer).
  *   - User must request model id "custom".
  *   - users/{uid}.custom_provider must have { base_url, api_key, model }.
  *   - Falls back to gemini if any of those conditions are unmet.

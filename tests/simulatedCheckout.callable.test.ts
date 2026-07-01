@@ -23,6 +23,12 @@ async function seedUser(uid: string) {
   });
 }
 
+async function seedEmployer(uid: string) {
+  await db.collection('users').doc(uid).set({
+    role: 'employer', subscription_status: 'free', credits: 100, created_at: '2026-01-01',
+  });
+}
+
 beforeEach(clearFirestore);
 afterEach(() => { delete process.env.BILLING_SIMULATION; });
 
@@ -36,7 +42,7 @@ describe('confirmSimulatedCheckout', () => {
 
   it('activates a business plan via the real entitlement path when enabled', async () => {
     process.env.BILLING_SIMULATION = 'true';
-    await seedUser('emp2');
+    await seedEmployer('emp2');
 
     const res = await confirmSimulatedCheckoutImpl('emp2', { planKey: 'pending_biz_starter' });
     expect(res.status).toBe('active');
@@ -54,6 +60,13 @@ describe('confirmSimulatedCheckout', () => {
     expect(user.role).toBe('employer');
     expect(user.subscription_status).toBe('starter');
     expect(user.credits).toBe(100 + 3000); // starter monthly grant
+  });
+
+  it('does not activate a business plan for a candidate account', async () => {
+    process.env.BILLING_SIMULATION = 'true';
+    await seedUser('cand-business');
+    await expect(confirmSimulatedCheckoutImpl('cand-business', { planKey: 'pending_biz_starter' }))
+      .rejects.toThrow(/candidate accounts cannot buy employer plans/i);
   });
 
   it('activates a paid candidate plan when enabled', async () => {

@@ -10,9 +10,9 @@ describe('business portal access', () => {
     expect(hasBusinessPortalAccess('employer', 'free')).toBe(true);
   });
 
-  it('allows candidate-role accounts with a business subscription', () => {
-    expect(hasBusinessPortalAccess('candidate', 'starter')).toBe(true);
-    expect(hasBusinessPortalAccess('candidate', 'growth')).toBe(true);
+  it('does not allow candidate-role accounts with a stale business subscription', () => {
+    expect(hasBusinessPortalAccess('candidate', 'starter')).toBe(false);
+    expect(hasBusinessPortalAccess('candidate', 'growth')).toBe(false);
   });
 
   it('does not treat an ordinary free candidate as a business account', () => {

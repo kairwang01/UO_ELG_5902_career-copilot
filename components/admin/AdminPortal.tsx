@@ -45,7 +45,6 @@ import {
   adminUpdateQuotas,
   adminUpsertModel,
   adminWhoAmI,
-  SUBSCRIPTION_PLANS,
   type AdminDashboard,
   type AdminUserFilters,
   type AdminPlanKey,
@@ -62,6 +61,7 @@ import {
 } from '../../services/adminClient';
 import { TOOL_CREDIT_COSTS } from '../../config/credits';
 import { hasAdminPermission, type AdminRole } from '../../lib/access/permissions';
+import { subscriptionPlansForRole } from '../../lib/access/subscriptionPlans';
 import { PermissionMatrix, ProductRoleOverview } from './AccessControlSections';
 import { KeyPoolHealthSection } from './KeyPoolHealthSection';
 import { ApiPlatformPanel } from './ApiPlatformPanel';
@@ -160,10 +160,10 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   users: {
-    description: 'Search users, inspect usage, adjust credits, and override subscriptions.',
+    description: 'Search users, inspect usage, adjust credits, and override subscriptions within each user product role.',
     roles: {
-      super: 'View users, adjust credits, override subscriptions, and manage admin access.',
-      admin: 'View users, adjust credits, and override subscriptions.',
+      super: 'View users, adjust credits, override role-compatible subscriptions, and manage admin access.',
+      admin: 'View users, adjust credits, and override role-compatible subscriptions.',
     },
   },
   admins: {
@@ -1279,8 +1279,10 @@ const AdminPortal: React.FC = () => {
       const report = await adminGetUserReport(uid);
       if (!mountedRef.current || selectedUidRef.current !== uid) return; // admin switched users mid-fetch
       setUserReport(report);
-      const profile = (report as { profile?: { subscription_status?: string } }).profile;
-      setSubStatus(profile?.subscription_status ?? '');
+      const profile = (report as { profile?: { role?: string | null; subscription_status?: string } }).profile;
+      const allowedPlans = subscriptionPlansForRole(profile?.role);
+      const currentPlan = profile?.subscription_status ?? '';
+      setSubStatus(allowedPlans.includes(currentPlan) ? currentPlan : '');
     } catch (e) {
       if (!mountedRef.current || selectedUidRef.current !== uid) return;
       setError(e instanceof Error ? e.message : 'Failed to load user report');
@@ -1330,6 +1332,8 @@ const AdminPortal: React.FC = () => {
   };
 
   const selectedIsAdmin = !!selectedUid && admins.some((a) => a.uid === selectedUid);
+  const selectedProductRole = ((userReport as { profile?: { role?: string | null } } | null)?.profile?.role) ?? null;
+  const selectedSubscriptionPlans = subscriptionPlansForRole(selectedProductRole);
 
   const toggleSelectedAdmin = async () => {
     if (!selectedUid) return;
@@ -3923,7 +3927,7 @@ const AdminPortal: React.FC = () => {
                         label="Plan"
                         options={[
                           { value: '', label: 'Select plan' },
-                          ...SUBSCRIPTION_PLANS.map((p) => ({ value: p, label: p })),
+                          ...selectedSubscriptionPlans.map((p) => ({ value: p, label: PLAN_LABELS[p as AdminPlanKey] ?? p })),
                         ]}
                         value={subStatus}
                         onChange={setSubStatus}
@@ -3939,7 +3943,7 @@ const AdminPortal: React.FC = () => {
                       <option value="" disabled>
                         Select plan…
                       </option>
-                      {SUBSCRIPTION_PLANS.map((p) => (
+                      {selectedSubscriptionPlans.map((p) => (
                         <option key={p} value={p}>
                           {p}
                         </option>
@@ -3950,11 +3954,15 @@ const AdminPortal: React.FC = () => {
                     <button
                       type="button"
                       onClick={applySubscription}
+                      disabled={!subStatus}
                       className="bg-blue-700 hover:bg-blue-800 px-3 py-2 rounded-md text-sm font-medium text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
                     >
                       Set
                     </button>
                   </div>
+                  <p className="text-[11px] leading-5 text-gray-500">
+                    Subscription tier changes stay within the user's product role{selectedProductRole ? ` (${selectedProductRole})` : ''}; use a separate account for another product role.
+                  </p>
                 </div>
 
                 {/* Admin toggle */}

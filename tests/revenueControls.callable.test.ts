@@ -12,6 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as admin from '../functions/node_modules/firebase-admin';
 import { applySubscriptionSelection } from '../functions/src/handlers/setSubscriptionStatus';
+import { adminSetSubscriptionImpl } from '../functions/src/handlers/adminPortal';
 import { meterToolRun, recordFreeToolRun } from '../functions/src/credits/deductCredits';
 import { FREE_TIER_DAILY_RUN_LIMIT, getUserTodayUsage } from '../functions/src/admin/usageLog';
 import { refreshPlatformCaches, getActiveJobLimit } from '../functions/src/admin/platformConfig';
@@ -35,17 +36,27 @@ beforeEach(clearFirestore);
 afterEach(() => { delete process.env.ALLOW_DEMO_GRANTS; });
 
 describe('setSubscriptionStatus paid-entitlement gate', () => {
+  it('blocks candidates from selecting a business plan', async () => {
+    await seedUser('cand-business');
+    await expect(applySubscriptionSelection('cand-business', 'pending_biz_pro'))
+      .rejects.toThrow(/candidate accounts cannot be switched/i);
+
+    const user = (await db.collection('users').doc('cand-business').get()).data()!;
+    expect(user.role).toBe('candidate');
+    expect(user.subscription_status).toBe('free');
+  });
+
   it('blocks zero-payment activation of a BUSINESS plan → pending, no role/credit change', async () => {
-    await seedUser('emp1');
+    await seedUser('emp1', { role: 'employer' });
     const res = await applySubscriptionSelection('emp1', 'pending_biz_pro');
 
     expect(res.status).toBe('pending_payment');
-    expect(res.role).toBe('candidate');            // NOT promoted to employer
+    expect(res.role).toBe('employer');
     expect(res.subscription_status).toBe('free');  // NOT pro
     expect(res.pending_plan).toBe('pro');
 
     const user = (await db.collection('users').doc('emp1').get()).data()!;
-    expect(user.role).toBe('candidate');
+    expect(user.role).toBe('employer');
     expect(user.subscription_status).toBe('free');
     expect(user.credits).toBe(100);                // no paid credits granted
 
@@ -65,7 +76,7 @@ describe('setSubscriptionStatus paid-entitlement gate', () => {
   });
 
   it('activates a business plan WITH a real billing entitlement (grant_source paid)', async () => {
-    await seedUser('emp2');
+    await seedUser('emp2', { role: 'employer' });
     await db.collection('billing').doc('emp2').set({ active: true });
 
     const res = await applySubscriptionSelection('emp2', 'pending_biz_pro');
@@ -81,7 +92,7 @@ describe('setSubscriptionStatus paid-entitlement gate', () => {
 
   it('demo switch activates but tags grant_source demo_preview and never writes billing.active', async () => {
     process.env.ALLOW_DEMO_GRANTS = 'true';
-    await seedUser('emp3');
+    await seedUser('emp3', { role: 'employer' });
 
     const res = await applySubscriptionSelection('emp3', 'pending_biz_starter');
     expect(res.status).toBe('active');
@@ -112,8 +123,55 @@ describe('setSubscriptionStatus paid-entitlement gate', () => {
     expect(billing.exists).toBe(false);
   });
 
+  it('blocks an existing candidate from the free business entry', async () => {
+    await seedUser('cand-free-biz');
+
+    await expect(applySubscriptionSelection('cand-free-biz', 'pending_biz_free'))
+      .rejects.toThrow(/candidate accounts cannot be switched/i);
+
+    const user = (await db.collection('users').doc('cand-free-biz').get()).data()!;
+    expect(user.role).toBe('candidate');
+    expect(user.subscription_status).toBe('free');
+  });
+
+  it('blocks an existing candidate from business signup even when companyName is sent', async () => {
+    await seedUser('cand-business-signup');
+
+    await expect(applySubscriptionSelection('cand-business-signup', 'pending_biz_starter', {
+      fullName: 'Candidate User',
+      companyName: 'Acme',
+    })).rejects.toThrow(/candidate accounts cannot be switched/i);
+
+    const user = (await db.collection('users').doc('cand-business-signup').get()).data()!;
+    expect(user.role).toBe('candidate');
+    expect(user.subscription_status).toBe('free');
+    expect(user.company_name).toBeUndefined();
+  });
+
+  it('can initialize a new business signup as an employer account', async () => {
+    const res = await applySubscriptionSelection('new-business', 'pending_biz_starter', {
+      fullName: 'Biz Owner',
+      companyName: 'Acme',
+    });
+
+    expect(res.status).toBe('pending_payment');
+    expect(res.role).toBe('employer');
+    expect(res.subscription_status).toBe('free');
+
+    const user = (await db.collection('users').doc('new-business').get()).data()!;
+    expect(user.role).toBe('employer');
+    expect(user.company_name).toBe('Acme');
+    expect(user.subscription_status).toBe('free');
+  });
+
+  it('blocks employer accounts from selecting candidate paid plans', async () => {
+    await seedUser('emp-candidate-plan', { role: 'employer' });
+    await expect(applySubscriptionSelection('emp-candidate-plan', 'pending_accelerator'))
+      .rejects.toThrow(/employer accounts cannot be switched/i);
+  });
+
   it('grants the monthly allotment at most once per month even when entitled (high-water mark)', async () => {
-    await seedUser('emp4');
+    await seedUser('emp4', { role: 'employer' });
     await db.collection('billing').doc('emp4').set({ active: true });
 
     await applySubscriptionSelection('emp4', 'pending_biz_starter'); // 3000
@@ -123,6 +181,47 @@ describe('setSubscriptionStatus paid-entitlement gate', () => {
     await applySubscriptionSelection('emp4', 'pending_biz_starter'); // same month → no double grant
     const after2 = (await db.collection('users').doc('emp4').get()).data()!;
     expect(after2.credits).toBe(100 + 3000);
+  });
+});
+
+describe('adminSetSubscription role-compatible overrides', () => {
+  it('allows candidates to receive candidate tiers', async () => {
+    await seedUser('admin-cand');
+    await adminSetSubscriptionImpl('admin-uid', 'admin-cand', 'accelerator');
+
+    const user = (await db.collection('users').doc('admin-cand').get()).data()!;
+    expect(user.role).toBe('candidate');
+    expect(user.subscription_status).toBe('accelerator');
+  });
+
+  it('rejects employer tiers for candidate accounts', async () => {
+    await seedUser('admin-cand-business');
+    await expect(adminSetSubscriptionImpl('admin-uid', 'admin-cand-business', 'starter'))
+      .rejects.toThrow(/not available for candidate/i);
+
+    const user = (await db.collection('users').doc('admin-cand-business').get()).data()!;
+    expect(user.role).toBe('candidate');
+    expect(user.subscription_status).toBe('free');
+  });
+
+  it('allows employer accounts to receive employer tiers and free', async () => {
+    await seedUser('admin-emp', { role: 'employer' });
+    await adminSetSubscriptionImpl('admin-uid', 'admin-emp', 'starter');
+    await adminSetSubscriptionImpl('admin-uid', 'admin-emp', 'free');
+
+    const user = (await db.collection('users').doc('admin-emp').get()).data()!;
+    expect(user.role).toBe('employer');
+    expect(user.subscription_status).toBe('free');
+  });
+
+  it('rejects candidate paid tiers for employer accounts', async () => {
+    await seedUser('admin-emp-candidate', { role: 'employer' });
+    await expect(adminSetSubscriptionImpl('admin-uid', 'admin-emp-candidate', 'executive'))
+      .rejects.toThrow(/not available for employer/i);
+
+    const user = (await db.collection('users').doc('admin-emp-candidate').get()).data()!;
+    expect(user.role).toBe('employer');
+    expect(user.subscription_status).toBe('free');
   });
 });
 

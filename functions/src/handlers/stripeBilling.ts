@@ -15,7 +15,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { requireAuth } from "../middleware/auth";
 import { USERS_COLLECTION, USER_FIELDS, CREDIT_PACK_CREDITS } from "../credits/schema";
-import { applySubscriptionSelection } from "./setSubscriptionStatus";
+import { applySubscriptionSelection, assertPlanAllowedForRole } from "./setSubscriptionStatus";
 import { ensurePlatformCaches, getAppBaseUrl } from "../admin/platformConfig";
 
 if (!admin.apps.length) {
@@ -292,8 +292,22 @@ function assertEntitlementInput(input: StripeEntitlementInput): CheckoutPlan {
   return { plan: input.plan, ...expected };
 }
 
+async function assertCheckoutAllowedForAccount(uid: string, plan: CheckoutPlan): Promise<void> {
+  const snap = await db.collection(USERS_COLLECTION).doc(uid).get();
+  if (!snap.exists) return;
+  const role = (snap.get(USER_FIELDS.role) as string | undefined) ?? "candidate";
+  if (plan.audience === "business" && role !== "employer") {
+    throw new HttpsError(
+      "failed-precondition",
+      "Candidate accounts cannot buy employer plans. Register a separate employer account."
+    );
+  }
+  assertPlanAllowedForRole(role, plan.plan);
+}
+
 export async function activateStripeEntitlement(input: StripeEntitlementInput) {
   const plan = assertEntitlementInput(input);
+  await assertCheckoutAllowedForAccount(input.uid, plan);
   const now = FieldValue.serverTimestamp();
   await db.collection(BILLING_COLLECTION).doc(input.uid).set(
     {
@@ -490,6 +504,7 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
   }
 
   const plan = normalizeCheckoutPlan(data.planKey);
+  await assertCheckoutAllowedForAccount(uid, plan);
 
   // Simulation mode: return an in-app fake-checkout URL with the same { url, id }
   // shape the client already consumes (window.location.assign). No Stripe keys or

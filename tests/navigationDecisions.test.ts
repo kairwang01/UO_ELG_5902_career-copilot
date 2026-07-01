@@ -73,7 +73,7 @@ describe('navigation decisions', () => {
     })).toBe('employer');
   });
 
-  it('treats business subscriptions as business access even when role is stale candidate', () => {
+  it('does not treat stale candidate business subscriptions as employer portal access', () => {
     expect(decideWorkspaceShell({
       entry: 'portal',
       hasSession: true,
@@ -83,7 +83,7 @@ describe('navigation decisions', () => {
       currentView: 'home',
       role: 'candidate',
       subscriptionStatus: 'starter',
-    })).toBe('employer');
+    })).toBe('embedded');
   });
 
   it('keeps unpaid pending business plans on the embedded portal page, not the employer shell', () => {

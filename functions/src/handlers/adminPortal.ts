@@ -52,10 +52,10 @@ import {
 } from "../admin/platformConfig";
 import { getTodayUsageTotals, logAdminAction, logCreditLedger } from "../admin/usageLog";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
-
-/** Plan keys an admin may assign (mirror of setSubscriptionStatus / config.ts). */
-const CANDIDATE_PLANS = new Set(["free", "essentials", "accelerator", "executive"]);
-const BUSINESS_PLANS = new Set(["starter", "growth", "pro", "single_post", "job_pack"]);
+import {
+  ALL_SUBSCRIPTION_PLANS,
+  assertPlanAllowedForRole,
+} from "./setSubscriptionStatus";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -764,17 +764,12 @@ interface SetSubscriptionRequest {
   subscription_status: string;
 }
 
-/** Set a user's subscription tier (admin override). */
-export const adminSetSubscriptionFunction = onCall({ invoker: "public" }, async (request) => {
-  const { uid: adminUid } = await requireRole(request, "admin");
-  const rawData = (request.data ?? {}) as SetSubscriptionRequest;
-  // A6: explicit string check
-  const uid = assertUid(rawData.uid);
-  if (typeof rawData.subscription_status !== "string") {
+export async function adminSetSubscriptionImpl(adminUid: string, uid: string, subscriptionStatus: unknown) {
+  if (typeof subscriptionStatus !== "string") {
     throw new HttpsError("invalid-argument", "subscription_status must be a string.");
   }
-  const plan = rawData.subscription_status.trim();
-  if (!CANDIDATE_PLANS.has(plan) && !BUSINESS_PLANS.has(plan)) {
+  const plan = subscriptionStatus.trim();
+  if (!ALL_SUBSCRIPTION_PLANS.has(plan)) {
     throw new HttpsError("invalid-argument", `Unknown plan: ${plan}`);
   }
 
@@ -782,12 +777,13 @@ export const adminSetSubscriptionFunction = onCall({ invoker: "public" }, async 
   const snap = await userRef.get();
   if (!snap.exists) throw new HttpsError("not-found", "User not found.");
   const previous = snap.get(USER_FIELDS.subscriptionStatus) ?? null;
+  const role = snap.get(USER_FIELDS.role) ?? "candidate";
+  assertPlanAllowedForRole(role, plan);
 
   const patch: Record<string, unknown> = {
     [USER_FIELDS.subscriptionStatus]: plan,
     [USER_FIELDS.updatedAt]: new Date().toISOString(),
   };
-  if (BUSINESS_PLANS.has(plan)) patch[USER_FIELDS.role] = "employer";
 
   await userRef.update(patch);
   await logAdminAction({
@@ -798,6 +794,15 @@ export const adminSetSubscriptionFunction = onCall({ invoker: "public" }, async 
   });
 
   return { uid, subscription_status: plan };
+}
+
+/** Set a user's subscription tier (admin override). */
+export const adminSetSubscriptionFunction = onCall({ invoker: "public" }, async (request) => {
+  const { uid: adminUid } = await requireRole(request, "admin");
+  const rawData = (request.data ?? {}) as SetSubscriptionRequest;
+  // A6: explicit string check
+  const uid = assertUid(rawData.uid);
+  return adminSetSubscriptionImpl(adminUid, uid, rawData.subscription_status);
 });
 
 // ---------------------------------------------------------------------------
