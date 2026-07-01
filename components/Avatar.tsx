@@ -24,6 +24,7 @@ interface AvatarProps {
   timeoutMessage?: string;
   uploadControlClassName?: string;
   uploadIconClassName?: string;
+  showUploadLabel?: boolean;
 }
 
 const Avatar: React.FC<AvatarProps> = ({
@@ -39,6 +40,7 @@ const Avatar: React.FC<AvatarProps> = ({
   timeoutMessage = 'Upload timed out. Check your connection and try again.',
   uploadControlClassName = 'p-2',
   uploadIconClassName = 'h-5 w-5',
+  showUploadLabel = true,
 }) => {
   const { addToast } = useToast();
   const inputId = useId();
@@ -142,7 +144,7 @@ const Avatar: React.FC<AvatarProps> = ({
           </span>
         )}
       </span>
-      {onUpload && (uploading || uploadLabel) && (
+      {showUploadLabel && onUpload && (uploading || uploadLabel) && (
         <p className="text-sm text-gray-500">{uploading ? uploadingLabel : uploadLabel}</p>
       )}
     </span>

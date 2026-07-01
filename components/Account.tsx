@@ -1176,16 +1176,19 @@ const Account: React.FC<AccountProps> = ({
     </ViewportAwareDialog>
   ) : null;
 
+  const labelClass = 'block text-xs font-semibold text-gray-600 dark:text-slate-300';
+  const inputClass = 'mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100';
+
   return (
-    <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 p-8 rounded-lg shadow-md border border-gray-200 dark:border-slate-700 animate-fade-in">
-      <div className="flex justify-between items-center mb-6 pb-4 border-b dark:border-slate-700">
-        <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">
+    <div className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm animate-fade-in dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-slate-700">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
           {t('account_title')}
         </h1>
         <button
           type="button"
           onClick={onBack ?? (() => onSetView('home'))}
-          className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
           {t('account_back_button')}
@@ -1195,15 +1198,16 @@ const Account: React.FC<AccountProps> = ({
       {/* Profile Details Form */}
       <form
         onSubmit={(e) => updateProfile(e, { fullName, avatarUrl, birthDate })}
-        className="space-y-6"
+        className="space-y-4 px-5 py-5"
       >
-        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
           {t('account_profile_details')}
         </h2>
         <AccountNoticeBanner notice={profileNotice} qa="account-profile-notice" />
+        <div className="grid gap-5 lg:grid-cols-[120px_minmax(0,1fr)]">
         <Avatar
           url={avatarUrl}
-          size={150}
+          size={96}
           onUpload={async (url) => {
             const prev = avatarUrl;
             setAvatarUrl(url);
@@ -1218,11 +1222,15 @@ const Account: React.FC<AccountProps> = ({
           signInRequiredMessage={t('account_avatar_signin_required')}
           maxSizeMessage={t('account_avatar_size_error')}
           timeoutMessage={t('account_avatar_timeout_error')}
+          uploadControlClassName="p-1.5"
+          uploadIconClassName="h-4 w-4"
+          showUploadLabel={false}
         />
+        <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label
             htmlFor="email"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className={labelClass}
           >
             {t('account_email_label')}
           </label>
@@ -1231,13 +1239,13 @@ const Account: React.FC<AccountProps> = ({
             type="text"
             value={session.user.email || ''}
             disabled
-            className="mt-1 block w-full bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none"
+            className={`${inputClass} bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400`}
           />
         </div>
         <div>
           <label
             htmlFor="fullName"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className={labelClass}
           >
             {t('account_fullname_label')}
           </label>
@@ -1246,13 +1254,13 @@ const Account: React.FC<AccountProps> = ({
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-900"
+            className={inputClass}
           />
         </div>
         <div>
           <label
             htmlFor="birthDate"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className={labelClass}
           >
             {t('account_birth_date_label')}
           </label>
@@ -1262,20 +1270,22 @@ const Account: React.FC<AccountProps> = ({
             value={birthDate}
             max={new Date().toISOString().slice(0, 10)}
             onChange={(e) => setBirthDate(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-900"
+            className={inputClass}
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{t('account_birth_date_hint')}</p>
         </div>
-        <div>
+        <div className="flex items-end sm:col-span-2">
           <button
             type="submit"
-            className="w-full sm:w-auto px-4 py-2 bg-blue-700 text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-blue-400"
+            className="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:bg-blue-400 sm:w-auto"
             disabled={profileSaving}
           >
             {profileSaving
               ? t('account_saving_button')
               : t('account_update_profile_button')}
           </button>
+        </div>
+        </div>
         </div>
       </form>
 
@@ -1303,7 +1313,7 @@ const Account: React.FC<AccountProps> = ({
 
       {/* Web3 Identity Section — experimental, feature-flagged */}
       {web3Enabled && (
-        <div className="space-y-6 mt-10">
+        <div className="space-y-4 border-t border-gray-200 px-5 py-5 dark:border-slate-700">
           <div className="flex items-center gap-2 border-b dark:border-slate-700 pb-2">
             <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">
               {t('account_web3_title')}
@@ -1553,15 +1563,16 @@ const Account: React.FC<AccountProps> = ({
 
       {web3ConfirmDialog}
 
-      <form onSubmit={handleUpdatePassword} className="space-y-6 mt-10">
-        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-slate-700 pb-2">
+      <form onSubmit={handleUpdatePassword} className="space-y-4 border-t border-gray-200 px-5 py-5 dark:border-slate-700">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
           {t('account_change_password')}
         </h2>
         <AccountNoticeBanner notice={passwordNotice} qa="account-password-notice" />
+        <div className="grid max-w-xl gap-3">
         <div>
           <label
             htmlFor="newPassword"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className={labelClass}
           >
             {t('account_new_password_label')}
           </label>
@@ -1570,14 +1581,14 @@ const Account: React.FC<AccountProps> = ({
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-900"
+            className={inputClass}
             placeholder="••••••••"
           />
         </div>
         <div>
           <label
             htmlFor="confirmPassword"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className={labelClass}
           >
             {t('account_confirm_password_label')}
           </label>
@@ -1586,20 +1597,21 @@ const Account: React.FC<AccountProps> = ({
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-900"
+            className={inputClass}
             placeholder="••••••••"
           />
         </div>
-        <div>
+        <div className="flex items-end">
           <button
             type="submit"
-            className="w-full sm:w-auto px-4 py-2 bg-gray-700 text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 disabled:bg-gray-400"
+            className="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-gray-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800 disabled:bg-gray-400 sm:w-auto"
             disabled={passwordSaving || !password}
           >
             {passwordSaving
               ? t('account_saving_button')
               : t('account_update_password_button')}
           </button>
+        </div>
         </div>
       </form>
 
