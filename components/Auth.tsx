@@ -220,7 +220,10 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
 
       if (authError) {
         if (authError.message.includes('email-already-in-use') || authError.message.includes('already registered')) {
-          setError(t('auth_error_user_exists'));
+          // Switching to the sign-in view fires the [mode, authView] effect which
+          // clears `error`, so an inline setError here would be wiped instantly.
+          // Use a toast — it lives in the global provider and survives the switch.
+          addToast(t('auth_error_user_exists'), 'error');
           setAuthView('sign_in');
         } else {
           setError(getAuthErrorMessage(authError.message, t));

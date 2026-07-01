@@ -17,6 +17,7 @@ import { PasswordInput } from '../ui/PasswordInput';
 import { Button } from '../ui/button';
 import { Check } from 'lucide-react';
 import CheckoutRedirectNotice from '../billing/CheckoutRedirectNotice';
+import { useToast } from '../Toast';
 import { businessPlanDefs, type BusinessPlanId } from './businessPlans';
 import { shouldRedirectBusinessPlanToCheckout } from '../../lib/access/businessEntryDecisions';
 
@@ -31,6 +32,7 @@ interface Props {
 
 export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSignIn, onSignedUp, initialPlan = 'starter', t }: Props) {
   const { startSubscriptionCheckout } = useSubscriptionCheckout();
+  const { addToast } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<BusinessPlanId>(initialPlan);
   const [orgName, setOrgName] = useState('');
   const [contactName, setContactName] = useState('');
@@ -78,7 +80,10 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
 
       if (authError) {
         if (authError.message.includes('email-already-in-use') || authError.message.includes('already registered')) {
-          setError(t('auth_error_user_exists'));
+          // onSwitchToSignIn() unmounts this modal, so an inline setError would
+          // never render. A toast lives in the global provider and survives the
+          // modal swap, so the user learns why they were sent to sign-in.
+          addToast(t('auth_error_user_exists'), 'error');
           onSwitchToSignIn();
         } else {
           setError(authError.message);
