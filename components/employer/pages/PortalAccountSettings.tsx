@@ -6,14 +6,14 @@ import { PortalTopBar } from '../PortalTopBar';
 interface PortalAccountSettingsProps {
   session: Session;
   darkMode: boolean;
+  onBack: () => void;
   t: (key: string) => string;
 }
 
-// Embeds the real Account component (password, profile photo, Web3, API keys, sign out).
-// onSetView is a no-op here since we handle navigation in the portal shell.
 export function PortalAccountSettings({
   session,
   darkMode,
+  onBack,
   t,
 }: PortalAccountSettingsProps) {
   return (
@@ -23,9 +23,8 @@ export function PortalAccountSettings({
         <Account
           key={session.user.id}
           session={session}
-          // Account uses onSetView only to navigate to api_docs or back to home.
-          // In the portal context these are no-ops; the user stays in the portal.
           onSetView={() => {}}
+          onBack={onBack}
           t={t}
         />
       </div>

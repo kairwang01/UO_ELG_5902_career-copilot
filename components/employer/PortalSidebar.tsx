@@ -57,39 +57,36 @@ export function PortalSidebar({
   t,
   mobile = false,
 }: PortalSidebarProps) {
-
   const dm = darkMode;
-  const navItem = (page: PortalPage, label: string, Icon: React.ElementType) => (
-    <button
-      key={page}
-      data-qa={`employer-nav-${page}`}
-      onClick={() => onNavigate(page)}
-      aria-current={currentPage === page ? 'page' : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm transition-colors ${
-        currentPage === page
-          ? 'bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50'
-          : dm
-          ? 'text-gray-300 hover:bg-gray-700'
-          : 'text-gray-600 hover:bg-gray-50'
-      }`}
-    >
-      <Icon className="w-5 h-5 flex-shrink-0" />
-      <span className="flex-1 text-left">{label}</span>
-      {currentPage === page && <ChevronRight className="w-4 h-4" />}
-    </button>
-  );
+  const navItem = (page: PortalPage, label: string, Icon: React.ElementType) => {
+    const active = currentPage === page;
+    return (
+      <button
+        key={page}
+        data-qa={`employer-nav-${page}`}
+        onClick={() => onNavigate(page)}
+        aria-current={active ? 'page' : undefined}
+        className={`group flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium ${
+          active
+            ? 'bg-slate-100 text-slate-950 shadow-sm dark:bg-slate-800 dark:text-white'
+            : 'text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-950 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100'
+        }`}
+      >
+        <Icon className={`h-4 w-4 flex-shrink-0 ${active ? 'text-slate-900 dark:text-white' : 'text-gray-400 dark:text-slate-500'}`} />
+        <span className="flex-1 text-left">{label}</span>
+        {active && <ChevronRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />}
+      </button>
+    );
+  };
 
   return (
     <aside
       data-qa={mobile ? 'employer-mobile-sidebar' : 'employer-sidebar'}
       className={`${
-        mobile ? 'flex w-72 max-w-[85vw] h-full' : 'hidden lg:flex w-64 h-screen'
-      } flex-shrink-0 flex-col border-r ${
-        dm ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-      }`}
+        mobile ? 'flex h-full w-72 max-w-[85vw]' : 'hidden h-screen w-64 lg:flex'
+      } flex-shrink-0 flex-col border-r border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900`}
     >
-      {/* Logo — clicking goes back to the business homepage */}
-      <div className="p-6">
+      <div className="border-b border-gray-100 p-6 dark:border-slate-800">
         <button
           onClick={onGoHome}
           className="group flex min-w-0 text-left transition-opacity hover:opacity-85"
@@ -99,83 +96,86 @@ export function PortalSidebar({
         </button>
       </div>
 
-      <div className="flex-1 px-4 space-y-2 overflow-y-auto">
-        <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{t('portal_nav_workspace_group')}</div>
+      <nav className="flex-1 space-y-6 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-slate-800">
+        <div className="space-y-1">
+          <h3 className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
+            {t('portal_nav_workspace_group')}
+          </h3>
+          {navItem('dashboard', t('portal_nav_dashboard'), LayoutDashboard)}
+          {navItem('post-job', t('portal_nav_post_job'), Briefcase)}
+          {navItem('job-listings', t('portal_nav_job_listings'), FileText)}
+          {navItem('talent-pool', t('portal_nav_discover'), Users)}
+          {navItem('shortlist', t('portal_nav_shortlist'), BookmarkCheck)}
+          {navItem('agency-hub', t('portal_nav_agency_hub'), Building2)}
+        </div>
 
-        {navItem('dashboard', t('portal_nav_dashboard'), LayoutDashboard)}
-        {navItem('post-job', t('portal_nav_post_job'), Briefcase)}
-        {navItem('job-listings', t('portal_nav_job_listings'), FileText)}
-        {navItem('talent-pool', t('portal_nav_discover'), Users)}
-        {navItem('shortlist', t('portal_nav_shortlist'), BookmarkCheck)}
-        {navItem('agency-hub', t('portal_nav_agency_hub'), Building2)}
-
-        <div className="pt-6 space-y-2">
-          <div className={`text-xs font-semibold px-3 mb-2 ${dm ? 'text-gray-500' : 'text-gray-400'}`}>{t('portal_nav_settings_group')}</div>
+        <div className="space-y-1">
+          <h3 className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
+            {t('portal_nav_settings_group')}
+          </h3>
           {navItem('company-profile', t('portal_nav_org_profile'), User)}
-          {/* Personal "Account Settings" lives in the top-right account menu only — the
-              same single access point the candidate workspace uses (no sidebar duplicate). */}
           {navItem('billing', t('portal_nav_billing'), CreditCard)}
         </div>
+      </nav>
 
-        {/* Language switcher — lets users change language after sign-in. */}
-        <div className="pt-4 space-y-0.5">
-          <LanguageSwitcher onLanguageChange={onLanguageChange} currentLang={currentLang} />
-        </div>
-      </div>
-
-      {/* User footer */}
-      <div className={`p-4 space-y-1 border-t ${dm ? 'border-gray-700' : 'border-gray-200'}`}>
-        {/* Credits row */}
-        <div className="flex items-center gap-3 px-3 py-2">
-          <CreditCard className="w-5 h-5 text-[#1d4ed8]" />
+      <div className="border-t border-gray-100 bg-gray-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+        <div className="mb-4 flex items-center gap-3 px-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+            <CreditCard className="h-4 w-4" />
+          </div>
           <div>
-            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_credits_label')}</div>
-            <div className={`font-semibold ${dm ? 'text-white' : 'text-gray-900'}`}>{(profile?.credits ?? 0).toLocaleString()} CR</div>
+            <p className="text-[10px] font-bold uppercase text-gray-400 dark:text-slate-500">{t('portal_credits_label')}</p>
+            <p className="text-xs font-bold tracking-tight text-gray-900 dark:text-white">{(profile?.credits ?? 0).toLocaleString()} CR</p>
           </div>
         </div>
-        {/* My Profile — single profile access point (no duplicate top-right menu). */}
-        <button
-          type="button"
-          data-qa="employer-nav-account-settings"
-          onClick={() => onNavigate('account-settings')}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-            currentPage === 'account-settings'
-              ? (dm ? 'bg-gray-700/50' : 'bg-blue-50')
-              : (dm ? 'hover:bg-gray-700/40' : 'hover:bg-gray-100')
-          }`}
-        >
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${dm ? 'bg-gray-700' : 'bg-blue-100'}`}>
+
+        <LanguageSwitcher onLanguageChange={onLanguageChange} currentLang={currentLang} variant="footer" />
+
+        <div className="mt-1 border-t border-gray-200/50 pt-3 dark:border-slate-800/50">
+          <button
+            type="button"
+            data-qa="employer-nav-account-settings"
+            onClick={() => onNavigate('account-settings')}
+            aria-current={currentPage === 'account-settings' ? 'page' : undefined}
+            className={`w-full flex items-center gap-3 rounded-lg p-1.5 text-left ${
+              currentPage === 'account-settings'
+                ? 'bg-slate-100 shadow-sm dark:bg-slate-800'
+                : 'transition-colors hover:bg-gray-100 dark:hover:bg-slate-800/50'
+            }`}
+          >
             {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+              <img src={profile.avatar_url} alt="" className="h-7 w-7 rounded-lg object-cover" />
             ) : (
-              <User className={`w-5 h-5 ${dm ? 'text-gray-300' : 'text-blue-600'}`} />
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-200 dark:bg-slate-800">
+                <User className="h-3.5 w-3.5 text-gray-500" />
+              </div>
             )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className={`text-sm font-semibold truncate ${dm ? 'text-white' : 'text-gray-900'}`}>
-              {profile?.full_name || t('portal_business_fallback_name')}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11px] font-bold text-gray-900 dark:text-white">
+                {profile?.full_name || profile?.company_name || t('portal_business_fallback_name')}
+              </p>
+              <p className="truncate text-[9px] uppercase tracking-tight text-gray-400">{t('portal_nav_account')}</p>
             </div>
-            <div className={`text-xs ${dm ? 'text-gray-400' : 'text-gray-500'}`}>{t('portal_nav_account')}</div>
+            <Settings className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          </button>
+          <div className="mt-2 grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={onToggleDark}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800/50"
+            >
+              {dm ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              {dm ? t('menu_light_mode') : t('menu_dark_mode')}
+            </button>
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              {t('menu_sign_out')}
+            </button>
           </div>
-          <Settings className="w-4 h-4 shrink-0 text-gray-400" />
-        </button>
-        <div className="mt-1 grid grid-cols-2 gap-1">
-          <button
-            type="button"
-            onClick={onToggleDark}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${dm ? 'text-gray-300 hover:bg-gray-700/40' : 'text-gray-600 hover:bg-gray-100'}`}
-          >
-            {dm ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            {dm ? t('menu_light_mode') : t('menu_dark_mode')}
-          </button>
-          <button
-            type="button"
-            onClick={onSignOut}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${dm ? 'text-red-400 hover:bg-red-900/20' : 'text-red-600 hover:bg-red-50'}`}
-          >
-            <LogOut className="w-4 h-4" />
-            {t('menu_sign_out')}
-          </button>
         </div>
       </div>
     </aside>

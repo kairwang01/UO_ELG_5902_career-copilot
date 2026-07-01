@@ -89,6 +89,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const [jobForFunnel, setJobForFunnel] = useState<JobPosting | null>(null);
   // Previous page before entering post-job/funnel views
   const [prevPage, setPrevPage] = useState<PortalPage>('dashboard');
+  const [accountBackPage, setAccountBackPage] = useState<PortalPage>('dashboard');
 
   useEffect(() => {
     mountedRef.current = true;
@@ -178,6 +179,9 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
   const navigate = (page: PortalPage) => {
     // Clear edit/funnel state when navigating via sidebar
+    if (page === 'account-settings' && currentPage !== 'account-settings') {
+      setAccountBackPage(currentPage);
+    }
     setJobToEdit(null);
     setJobForFunnel(null);
     setTalentPoolInitialJobId(null);
@@ -452,6 +456,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
             <PortalAccountSettings
               session={session}
               darkMode={darkMode}
+              onBack={() => navigate(accountBackPage === 'account-settings' ? 'dashboard' : accountBackPage)}
               t={t}
             />
           )}
