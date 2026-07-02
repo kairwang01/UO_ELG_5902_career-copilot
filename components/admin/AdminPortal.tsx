@@ -1367,6 +1367,8 @@ const AdminPortal: React.FC = () => {
     setError(null);
     setSelectedUid(uid);
     selectedUidRef.current = uid;
+    setUserReport(null);
+    setSubStatus('');
     try {
       const report = await adminGetUserReport(uid);
       if (!mountedRef.current || selectedUidRef.current !== uid) return; // admin switched users mid-fetch

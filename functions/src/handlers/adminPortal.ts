@@ -602,30 +602,36 @@ interface UserReportRequest {
   uid: string;
 }
 
-/** Per-user usage report (7-day events + credit ledger). */
+/** Per-user profile and 7-day usage summary for the admin detail panel. */
 export const adminGetUserReportFunction = onCall({ invoker: "public" }, async (request) => {
   await requireRole(request, "admin");
   const rawData = (request.data ?? {}) as UserReportRequest;
   // A6: explicit string type-check
   const uid = assertUid(rawData.uid);
 
-  const userSnap = await db.collection(USERS_COLLECTION).doc(uid).get();
-  if (!userSnap.exists) throw new HttpsError("not-found", "User not found.");
-
   const weekStart = startOfUtcDaysAgo(7);
-  const [usageSnap, ledgerSnap] = await Promise.all([
+  const authInfoPromise = admin.auth().getUser(uid).then(
+    (authUser) => ({
+      email: authUser.email ?? null,
+      email_verified: authUser.emailVerified,
+      disabled: authUser.disabled,
+      display_name: authUser.displayName ?? null,
+      auth_created_at: authUser.metadata.creationTime ?? null,
+      last_sign_in: authUser.metadata.lastSignInTime ?? null,
+    }),
+    () => null
+  );
+  const [userSnap, usageSnap, authInfo] = await Promise.all([
+    db.collection(USERS_COLLECTION).doc(uid).get(),
     db
       .collection(USAGE_EVENTS_COLLECTION)
       .where("uid", "==", uid)
       .where("created_at", ">=", weekStart)
       .limit(200)
       .get(),
-    db
-      .collection(CREDIT_LEDGER_COLLECTION)
-      .where("uid", "==", uid)
-      .limit(50)
-      .get(),
+    authInfoPromise,
   ]);
+  if (!userSnap.exists) throw new HttpsError("not-found", "User not found.");
 
   const byTool: Record<string, number> = {};
   usageSnap.forEach((doc) => {
@@ -633,44 +639,12 @@ export const adminGetUserReportFunction = onCall({ invoker: "public" }, async (r
     byTool[tool] = (byTool[tool] ?? 0) + 1;
   });
 
-  let authInfo: {
-    email: string | null;
-    email_verified: boolean;
-    disabled: boolean;
-    display_name: string | null;
-    auth_created_at: string | null;
-    last_sign_in: string | null;
-  } | null = null;
-  try {
-    const authUser = await admin.auth().getUser(uid);
-    authInfo = {
-      email: authUser.email ?? null,
-      email_verified: authUser.emailVerified,
-      disabled: authUser.disabled,
-      display_name: authUser.displayName ?? null,
-      auth_created_at: authUser.metadata.creationTime ?? null,
-      last_sign_in: authUser.metadata.lastSignInTime ?? null,
-    };
-  } catch {
-    // User exists in Firestore but not in Auth (edge case) — leave authInfo null.
-  }
-
   const docData = userSnap.data() ?? {};
   return {
     profile: { uid, ...docData, email: authInfo?.email ?? docData.email ?? null },
     auth: authInfo,
     week_runs: usageSnap.size,
     week_by_tool: byTool,
-    usage_events: usageSnap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      created_at: doc.data().created_at?.toDate?.()?.toISOString?.() ?? null,
-    })),
-    credit_ledger: ledgerSnap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      created_at: doc.data().created_at?.toDate?.()?.toISOString?.() ?? null,
-    })),
   };
 });
 
