@@ -60,7 +60,7 @@ import {
   type TestModelResult,
 } from '../../services/adminClient';
 import { TOOL_CREDIT_COSTS } from '../../config/credits';
-import { hasAdminPermission, type AdminRole } from '../../lib/access/permissions';
+import { ADMIN_ROLE_DESCRIPTIONS, hasAdminPermission, type AdminRole } from '../../lib/access/permissions';
 import { subscriptionPlansForRole } from '../../lib/access/subscriptionPlans';
 import { PermissionMatrix, ProductRoleOverview } from './AccessControlSections';
 import { KeyPoolHealthSection } from './KeyPoolHealthSection';
@@ -248,6 +248,37 @@ const USER_CREATED_FILTERS = [
 ] as const;
 
 const USER_PAGE_SIZE = 10;
+
+const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
+  reviewer: 'Reviewer',
+  admin: 'Admin',
+  super: 'Super',
+};
+
+const formatAdminPortalError = (
+  error: unknown,
+  currentRole: AdminRole | null,
+  action: string,
+  fallback: string,
+) => {
+  const message = error instanceof Error ? error.message : '';
+  const code = typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : '';
+  const permissionError =
+    code === 'functions/permission-denied' ||
+    message.includes('This admin action is blocked.') ||
+    message.includes('This action requires the');
+
+  if (!permissionError) return message || fallback;
+
+  const roleLabel = currentRole ? ADMIN_ROLE_LABELS[currentRole] : 'Unknown';
+  const roleSummary = currentRole ? ADMIN_ROLE_DESCRIPTIONS[currentRole] : 'Your current admin role could not be confirmed.';
+  return [
+    `Action blocked: ${action}.`,
+    `Current admin role: ${roleLabel}.`,
+    roleSummary,
+    message || fallback,
+  ].join(' ');
+};
 
 const UserAvatarThumb: React.FC<{ url?: string | null; label?: string | null; roleLabel?: string | null; size?: 'sm' | 'md' }> = ({ url, label, roleLabel, size = 'md' }) => {
   const [failed, setFailed] = useState(false);
@@ -1009,11 +1040,11 @@ const AdminPortal: React.FC = () => {
       setDashboard(dashboardData);
       setLastRefreshed(new Date());
     } catch (e) {
-      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load dashboard');
+      if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load dashboard', 'Failed to load dashboard'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [adminRole]);
 
   const loadLlm = useCallback(async () => {
     setError(null);
@@ -1026,9 +1057,9 @@ const AdminPortal: React.FC = () => {
       setKairllmUrl(cfg.kairllm_base_url ?? '');
       setDeepseekUrl(cfg.deepseek_base_url ?? '');
     } catch (e) {
-      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load LLM config');
+      if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load model and key settings', 'Failed to load LLM config'));
     }
-  }, []);
+  }, [adminRole]);
 
   const loadQuotas = useCallback(async () => {
     setError(null);
@@ -1038,9 +1069,9 @@ const AdminPortal: React.FC = () => {
       setQuotas(quotaData);
       setQuotasLoadedAt(Date.now());
     } catch (e) {
-      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load quotas');
+      if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load quotas', 'Failed to load quotas'));
     }
-  }, []);
+  }, [adminRole]);
 
   // cursor-as-argument (NOT closed over userCursor) keeps this callback []-stable,
   // so the loader effect below doesn't re-fire when userCursor changes (would loop).
@@ -1056,12 +1087,12 @@ const AdminPortal: React.FC = () => {
         setUserPageIndex(pageIndex);
         if (pageIndex === 0) setUserPageCursors([undefined]);
       } catch (e) {
-        if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load users');
+        if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load users', 'Failed to load users'));
       } finally {
         if (mountedRef.current) setUserListLoading(false);
       }
     },
-    [userFilters],
+    [adminRole, userFilters],
   );
 
   const loadNextUserPage = () => {
@@ -1088,9 +1119,9 @@ const AdminPortal: React.FC = () => {
       if (!mountedRef.current) return;
       setAdmins(res.admins);
     } catch (e) {
-      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load admins');
+      if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load Access Control users', 'Failed to load admins'));
     }
-  }, []);
+  }, [adminRole]);
 
   const loadAuditLog = useCallback(async () => {
     setError(null);
@@ -1101,11 +1132,11 @@ const AdminPortal: React.FC = () => {
       setAuditLog(res.entries);
       setLastRefreshed(new Date());
     } catch (e) {
-      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load audit log');
+      if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load audit log', 'Failed to load audit log'));
     } finally {
       if (mountedRef.current) setAuditLoaded(true);
     }
-  }, []);
+  }, [adminRole]);
 
   const loadModels = useCallback(async () => {
     setError(null);
@@ -1116,11 +1147,11 @@ const AdminPortal: React.FC = () => {
       setModels(res.models);
       setDefaultModelId(res.defaultModelId ?? null);
     } catch (e) {
-      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load models');
+      if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load models', 'Failed to load models'));
     } finally {
       if (mountedRef.current) setModelsLoaded(true);
     }
-  }, []);
+  }, [adminRole]);
 
   const loadPrompts = useCallback(async () => {
     setError(null);
@@ -1130,11 +1161,11 @@ const AdminPortal: React.FC = () => {
       if (!mountedRef.current) return;
       setPrompts(res.prompts);
     } catch (e) {
-      if (mountedRef.current) setError(e instanceof Error ? e.message : 'Failed to load prompts');
+      if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load prompts', 'Failed to load prompts'));
     } finally {
       if (mountedRef.current) setPromptsLoaded(true);
     }
-  }, []);
+  }, [adminRole]);
 
   const loadPromptVersions = useCallback(async (promptKey: string) => {
     setPromptVersionsLoading(true);
@@ -1187,7 +1218,7 @@ const AdminPortal: React.FC = () => {
       setKairllmKey('');
       setDeepseekKey('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(formatAdminPortalError(e, adminRole, 'Save model and key settings', 'Save failed'));
     } finally {
       setLoading(false);
     }
@@ -1221,7 +1252,7 @@ const AdminPortal: React.FC = () => {
       });
       setQuotas(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(formatAdminPortalError(e, adminRole, 'Save quotas', 'Save failed'));
     } finally {
       setLoading(false);
     }
@@ -1293,7 +1324,7 @@ const AdminPortal: React.FC = () => {
       setSubStatus(allowedPlans.includes(currentPlan) ? currentPlan : '');
     } catch (e) {
       if (!mountedRef.current || selectedUidRef.current !== uid) return;
-      setError(e instanceof Error ? e.message : 'Failed to load user report');
+      setError(formatAdminPortalError(e, adminRole, 'Open user detail', 'Failed to load user report'));
     }
   };
 
@@ -1321,7 +1352,7 @@ const AdminPortal: React.FC = () => {
       }
       await loadUsers(userPageCursors[userPageIndex], userPageIndex);
     } catch (e) {
-      if (selectedUidRef.current === uid) setError(e instanceof Error ? e.message : 'Failed to adjust credits');
+      if (selectedUidRef.current === uid) setError(formatAdminPortalError(e, adminRole, 'Adjust user credits', 'Failed to adjust credits'));
     }
   };
 
@@ -1335,7 +1366,7 @@ const AdminPortal: React.FC = () => {
       if (selectedUidRef.current === uid) setUserReport(report);
       await loadUsers(userPageCursors[userPageIndex], userPageIndex);
     } catch (e) {
-      if (selectedUidRef.current === uid) setError(e instanceof Error ? e.message : 'Failed to set subscription');
+      if (selectedUidRef.current === uid) setError(formatAdminPortalError(e, adminRole, 'Set user subscription', 'Failed to set subscription'));
     }
   };
 
@@ -1350,7 +1381,7 @@ const AdminPortal: React.FC = () => {
       await adminSetAdmin({ uid: selectedUid, makeAdmin: !selectedIsAdmin });
       await loadAdmins();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update admin access');
+      setError(formatAdminPortalError(e, adminRole, 'Update admin access', 'Failed to update admin access'));
     }
   };
 
@@ -1365,7 +1396,7 @@ const AdminPortal: React.FC = () => {
       setNewAdmin('');
       await loadAdmins();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to add admin');
+      setError(formatAdminPortalError(e, adminRole, 'Add legacy admin access', 'Failed to add admin'));
     }
   };
 
@@ -1375,7 +1406,7 @@ const AdminPortal: React.FC = () => {
       await adminSetAdmin({ uid, makeAdmin: false });
       await loadAdmins();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to revoke admin');
+      setError(formatAdminPortalError(e, adminRole, 'Revoke legacy admin access', 'Failed to revoke admin'));
     }
   };
 
@@ -1402,7 +1433,7 @@ const AdminPortal: React.FC = () => {
       await adminSetAdminRole({ uid, role });
       await loadAdmins();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to change role');
+      setError(formatAdminPortalError(e, adminRole, 'Change console user role', 'Failed to change role'));
     }
   };
 
@@ -1431,7 +1462,7 @@ const AdminPortal: React.FC = () => {
           await adminRemoveAdmin({ uid });
           await loadAdmins();
         } catch (e) {
-          setError(e instanceof Error ? e.message : 'Failed to remove admin');
+          setError(formatAdminPortalError(e, adminRole, 'Remove console user access', 'Failed to remove admin'));
         }
       },
     });
@@ -1516,7 +1547,7 @@ const AdminPortal: React.FC = () => {
       setModels(res.models);
       setModelForm(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save model');
+      setError(formatAdminPortalError(e, adminRole, 'Save model', 'Failed to save model'));
     } finally {
       setModelSaving(false);
     }
@@ -1535,7 +1566,7 @@ const AdminPortal: React.FC = () => {
           const res = await adminDeleteModel(id);
           setModels(res.models);
         } catch (e) {
-          setError(e instanceof Error ? e.message : 'Failed to delete model');
+          setError(formatAdminPortalError(e, adminRole, 'Delete model', 'Failed to delete model'));
         }
       },
     });
@@ -2221,7 +2252,7 @@ const AdminPortal: React.FC = () => {
                     if (providerTab === 'gemini') setGeminiKey('');
                     else if (providerTab === 'kairllm') setKairllmKey('');
                     else setDeepseekKey('');
-                  } catch (e) { setError(e instanceof Error ? e.message : 'Save failed'); }
+                  } catch (e) { setError(formatAdminPortalError(e, adminRole, `Save ${meta.label} settings`, 'Save failed')); }
                   finally { setLoading(false); }
                 };
 

@@ -47,9 +47,26 @@ const ROLE_ORDER: Record<AdminRole, number> = {
   super: 2,
 };
 
+const ROLE_SUMMARIES: Record<AdminRole, string> = {
+  reviewer: "Reviewer can view the dashboard and audit log only.",
+  admin: "Admin can manage users, credits, subscriptions, prompt drafts, quotas, and API platform read-only views.",
+  super: "Super can do everything admin can, plus model/key management, prompt publishing, console access, billing, API platform management, and Web3 settings.",
+};
+
 /** Returns true when `actual` satisfies the `required` minimum. */
 export function roleAtLeast(actual: AdminRole, required: AdminRole): boolean {
   return ROLE_ORDER[actual] >= ROLE_ORDER[required];
+}
+
+export function adminRoleDeniedMessage(actual: AdminRole | null, required: AdminRole): string {
+  const current = actual ?? "none";
+  return [
+    "This admin action is blocked.",
+    `Current admin role: ${current}.`,
+    `Required role: ${required} or higher.`,
+    actual ? ROLE_SUMMARIES[actual] : "This account has no active admin role.",
+    ROLE_SUMMARIES[required],
+  ].join(" ");
 }
 
 // ---------------------------------------------------------------------------
@@ -149,7 +166,7 @@ export async function requireRole(
   if (role === null || !roleAtLeast(role, min)) {
     throw new HttpsError(
       "permission-denied",
-      `This action requires the '${min}' role or higher.`
+      adminRoleDeniedMessage(role, min)
     );
   }
   return { uid, role };
