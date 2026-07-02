@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, Calendar, Check, ChevronDown, CircleHelp, RotateCcw, Search, Star, X, Zap } from 'lucide-react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
@@ -2321,20 +2321,20 @@ const AdminPortal: React.FC = () => {
         {tab === 'ai' && (
           <div className="space-y-8">
 
-            {/* 閳烘劏鏅?SECTION 0: KEY POOL HEALTH 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡?*/}
+            {/* SECTION 0: KEY POOL HEALTH */}
             <KeyPoolHealthSection models={models} />
 
-            {/* 閳烘劏鏅?SECTION A: PROVIDER CREDENTIALS 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅?*/}
+            {/* SECTION A: PROVIDER CREDENTIALS */}
             <div>
               <div className="mb-4">
                 <SectionHeading>Provider credentials</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   Rotate keys, update endpoints, and verify live connectivity before saving.
-                  Raw keys are never echoed ? only masked previews are shown.
+                  Raw keys are never echoed - only masked previews are shown.
                 </p>
               </div>
 
-              {/* Provider selector ? single-select dropdown (mainstream API-console
+              {/* Provider selector - single-select dropdown (mainstream API-console
                   style) so only the chosen provider's config renders, no 3-card clutter. */}
               <div className="mb-5 max-w-xs">
                 <FieldLabel htmlFor="provider-select">Provider</FieldLabel>
@@ -2344,9 +2344,9 @@ const AdminPortal: React.FC = () => {
                   onChange={(e) => setProviderTab(e.target.value as 'gemini' | 'kairllm' | 'deepseek')}
                   className={textInput}
                 >
-                  <option value="gemini">Gemini ? free tier</option>
-                  <option value="kairllm">KairLLM ? paid tier</option>
-                  <option value="deepseek">DeepSeek ? business tier</option>
+                  <option value="gemini">Gemini - free tier</option>
+                  <option value="kairllm">KairLLM - paid tier</option>
+                  <option value="deepseek">DeepSeek - business tier</option>
                 </select>
               </div>
 
@@ -2469,7 +2469,7 @@ const AdminPortal: React.FC = () => {
               )}
             </div>
 
-            {/* 閳烘劏鏅?SECTION B: MODEL REGISTRY 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅?*/}
+            {/* SECTION B: MODEL REGISTRY */}
             <div>
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
@@ -3275,7 +3275,7 @@ const AdminPortal: React.FC = () => {
                                   className={`shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                   aria-hidden="true"
                                 >
-                                  閳?
+                                  v
                                 </span>
                               </button>
 
@@ -4300,7 +4300,7 @@ const AdminPortal: React.FC = () => {
               {canManageAdmins && (
               <details className="group rounded-lg border border-emerald-200 bg-emerald-50/40">
                 <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-50">
-                  <span>棣冩懄 Invite Admin or Reviewer</span>
+                  <span>📮 Invite Admin or Reviewer</span>
                   <ChevronDown className="h-4 w-4 text-emerald-700 transition-transform group-open:rotate-180" />
                 </summary>
                 <div className="space-y-3 border-t border-emerald-100 p-3">
