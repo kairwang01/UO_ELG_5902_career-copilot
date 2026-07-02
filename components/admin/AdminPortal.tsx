@@ -132,7 +132,7 @@ type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
 // Keep this in sync with admin page behavior, role permissions, and sidebar changes.
 const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
   dashboard: {
-    description: 'Overview of platform health, usage, revenue, and model routing status.',
+    description: 'Overview of platform health, usage, and revenue. Model routing status is visible to super users only.',
     roles: {
       super: 'View dashboard data and change the default model routing.',
       admin: 'View dashboard data.',
@@ -1186,8 +1186,11 @@ const AdminPortal: React.FC = () => {
 
   useEffect(() => {
     if (!isAdmin) return;
-    if (tab === 'dashboard') { loadDashboard(); loadModels(); }
-    if (tab === 'ai') { loadLlm(); loadModels(); }
+    if (tab === 'dashboard') {
+      loadDashboard();
+      if (hasAdminPermission(adminRole, 'admin.models.read')) loadModels();
+    }
+    if (tab === 'ai' && hasAdminPermission(adminRole, 'admin.models.read')) { loadLlm(); loadModels(); }
     if (tab === 'prompts') loadPrompts();
     if (tab === 'quotas') loadQuotas();
     if (tab === 'users') {
@@ -1637,6 +1640,7 @@ const AdminPortal: React.FC = () => {
   const role = adminRole ?? 'admin'; // default to admin while loading
   const isReviewer = role === 'reviewer';
   // Derived capabilities — single source: lib/access/permissions.ts.
+  const canReadModels = hasAdminPermission(role, 'admin.models.read');
   const canWriteModels = hasAdminPermission(role, 'admin.models.write');
   const canPublishPrompts = hasAdminPermission(role, 'admin.prompts.publish');
   const canReadAdmins = hasAdminPermission(role, 'admin.admins.read');
@@ -1678,8 +1682,11 @@ const AdminPortal: React.FC = () => {
   const tabs = allTabs.filter((t) => t.visible).map(({ id, label, superOnly, help }) => ({ id, label, superOnly, help }));
 
   const refreshForTab = () => {
-    if (tab === 'dashboard') { loadDashboard(); loadModels(); }
-    else if (tab === 'ai') { loadLlm(); loadModels(); }
+    if (tab === 'dashboard') {
+      loadDashboard();
+      if (canReadModels) loadModels();
+    }
+    else if (tab === 'ai' && canReadModels) { loadLlm(); loadModels(); }
     else if (tab === 'prompts') loadPrompts();
     else if (tab === 'quotas') loadQuotas();
     else if (tab === 'users') {
@@ -1940,7 +1947,7 @@ const AdminPortal: React.FC = () => {
                 )}
 
                 {/* Model Routing status card */}
-                {modelsLoaded && (
+                {canReadModels && modelsLoaded && (
                   <Card className="p-5">
                     <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">
                       {t('admin.dashboard.model_routing_title')}
