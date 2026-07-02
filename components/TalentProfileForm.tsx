@@ -38,6 +38,7 @@ const PREFILL_LANGUAGE_OPTIONS = [
   { value: 'de', label: 'German', note: 'Use for German-language applications.' },
   { value: 'ja', label: 'Japanese', note: 'Use for Japanese-language applications.' },
   { value: 'vi', label: 'Vietnamese', note: 'Use for Vietnamese-language applications.' },
+  { value: 'ar', label: 'Arabic', note: 'Use for Arabic-language applications and employer review.' },
   { value: 'source', label: 'Keep resume language', note: 'Preserve the language used in the uploaded resume.' },
 ];
 

@@ -5,9 +5,10 @@
  *   reviewer : adminGetDashboard, adminGetAuditLog, adminCheckAccess, adminWhoAmI
  *   admin    : + adminGetLlmConfig, adminUpdateLlmConfig, adminGetQuotas,
  *                adminUpdateQuotas, adminListUsers, adminGetUserReport,
- *                adminAdjustCredits, adminSetSubscription, adminGetPrompts,
- *                adminUpdatePrompt, adminResetPrompt, adminListModels,
- *                adminUpsertModel, adminDeleteModel, adminTestModel
+ *                adminAdjustCredits, adminSetSubscription, adminDeleteUser,
+ *                adminCreateSampleAccounts, adminGetPrompts, adminUpdatePrompt,
+ *                adminResetPrompt, adminListModels, adminUpsertModel,
+ *                adminDeleteModel, adminTestModel
  *   super    : + adminSetAdmin (LEGACY, deprecated), adminInviteAdmin,
  *                adminSetAdminRole, adminRemoveAdmin
  *
@@ -25,6 +26,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
+import { randomBytes } from "crypto";
 import { requireRole, getAdminRole, invalidateAccessCache, AdminEntry, AdminRole } from "../admin/roles";
 import {
   CREDIT_LEDGER_COLLECTION,
@@ -56,6 +58,8 @@ import {
   ALL_SUBSCRIPTION_PLANS,
   assertPlanAllowedForRole,
 } from "./setSubscriptionStatus";
+
+const SAMPLE_ACCOUNT_CREDITS = 100_000;
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -99,6 +103,30 @@ function assertReason(reason: unknown): string {
     throw new HttpsError("invalid-argument", "reason must not exceed 300 characters.");
   }
   return trimmed;
+}
+
+function assertEmail(email: unknown, label = "email"): string {
+  if (typeof email !== "string" || email.trim().length === 0) {
+    throw new HttpsError("invalid-argument", `${label} must be a non-empty string.`);
+  }
+  const trimmed = email.trim().toLowerCase();
+  if (trimmed.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    throw new HttpsError("invalid-argument", `${label} must be a valid email address.`);
+  }
+  return trimmed;
+}
+
+function isAuthUserNotFound(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "auth/user-not-found"
+  );
+}
+
+function samplePassword(): string {
+  return `Cc-${randomBytes(9).toString("base64url")}-26!`;
 }
 
 function startOfUtcDaysAgo(days: number): Timestamp {
@@ -777,6 +805,213 @@ export const adminSetSubscriptionFunction = onCall({ invoker: "public" }, async 
   // A6: explicit string check
   const uid = assertUid(rawData.uid);
   return adminSetSubscriptionImpl(adminUid, uid, rawData.subscription_status);
+});
+
+// ---------------------------------------------------------------------------
+// User deletion + sample account provisioning
+// ---------------------------------------------------------------------------
+
+interface DeleteUserRequest {
+  uid?: string;
+  email?: string;
+  reason: string;
+}
+
+/** Delete a product user from Firebase Auth and users/{uid}. */
+export const adminDeleteUserFunction = onCall({ invoker: "public" }, async (request) => {
+  const { uid: adminUid, role: adminRole } = await requireRole(request, "admin");
+  const rawData = (request.data ?? {}) as DeleteUserRequest;
+  const reason = assertReason(rawData.reason);
+
+  let targetUid = typeof rawData.uid === "string" && rawData.uid.trim()
+    ? assertUid(rawData.uid)
+    : "";
+  let authUser: admin.auth.UserRecord | null = null;
+
+  if (!targetUid) {
+    const email = assertEmail(rawData.email, "email");
+    try {
+      authUser = await admin.auth().getUserByEmail(email);
+      targetUid = authUser.uid;
+    } catch (error) {
+      if (isAuthUserNotFound(error)) {
+        throw new HttpsError("not-found", "Auth user not found for that email.");
+      }
+      throw error;
+    }
+  }
+
+  if (targetUid === adminUid) {
+    throw new HttpsError("failed-precondition", "Admins cannot delete their own account.");
+  }
+
+  const targetAdminRole = await getAdminRole(targetUid);
+  if (targetAdminRole) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Admin or reviewer accounts must be removed from Access Control before account deletion."
+    );
+  }
+
+  if (!authUser) {
+    try {
+      authUser = await admin.auth().getUser(targetUid);
+    } catch (error) {
+      if (!isAuthUserNotFound(error)) throw error;
+    }
+  }
+
+  const userRef = db.collection(USERS_COLLECTION).doc(targetUid);
+  const profileSnap = await userRef.get();
+  const profile = profileSnap.exists ? profileSnap.data() ?? {} : {};
+  const email = authUser?.email ?? (typeof profile.email === "string" ? profile.email : null);
+  const displayName = authUser?.displayName ?? (typeof profile.full_name === "string" ? profile.full_name : null);
+
+  let deletedAuth = false;
+  let deletedProfile = false;
+  try {
+    await admin.auth().deleteUser(targetUid);
+    deletedAuth = true;
+  } catch (error) {
+    if (!isAuthUserNotFound(error)) throw error;
+  }
+
+  if (profileSnap.exists) {
+    await userRef.delete();
+    deletedProfile = true;
+  }
+
+  if (!deletedAuth && !deletedProfile) {
+    throw new HttpsError("not-found", "No Auth user or profile was found for that account.");
+  }
+
+  await logAdminAction({
+    admin_uid: adminUid,
+    action: "delete_user",
+    target_uid: targetUid,
+    details: {
+      operatorUid: adminUid,
+      operatorRole: adminRole,
+      targetUid,
+      email,
+      displayName,
+      deletedAuth,
+      deletedProfile,
+      reason,
+      createdAt: new Date().toISOString(),
+    },
+  });
+
+  return { uid: targetUid, email, deleted_auth: deletedAuth, deleted_profile: deletedProfile };
+});
+
+const SAMPLE_ACCOUNT_DEFINITIONS = [
+  {
+    kind: "job_seeker",
+    email: "sample.jobseeker@career-copilot.example.com",
+    displayName: "Sample Job Seeker",
+    role: "candidate",
+    subscriptionStatus: "executive",
+    companyName: null,
+  },
+  {
+    kind: "employer",
+    email: "sample.employer@career-copilot.example.com",
+    displayName: "Sample Employer",
+    role: "employer",
+    subscriptionStatus: "pro",
+    companyName: "Career CoPilot Demo Employer",
+  },
+] as const;
+
+export const adminCreateSampleAccountsFunction = onCall({ invoker: "public" }, async (_request) => {
+  const { uid: adminUid, role: adminRole } = await requireRole(_request, "admin");
+  const now = new Date().toISOString();
+  const accounts: Array<{
+    kind: string;
+    uid: string;
+    email: string;
+    password: string;
+    role: string;
+    subscription_status: string;
+    credits: number;
+    created: boolean;
+  }> = [];
+
+  for (const definition of SAMPLE_ACCOUNT_DEFINITIONS) {
+    const password = samplePassword();
+    let created = false;
+    let authUser: admin.auth.UserRecord;
+    try {
+      authUser = await admin.auth().getUserByEmail(definition.email);
+      authUser = await admin.auth().updateUser(authUser.uid, {
+        disabled: false,
+        displayName: definition.displayName,
+        emailVerified: true,
+        password,
+      });
+    } catch (error) {
+      if (!isAuthUserNotFound(error)) throw error;
+      authUser = await admin.auth().createUser({
+        email: definition.email,
+        password,
+        displayName: definition.displayName,
+        emailVerified: true,
+        disabled: false,
+      });
+      created = true;
+    }
+
+    const userRef = db.collection(USERS_COLLECTION).doc(authUser.uid);
+    const currentProfile = await userRef.get();
+    await userRef.set(
+      {
+        [USER_FIELDS.credits]: SAMPLE_ACCOUNT_CREDITS,
+        [USER_FIELDS.role]: definition.role,
+        [USER_FIELDS.subscriptionStatus]: definition.subscriptionStatus,
+        [USER_FIELDS.fullName]: definition.displayName,
+        [USER_FIELDS.companyName]: definition.companyName,
+        email: definition.email,
+        sample_account: true,
+        preferred_language: "en",
+        created_at: currentProfile.get(USER_FIELDS.createdAt) ?? now,
+        updated_at: now,
+      },
+      { merge: true }
+    );
+
+    accounts.push({
+      kind: definition.kind,
+      uid: authUser.uid,
+      email: definition.email,
+      password,
+      role: definition.role,
+      subscription_status: definition.subscriptionStatus,
+      credits: SAMPLE_ACCOUNT_CREDITS,
+      created,
+    });
+  }
+
+  await logAdminAction({
+    admin_uid: adminUid,
+    action: "create_sample_accounts",
+    details: {
+      operatorUid: adminUid,
+      operatorRole: adminRole,
+      accounts: accounts.map(({ kind, uid, email, role, subscription_status, credits, created }) => ({
+        kind,
+        uid,
+        email,
+        role,
+        subscription_status,
+        credits,
+        created,
+      })),
+      createdAt: now,
+    },
+  });
+
+  return { accounts };
 });
 
 // ---------------------------------------------------------------------------

@@ -127,6 +127,7 @@ const TALENT_PROFILE_TARGET_LANGUAGES: Record<string, string> = {
   de: "German",
   ja: "Japanese",
   vi: "Vietnamese",
+  ar: "Arabic",
   source: "the same language as the resume",
 };
 

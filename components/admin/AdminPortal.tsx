@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, Calendar, Check, ChevronDown, CircleHelp, RotateCcw, Search, Star, X, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Calendar, Check, ChevronDown, CircleHelp, RotateCcw, Search, Star, Trash2, UserPlus, X, Zap } from 'lucide-react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
 import { AdminAccessDenied, AdminVerifying, resolveRoleWithFallback } from './AdminAccessGate';
@@ -18,6 +18,8 @@ import {
 import {
   adminAdjustCredits,
   adminCheckAccess,
+  adminCreateSampleAccounts,
+  adminDeleteUser,
   adminDeleteModel,
   adminGetAuditLog,
   adminGetDashboard,
@@ -51,6 +53,7 @@ import {
   type AdminPlanQuota,
   type AdminQuotas,
   type AdminRow,
+  type AdminSampleAccount,
   type AdminToolQuota,
   type AdminUserRow,
   type AuditLogEntry,
@@ -810,6 +813,9 @@ const AdminPortal: React.FC = () => {
   const quotaScrollTargetRef = useRef<QuotaSectionId | null>(null);
   const [userReport, setUserReport] = useState<Record<string, unknown> | null>(null);
   const [subStatus, setSubStatus] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [sampleAccounts, setSampleAccounts] = useState<AdminSampleAccount[] | null>(null);
+  const [sampleAccountsLoading, setSampleAccountsLoading] = useState(false);
   const [admins, setAdmins] = useState<AdminRow[]>([]);
   const [newAdmin, setNewAdmin] = useState('');
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
@@ -1452,6 +1458,7 @@ const AdminPortal: React.FC = () => {
   const openUser = async (uid: string) => {
     setError(null);
     setSelectedUid(uid);
+    setDeleteReason('');
     selectedUidRef.current = uid;
     setUserReport(null);
     setSubStatus('');
@@ -1514,6 +1521,69 @@ const AdminPortal: React.FC = () => {
   const selectedIsAdmin = !!selectedUid && admins.some((a) => a.uid === selectedUid);
   const selectedProductRole = ((userReport as { profile?: { role?: string | null } } | null)?.profile?.role) ?? null;
   const selectedSubscriptionPlans = subscriptionPlansForRole(selectedProductRole);
+
+  const createSampleAccounts = async () => {
+    setAdminConfirm({
+      title: 'Create sample accounts',
+      description: 'Create or reset the demo Job Seeker and Employer accounts with full product access and credits.',
+      detail: 'Existing sample accounts will keep the same email and receive a new password.',
+      confirmLabel: 'Create / reset',
+      run: async () => {
+        setError(null);
+        setSampleAccountsLoading(true);
+        try {
+          const result = await adminCreateSampleAccounts();
+          setSampleAccounts(result.accounts);
+          await loadUsers(userPageCursors[userPageIndex], userPageIndex);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to create sample accounts');
+        } finally {
+          setSampleAccountsLoading(false);
+        }
+      },
+    });
+  };
+
+  const deleteSelectedUser = async () => {
+    if (!selectedUid || !userReport) return;
+    const reason = deleteReason.trim();
+    if (reason.length < 10 || reason.length > 300) {
+      setError('Deletion reason must be between 10 and 300 characters.');
+      return;
+    }
+    const profile = ((userReport as { profile?: Record<string, unknown> }).profile ?? {}) as Record<string, unknown>;
+    const auth = (userReport as { auth?: Record<string, unknown> | null }).auth ?? null;
+    const str = (value: unknown) => (typeof value === 'string' && value ? value : null);
+    const email = str(profile.email) ?? (auth ? str(auth.email) : null);
+    const displayName = str(profile.full_name) ?? str(profile.company_name) ?? (auth ? str(auth.display_name) : null);
+    const label = displayName || email || selectedUid;
+    const uid = selectedUid;
+
+    setAdminConfirm({
+      title: 'Delete account',
+      description: 'This removes the Firebase Auth login and users profile. Historical audit, usage, and ledger records are retained.',
+      detail: `${label}\n${email ?? 'No email'}\n${uid}`,
+      confirmLabel: 'Delete account',
+      tone: 'danger',
+      run: async () => {
+        setError(null);
+        try {
+          await adminDeleteUser({ uid, reason });
+          if (selectedUidRef.current === uid) {
+            selectedUidRef.current = null;
+            setSelectedUid(null);
+            setUserReport(null);
+            setSubStatus('');
+            setDeleteReason('');
+          }
+          await loadUsers(userPageCursors[userPageIndex], userPageIndex);
+          await loadAdmins();
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to delete account');
+        }
+      },
+    });
+  };
 
   const toggleSelectedAdmin = async () => {
     if (!selectedUid) return;
@@ -1783,6 +1853,8 @@ const AdminPortal: React.FC = () => {
   const canPublishPrompts = hasAdminPermission(role, 'admin.prompts.publish');
   const canReadAdmins = hasAdminPermission(role, 'admin.admins.read');
   const canManageAdmins = hasAdminPermission(role, 'admin.admins.manage');
+  const canDeleteUsers = hasAdminPermission(role, 'admin.users.delete');
+  const canCreateSampleAccounts = hasAdminPermission(role, 'admin.users.sample.create');
   const visibleAdminBase = canManageAdmins ? admins : admins.filter((entry) => entry.role === 'reviewer');
   const visibleAdmins = adminRoleFilters.length === 0
     ? visibleAdminBase
@@ -3893,9 +3965,22 @@ const AdminPortal: React.FC = () => {
               <div className="px-5 py-4 border-b border-gray-200 space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <SectionHeading>Users</SectionHeading>
-                  <span className="text-xs text-gray-500">
-                    {userListLoading ? 'Loading...' : `Page ${userPageIndex + 1} - ${users.length} shown`}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {canCreateSampleAccounts && (
+                      <button
+                        type="button"
+                        onClick={createSampleAccounts}
+                        disabled={sampleAccountsLoading}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Sample accounts
+                      </button>
+                    )}
+                    <span className="text-xs text-gray-500">
+                      {userListLoading ? 'Loading...' : `Page ${userPageIndex + 1} - ${users.length} shown`}
+                    </span>
+                  </div>
                 </div>
                 <div className="grid gap-2.5 lg:grid-cols-[minmax(240px,1fr)_150px_190px_160px]">
                   <div className="relative">
@@ -3953,6 +4038,40 @@ const AdminPortal: React.FC = () => {
                     >
                       Clear All
                     </button>
+                  </div>
+                )}
+                {sampleAccounts && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-emerald-950">Sample accounts ready</p>
+                      <button
+                        type="button"
+                        onClick={() => setSampleAccounts(null)}
+                        className="rounded text-emerald-700 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                        aria-label="Dismiss sample account credentials"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="mt-2 grid gap-2 lg:grid-cols-2">
+                      {sampleAccounts.map((account) => (
+                        <div key={account.email} className="rounded-md border border-emerald-100 bg-white p-2.5 text-xs text-gray-700">
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className="font-semibold text-gray-900">
+                              {account.kind === 'job_seeker' ? 'Job seeker' : 'Employer'}
+                            </span>
+                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                              {account.created ? 'created' : 'reset'}
+                            </span>
+                          </div>
+                          <p className="break-all font-mono">{account.email}</p>
+                          <p className="break-all font-mono">{account.password}</p>
+                          <p className="mt-1 text-gray-500">
+                            {account.subscription_status} / {account.credits.toLocaleString()} credits
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -4212,6 +4331,47 @@ const AdminPortal: React.FC = () => {
                       }`}
                     >
                       {selectedIsAdmin ? 'Revoke admin' : 'Grant admin'}
+                    </button>
+                  </div>
+                )}
+                {canDeleteUsers && (
+                  <div className="space-y-2 border-t border-red-100 pt-3">
+                    <div className="flex items-start gap-2">
+                      <Trash2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-red-800">Delete account</p>
+                        <p className="text-[11px] leading-5 text-red-700">
+                          Removes Firebase Auth access and the user profile. Audit history is retained.
+                        </p>
+                      </div>
+                    </div>
+                    {selectedIsAdmin && (
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
+                        Remove this user from Access Control before deleting the account.
+                      </p>
+                    )}
+                    <div>
+                      <FieldLabel>Deletion reason</FieldLabel>
+                      <textarea
+                        value={deleteReason}
+                        onChange={(e) => setDeleteReason(e.target.value)}
+                        rows={2}
+                        maxLength={300}
+                        placeholder="Requested by client; duplicate or invalid account."
+                        className={`${textInput} resize-none border-red-200 focus:border-red-500 focus:ring-red-500`}
+                      />
+                      <p className={`mt-0.5 text-[11px] ${deleteReason.trim().length < 10 || deleteReason.length > 300 ? 'text-amber-600' : 'text-gray-400'}`}>
+                        {deleteReason.length}/300
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={deleteSelectedUser}
+                      disabled={selectedIsAdmin || deleteReason.trim().length < 10}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete account
                     </button>
                   </div>
                 )}

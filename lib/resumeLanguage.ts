@@ -7,6 +7,7 @@ const MARKET_LOCAL_LANGUAGE: Record<string, { name: string; labelKey: string }> 
   Japan:    { name: 'Japanese',   labelKey: 'resume_lang_japanese' },
   China:    { name: 'Simplified Chinese', labelKey: 'resume_lang_chinese' },
   Vietnam:  { name: 'Vietnamese', labelKey: 'resume_lang_vietnamese' },
+  'United Arab Emirates': { name: 'Arabic', labelKey: 'resume_lang_arabic' },
 };
 
 export type OutputLanguageChoice = 'en' | 'local';

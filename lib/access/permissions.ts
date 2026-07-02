@@ -26,6 +26,8 @@ export type AdminPermission =
   | 'admin.users.read'
   | 'admin.users.credits.adjust'
   | 'admin.users.subscription.write'
+  | 'admin.users.delete'
+  | 'admin.users.sample.create'
   | 'admin.admins.read'
   | 'admin.prompts.read'
   | 'admin.prompts.draft'
@@ -52,6 +54,8 @@ const ADMIN_PERMISSIONS: AdminPermission[] = [
   'admin.users.read',
   'admin.users.credits.adjust',
   'admin.users.subscription.write',
+  'admin.users.delete',
+  'admin.users.sample.create',
   'admin.admins.read',
   'admin.prompts.read',
   'admin.prompts.draft',
@@ -87,7 +91,7 @@ export const hasAdminPermission = (
 /** Human-readable summaries rendered in the Access Control permission matrix. */
 export const ADMIN_ROLE_DESCRIPTIONS: Record<AdminRole, string> = {
   reviewer: 'Read-only oversight: platform dashboard and the audit trail.',
-  admin: 'Day-to-day operations: users, credits, subscriptions, prompts (drafts), quotas.',
+  admin: 'Day-to-day operations: users, credits, subscriptions, sample accounts, prompts (drafts), quotas.',
   super: 'Full control: everything above plus model routing, provider keys, prompt publishing, admin invitations, API platform, billing and Web3 settings.',
 };
 
@@ -101,6 +105,8 @@ export const ADMIN_PERMISSION_MATRIX: { label: string; permission: AdminPermissi
   { label: 'View users', permission: 'admin.users.read' },
   { label: 'Adjust credits', permission: 'admin.users.credits.adjust' },
   { label: 'Override subscriptions', permission: 'admin.users.subscription.write' },
+  { label: 'Delete product users', permission: 'admin.users.delete' },
+  { label: 'Create sample accounts', permission: 'admin.users.sample.create' },
   { label: 'Edit prompt drafts', permission: 'admin.prompts.draft' },
   { label: 'Publish / roll back prompts', permission: 'admin.prompts.publish' },
   { label: 'Edit platform quotas', permission: 'admin.quotas.write' },
