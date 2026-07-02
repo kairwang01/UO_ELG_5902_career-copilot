@@ -160,7 +160,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   users: {
-    description: 'Search users, see product-role badges, inspect usage, adjust credits, and override subscriptions within each user product role.',
+    description: 'Search users, use role-aware plan filters, inspect usage, adjust credits, and override subscriptions within each user product role.',
     roles: {
       super: 'View users, adjust credits, override role-compatible subscriptions, and manage admin access.',
       admin: 'View users, adjust credits, and override role-compatible subscriptions.',
@@ -237,6 +237,45 @@ const PLAN_LABELS: Record<AdminPlanKey, string> = {
   single_post: 'Single Post',
   job_pack: 'Job Pack',
 };
+
+type UserFilterOption =
+  | { type?: 'option'; value: string; label: string }
+  | { type: 'header'; label: string; description?: string; dividerBefore?: boolean };
+
+const USER_PLAN_FILTER_OPTIONS: readonly UserFilterOption[] = [
+  {
+    type: 'header',
+    label: 'Shared free plan',
+    description: 'Free is shared; combine with Role to isolate candidate, employer, or agency free users.',
+  },
+  { value: 'free', label: 'Free (shared: candidate / employer / agency)' },
+  {
+    type: 'header',
+    label: 'Candidate role plans',
+    description: 'Use with Role = candidate for candidate-only views.',
+    dividerBefore: true,
+  },
+  { value: 'essentials', label: 'Candidate Essentials' },
+  { value: 'accelerator', label: 'Candidate Accelerator' },
+  { value: 'executive', label: 'Candidate Executive' },
+  {
+    type: 'header',
+    label: 'Employer role plans',
+    description: 'Use with Role = employer for employer-only views.',
+    dividerBefore: true,
+  },
+  { value: 'starter', label: 'Employer Starter' },
+  { value: 'growth', label: 'Employer Growth' },
+  { value: 'pro', label: 'Employer Pro' },
+  { value: 'single_post', label: 'Employer Single Post' },
+  { value: 'job_pack', label: 'Employer Job Pack' },
+];
+
+const USER_PLAN_FILTER_LABELS = Object.fromEntries(
+  USER_PLAN_FILTER_OPTIONS
+    .filter((option): option is Extract<UserFilterOption, { value: string }> => option.type !== 'header')
+    .map((option) => [option.value, option.label]),
+) as Record<string, string>;
 
 const USER_ROLE_OPTIONS = ['candidate', 'employer', 'agency'] as const;
 
@@ -585,12 +624,13 @@ const formatCountLabel = (label: string, selectedLabels: string[]) => {
 
 const UserFilterDropdown: React.FC<{
   label: string;
-  options: readonly { value: string; label: string }[];
+  options: readonly UserFilterOption[];
   selected: string[];
   onChange: (next: string[]) => void;
 }> = ({ label, options, selected, onChange }) => {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const selectedLabels = options
+    .filter((option): option is Extract<UserFilterOption, { value: string }> => option.type !== 'header')
     .filter((option) => selected.includes(option.value))
     .map((option) => option.label);
 
@@ -622,6 +662,16 @@ const UserFilterDropdown: React.FC<{
       </summary>
       <div className="absolute left-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg">
         {options.map((option) => {
+          if (option.type === 'header') {
+            return (
+              <div key={`header-${option.label}`} className={option.dividerBefore ? 'mt-1.5 border-t border-gray-100 pt-2' : 'pb-1'}>
+                <p className="px-2.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">{option.label}</p>
+                {option.description && (
+                  <p className="px-2.5 pt-0.5 text-[10px] leading-4 text-gray-400">{option.description}</p>
+                )}
+              </div>
+            );
+          }
           const checked = selected.includes(option.value);
           return (
             <button
@@ -857,7 +907,7 @@ const AdminPortal: React.FC = () => {
       ? [{ key: 'search', label: `Search: ${debouncedUserSearch.trim()}` }]
       : []),
     ...userRoleFilters.map((role) => ({ key: `role:${role}`, label: `Role: ${role}` })),
-    ...userPlanFilters.map((plan) => ({ key: `plan:${plan}`, label: `Status: ${PLAN_LABELS[plan as AdminPlanKey] ?? plan}` })),
+    ...userPlanFilters.map((plan) => ({ key: `plan:${plan}`, label: `Plan: ${USER_PLAN_FILTER_LABELS[plan] ?? PLAN_LABELS[plan as AdminPlanKey] ?? plan}` })),
     ...(userCreatedFilter
       ? [{ key: 'created', label: `Joined: ${USER_CREATED_FILTERS.find((f) => f.value === userCreatedFilter)?.label ?? userCreatedFilter}` }]
       : []),
@@ -3730,7 +3780,7 @@ const AdminPortal: React.FC = () => {
                   />
                   <UserFilterDropdown
                     label="Plan"
-                    options={PLAN_KEYS.map((plan) => ({ value: plan, label: PLAN_LABELS[plan] }))}
+                    options={USER_PLAN_FILTER_OPTIONS}
                     selected={userPlanFilters}
                     onChange={setUserPlanFilters}
                   />
