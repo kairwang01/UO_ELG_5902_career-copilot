@@ -169,7 +169,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
   admins: {
     description: 'Control console access and review product/admin permission matrices.',
     roles: {
-      super: 'Invite, remove, and update console users; view permission matrices.',
+      super: 'Invite, remove, and change admin/reviewer roles for console users; view permission matrices.',
       admin: 'View reviewer accounts.',
     },
   },

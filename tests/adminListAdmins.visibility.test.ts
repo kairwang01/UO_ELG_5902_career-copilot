@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterAdminRowsForViewer, profileAvatarUrl } from '../functions/src/handlers/adminPortal';
+import { buildAdminRoleAccessPatch, filterAdminRowsForViewer, profileAvatarUrl } from '../functions/src/handlers/adminPortal';
 
 type Rows = Parameters<typeof filterAdminRowsForViewer>[0];
 
@@ -34,5 +34,12 @@ describe('adminListAdmins visibility', () => {
 
   it('falls back to the Firebase Auth photo URL', () => {
     expect(profileAvatarUrl({}, { photoURL: 'https://cdn.example.com/auth.png' } as any)).toBe('https://cdn.example.com/auth.png');
+  });
+
+  it('promotes legacy admin_uids entries into RBAC when changing role', () => {
+    expect(buildAdminRoleAccessPatch({}, ['legacy-admin', 'other-admin'], 'legacy-admin', 'reviewer')).toEqual({
+      admins: { 'legacy-admin': { role: 'reviewer', status: 'active' } },
+      admin_uids: ['other-admin'],
+    });
   });
 });

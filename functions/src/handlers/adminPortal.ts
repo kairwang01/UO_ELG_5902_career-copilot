@@ -981,6 +981,28 @@ interface SetAdminRoleRequest {
   role: AdminRole;
 }
 
+export function buildAdminRoleAccessPatch(
+  adminsMap: Record<string, AdminEntry>,
+  legacyDocUids: string[],
+  targetUid: string,
+  role: AdminRole
+): { admins: Record<string, AdminEntry>; admin_uids: string[] } {
+  const existing = adminsMap[targetUid];
+  if (!existing && !legacyDocUids.includes(targetUid)) {
+    throw new HttpsError("not-found", "Admin entry not found. Use adminInviteAdmin to add them first.");
+  }
+
+  return {
+    admins: {
+      [targetUid]: {
+        ...(existing ?? { status: "active" as const }),
+        role,
+      },
+    },
+    admin_uids: legacyDocUids.filter((uid) => uid !== targetUid),
+  };
+}
+
 /**
  * Change the role of an existing admin/reviewer entry.
  * Super-only. A super cannot change their own role.
@@ -1001,17 +1023,16 @@ export const adminSetAdminRoleFunction = onCall({ invoker: "public" }, async (re
   const accessRef = db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.access);
   const accessSnap = await accessRef.get();
   const adminsMap: Record<string, AdminEntry> = accessSnap.data()?.admins ?? {};
-
-  if (!adminsMap[targetUid]) {
-    throw new HttpsError("not-found", "Admin entry not found. Use adminInviteAdmin to add them first.");
-  }
-
-  adminsMap[targetUid] = { ...adminsMap[targetUid], role };
+  const legacyDocUids: string[] = accessSnap.data()?.admin_uids ?? [];
+  const accessPatch = buildAdminRoleAccessPatch(adminsMap, legacyDocUids, targetUid, role);
 
   await accessRef.set(
-    { admins: { [targetUid]: adminsMap[targetUid] }, updated_at: new Date().toISOString(), updated_by: callerUid },
+    { ...accessPatch, updated_at: new Date().toISOString(), updated_by: callerUid },
     { merge: true }
   );
+  const existingUser = await admin.auth().getUser(targetUid);
+  const existingClaims = (existingUser.customClaims ?? {}) as Record<string, unknown>;
+  await admin.auth().setCustomUserClaims(targetUid, { ...existingClaims, admin: true });
   invalidateAccessCache();
 
   await logAdminAction({
@@ -1021,7 +1042,7 @@ export const adminSetAdminRoleFunction = onCall({ invoker: "public" }, async (re
     details: { role },
   });
 
-  return { uid: targetUid, role, status: adminsMap[targetUid].status };
+  return { uid: targetUid, role, status: accessPatch.admins[targetUid].status };
 });
 
 interface RemoveAdminRequest {
