@@ -3621,5 +3621,17 @@
   "mi_speech_label": "Answer language",
   "mi_speech_voice": "Voice",
   "mi_speech_listening": "Listening",
-  "mi_speech_auto_using": "Auto detected:"
+  "mi_speech_auto_using": "Auto detected:",
+  "verify_gate_title": "Verify your email to continue",
+  "verify_gate_body": "We sent a verification link to {email}. Open it to activate your account, then come back and continue.",
+  "verify_gate_your_email": "your email address",
+  "verify_gate_resent": "Verification email sent — check your inbox and spam folder.",
+  "verify_gate_send_failed": "Couldn't send the email just now. Please try again in a moment.",
+  "verify_gate_still_unverified": "Not verified yet. Open the link in the email, then tap \"I’ve verified\" again.",
+  "verify_gate_check": "I’ve verified — continue",
+  "verify_gate_checking": "Checking…",
+  "verify_gate_resend": "Resend verification email",
+  "verify_gate_resend_cooldown": "Resend in {seconds}s",
+  "verify_gate_typo_hint": "Entered the wrong email? Sign out and register again with the correct address.",
+  "verify_gate_signout": "Sign out"
 }
