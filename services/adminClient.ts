@@ -206,8 +206,11 @@ export interface AuditLogEntry {
   created_at: string | null;
 }
 
-export const adminGetAuditLog = () =>
-  call<Record<string, never>, { entries: AuditLogEntry[] }>('adminGetAuditLog')({}).then((r) => r.data);
+export const adminGetAuditLog = (limit = 25, start_after_id?: string) =>
+  call<
+    { limit?: number; start_after_id?: string },
+    { entries: AuditLogEntry[]; next_cursor: string | null }
+  >('adminGetAuditLog')({ limit, start_after_id }).then((r) => r.data);
 
 // ─── Models ────────────────────────────────────────────────────────────────
 

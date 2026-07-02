@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, Calendar, Check, ChevronDown, CircleHelp, RotateCcw, Search, Star, X, Zap } from 'lucide-react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
@@ -70,7 +70,7 @@ import Avatar from '../Avatar';
 import { ToastProvider } from '../Toast';
 import ConfirmActionDialog from '../ConfirmActionDialog';
 
-// ─── minimal i18n stub — keys returned in StructuredOutput ───────────────────
+// Minimal i18n stub ? keys returned in StructuredOutput.
 const STRINGS: Record<string, string> = {
   'admin.role.super': 'Super',
   'admin.role.admin': 'Admin',
@@ -89,7 +89,7 @@ const STRINGS: Record<string, string> = {
   'admin.admins.status': 'Status',
   'admin.prompts.save_draft': 'Save as draft',
   'admin.prompts.change_summary': 'Change summary (optional)',
-  'admin.prompts.change_summary_placeholder': 'What changed and why…',
+  'admin.prompts.change_summary_placeholder': 'What changed and why...',
   'admin.prompts.publish': 'Publish',
   'admin.prompts.publish_confirm': 'Publish this version? It will take effect immediately for all users.',
   'admin.prompts.rollback': 'Roll back',
@@ -99,12 +99,12 @@ const STRINGS: Record<string, string> = {
   'admin.prompts.status_draft': 'draft',
   'admin.prompts.status_published': 'published',
   'admin.prompts.status_rolled_back': 'rolled back',
-  'admin.credits.reason_label': 'Reason (required, 10–300 chars)',
+  'admin.credits.reason_label': 'Reason (required, 10-300 chars)',
   'admin.credits.reason_placeholder': 'e.g. Refund for failed job scan on 2026-06-01',
-  'admin.credits.delta_constraint': 'Max ±5000 credits per adjustment.',
+  'admin.credits.delta_constraint': 'Max +/-5000 credits per adjustment.',
   'admin.credits.apply': 'Apply',
   'admin.model.api_keys_label': 'API keys (one per line)',
-  'admin.model.api_keys_placeholder': 'sk-… (new keys; existing masked keys listed below)',
+  'admin.model.api_keys_placeholder': 'sk-... (new keys; existing masked keys listed below)',
   'admin.model.fallback_chain': 'Fallback chain',
   'admin.model.fallback_chain_hint': 'Model ids to try in order if this model fails.',
   'admin.model.priority': 'Priority',
@@ -115,19 +115,28 @@ const STRINGS: Record<string, string> = {
   'admin.model.set_default_btn': 'Set as default',
   'admin.set_default_confirm': 'Set this model as the platform routing default? All auto-routed requests will use it.',
   'admin.model.set_default_ok': 'Default model updated.',
-  'admin.dashboard.model_routing_title': 'Model Routing / 模型路由',
+  'admin.dashboard.model_routing_title': 'Model Routing',
   'admin.dashboard.model_routing_default': 'Default model',
   'admin.dashboard.model_routing_enabled': 'Enabled models',
   'admin.dashboard.model_routing_chain': 'Fallback chain',
   'admin.dashboard.model_routing_none': 'Not configured',
   'admin.access.reviewer_only': 'You have reviewer access. Only Dashboard and Audit Log are available.',
-  'admin_free_cap_help': 'Free-tier output-token ceiling (服务分级). Requests from free users will be capped at this many output tokens. Default 8192 = Gemini Flash native max (no artificial truncation). Lower this value to create a harder free/paid quality boundary.',
+  'admin_free_cap_help': 'Free-tier output-token ceiling (鏈嶅姟鍒嗙骇). Requests from free users will be capped at this many output tokens. Default 8192 = Gemini Flash native max (no artificial truncation). Lower this value to create a harder free/paid quality boundary.',
   'admin.dashboard.model_routing_select': 'Change default model',
 };
 const t = (key: string) => STRINGS[key] ?? key;
 
 type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'billing' | 'apiplatform' | 'web3' | 'audit';
 type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
+type QuotaSectionId = 'global' | 'plans' | 'tools' | 'posting' | 'interview';
+
+const QUOTA_SECTIONS: { id: QuotaSectionId; label: string }[] = [
+  { id: 'global', label: 'Global quotas' },
+  { id: 'plans', label: 'Plan quotas' },
+  { id: 'tools', label: 'Tool access' },
+  { id: 'posting', label: 'Employer posting' },
+  { id: 'interview', label: 'Mock interview' },
+];
 
 // Keep this in sync with admin page behavior, role permissions, and sidebar changes.
 const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
@@ -153,7 +162,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   quotas: {
-    description: 'Manage plan quotas, credit grants, run limits, and tool credit costs.',
+    description: 'Manage plan quotas, credit grants, run limits, and tool credit costs with sticky section shortcuts.',
     roles: {
       super: 'View and update quotas.',
       admin: 'View and update quotas.',
@@ -193,7 +202,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   audit: {
-    description: 'Read the latest admin action log for operational review.',
+    description: 'Read paginated admin action logs for operational review.',
     roles: {
       super: 'View audit log entries.',
       admin: 'View audit log entries.',
@@ -287,6 +296,7 @@ const USER_CREATED_FILTERS = [
 ] as const;
 
 const USER_PAGE_SIZE = 10;
+const AUDIT_PAGE_SIZE = 25;
 
 const ADMIN_ROLE_LABELS: Record<AdminRole, string> = {
   reviewer: 'Reviewer',
@@ -583,7 +593,7 @@ const getPromptModuleStyle = (module: string) => {
   return PROMPT_MODULE_STYLES[index];
 };
 
-// Per-field semantics for the plan-quota table. CRITICAL: `0` means different things —
+// Per-field semantics for the plan-quota table. CRITICAL: `0` means different things -
 // for daily runs/credits the runtime gate is `> 0` (so 0 = unlimited), but active_job
 // uses `active >= limit` (so 0 = NONE allowed, blocks posting). monthly_grant is an
 // amount, not a limit. Surfacing this prevents the classic "I set it to 0 = unlimited"
@@ -592,7 +602,7 @@ const PLAN_QUOTA_FIELDS: { key: keyof AdminPlanQuota; header: string; tip: strin
   { key: 'daily_run_limit', header: 'Daily runs', tip: 'Max AI tool runs per day for this plan. 0 = Unlimited (the plan relies on credits instead).', zeroLabel: 'Unlimited' },
   { key: 'daily_credit_limit', header: 'Daily credits', tip: 'Max credits a user on this plan can spend per day. 0 = Unlimited.', zeroLabel: 'Unlimited' },
   { key: 'monthly_credit_grant', header: 'Monthly grant', tip: 'Credits granted at the start of each billing cycle. 0 = no grant.', zeroLabel: null },
-  { key: 'active_job_limit', header: 'Active jobs', tip: 'Max simultaneously OPEN job posts. 0 = None allowed (blocks posting) — set a positive number for employer plans.', zeroLabel: 'None' },
+  { key: 'active_job_limit', header: 'Active jobs', tip: 'Max simultaneously OPEN job posts. 0 = None allowed (blocks posting) ? set a positive number for employer plans.', zeroLabel: 'None' },
 ];
 
 const effectivePlanQuota = (quotas: AdminQuotas, plan: AdminPlanKey): AdminPlanQuota => ({
@@ -761,7 +771,7 @@ const UserSingleFilterDropdown: React.FC<{
   );
 };
 
-// ─── main component ────────────────────────────────────────────────────────
+// Main component.
 
 const AdminPortal: React.FC = () => {
   const [session, setSession] = useState<Awaited<ReturnType<typeof data.auth.getSession>>>(null);
@@ -778,6 +788,8 @@ const AdminPortal: React.FC = () => {
   const [llm, setLlm] = useState<Record<string, string>>({});
   const [quotas, setQuotas] = useState<AdminQuotas>({});
   const [quotasLoadedAt, setQuotasLoadedAt] = useState<number | null>(null);
+  const [activeQuotaSection, setActiveQuotaSection] = useState<QuotaSectionId>('global');
+  const [quotaNavScrolled, setQuotaNavScrolled] = useState(false);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [userCursor, setUserCursor] = useState<string | null>(null);
   const [userPageIndex, setUserPageIndex] = useState(0);
@@ -793,11 +805,17 @@ const AdminPortal: React.FC = () => {
   // paint its data under a user the admin has since switched to.
   const selectedUidRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
+  const quotaPanelRef = useRef<HTMLDivElement | null>(null);
+  const quotaSectionRefs = useRef<Partial<Record<QuotaSectionId, HTMLElement | null>>>({});
+  const quotaScrollTargetRef = useRef<QuotaSectionId | null>(null);
   const [userReport, setUserReport] = useState<Record<string, unknown> | null>(null);
   const [subStatus, setSubStatus] = useState('');
   const [admins, setAdmins] = useState<AdminRow[]>([]);
   const [newAdmin, setNewAdmin] = useState('');
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
+  const [auditCursor, setAuditCursor] = useState<string | null>(null);
+  const [auditPageIndex, setAuditPageIndex] = useState(0);
+  const [auditPageCursors, setAuditPageCursors] = useState<(string | undefined)[]>([undefined]);
   const [auditLoaded, setAuditLoaded] = useState(false);
 
   // test-connection status: keyed by 'gemini'|'kairllm'|'deepseek' or model id
@@ -824,7 +842,7 @@ const AdminPortal: React.FC = () => {
   const [expandedPromptKey, setExpandedPromptKey] = useState<string | null>(null);
   // per-row draft text (only kept for the currently-expanded row)
   const [promptDraft, setPromptDraft] = useState('');
-  // per-row inline feedback: key → { ok: string } | { err: string }
+  // per-row inline feedback: key -> { ok: string } | { err: string }
   const [promptFeedback, setPromptFeedback] = useState<Record<string, { ok?: string; err?: string }>>({});
   const [promptSaving, setPromptSaving] = useState(false);
 
@@ -847,7 +865,7 @@ const AdminPortal: React.FC = () => {
   const [kairllmUrl, setKairllmUrl] = useState('');
   const [deepseekKey, setDeepseekKey] = useState('');
   const [deepseekUrl, setDeepseekUrl] = useState('');
-  // Which provider's credentials are shown — single-select, like mainstream API
+  // Which provider's credentials are shown ? single-select, like mainstream API
   // consoles, so only the chosen provider's config renders (no 3-card clutter).
   const [providerTab, setProviderTab] = useState<'gemini' | 'kairllm' | 'deepseek'>('gemini');
 
@@ -998,7 +1016,7 @@ const AdminPortal: React.FC = () => {
       .catch(() => {
         if (active) setIsAdmin(false);
       });
-    // Fetch fine-grained role — backend is authoritative; UI just mirrors it for hiding elements.
+    // Fetch fine-grained role ? backend is authoritative; UI just mirrors it for hiding elements.
     // resolveRoleWithFallback handles permission-denied/not-found during rollout gracefully.
     resolveRoleWithFallback(adminWhoAmI)
       .then((role) => {
@@ -1079,7 +1097,7 @@ const AdminPortal: React.FC = () => {
     }
   };
 
-  // ── data loaders ──────────────────────────────────────────────────────────
+  // Data loaders.
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -1173,13 +1191,16 @@ const AdminPortal: React.FC = () => {
     }
   }, [adminRole]);
 
-  const loadAuditLog = useCallback(async () => {
+  const loadAuditLog = useCallback(async (cursor?: string, pageIndex = 0) => {
     setError(null);
     setAuditLoaded(false);
     try {
-      const res = await adminGetAuditLog();
+      const res = await adminGetAuditLog(AUDIT_PAGE_SIZE, cursor);
       if (!mountedRef.current) return;
       setAuditLog(res.entries);
+      setAuditCursor(res.next_cursor);
+      setAuditPageIndex(pageIndex);
+      if (pageIndex === 0) setAuditPageCursors([undefined]);
       setLastRefreshed(new Date());
     } catch (e) {
       if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load audit log', 'Failed to load audit log'));
@@ -1187,6 +1208,23 @@ const AdminPortal: React.FC = () => {
       if (mountedRef.current) setAuditLoaded(true);
     }
   }, [adminRole]);
+
+  const loadNextAuditPage = () => {
+    if (!auditCursor) return;
+    const nextPage = auditPageIndex + 1;
+    setAuditPageCursors((prev) => {
+      const next = prev.slice(0, nextPage);
+      next[nextPage] = auditCursor;
+      return next;
+    });
+    loadAuditLog(auditCursor, nextPage);
+  };
+
+  const loadPreviousAuditPage = () => {
+    if (auditPageIndex === 0) return;
+    const previousPage = auditPageIndex - 1;
+    loadAuditLog(auditPageCursors[previousPage], previousPage);
+  };
 
   const loadModels = useCallback(async () => {
     setError(null);
@@ -1251,7 +1289,55 @@ const AdminPortal: React.FC = () => {
     if (tab === 'audit') loadAuditLog();
   }, [isAdmin, adminRole, tab, loadDashboard, loadLlm, loadModels, loadPrompts, loadQuotas, loadUsers, loadAdmins, loadAuditLog]);
 
-  // ── mutators ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (tab !== 'quotas') return;
+    const scrollRoot = quotaPanelRef.current?.closest('main') as HTMLElement | null;
+    if (!scrollRoot) return;
+
+    let frame = 0;
+    const updateQuotaNav = () => {
+      frame = 0;
+      setQuotaNavScrolled(scrollRoot.scrollTop > 8);
+
+      const marker = scrollRoot.getBoundingClientRect().top + 128;
+      const target = quotaScrollTargetRef.current;
+      if (target) {
+        setActiveQuotaSection(target);
+        const targetNode = quotaSectionRefs.current[target];
+        if (targetNode && targetNode.getBoundingClientRect().top <= marker) {
+          quotaScrollTargetRef.current = null;
+        } else {
+          return;
+        }
+      }
+
+      const current = QUOTA_SECTIONS.reduce<QuotaSectionId>((active, section) => {
+        const node = quotaSectionRefs.current[section.id];
+        return node && node.getBoundingClientRect().top <= marker ? section.id : active;
+      }, QUOTA_SECTIONS[0].id);
+      setActiveQuotaSection(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateQuotaNav);
+    };
+
+    updateQuotaNav();
+    scrollRoot.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      scrollRoot.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [tab]);
+
+  const scrollToQuotaSection = (sectionId: QuotaSectionId) => {
+    quotaScrollTargetRef.current = sectionId;
+    setActiveQuotaSection(sectionId);
+    quotaSectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Mutators.
 
   const saveLlm = async () => {
     setLoading(true);
@@ -1388,7 +1474,7 @@ const AdminPortal: React.FC = () => {
     const delta = Number(creditDelta);
     if (!Number.isFinite(delta) || delta === 0) return;
     if (Math.abs(delta) > 5000) {
-      setError('Credit adjustment cannot exceed ±5000.');
+      setError('Credit adjustment cannot exceed +/-5000.');
       return;
     }
     const reason = creditReason.trim();
@@ -1544,7 +1630,7 @@ const AdminPortal: React.FC = () => {
       setMfProvider(entry.provider);
       setMfBuiltin(entry.builtin ?? '');
       setMfBaseUrl(entry.base_url ?? '');
-      setMfApiKey(''); // never pre-fill — masked value is display-only
+      setMfApiKey(''); // never pre-fill ? masked value is display-only
       setMfApiKeys(''); // new keys textarea starts empty
       setMfFallbackChain(entry.fallbackChain ?? []);
       setMfPriority(entry.priority !== undefined ? String(entry.priority) : '');
@@ -1669,7 +1755,7 @@ const AdminPortal: React.FC = () => {
     });
   };
 
-  // ── auth gates ────────────────────────────────────────────────────────────
+  // Auth gates.
 
   if (!session) {
     return <AdminSignIn />;
@@ -1683,7 +1769,7 @@ const AdminPortal: React.FC = () => {
     return <AdminAccessDenied />;
   }
 
-  // ── role-gating helpers ───────────────────────────────────────────────────
+  // Role-gating helpers.
   // Server is authoritative; these just drive UI visibility.
   // reviewer: Dashboard + Audit Log only
   // admin:    + Users (with credits), Prompts (draft-only), Quotas
@@ -1691,7 +1777,7 @@ const AdminPortal: React.FC = () => {
 
   const role = adminRole ?? 'admin'; // default to admin while loading
   const isReviewer = role === 'reviewer';
-  // Derived capabilities — single source: lib/access/permissions.ts.
+  // Derived capabilities ? single source: lib/access/permissions.ts.
   const canReadModels = hasAdminPermission(role, 'admin.models.read');
   const canWriteModels = hasAdminPermission(role, 'admin.models.write');
   const canPublishPrompts = hasAdminPermission(role, 'admin.prompts.publish');
@@ -1714,7 +1800,7 @@ const AdminPortal: React.FC = () => {
     ? accessTab
     : accessTabs[0].id;
 
-  // ── tab definitions ───────────────────────────────────────────────────────
+  // Tab definitions.
   // Visibility is driven by the central registry (lib/access/permissions.ts);
   // the server re-checks every action regardless of what renders here.
 
@@ -1749,7 +1835,7 @@ const AdminPortal: React.FC = () => {
     else if (tab === 'audit') loadAuditLog();
   };
 
-  // ── render ────────────────────────────────────────────────────────────────
+  // Render.
 
   return (
     <ToastProvider>
@@ -1915,12 +2001,12 @@ const AdminPortal: React.FC = () => {
         {/* Reviewer notice */}
         {isReviewer && (
           <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-2.5 rounded-lg text-sm">
-            <span aria-hidden="true">ℹ</span>
+            <span aria-hidden="true">i</span>
             <span>{t('admin.access.reviewer_only')}</span>
           </div>
         )}
 
-        {/* ── DASHBOARD ─────────────────────────────────────────────────── */}
+        {/* DASHBOARD */}
         {tab === 'dashboard' && (
           <>
             {!dashboard && !loading && (
@@ -1952,7 +2038,7 @@ const AdminPortal: React.FC = () => {
                   ))}
                 </div>
 
-                {/* AI provider health — visible to every admin so a "keys missing →
+                {/* AI provider health ? visible to every admin so a "keys missing ->
                     all AI down" outage is obvious, even though editing keys is super-only. */}
                 {dashboard.ai_providers && (
                   dashboard.ai_providers.any_configured ? (
@@ -1961,7 +2047,7 @@ const AdminPortal: React.FC = () => {
                       {([['Gemini', 'gemini'], ['KAIRLLM', 'kairllm'], ['DeepSeek', 'deepseek']] as const).map(([label, key]) => (
                         <span key={key} className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                           <span className={dashboard.ai_providers![key] ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500'}>
-                            {dashboard.ai_providers![key] ? '●' : '○'}
+                            {dashboard.ai_providers![key] ? 'on' : 'off'}
                           </span>
                           {label}
                         </span>
@@ -1971,7 +2057,7 @@ const AdminPortal: React.FC = () => {
                     <div role="alert" className="rounded-lg border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-800 dark:text-red-200">
                       <p className="flex items-start gap-2 font-semibold">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                        <span>No provider keys are configured — generation tools are currently failing.</span>
+                        <span>No provider keys are configured ? generation tools are currently failing.</span>
                       </p>
                       <p className="mt-1 text-red-700 dark:text-red-300">
                         A super-admin must add a provider key under <span className="font-medium">Models &amp; Keys</span> (or set it in the functions environment). Services recover within ~60s of saving.
@@ -1982,7 +2068,7 @@ const AdminPortal: React.FC = () => {
                           onClick={() => setTab('ai')}
                           className="mt-2 inline-flex items-center gap-1 rounded-md bg-red-700 hover:bg-red-800 px-3 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-offset-red-950"
                         >
-                          Go to Models &amp; Keys →
+                            Go to Models &amp; Keys &gt;
                         </button>
                       )}
                     </div>
@@ -1993,8 +2079,8 @@ const AdminPortal: React.FC = () => {
                   <p className="text-xs text-amber-700 flex items-center gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                     Showing partial data
-                    {dashboard.users_truncated ? ' · user count capped at 2,000' : ''}
-                    {dashboard.week_usage_truncated ? ' · usage aggregates capped at 5,000 events' : ''}
+                    {dashboard.users_truncated ? ' - user count capped at 2,000' : ''}
+                    {dashboard.week_usage_truncated ? ' - usage aggregates capped at 5,000 events' : ''}
                   </p>
                 )}
 
@@ -2005,7 +2091,7 @@ const AdminPortal: React.FC = () => {
                       {t('admin.dashboard.model_routing_title')}
                     </p>
                     <div className="flex flex-wrap gap-6 items-start">
-                      {/* Default model — selectable for super; read-only for admin/reviewer */}
+                      {/* Default model ? selectable for super; read-only for admin/reviewer */}
                       <div className="min-w-[180px]">
                         <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
                           {t('admin.dashboard.model_routing_default')}
@@ -2046,7 +2132,7 @@ const AdminPortal: React.FC = () => {
                             {defaultModelChanging && (
                               <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
                                 <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin" />
-                                Saving…
+                                Saving...
                               </span>
                             )}
                             {/* Live region so the set-default result is announced to screen readers. */}
@@ -2162,7 +2248,7 @@ const AdminPortal: React.FC = () => {
                   </div>
                 </Card>
 
-                {/* Free / uncharged tool volume — observability only, never billed or capped */}
+                {/* Free / uncharged tool volume ? observability only, never billed or capped */}
                 <Card>
                   <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
                     <SectionHeading>7-day free tool usage (no charge)</SectionHeading>
@@ -2216,7 +2302,7 @@ const AdminPortal: React.FC = () => {
                               {String(ev.created_at).slice(0, 19).replace('T', ' ')}
                             </span>
                             <span className="text-gray-500 dark:text-gray-500 shrink-0">
-                              {String(ev.uid).slice(0, 8)}…
+                              {String(ev.uid).slice(0, 8)}...
                             </span>
                             <span className="text-blue-600 dark:text-blue-400 shrink-0">{String(ev.tool)}</span>
                             <span className="ml-auto text-gray-500 dark:text-gray-500">{String(ev.credit_cost)} cr</span>
@@ -2231,24 +2317,24 @@ const AdminPortal: React.FC = () => {
           </>
         )}
 
-        {/* ── MODELS & KEYS (merged) ────────────────────────────────── */}
+        {/* MODELS & KEYS */}
         {tab === 'ai' && (
           <div className="space-y-8">
 
-            {/* ══ SECTION 0: KEY POOL HEALTH ═══════════════════════════════ */}
+            {/* 閳烘劏鏅?SECTION 0: KEY POOL HEALTH 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡?*/}
             <KeyPoolHealthSection models={models} />
 
-            {/* ══ SECTION A: PROVIDER CREDENTIALS ══════════════════════════ */}
+            {/* 閳烘劏鏅?SECTION A: PROVIDER CREDENTIALS 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅?*/}
             <div>
               <div className="mb-4">
                 <SectionHeading>Provider credentials</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   Rotate keys, update endpoints, and verify live connectivity before saving.
-                  Raw keys are never echoed — only masked previews are shown.
+                  Raw keys are never echoed ? only masked previews are shown.
                 </p>
               </div>
 
-              {/* Provider selector — single-select dropdown (mainstream API-console
+              {/* Provider selector ? single-select dropdown (mainstream API-console
                   style) so only the chosen provider's config renders, no 3-card clutter. */}
               <div className="mb-5 max-w-xs">
                 <FieldLabel htmlFor="provider-select">Provider</FieldLabel>
@@ -2258,15 +2344,15 @@ const AdminPortal: React.FC = () => {
                   onChange={(e) => setProviderTab(e.target.value as 'gemini' | 'kairllm' | 'deepseek')}
                   className={textInput}
                 >
-                  <option value="gemini">Gemini — free tier</option>
-                  <option value="kairllm">KairLLM — paid tier</option>
-                  <option value="deepseek">DeepSeek — business tier</option>
+                  <option value="gemini">Gemini ? free tier</option>
+                  <option value="kairllm">KairLLM ? paid tier</option>
+                  <option value="deepseek">DeepSeek ? business tier</option>
                 </select>
               </div>
 
               {(() => {
                 const meta = {
-                  gemini: { label: 'Gemini', tier: 'free tier', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza… (leave blank to keep current)' },
+                  gemini: { label: 'Gemini', tier: 'free tier', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza... (leave blank to keep current)' },
                   kairllm: { label: 'KairLLM', tier: 'paid tier', tierClass: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/50', masked: llm.kairllm_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
                   deepseek: { label: 'DeepSeek', tier: 'business tier', tierClass: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', masked: llm.deepseek_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
                 }[providerTab];
@@ -2365,7 +2451,7 @@ const AdminPortal: React.FC = () => {
                         <span className="inline-flex items-center gap-1.5 font-medium">
                           {ts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
                           {ts.ok ? 'Connected' : 'Failed'}
-                          {ts.ok && ts.latencyMs !== undefined ? ` · ${ts.latencyMs}ms` : ''}
+                          {ts.ok && ts.latencyMs !== undefined ? ` - ${ts.latencyMs}ms` : ''}
                         </span>
                         {ts.ok && ts.text && (<span className="text-emerald-700 dark:text-emerald-300 font-mono text-[11px] truncate" title={ts.text}>reply: {ts.text}</span>)}
                         {!ts.ok && ts.error && (<span className="text-red-700 dark:text-red-300 font-mono text-[11px] break-all">{ts.error}</span>)}
@@ -2378,12 +2464,12 @@ const AdminPortal: React.FC = () => {
               {llm.updated_at && (
                 <p className="mt-3 text-xs text-gray-400">
                   Last saved {new Date(llm.updated_at).toLocaleString()} by{' '}
-                  <span className="font-mono">{llm.updated_by?.slice(0, 8)}…</span>
+                  <span className="font-mono">{llm.updated_by?.slice(0, 8)}...</span>
                 </p>
               )}
             </div>
 
-            {/* ══ SECTION B: MODEL REGISTRY ══════════════════════════════ */}
+            {/* 閳烘劏鏅?SECTION B: MODEL REGISTRY 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅?*/}
             <div>
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
@@ -2404,12 +2490,12 @@ const AdminPortal: React.FC = () => {
                 )}
               </div>
 
-              {/* ── ADD / EDIT FORM ──────────────────────────────────────── */}
+              {/* ADD / EDIT FORM */}
               {modelForm !== null && (
                 <Card className="p-5 space-y-5 mb-4">
                   <div className="flex items-center justify-between gap-3">
                     <SectionHeading>
-                      {modelForm === 'new' ? 'Add new model' : `Edit — ${mfId}`}
+                      {modelForm === 'new' ? 'Add new model' : `Edit ? ${mfId}`}
                     </SectionHeading>
                     <button
                       type="button"
@@ -2479,13 +2565,13 @@ const AdminPortal: React.FC = () => {
                         onChange={(e) => setMfBuiltin(e.target.value as ModelEntry['builtin'] | '')}
                         className={textInput}
                       >
-                        <option value="">— none —</option>
+                          <option value="">none</option>
                         <option value="kairllm">kairllm</option>
                         <option value="deepseek">deepseek</option>
                       </select>
                     </div>
 
-                    {/* Base URL — only relevant for openai-compatible non-builtin */}
+                    {/* Base URL ? only relevant for openai-compatible non-builtin */}
                     {mfProvider === 'openai-compatible' && !mfBuiltin && (
                       <div className="sm:col-span-2">
                         <FieldLabel htmlFor="mf-base-url">Base URL</FieldLabel>
@@ -2499,7 +2585,7 @@ const AdminPortal: React.FC = () => {
                       </div>
                     )}
 
-                    {/* API Key — only for openai-compatible non-builtin */}
+                    {/* API Key ? only for openai-compatible non-builtin */}
                     {mfProvider === 'openai-compatible' && !mfBuiltin && (
                       <div className="sm:col-span-2 space-y-3">
                         <div>
@@ -2509,7 +2595,7 @@ const AdminPortal: React.FC = () => {
                             type="password"
                             value={mfApiKey}
                             onChange={(e) => setMfApiKey(e.target.value)}
-                            placeholder={modelForm !== 'new' ? 'leave blank to keep existing key' : 'sk-…'}
+                            placeholder={modelForm !== 'new' ? 'leave blank to keep existing key' : 'sk-...'}
                             className={textInput}
                             autoComplete="off"
                           />
@@ -2570,12 +2656,12 @@ const AdminPortal: React.FC = () => {
                             autoComplete="off"
                             spellCheck={false}
                           />
-                          <p className="text-[11px] text-gray-400 mt-0.5">One key per line. Appended to the pool — existing keys are not removed.</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">One key per line. Appended to the pool ? existing keys are not removed.</p>
                         </div>
                       </div>
                     )}
 
-                    {/* Fallback chain + priority — available for all provider types */}
+                    {/* Fallback chain + priority ? available for all provider types */}
                     <div className="sm:col-span-2">
                       <FieldLabel htmlFor="mf-fallback">{t('admin.model.fallback_chain')}</FieldLabel>
                       <p className="text-[11px] text-gray-500 mb-1">{t('admin.model.fallback_chain_hint')}</p>
@@ -2664,7 +2750,7 @@ const AdminPortal: React.FC = () => {
                       setTest('__form__', { state: 'running' });
                       try {
                         const input = modelForm !== 'new' && !mfApiKey && !mfBaseUrl
-                          // saved model with no changes typed → test by id
+                          // saved model with no changes typed ? test by id
                           ? { id: mfId }
                           : {
                               config: {
@@ -2705,7 +2791,7 @@ const AdminPortal: React.FC = () => {
                             <span className="inline-flex items-center gap-1.5 font-medium">
                               {fts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
                               {fts.ok ? 'Connected' : 'Failed'}
-                              {fts.ok && fts.latencyMs !== undefined ? ` · ${fts.latencyMs}ms` : ''}
+                              {fts.ok && fts.latencyMs !== undefined ? ` - ${fts.latencyMs}ms` : ''}
                             </span>
                             {fts.ok && fts.text && (
                               <span className="text-emerald-700 font-mono text-[11px] truncate" title={fts.text}>
@@ -2723,7 +2809,7 @@ const AdminPortal: React.FC = () => {
                 </Card>
               )}
 
-              {/* ── MODEL LIST TABLE ──────────────────────────────────────── */}
+              {/* MODEL LIST TABLE */}
               <Card>
                 <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
                   <SectionHeading>Configured models</SectionHeading>
@@ -2767,7 +2853,7 @@ const AdminPortal: React.FC = () => {
                 {!modelsLoaded ? (
                   <div className="flex items-center gap-2 px-5 py-8 text-sm text-gray-500">
                     <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                    Loading models…
+                    Loading models...
                   </div>
                 ) : models.length === 0 ? (
                   <EmptyState message="No models configured yet. Use 'Add model' to create one." />
@@ -2865,7 +2951,7 @@ const AdminPortal: React.FC = () => {
                                   ? <span className="text-indigo-500">platform</span>
                                   : m.provider === 'gemini'
                                   ? <span className="text-gray-400">env key</span>
-                                  : <span className="text-gray-400">—</span>
+                                  : <span className="text-gray-400">-</span>
                                 }
                               </td>
 
@@ -2882,14 +2968,14 @@ const AdminPortal: React.FC = () => {
                                 </span>
                               </td>
 
-                              {/* Key health dot — best-effort; absent when no health data */}
+                              {/* Key health dot ? best-effort; absent when no health data */}
                               <td className="px-5 py-3 whitespace-nowrap">
                                 {m.keyHealth ? (() => {
                                   const h = m.keyHealth!;
                                   const cooled = h.anyCooled;
                                   const tip = cooled
-                                    ? `Cooling down until ${h.cooldownUntil ?? '?'}${h.lastErrorCode ? ` · last error: ${h.lastErrorCode}` : ''}${h.failureCount !== undefined ? ` · failures: ${h.failureCount}` : ''}`
-                                    : `OK${h.failureCount !== undefined ? ` · failures: ${h.failureCount}` : ''}${h.lastFailureAt ? ` · last failure: ${h.lastFailureAt.slice(0, 16).replace('T', ' ')}` : ''}`;
+                                    ? `Cooling down until ${h.cooldownUntil ?? '?'}${h.lastErrorCode ? ` - last error: ${h.lastErrorCode}` : ''}${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}`
+                                    : `OK${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}${h.lastFailureAt ? ` - last failure: ${h.lastFailureAt.slice(0, 16).replace('T', ' ')}` : ''}`;
                                   return (
                                     <span
                                       title={tip}
@@ -2898,11 +2984,11 @@ const AdminPortal: React.FC = () => {
                                     />
                                   );
                                 })() : (
-                                  <span className="text-gray-300 text-[11px]" aria-label="No health data">—</span>
+                                  <span className="text-gray-300 text-[11px]" aria-label="No health data">-</span>
                                 )}
                               </td>
 
-                              {/* Default column — super only */}
+                              {/* Default column ? super only */}
                               <td className="px-5 py-3 whitespace-nowrap">
                                 {m.id === defaultModelId ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700">
@@ -2938,7 +3024,7 @@ const AdminPortal: React.FC = () => {
                                 {rts.state === 'running' && (
                                   <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
                                     <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                                    Testing…
+                                    Testing...
                                   </span>
                                 )}
                                 {rts.state === 'done' && (
@@ -2949,7 +3035,7 @@ const AdminPortal: React.FC = () => {
                                       {rts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
                                       <span>
                                         {rts.ok
-                                          ? `ok${rts.latencyMs !== undefined ? ` · ${rts.latencyMs}ms` : ''}`
+                                          ? `ok${rts.latencyMs !== undefined ? ` - ${rts.latencyMs}ms` : ''}`
                                           : 'failed'}
                                       </span>
                                       <button
@@ -3000,7 +3086,7 @@ const AdminPortal: React.FC = () => {
                                   </button>
                                 ) : (
                                   <span
-                                    title="Structural id — cannot be deleted"
+                                    title="Structural id ? cannot be deleted"
                                     className="text-xs text-gray-300 cursor-not-allowed select-none"
                                   >
                                     Delete
@@ -3020,7 +3106,7 @@ const AdminPortal: React.FC = () => {
           </div>
         )}
 
-        {/* ── PROMPTS ───────────────────────────────────────────────────── */}
+        {/* PROMPTS */}
         {tab === 'prompts' && (
           <div className="space-y-5">
             {/* Header */}
@@ -3028,7 +3114,7 @@ const AdminPortal: React.FC = () => {
               <SectionHeading>AI Prompts</SectionHeading>
               <p className="mt-1 text-xs text-gray-500">
                 Override the default system prompt for any AI function. Edits take effect on
-                the next request — no redeploy needed.{' '}
+                the next request ? no redeploy needed.{' '}
                 <span className="font-medium text-amber-700">
                   Preserve all {'{{placeholder}}'} variables or the function will break.
                 </span>
@@ -3094,7 +3180,7 @@ const AdminPortal: React.FC = () => {
             {!promptsLoaded ? (
               <div className="flex items-center gap-2 py-8 text-sm text-gray-500">
                 <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                Loading prompts…
+                Loading prompts...
               </div>
             ) : prompts.length === 0 ? (
               <EmptyState message="No prompts found." />
@@ -3142,7 +3228,7 @@ const AdminPortal: React.FC = () => {
 
                           return (
                             <li key={entry.key}>
-                              {/* Row header — always visible */}
+                              {/* Row header ? always visible */}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3151,7 +3237,7 @@ const AdminPortal: React.FC = () => {
                                   } else {
                                     setExpandedPromptKey(entry.key);
                                     setPromptDraft(entry.override ?? entry.default);
-                                    // Reset the change summary too — otherwise the previous
+                                    // Reset the change summary too ? otherwise the previous
                                     // prompt's summary rides along into this one's save.
                                     setPromptChangeSummary('');
                                     // clear any lingering feedback when re-opening
@@ -3189,7 +3275,7 @@ const AdminPortal: React.FC = () => {
                                   className={`shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                   aria-hidden="true"
                                 >
-                                  ▾
+                                  閳?
                                 </span>
                               </button>
 
@@ -3354,7 +3440,7 @@ const AdminPortal: React.FC = () => {
                                       {promptVersionsLoading ? (
                                         <div className="flex items-center gap-2 px-4 py-4 text-sm text-gray-500">
                                           <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                                          Loading…
+                                          Loading...
                                         </div>
                                       ) : promptVersions.length === 0 ? (
                                         <p className="px-4 py-3 text-sm text-gray-400">{t('admin.prompts.versions_empty')}</p>
@@ -3381,7 +3467,7 @@ const AdminPortal: React.FC = () => {
                                                       </span>
                                                     )}
                                                   </div>
-                                                  {/* Publish / Rollback — requires admin.prompts.publish */}
+                                                  {/* Publish / Rollback ? requires admin.prompts.publish */}
                                                   {canPublishPrompts && (
                                                     <div className="flex items-center gap-2">
                                                       {v.status === 'draft' && (
@@ -3392,7 +3478,7 @@ const AdminPortal: React.FC = () => {
                                                             setAdminConfirm({
                                                               title: t('admin.prompts.publish'),
                                                               description: t('admin.prompts.publish_confirm'),
-                                                              detail: `${entry.key} · v${v.version}`,
+                                                              detail: `${entry.key} - v${v.version}`,
                                                               confirmLabel: t('admin.prompts.publish'),
                                                               run: async () => {
                                                                 setPromptSaving(true);
@@ -3424,7 +3510,7 @@ const AdminPortal: React.FC = () => {
                                                             setAdminConfirm({
                                                               title: t('admin.prompts.rollback'),
                                                               description: t('admin.prompts.rollback_confirm'),
-                                                              detail: `${entry.key} · v${v.version}`,
+                                                              detail: `${entry.key} - v${v.version}`,
                                                               confirmLabel: t('admin.prompts.rollback'),
                                                               tone: 'danger',
                                                               run: async () => {
@@ -3486,9 +3572,37 @@ const AdminPortal: React.FC = () => {
           </div>
         )}
 
-        {/* ── QUOTAS ────────────────────────────────────────────────────── */}
+        {/* QUOTAS */}
         {tab === 'quotas' && (
-          <div className="space-y-5">
+          <div ref={quotaPanelRef} className="space-y-10 pb-24">
+            <div
+              className={`sticky top-0 z-20 -mx-1 rounded-full border border-gray-200 p-1 transition-all duration-200 ${
+                quotaNavScrolled ? 'bg-white/85 shadow-md backdrop-blur' : 'bg-white shadow-sm'
+              }`}
+            >
+              <div className="flex gap-1 overflow-x-auto">
+                {QUOTA_SECTIONS.map((section) => {
+                  const active = section.id === activeQuotaSection;
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => scrollToQuotaSection(section.id)}
+                      className={`shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 sm:flex-1 ${
+                        active ? 'bg-blue-700 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                      aria-pressed={active}
+                    >
+                      {section.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <section
+              ref={(node) => { quotaSectionRefs.current.global = node; }}
+              className="scroll-mt-32"
+            >
             <Card className="p-5 space-y-5">
               <div>
                 <SectionHeading>Global quotas</SectionHeading>
@@ -3539,7 +3653,7 @@ const AdminPortal: React.FC = () => {
                     className={textInput}
                   />
                   <p className="text-[11px] text-gray-400 mt-0.5">
-                    Range: 256–32768. Default 8192 = no artificial truncation.
+                    Range: 256-32768. Default 8192 = no artificial truncation.
                   </p>
                 </div>
                 <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer select-none self-end pb-2">
@@ -3553,7 +3667,12 @@ const AdminPortal: React.FC = () => {
                 </label>
               </div>
             </Card>
+            </section>
 
+            <section
+              ref={(node) => { quotaSectionRefs.current.plans = node; }}
+              className="scroll-mt-32"
+            >
             <Card className="p-5 space-y-4">
               <div>
                 <SectionHeading>Plan quotas</SectionHeading>
@@ -3565,7 +3684,7 @@ const AdminPortal: React.FC = () => {
                   Source: <code>platform_config/quotas</code> (Firestore).{' '}
                   {quotasLoadedAt
                     ? `Loaded ${new Date(quotasLoadedAt).toLocaleTimeString()}.`
-                    : 'Loading…'}{' '}
+                      : 'Loading...'}{' '}
                   Server enforcement cache refreshes within ~60s of a save.
                 </p>
               </div>
@@ -3622,7 +3741,12 @@ const AdminPortal: React.FC = () => {
                 </table>
               </div>
             </Card>
+            </section>
 
+            <section
+              ref={(node) => { quotaSectionRefs.current.tools = node; }}
+              className="scroll-mt-32"
+            >
             <Card className="p-5 space-y-4">
               <div>
                 <SectionHeading>Tool access</SectionHeading>
@@ -3686,7 +3810,12 @@ const AdminPortal: React.FC = () => {
                 </table>
               </div>
             </Card>
+            </section>
 
+            <section
+              ref={(node) => { quotaSectionRefs.current.posting = node; }}
+              className="scroll-mt-32"
+            >
             <Card className="p-5 space-y-4">
               <div>
                 <SectionHeading>Employer posting</SectionHeading>
@@ -3705,7 +3834,12 @@ const AdminPortal: React.FC = () => {
                 ))}
               </div>
             </Card>
+            </section>
 
+            <section
+              ref={(node) => { quotaSectionRefs.current.interview = node; }}
+              className="scroll-mt-32"
+            >
             <Card className="p-5 space-y-4">
               <div>
                 <SectionHeading>Mock interview</SectionHeading>
@@ -3743,6 +3877,7 @@ const AdminPortal: React.FC = () => {
                 </div>
               </div>
             </Card>
+            </section>
 
             <Card className="p-5">
               <SaveButton onClick={saveQuotas} loading={loading} label="Save quotas" />
@@ -3750,7 +3885,7 @@ const AdminPortal: React.FC = () => {
           </div>
         )}
 
-        {/* ── USERS ─────────────────────────────────────────────────────── */}
+        {/* USERS */}
         {tab === 'users' && (
           <div className="grid md:grid-cols-[1fr_380px] gap-6 items-start">
             {/* User list */}
@@ -3759,7 +3894,7 @@ const AdminPortal: React.FC = () => {
                 <div className="flex items-center justify-between gap-3">
                   <SectionHeading>Users</SectionHeading>
                   <span className="text-xs text-gray-500">
-                    {userListLoading ? 'Loading...' : `Page ${userPageIndex + 1} · ${users.length} shown`}
+                    {userListLoading ? 'Loading...' : `Page ${userPageIndex + 1} - ${users.length} shown`}
                   </span>
                 </div>
                 <div className="grid gap-2.5 lg:grid-cols-[minmax(240px,1fr)_150px_190px_160px]">
@@ -3828,7 +3963,7 @@ const AdminPortal: React.FC = () => {
                     Loading users...
                   </div>
                 ) : users.length === 0 ? (
-                  <EmptyState message={activeUserFilterTags.length > 0 ? '暂无匹配数据' : 'No users found.'} />
+                  <EmptyState message={activeUserFilterTags.length > 0 ? 'No matching users.' : 'No users found.'} />
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
@@ -3862,7 +3997,7 @@ const AdminPortal: React.FC = () => {
                           <td className="px-5 py-3 text-gray-900 font-medium">
                             {u.full_name || (
                               <span className="font-mono text-xs text-gray-500">
-                                {u.uid.slice(0, 10)}…
+                                {u.uid.slice(0, 10)}...
                               </span>
                             )}
                           </td>
@@ -3933,13 +4068,13 @@ const AdminPortal: React.FC = () => {
                     return isNaN(d.getTime()) ? s : d.toLocaleString();
                   };
                   const rows: { label: string; value: React.ReactNode }[] = [
-                    { label: 'Email', value: str(p.email) ?? (a ? str(a.email) : null) ?? '—' },
-                    { label: 'Name', value: str(p.full_name) ?? str(p.company_name) ?? (a ? str(a.display_name) : null) ?? '—' },
-                    { label: 'Role', value: str(p.role) ?? '—' },
+                    { label: 'Email', value: str(p.email) ?? (a ? str(a.email) : null) ?? '-' },
+                    { label: 'Name', value: str(p.full_name) ?? str(p.company_name) ?? (a ? str(a.display_name) : null) ?? '-' },
+                    { label: 'Role', value: str(p.role) ?? '-' },
                     { label: 'Plan', value: str(p.subscription_status) ?? 'free' },
-                    { label: 'Credits', value: typeof p.credits === 'number' ? (p.credits as number).toLocaleString() : '—' },
-                    { label: 'Joined', value: dateStr(a?.auth_created_at) ?? dateStr(p.created_at) ?? '—' },
-                    { label: 'Last sign-in', value: (a && dateStr(a.last_sign_in)) ?? '—' },
+                    { label: 'Credits', value: typeof p.credits === 'number' ? (p.credits as number).toLocaleString() : '-' },
+                    { label: 'Joined', value: dateStr(a?.auth_created_at) ?? dateStr(p.created_at) ?? '-' },
+                    { label: 'Last sign-in', value: (a && dateStr(a.last_sign_in)) ?? '-' },
                   ];
                   return (
                     <div className="space-y-1 border-t border-gray-200 pt-3">
@@ -4039,7 +4174,7 @@ const AdminPortal: React.FC = () => {
                       className={`${userFilterControl} appearance-none rounded-lg bg-white px-3 pr-9 shadow-sm`}
                     >
                       <option value="" disabled>
-                        Select plan…
+                        Select plan...
                       </option>
                       {selectedSubscriptionPlans.map((p) => (
                         <option key={p} value={p}>
@@ -4086,7 +4221,7 @@ const AdminPortal: React.FC = () => {
                 {/* Week breakdown */}
                 <details className="group">
                   <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 transition-colors select-none list-none flex items-center gap-1">
-                    <span className="group-open:rotate-90 transition-transform">▶</span>
+                      <span className="group-open:rotate-90 transition-transform">&gt;</span>
                     Weekly tool breakdown
                   </summary>
                   <pre className="mt-2 text-[11px] bg-gray-50 p-3 rounded-lg overflow-auto max-h-48 text-gray-600 leading-relaxed">
@@ -4102,7 +4237,7 @@ const AdminPortal: React.FC = () => {
               <Card className="p-5 md:sticky md:top-4">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                  Loading user report…
+                  Loading user report...
                 </div>
               </Card>
             ) : (
@@ -4113,7 +4248,7 @@ const AdminPortal: React.FC = () => {
           </div>
         )}
 
-        {/* ── ADMINS ────────────────────────────────────────────────────── */}
+        {/* ADMINS */}
         {tab === 'admins' && canReadAdmins && (
           <div className="max-w-4xl space-y-5">
             <div className="flex rounded-full border border-gray-200 bg-white p-1 shadow-sm">
@@ -4165,7 +4300,7 @@ const AdminPortal: React.FC = () => {
               {canManageAdmins && (
               <details className="group rounded-lg border border-emerald-200 bg-emerald-50/40">
                 <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-50">
-                  <span>📮 Invite Admin or Reviewer</span>
+                  <span>棣冩懄 Invite Admin or Reviewer</span>
                   <ChevronDown className="h-4 w-4 text-emerald-700 transition-transform group-open:rotate-180" />
                 </summary>
                 <div className="space-y-3 border-t border-emerald-100 p-3">
@@ -4262,7 +4397,7 @@ const AdminPortal: React.FC = () => {
                           )}
                         </p>
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-                          {a.display_name && a.email ? <span>{a.email} · </span> : null}
+                          {a.display_name && a.email ? <span>{a.email} - </span> : null}
                           <span className="font-mono">{a.uid}</span>
                         </p>
                         {a.invited_at && (
@@ -4309,12 +4444,12 @@ const AdminPortal: React.FC = () => {
           </div>
         )}
 
-        {/* ── API PLATFORM (developer preview) ──────────────────────────── */}
+        {/* API PLATFORM (developer preview) */}
         {tab === 'apiplatform' && hasAdminPermission(role, 'admin.apiplatform.read') && (
           <ApiPlatformPanel canManage={hasAdminPermission(role, 'admin.apiplatform.manage')} />
         )}
 
-        {/* ── WEB3 SETTINGS (experimental) ──────────────────────────────── */}
+        {/* WEB3 SETTINGS (experimental) */}
         {tab === 'billing' && hasAdminPermission(role, 'admin.billing.manage') && (
           <Card>
             <div className="px-5 py-4 border-b border-gray-200">
@@ -4331,20 +4466,20 @@ const AdminPortal: React.FC = () => {
           <Web3SettingsPanel />
         )}
 
-        {/* ── AUDIT LOG ─────────────────────────────────────────────────── */}
+        {/* AUDIT LOG */}
         {tab === 'audit' && (
           <Card>
             <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
               <div>
                 <SectionHeading>Audit log</SectionHeading>
                 <p className="mt-0.5 text-xs text-gray-500">
-                  Last 100 admin actions, newest first. Raw keys are never stored — key changes
+                  {AUDIT_PAGE_SIZE} admin actions per page, newest first. Raw keys are never stored; key changes
                   appear as boolean flags only.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={loadAuditLog}
+                onClick={() => loadAuditLog()}
                 className="text-xs text-blue-600 hover:text-blue-700 transition-colors focus:outline-none focus:underline"
               >
                 Refresh
@@ -4354,7 +4489,7 @@ const AdminPortal: React.FC = () => {
             {!auditLoaded ? (
               <div className="flex items-center gap-2 px-5 py-8 text-sm text-gray-500">
                 <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                Loading audit log…
+                Loading audit log...
               </div>
             ) : auditLog.length === 0 ? (
               <EmptyState message="No audit log entries yet. Admin actions will appear here." />
@@ -4386,17 +4521,17 @@ const AdminPortal: React.FC = () => {
                         <td className="px-5 py-3 font-mono text-[11px] text-gray-500 whitespace-nowrap">
                           {entry.created_at
                             ? entry.created_at.slice(0, 19).replace('T', ' ')
-                            : <span className="text-gray-400">—</span>}
+                            : <span className="text-gray-400">-</span>}
                         </td>
                         <td className="px-5 py-3">
                           <ActionBadge action={entry.action} />
                         </td>
                         <td className="px-5 py-3 font-mono text-[11px] text-gray-600">
-                          {entry.admin_uid.slice(0, 10)}…
+                          {entry.admin_uid.slice(0, 10)}...
                         </td>
                         <td className="px-5 py-3 font-mono text-[11px] text-gray-600">
-                          {entry.target_uid ? `${entry.target_uid.slice(0, 10)}…` : (
-                            <span className="text-gray-400">—</span>
+                          {entry.target_uid ? `${entry.target_uid.slice(0, 10)}...` : (
+                            <span className="text-gray-400">-</span>
                           )}
                         </td>
                         <td className="px-5 py-3 text-[11px] text-gray-500 max-w-[280px]">
@@ -4406,6 +4541,27 @@ const AdminPortal: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+                {(auditPageIndex > 0 || auditCursor) && (
+                  <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={loadPreviousAuditPage}
+                      disabled={auditPageIndex === 0 || !auditLoaded}
+                      className="text-xs text-blue-600 transition-colors hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs text-gray-500">Page {auditPageIndex + 1}</span>
+                    <button
+                      type="button"
+                      onClick={loadNextAuditPage}
+                      disabled={!auditCursor || !auditLoaded}
+                      className="text-xs text-blue-600 transition-colors hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -4434,3 +4590,7 @@ const AdminPortal: React.FC = () => {
 };
 
 export default AdminPortal;
+
+
+
+

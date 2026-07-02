@@ -1204,17 +1204,37 @@ export interface AuditLogEntry {
   created_at: string | null;
 }
 
-/** Recent admin audit log (last 100 entries, newest first). */
+interface AuditLogRequest {
+  limit?: number;
+  start_after_id?: string;
+}
+
+export function resolveAuditLogPageRequest(data: unknown) {
+  const { limit = 25, start_after_id } = (data ?? {}) as AuditLogRequest;
+  return {
+    limit: Math.min(Math.max(Number.isFinite(limit) ? Number(limit) : 25, 1), 100),
+    start_after_id: typeof start_after_id === "string" && start_after_id ? start_after_id : undefined,
+  };
+}
+
+/** Paginated admin audit log, newest first. */
 export const adminGetAuditLogFunction = onCall({ invoker: "public" }, async (request) => {
   await requireRole(request, "reviewer");
+  const { limit, start_after_id } = resolveAuditLogPageRequest(request.data);
 
-  const snap = await db
+  let q = db
     .collection(ADMIN_AUDIT_LOG_COLLECTION)
     .orderBy("created_at", "desc")
-    .limit(100)
-    .get();
+    .limit(limit + 1);
+  if (start_after_id) {
+    const cursor = await db.collection(ADMIN_AUDIT_LOG_COLLECTION).doc(start_after_id).get();
+    if (cursor.exists) q = q.startAfter(cursor);
+  }
 
-  const entries: AuditLogEntry[] = snap.docs.map((doc) => {
+  const snap = await q.get();
+  const docs = snap.docs.slice(0, limit);
+
+  const entries: AuditLogEntry[] = docs.map((doc) => {
     const d = doc.data();
     return {
       id: doc.id,
@@ -1226,5 +1246,5 @@ export const adminGetAuditLogFunction = onCall({ invoker: "public" }, async (req
     };
   });
 
-  return { entries };
+  return { entries, next_cursor: snap.docs.length > limit ? docs[docs.length - 1].id : null };
 });
