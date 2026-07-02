@@ -160,7 +160,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   users: {
-    description: 'Search users, inspect usage, adjust credits, and override subscriptions within each user product role.',
+    description: 'Search users, see product-role badges, inspect usage, adjust credits, and override subscriptions within each user product role.',
     roles: {
       super: 'View users, adjust credits, override role-compatible subscriptions, and manage admin access.',
       admin: 'View users, adjust credits, and override role-compatible subscriptions.',
@@ -249,23 +249,31 @@ const USER_CREATED_FILTERS = [
 
 const USER_PAGE_SIZE = 10;
 
-const UserAvatarThumb: React.FC<{ url?: string | null; label?: string | null; size?: 'sm' | 'md' }> = ({ url, label, size = 'md' }) => {
+const UserAvatarThumb: React.FC<{ url?: string | null; label?: string | null; roleLabel?: string | null; size?: 'sm' | 'md' }> = ({ url, label, roleLabel, size = 'md' }) => {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [url]);
   const classes = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-9 w-9 text-sm';
   const initial = (label?.trim()?.[0] || '?').toUpperCase();
   const showImage = Boolean(url && !failed);
+  const role = roleLabel?.trim();
   return (
-    <span className={`${classes} flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 font-semibold text-slate-600`}>
-      {showImage ? (
-        <img
-          src={url ?? ''}
-          alt={label ? `${label} avatar` : 'User avatar'}
-          className="h-full w-full object-cover"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        initial
+    <span className={`${classes} relative flex shrink-0 items-center justify-center`}>
+      <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-slate-100 font-semibold text-slate-600 ring-1 ring-slate-200">
+        {showImage ? (
+          <img
+            src={url ?? ''}
+            alt={label ? `${label} avatar` : 'User avatar'}
+            className="h-full w-full object-cover"
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          initial
+        )}
+      </span>
+      {role && size !== 'sm' && (
+        <span className="absolute -bottom-1 left-1/2 max-w-[3.75rem] -translate-x-1/2 truncate rounded-full border border-white bg-slate-900 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white shadow-sm">
+          {role}
+        </span>
       )}
     </span>
   );
@@ -3770,7 +3778,7 @@ const AdminPortal: React.FC = () => {
                           </td>
                           <td className="px-5 py-3 text-gray-600">
                             <div className="flex flex-wrap items-center gap-2">
-                              <UserAvatarThumb url={u.avatar_url} label={userLabel} />
+                              <UserAvatarThumb url={u.avatar_url} label={userLabel} roleLabel={u.role} />
                               {u.email || <span className="text-gray-400">-</span>}
                               {consoleUser?.role && (
                                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
