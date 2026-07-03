@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, SectionHeading, tableCell, tableHead, tableRow } from './adminUi';
 import { at } from './adminText';
+import { LlmProviderIcon } from './LlmProviderIcon';
 import type { ModelEntry } from '../../services/adminClient';
 
 /** Human-readable hint for the availability-error codes the router records. */
@@ -66,11 +67,17 @@ export const KeyPoolHealthSection: React.FC<{ models: ModelEntry[] }> = ({ model
               const h = m.keyHealth;
               const cooled = Boolean(h?.anyCooled);
               const hasData = h !== undefined && h !== null;
+              const iconText = [m.id, m.label, m.builtin, m.providerModel, m.base_url].filter(Boolean).join(' ');
               return (
                 <tr key={m.id} className={tableRow}>
                   <td className={tableCell}>
-                    <span className="font-medium text-gray-900">{m.label}</span>
-                    <span className="block font-mono text-[10px] text-gray-400">{m.id}</span>
+                    <span className="flex items-start gap-2">
+                      <LlmProviderIcon text={iconText} className="mt-0.5" />
+                      <span className="min-w-0">
+                        <span className="font-medium text-gray-900">{m.label}</span>
+                        <span className="block font-mono text-[10px] text-gray-400">{m.id}</span>
+                      </span>
+                    </span>
                   </td>
                   <td className={tableCell}>{poolSize(m)}</td>
                   <td className={tableCell}>

@@ -69,6 +69,7 @@ import { PermissionMatrix, ProductRoleOverview } from './AccessControlSections';
 import { KeyPoolHealthSection } from './KeyPoolHealthSection';
 import { ApiPlatformPanel } from './ApiPlatformPanel';
 import { Web3SettingsPanel } from './Web3SettingsPanel';
+import { LlmProviderIcon } from './LlmProviderIcon';
 import Avatar from '../Avatar';
 import { ToastProvider } from '../Toast';
 import ConfirmActionDialog from '../ConfirmActionDialog';
@@ -159,7 +160,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   ai: {
-    description: 'Manage model routing, provider keys, fallback chains, model testing, and key-health checks with sticky section shortcuts.',
+    description: 'Manage model routing, provider keys, provider icons, fallback chains, model testing, and key-health checks with sticky section shortcuts.',
     roles: {
       super: 'View and edit models, provider keys, defaults, and routing settings.',
     },
@@ -757,7 +758,9 @@ const UserSingleFilterDropdown: React.FC<{
   options: readonly { value: string; label: string }[];
   value: string;
   onChange: (next: string) => void;
-}> = ({ label, options, value, onChange }) => {
+  leadingIcon?: React.ReactNode;
+  ariaLabel?: string;
+}> = ({ label, options, value, onChange, leadingIcon, ariaLabel }) => {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const selectedLabel = options.find((option) => option.value === value)?.label ?? options[0]?.label ?? label;
 
@@ -775,10 +778,10 @@ const UserSingleFilterDropdown: React.FC<{
     <details ref={detailsRef} className="group relative">
       <summary
         className={`${userFilterControl} flex cursor-pointer list-none items-center justify-between gap-3 px-3 [&::-webkit-details-marker]:hidden`}
-        aria-label={`Filter users by ${label.toLowerCase()}`}
+        aria-label={ariaLabel ?? `Filter users by ${label.toLowerCase()}`}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <Calendar className="h-4 w-4 shrink-0 text-gray-400" />
+          {leadingIcon ?? <Calendar className="h-4 w-4 shrink-0 text-gray-400" />}
           <span className="min-w-0">
             <span className="block text-[11px] font-medium leading-3 text-gray-500">{label}</span>
             <span className="block truncate text-sm leading-5">{selectedLabel}</span>
@@ -2224,6 +2227,7 @@ const AdminPortal: React.FC = () => {
                       <span className="font-semibold text-gray-700 dark:text-gray-200">AI providers</span>
                       {([['Gemini', 'gemini'], ['KAIRLLM', 'kairllm'], ['DeepSeek', 'deepseek']] as const).map(([label, key]) => (
                         <span key={key} className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                          <LlmProviderIcon text={label} />
                           <span className={dashboard.ai_providers![key] ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500'}>
                             {dashboard.ai_providers![key] ? 'on' : 'off'}
                           </span>
@@ -2545,26 +2549,27 @@ const AdminPortal: React.FC = () => {
               </div>
 
               {/* Provider selector - single-select dropdown (mainstream API-console
-                  style) so only the chosen provider's config renders, no 3-card clutter. */}
+              style) so only the chosen provider's config renders, no 3-card clutter. */}
               <div className="mb-5 max-w-xs">
-                <FieldLabel htmlFor="provider-select">Provider</FieldLabel>
-                <select
-                  id="provider-select"
+                <UserSingleFilterDropdown
+                  label="Provider"
+                  ariaLabel="Choose LLM provider"
+                  leadingIcon={<LlmProviderIcon text={providerTab} />}
                   value={providerTab}
-                  onChange={(e) => setProviderTab(e.target.value as 'gemini' | 'kairllm' | 'deepseek')}
-                  className={textInput}
-                >
-                  <option value="gemini">Gemini - free tier</option>
-                  <option value="kairllm">KairLLM - paid tier</option>
-                  <option value="deepseek">DeepSeek - business tier</option>
-                </select>
+                  onChange={(next) => setProviderTab(next as 'gemini' | 'kairllm' | 'deepseek')}
+                  options={[
+                    { value: 'gemini', label: 'Gemini - free tier' },
+                    { value: 'kairllm', label: 'KairLLM - paid tier' },
+                    { value: 'deepseek', label: 'DeepSeek - business tier' },
+                  ]}
+                />
               </div>
 
               {(() => {
                 const meta = {
-                  gemini: { label: 'Gemini', tier: 'free tier', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza... (leave blank to keep current)' },
-                  kairllm: { label: 'KairLLM', tier: 'paid tier', tierClass: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/50', masked: llm.kairllm_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
-                  deepseek: { label: 'DeepSeek', tier: 'business tier', tierClass: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', masked: llm.deepseek_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
+                  gemini: { label: 'Gemini', iconText: 'gemini', tier: 'free tier', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza... (leave blank to keep current)' },
+                  kairllm: { label: 'KairLLM', iconText: 'kairllm', tier: 'paid tier', tierClass: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/50', masked: llm.kairllm_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
+                  deepseek: { label: 'DeepSeek', iconText: 'deepseek', tier: 'business tier', tierClass: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', masked: llm.deepseek_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
                 }[providerTab];
 
                 const newKey = providerTab === 'gemini' ? geminiKey : providerTab === 'kairllm' ? kairllmKey : deepseekKey;
@@ -2614,7 +2619,10 @@ const AdminPortal: React.FC = () => {
                 return (
                   <Card className="p-5 space-y-4 max-w-2xl">
                     <div className="flex items-start justify-between gap-2">
-                      <SectionHeading>{meta.label}</SectionHeading>
+                      <div className="flex items-center gap-2">
+                        <LlmProviderIcon text={meta.iconText} />
+                        <SectionHeading>{meta.label}</SectionHeading>
+                      </div>
                       <span className={`text-[10px] border px-2 py-0.5 rounded font-medium ${meta.tierClass}`}>{meta.tier}</span>
                     </div>
 
@@ -3108,6 +3116,7 @@ const AdminPortal: React.FC = () => {
                       <tbody className="divide-y divide-gray-100">
                         {models.map((m) => {
                           const isStructural = m.id === 'gemini' || m.id === 'custom';
+                          const iconText = [m.id, m.label, m.builtin, m.providerModel, m.base_url].filter(Boolean).join(' ');
                           const rts = testStatus[m.id] ?? { state: 'idle' };
                           const runRowTest = async () => {
                             setTest(m.id, { state: 'running' });
@@ -3122,8 +3131,13 @@ const AdminPortal: React.FC = () => {
                             <tr key={m.id} className="hover:bg-gray-50 transition-colors align-middle">
                               {/* Label + id */}
                               <td className="px-5 py-3">
-                                <p className="font-medium text-gray-900 leading-snug">{m.label}</p>
-                                <p className="font-mono text-[11px] text-gray-500 mt-0.5">{m.id}</p>
+                                <div className="flex items-start gap-2">
+                                  <LlmProviderIcon text={iconText} className="mt-0.5" />
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-gray-900 leading-snug">{m.label}</p>
+                                    <p className="font-mono text-[11px] text-gray-500 mt-0.5">{m.id}</p>
+                                  </div>
+                                </div>
                               </td>
 
                               {/* Provider + builtin tag */}
