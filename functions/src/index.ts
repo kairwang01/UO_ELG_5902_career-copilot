@@ -71,6 +71,8 @@ export { adminListUsersFunction      as adminListUsers        } from "./handlers
 export { adminGetUserReportFunction  as adminGetUserReport    } from "./handlers/adminPortal";
 export { adminAdjustCreditsFunction  as adminAdjustCredits    } from "./handlers/adminPortal";
 export { adminSetSubscriptionFunction as adminSetSubscription } from "./handlers/adminPortal";
+export { adminDeleteUserFunction     as adminDeleteUser       } from "./handlers/adminPortal";
+export { adminCreateSampleAccountsFunction as adminCreateSampleAccounts } from "./handlers/adminPortal";
 export { adminSetAdminFunction       as adminSetAdmin         } from "./handlers/adminPortal";
 export { adminListAdminsFunction     as adminListAdmins       } from "./handlers/adminPortal";
 export { adminCheckAccessFunction    as adminCheckAccess      } from "./handlers/adminPortal";

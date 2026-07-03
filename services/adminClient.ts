@@ -162,6 +162,27 @@ export const adminSetSubscription = (uid: string, subscription_status: string) =
     'adminSetSubscription',
   )({ uid, subscription_status }).then((r) => r.data);
 
+export const adminDeleteUser = (args: { uid?: string; email?: string; reason: string }) =>
+  call<typeof args, { uid: string; email: string | null; deleted_auth: boolean; deleted_profile: boolean }>(
+    'adminDeleteUser',
+  )(args).then((r) => r.data);
+
+export interface AdminSampleAccount {
+  kind: 'job_seeker' | 'employer';
+  uid: string;
+  email: string;
+  password: string;
+  role: string;
+  subscription_status: string;
+  credits: number;
+  created: boolean;
+}
+
+export const adminCreateSampleAccounts = () =>
+  call<Record<string, never>, { accounts: AdminSampleAccount[] }>(
+    'adminCreateSampleAccounts',
+  )({}).then((r) => r.data);
+
 export interface AdminRow {
   uid: string;
   email: string | null;

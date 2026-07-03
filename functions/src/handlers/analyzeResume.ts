@@ -70,6 +70,7 @@ const outputLanguageName = (value?: string): string => {
   if (normalized.startsWith("de")) return "German";
   if (normalized.startsWith("ja")) return "Japanese";
   if (normalized.startsWith("vi")) return "Vietnamese";
+  if (normalized.startsWith("ar")) return "Arabic";
   if (normalized.startsWith("es")) return "Spanish";
   if (normalized.startsWith("ko")) return "Korean";
   return "English";

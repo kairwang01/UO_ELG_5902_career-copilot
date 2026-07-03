@@ -45,6 +45,7 @@ import {
 import Sidebar from './components/Sidebar';
 import MyApplications from './components/MyApplications';
 import TalentProfileForm from './components/TalentProfileForm';
+import { VerifyEmailGate } from './components/VerifyEmailGate';
 import type { PortalPage } from './components/employer/EmployerPortal';
 const CareerCoachBot = React.lazy(() => import('./components/CareerCoachBot'));
 import VerifiedTalentSection from './components/VerifiedTalentSection';
@@ -1563,6 +1564,15 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const useTopCookieConsent = !showCandidateShell && !showEmployerShell && (entry === 'workspace' || entry === 'portal');
 
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
+
+  // Email-verification gate: a signed-in user whose email is not yet verified is
+  // held here until they confirm ownership — a mistyped address can't reach the
+  // portal. Google/SSO sign-ins are auto-verified; existing accounts were
+  // grandfathered to verified. Paid signups pass through Stripe checkout first
+  // (a full-page redirect) and land here on return, then verify to enter.
+  if (session?.user && session.user.emailVerified === false) {
+    return <VerifyEmailGate email={session.user.email ?? null} t={t} />;
+  }
 
   return (
       <div className={rootClass} data-qa-shell={workspaceShell} data-qa-auth={session ? 'signed-in' : 'signed-out'}>

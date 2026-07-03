@@ -3601,5 +3601,17 @@
   "mi_speech_label": "回答语言",
   "mi_speech_voice": "语音",
   "mi_speech_listening": "正在听",
-  "mi_speech_auto_using": "自动识别为："
+  "mi_speech_auto_using": "自动识别为：",
+  "verify_gate_title": "请先验证邮箱后继续",
+  "verify_gate_body": "我们已向 {email} 发送了验证链接。请点击链接激活账户，然后返回此处继续。",
+  "verify_gate_your_email": "你的邮箱地址",
+  "verify_gate_resent": "验证邮件已发送——请查看收件箱和垃圾邮件文件夹。",
+  "verify_gate_send_failed": "暂时无法发送邮件，请稍后再试。",
+  "verify_gate_still_unverified": "尚未验证。请点击邮件中的链接，然后再次点击“我已验证”。",
+  "verify_gate_check": "我已验证——继续",
+  "verify_gate_checking": "正在检查…",
+  "verify_gate_resend": "重新发送验证邮件",
+  "verify_gate_resend_cooldown": "{seconds} 秒后可重新发送",
+  "verify_gate_typo_hint": "邮箱填写错误？请退出并使用正确的邮箱重新注册。",
+  "verify_gate_signout": "退出登录"
 }

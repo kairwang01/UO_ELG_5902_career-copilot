@@ -263,6 +263,16 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           subscriptionResult.status === 'pending_payment' &&
           (mode !== 'business' || shouldRedirectBusinessPlanToCheckout(selectedPlan, subscriptionResult.status))
         ) {
+          // Send the verification email BEFORE redirecting to Stripe. Paid signups
+          // return here, so the send below (free-plan path) is never reached for
+          // them — without this, no paid user ever receives a verification email.
+          try {
+            if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
+              await sendEmailVerification(firebaseAuth.currentUser);
+            }
+          } catch (err) {
+            console.warn('sendEmailVerification failed:', err);
+          }
           await startSubscriptionCheckout(planKeyForServer);
           return;
         }

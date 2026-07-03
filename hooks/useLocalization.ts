@@ -70,7 +70,9 @@ export const useLocalization = (initialLanguage?: string) => {
 
     useEffect(() => {
         if (typeof document === 'undefined') return;
-        document.documentElement.lang = language || 'en';
+        const resolvedLanguage = language || 'en';
+        document.documentElement.lang = resolvedLanguage;
+        document.documentElement.dir = resolvedLanguage === 'ar' ? 'rtl' : 'ltr';
     }, [language]);
 
     useEffect(() => {

@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { getMarketLocalLanguage, resolveOutputLanguageName } from '../lib/resumeLanguage';
 
 describe('resumeLanguage', () => {
-  it('returns a local language for DE/FR/JP/VN', () => {
+  it('returns a local language for DE/FR/JP/VN/UAE', () => {
     expect(getMarketLocalLanguage('Germany')).toEqual({ name: 'German', labelKey: 'resume_lang_german' });
     expect(getMarketLocalLanguage('France')).toEqual({ name: 'French', labelKey: 'resume_lang_french' });
     expect(getMarketLocalLanguage('Japan')).toEqual({ name: 'Japanese', labelKey: 'resume_lang_japanese' });
     expect(getMarketLocalLanguage('Vietnam')).toEqual({ name: 'Vietnamese', labelKey: 'resume_lang_vietnamese' });
+    expect(getMarketLocalLanguage('United Arab Emirates')).toEqual({ name: 'Arabic', labelKey: 'resume_lang_arabic' });
   });
 
   it('returns null for English-native / multi-language markets', () => {
@@ -17,6 +18,7 @@ describe('resumeLanguage', () => {
 
   it('resolves the language name passed to the model', () => {
     expect(resolveOutputLanguageName('Japan', 'local')).toBe('Japanese');
+    expect(resolveOutputLanguageName('United Arab Emirates', 'local')).toBe('Arabic');
     expect(resolveOutputLanguageName('Japan', 'en')).toBe('English');
     expect(resolveOutputLanguageName('Canada', 'local')).toBe('English'); // no local language → English
   });

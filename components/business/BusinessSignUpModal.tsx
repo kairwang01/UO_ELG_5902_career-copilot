@@ -112,6 +112,16 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
         // switches, so auth routing can move the user to /portal while the embedded
         // checkout remains open.
         if (!profileError && shouldRedirectBusinessPlanToCheckout(selectedPlan, subscriptionResult.status)) {
+          // Send the verification email BEFORE redirecting to Stripe. Paid employer
+          // signups return here, so the send below (free-plan path) is never reached
+          // for them — without this, no paid employer ever receives a verification email.
+          try {
+            if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
+              await sendEmailVerification(firebaseAuth.currentUser);
+            }
+          } catch (err) {
+            console.warn('sendEmailVerification failed:', err);
+          }
           await startSubscriptionCheckout(pendingPlanKey);
           return;
         }

@@ -8,6 +8,7 @@ export const SUPPORTED_LANGUAGES = [
     { code: 'ja', name: '日本語' },
     { code: 'de', name: 'Deutsch' },
     { code: 'vi', name: 'Tiếng Việt' },
+    { code: 'ar', name: 'العربية' },
 ];
 
 interface LanguageSwitcherProps {
