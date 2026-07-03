@@ -88,6 +88,9 @@ export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t }) =>
         <p className="mt-3 text-center text-sm leading-relaxed text-slate-600">
           {t('verify_gate_body').replace('{email}', email || t('verify_gate_your_email'))}
         </p>
+        <p className="mt-2 text-center text-xs font-medium text-slate-500">
+          {t('verify_gate_spam_hint')}
+        </p>
 
         {notice && (
           <div className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-center text-sm text-emerald-800" role="status">{notice}</div>
