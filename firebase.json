@@ -10,6 +10,13 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "redirects": [
+      {
+        "source": "/:rest*",
+        "destination": "https://copilot.kairwang.cloud/:rest*",
+        "type": 301
+      }
+    ],
     "rewrites": [
       {
         "source": "**",
