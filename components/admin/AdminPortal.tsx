@@ -131,7 +131,14 @@ const t = (key: string) => STRINGS[key] ?? key;
 
 type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'billing' | 'apiplatform' | 'web3' | 'audit';
 type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
+type ModelSectionId = 'health' | 'credentials' | 'registry';
 type QuotaSectionId = 'global' | 'plans' | 'tools' | 'posting' | 'interview';
+
+const MODEL_SECTIONS: { id: ModelSectionId; label: string }[] = [
+  { id: 'health', label: 'Key health' },
+  { id: 'credentials', label: 'Provider credentials' },
+  { id: 'registry', label: 'Model registry' },
+];
 
 const QUOTA_SECTIONS: { id: QuotaSectionId; label: string }[] = [
   { id: 'global', label: 'Global quotas' },
@@ -152,7 +159,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   ai: {
-    description: 'Manage model routing, provider keys, fallback chains, and model testing.',
+    description: 'Manage model routing, provider keys, fallback chains, model testing, and key-health checks with sticky section shortcuts.',
     roles: {
       super: 'View and edit models, provider keys, defaults, and routing settings.',
     },
@@ -165,7 +172,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   quotas: {
-    description: 'Manage plan quotas, credit grants, run limits, and tool credit costs with sticky section shortcuts.',
+    description: 'Manage plan quotas, credit grants, run limits, and tool credit costs with sticky section shortcuts, top save, and unsaved-change warnings.',
     roles: {
       super: 'View and update quotas.',
       admin: 'View and update quotas.',
@@ -623,6 +630,41 @@ const effectiveToolQuota = (quotas: AdminQuotas, tool: string): AdminToolQuota =
   allowed_plans: (quotas.tool_quotas?.[tool]?.allowed_plans as AdminPlanKey[] | undefined) ?? [...PLAN_KEYS],
 });
 
+const normalizeQuotaSection = (quotas: AdminQuotas, section: QuotaSectionId) => {
+  if (section === 'global') {
+    return {
+      daily_tool_run_limit: Number(quotas.daily_tool_run_limit ?? 0),
+      daily_credit_spend_limit: Number(quotas.daily_credit_spend_limit ?? 0),
+      per_user_daily_credit_limit: Number(quotas.per_user_daily_credit_limit ?? 0),
+      enabled: quotas.enabled !== false,
+      free_max_output_tokens: Number(quotas.free_max_output_tokens ?? 8192),
+    };
+  }
+  if (section === 'plans') {
+    return Object.fromEntries(
+      PLAN_KEYS.map((plan) => [plan, effectivePlanQuota(quotas, plan)]),
+    );
+  }
+  if (section === 'tools') {
+    return Object.fromEntries(
+      TOOL_KEYS.map((tool) => {
+        const row = effectiveToolQuota(quotas, tool);
+        return [tool, { ...row, allowed_plans: [...row.allowed_plans].sort() }];
+      }),
+    );
+  }
+  if (section === 'interview') {
+    return {
+      mi_min_tier: quotas.mi_min_tier === 'free' ? 'free' : 'paid',
+      mi_report_unlock_credits: Number(quotas.mi_report_unlock_credits ?? 500),
+    };
+  }
+  return {};
+};
+
+const quotaSectionChanged = (current: AdminQuotas, saved: AdminQuotas, section: QuotaSectionId) =>
+  JSON.stringify(normalizeQuotaSection(current, section)) !== JSON.stringify(normalizeQuotaSection(saved, section));
+
 const userFilterControl =
   'h-10 w-full rounded-lg border border-gray-200 bg-white text-sm text-gray-900 shadow-sm ' +
   'transition focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10';
@@ -790,7 +832,10 @@ const AdminPortal: React.FC = () => {
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [llm, setLlm] = useState<Record<string, string>>({});
   const [quotas, setQuotas] = useState<AdminQuotas>({});
+  const [savedQuotas, setSavedQuotas] = useState<AdminQuotas | null>(null);
   const [quotasLoadedAt, setQuotasLoadedAt] = useState<number | null>(null);
+  const [activeModelSection, setActiveModelSection] = useState<ModelSectionId>('health');
+  const [modelNavScrolled, setModelNavScrolled] = useState(false);
   const [activeQuotaSection, setActiveQuotaSection] = useState<QuotaSectionId>('global');
   const [quotaNavScrolled, setQuotaNavScrolled] = useState(false);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
@@ -808,6 +853,9 @@ const AdminPortal: React.FC = () => {
   // paint its data under a user the admin has since switched to.
   const selectedUidRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
+  const modelPanelRef = useRef<HTMLDivElement | null>(null);
+  const modelSectionRefs = useRef<Partial<Record<ModelSectionId, HTMLElement | null>>>({});
+  const modelScrollTargetRef = useRef<ModelSectionId | null>(null);
   const quotaPanelRef = useRef<HTMLDivElement | null>(null);
   const quotaSectionRefs = useRef<Partial<Record<QuotaSectionId, HTMLElement | null>>>({});
   const quotaScrollTargetRef = useRef<QuotaSectionId | null>(null);
@@ -936,6 +984,14 @@ const AdminPortal: React.FC = () => {
       ? [{ key: 'created', label: `Joined: ${USER_CREATED_FILTERS.find((f) => f.value === userCreatedFilter)?.label ?? userCreatedFilter}` }]
       : []),
   ], [debouncedUserSearch, userRoleFilters, userPlanFilters, userCreatedFilter]);
+
+  const dirtyQuotaSections = useMemo(
+    () => savedQuotas
+      ? QUOTA_SECTIONS.filter((section) => section.id !== 'posting' && quotaSectionChanged(quotas, savedQuotas, section.id))
+      : [],
+    [quotas, savedQuotas],
+  );
+  const hasDirtyQuotas = dirtyQuotaSections.length > 0;
 
   const clearUserFilters = () => {
     setUserSearch('');
@@ -1141,6 +1197,7 @@ const AdminPortal: React.FC = () => {
       const quotaData = await adminGetQuotas();
       if (!mountedRef.current) return;
       setQuotas(quotaData);
+      setSavedQuotas(quotaData);
       setQuotasLoadedAt(Date.now());
     } catch (e) {
       if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load quotas', 'Failed to load quotas'));
@@ -1296,6 +1353,48 @@ const AdminPortal: React.FC = () => {
   }, [isAdmin, adminRole, tab, loadDashboard, loadLlm, loadModels, loadPrompts, loadQuotas, loadUsers, loadAdmins, loadAuditLog]);
 
   useEffect(() => {
+    if (tab !== 'ai') return;
+    const scrollRoot = modelPanelRef.current?.closest('main') as HTMLElement | null;
+    if (!scrollRoot) return;
+
+    let frame = 0;
+    const updateModelNav = () => {
+      frame = 0;
+      setModelNavScrolled(scrollRoot.scrollTop > 8);
+
+      const marker = scrollRoot.getBoundingClientRect().top + 128;
+      const target = modelScrollTargetRef.current;
+      if (target) {
+        setActiveModelSection(target);
+        const targetNode = modelSectionRefs.current[target];
+        if (targetNode && targetNode.getBoundingClientRect().top <= marker) {
+          modelScrollTargetRef.current = null;
+        } else {
+          return;
+        }
+      }
+
+      const current = MODEL_SECTIONS.reduce<ModelSectionId>((active, section) => {
+        const node = modelSectionRefs.current[section.id];
+        return node && node.getBoundingClientRect().top <= marker ? section.id : active;
+      }, MODEL_SECTIONS[0].id);
+      setActiveModelSection(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateModelNav);
+    };
+
+    updateModelNav();
+    scrollRoot.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      scrollRoot.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [tab]);
+
+  useEffect(() => {
     if (tab !== 'quotas') return;
     const scrollRoot = quotaPanelRef.current?.closest('main') as HTMLElement | null;
     if (!scrollRoot) return;
@@ -1336,6 +1435,12 @@ const AdminPortal: React.FC = () => {
       window.removeEventListener('resize', onScroll);
     };
   }, [tab]);
+
+  const scrollToModelSection = (sectionId: ModelSectionId) => {
+    modelScrollTargetRef.current = sectionId;
+    setActiveModelSection(sectionId);
+    modelSectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const scrollToQuotaSection = (sectionId: QuotaSectionId) => {
     quotaScrollTargetRef.current = sectionId;
@@ -1396,6 +1501,7 @@ const AdminPortal: React.FC = () => {
         tool_quotas,
       });
       setQuotas(updated);
+      setSavedQuotas(updated);
     } catch (e) {
       setError(formatAdminPortalError(e, adminRole, 'Save quotas', 'Save failed'));
     } finally {
@@ -2391,13 +2497,45 @@ const AdminPortal: React.FC = () => {
 
         {/* MODELS & KEYS */}
         {tab === 'ai' && (
-          <div className="space-y-8">
+          <div ref={modelPanelRef} className="space-y-10 pb-24">
+            <div
+              className={`sticky top-0 z-20 -mx-1 rounded-full border border-gray-200 p-1 transition-all duration-200 ${
+                modelNavScrolled ? 'bg-white/85 shadow-md backdrop-blur' : 'bg-white shadow-sm'
+              }`}
+            >
+              <div className="flex gap-1 overflow-x-auto">
+                {MODEL_SECTIONS.map((section) => {
+                  const active = section.id === activeModelSection;
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => scrollToModelSection(section.id)}
+                      className={`shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 sm:flex-1 ${
+                        active ? 'bg-blue-700 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                      aria-pressed={active}
+                    >
+                      {section.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* SECTION 0: KEY POOL HEALTH */}
-            <KeyPoolHealthSection models={models} />
+            <section
+              ref={(node) => { modelSectionRefs.current.health = node; }}
+              className="scroll-mt-32"
+            >
+              <KeyPoolHealthSection models={models} />
+            </section>
 
             {/* SECTION A: PROVIDER CREDENTIALS */}
-            <div>
+            <section
+              ref={(node) => { modelSectionRefs.current.credentials = node; }}
+              className="scroll-mt-32"
+            >
               <div className="mb-4">
                 <SectionHeading>Provider credentials</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
@@ -2539,10 +2677,13 @@ const AdminPortal: React.FC = () => {
                   <span className="font-mono">{llm.updated_by?.slice(0, 8)}...</span>
                 </p>
               )}
-            </div>
+            </section>
 
             {/* SECTION B: MODEL REGISTRY */}
-            <div>
+            <section
+              ref={(node) => { modelSectionRefs.current.registry = node; }}
+              className="scroll-mt-32"
+            >
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
                   <SectionHeading>Model registry</SectionHeading>
@@ -3173,7 +3314,7 @@ const AdminPortal: React.FC = () => {
                   </div>
                 )}
               </Card>
-            </div>
+            </section>
 
           </div>
         )}
@@ -3647,28 +3788,48 @@ const AdminPortal: React.FC = () => {
         {/* QUOTAS */}
         {tab === 'quotas' && (
           <div ref={quotaPanelRef} className="space-y-10 pb-24">
-            <div
-              className={`sticky top-0 z-20 -mx-1 rounded-full border border-gray-200 p-1 transition-all duration-200 ${
-                quotaNavScrolled ? 'bg-white/85 shadow-md backdrop-blur' : 'bg-white shadow-sm'
-              }`}
-            >
-              <div className="flex gap-1 overflow-x-auto">
-                {QUOTA_SECTIONS.map((section) => {
-                  const active = section.id === activeQuotaSection;
-                  return (
-                    <button
-                      key={section.id}
-                      type="button"
-                      onClick={() => scrollToQuotaSection(section.id)}
-                      className={`shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 sm:flex-1 ${
-                        active ? 'bg-blue-700 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
-                      aria-pressed={active}
-                    >
-                      {section.label}
-                    </button>
-                  );
-                })}
+            <div className="sticky top-0 z-20 space-y-3">
+              <div
+                className={`-mx-1 rounded-full border border-gray-200 p-1 transition-all duration-200 ${
+                  quotaNavScrolled ? 'bg-white/85 shadow-md backdrop-blur' : 'bg-white shadow-sm'
+                }`}
+              >
+                <div className="flex gap-1 overflow-x-auto">
+                  {QUOTA_SECTIONS.map((section) => {
+                    const active = section.id === activeQuotaSection;
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => scrollToQuotaSection(section.id)}
+                        className={`shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 sm:flex-1 ${
+                          active ? 'bg-blue-700 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                        aria-pressed={active}
+                      >
+                        {section.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <p className={`text-sm ${hasDirtyQuotas ? 'font-medium text-amber-700' : 'text-gray-500'}`}>
+                  {hasDirtyQuotas
+                    ? `${dirtyQuotaSections.map((section) => section.label).join(', ')} edited but not saved.`
+                    : 'No unsaved quota changes.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={saveQuotas}
+                  disabled={loading || !hasDirtyQuotas}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+                >
+                  {loading && (
+                    <span className="h-3 w-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                  )}
+                  Save quotas
+                </button>
               </div>
             </div>
             <section
@@ -3951,9 +4112,6 @@ const AdminPortal: React.FC = () => {
             </Card>
             </section>
 
-            <Card className="p-5">
-              <SaveButton onClick={saveQuotas} loading={loading} label="Save quotas" />
-            </Card>
           </div>
         )}
 

@@ -138,7 +138,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
       {/* Main column */}
       <div className="flex-1 flex h-screen flex-col min-w-0 overflow-hidden" data-admin-light>
         {/* Top bar */}
-        <header className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+        <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
             <div ref={helpRef} className="relative min-w-0">
               <div className="flex min-w-0 items-center gap-2">
@@ -156,7 +156,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
                 )}
               </div>
               {helpOpen && activeHelp && (
-                <div className="absolute left-0 top-full z-20 mt-2 w-[min(88vw,24rem)] rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-2 w-[min(88vw,24rem)] rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-lg">
                   <p className="font-medium text-gray-900">{activeHelp.description}</p>
                   {activeHelp.roles && (
                     <dl className="mt-3 space-y-2">
