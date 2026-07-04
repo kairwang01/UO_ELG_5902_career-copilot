@@ -15,6 +15,18 @@ import {
   CoverLetterExportGate,
   CoverLetterQualityNotice,
 } from './CoverLetterActions';
+import { useLocalization } from '../../hooks/useLocalization';
+import { TOOL_CREDIT_COSTS } from '../../config/credits';
+import { LanguageSyncBanner } from '../LanguageSyncBanner';
+import {
+  adoptBareResult,
+  getActiveLanguageVersion,
+  getLanguageVersion,
+  isLanguageVersionLibrary,
+  listVersionLanguages,
+  upsertLanguageVersion,
+  type LanguageVersionLibrary,
+} from '../../lib/languageVersions';
 
 interface CoverLetterGeneratorProps {
   resumeText: string;
@@ -113,8 +125,15 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CoverLetterResult | null>(null);
-  const { canSave, saved, saveState, persist, clear } = useToolResults<CoverLetterResult>();
+  const { canSave, saved, saveState, persist, clear } = useToolResults<LanguageVersionLibrary<CoverLetterResult>>();
   const [fromSaved, setFromSaved] = useState(false);
+  const { currentLang } = useLocalization();
+  // Per-language version library for the cover letter, the language of the
+  // currently-shown draft, and the UI language the sync banner was dismissed for
+  // (so we stop nagging). Powers the "switch vs regenerate" language banner.
+  const [lib, setLib] = useState<LanguageVersionLibrary<CoverLetterResult> | null>(null);
+  const [resultLang, setResultLang] = useState<string | null>(null);
+  const [langSyncDismissed, setLangSyncDismissed] = useState<string | null>(null);
   const [jobDescription, setJobDescription] = useState(initialInput);
   const [editableResult, setEditableResult] = useState('');
   const { apiStatus } = useApiStatus();
@@ -147,10 +166,31 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   };
 
   useEffect(() => {
-    if (saved && !result && hasMeaningfulCoverLetter(saved.result) && canExportCoverLetter(assessCoverLetterDraft(saved.result.letter))) {
-      setResult(saved.result);
-      setEditableResult(saved.result.letter);
-      setJobDescription(saved.result.jobDescription || '');
+    if (!saved || result) return;
+    const raw = saved.result as unknown;
+    // New shape: a per-language version library — hydrate the active version and
+    // keep the library so the sync banner can offer a free switch.
+    if (isLanguageVersionLibrary<CoverLetterResult>(raw)) {
+      const active = getActiveLanguageVersion(raw);
+      if (active && hasMeaningfulCoverLetter(active.result) && canExportCoverLetter(assessCoverLetterDraft(active.result.letter))) {
+        setLib(raw);
+        setResult(active.result);
+        setEditableResult(active.result.letter);
+        setJobDescription(active.result.jobDescription || '');
+        setResultLang(active.lang);
+        setFromSaved(true);
+      }
+      return;
+    }
+    // Backward-compat: a bare pre-versioning result. Adopt it as a single-language
+    // library in the current UI language (so no banner nags on this one).
+    const bare = raw as CoverLetterResult | null;
+    if (bare && hasMeaningfulCoverLetter(bare) && canExportCoverLetter(assessCoverLetterDraft(bare.letter))) {
+      setLib(adoptBareResult(bare, currentLang, saved.savedAt || Date.now()));
+      setResult(bare);
+      setEditableResult(bare.letter);
+      setJobDescription(bare.jobDescription || '');
+      setResultLang(currentLang);
       setFromSaved(true);
     }
   }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -183,6 +223,8 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     setEditableResult('');
     setFromSaved(false);
     setError(null);
+    setResultLang(null);
+    setLangSyncDismissed(null);
   };
 
   const handleTryExample = () => {
@@ -210,7 +252,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     setError(null);
     setResult(null);
     try {
-      const apiResult = await generateCoverLetter(resumeText, nextInput, market);
+      const apiResult = await generateCoverLetter(resumeText, nextInput, market, currentLang);
       if (!alive()) return;
       if (!hasMeaningfulCoverLetter(apiResult)) {
         throw new Error(t('ai_error_empty_response'));
@@ -225,8 +267,16 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
       setResult(nextResult);
       setEditableResult(nextResult.letter);
       setFromSaved(false);
+      // Track the draft's language and fold it into the per-language library, so a
+      // later UI-language change can offer a free switch instead of a paid re-run.
+      setResultLang(currentLang);
+      setLangSyncDismissed(null);
       if (canExportCoverLetter(validation)) {
-        persist(nextResult);
+        setLib((prev) => {
+          const nextLib = upsertLanguageVersion(prev, currentLang, nextResult, Date.now());
+          persist(nextLib); // no-op for free tier / signed-out (gated in the provider)
+          return nextLib;
+        });
       }
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
@@ -410,6 +460,27 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
     return (
       <div data-qa="cover-letter-tool" data-qa-tool-state="result" className="mx-auto max-w-6xl space-y-5 animate-fade-in">
+        {resultLang && resultLang !== currentLang && langSyncDismissed !== currentLang && (
+          <LanguageSyncBanner
+            contentLang={resultLang}
+            uiLang={currentLang}
+            availableLangs={listVersionLanguages(lib)}
+            creditCost={TOOL_CREDIT_COSTS['cover-letter']}
+            canPersist={canSave}
+            busy={loading}
+            t={t}
+            onSwitch={(lang) => {
+              const v = getLanguageVersion(lib, lang);
+              if (!v) return;
+              setResult(v.result);
+              setEditableResult(v.result.letter);
+              setJobDescription(v.result.jobDescription || '');
+              setResultLang(lang);
+            }}
+            onRegenerate={() => { void runTool(result.jobDescription || jobDescription); }}
+            onDismiss={() => setLangSyncDismissed(currentLang)}
+          />
+        )}
         {canExportCoverLetter(validation) && (
           <SavedResultBar
             t={t}
@@ -418,7 +489,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
             savedAt={saved?.savedAt ?? null}
             saveState={saveState}
             onTryNext={resetResult}
-            onClearSaved={() => { clear(); setFromSaved(false); }}
+            onClearSaved={() => { clear(); setFromSaved(false); setLib(null); }}
           />
         )}
         <CoverLetterQualityNotice validation={validation} />
