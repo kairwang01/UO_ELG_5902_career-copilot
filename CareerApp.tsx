@@ -65,6 +65,15 @@ import { decideSessionTransition } from './lib/access/sessionTransitions';
 import { useSession } from './contexts/SessionContext';
 import { useSubscriptionCheckout } from './contexts/SubscriptionCheckoutContext';
 import { ALL_TOOLS_CONFIG } from './constants/tools';
+import { LanguageSyncBanner } from './components/LanguageSyncBanner';
+import {
+  LanguageVersionLibrary,
+  getLanguageVersion,
+  isLanguageVersionLibrary,
+  listVersionLanguages,
+  upsertLanguageVersion,
+} from './lib/languageVersions';
+import { canSaveResults, loadToolResult, saveToolResult } from './services/toolResults';
 import './marketing/site-theme.css';
 
 const BusinessPage = React.lazy(() => import('./components/BusinessPage'));
@@ -202,6 +211,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const [isSavingResumeFile, setIsSavingResumeFile] = useState(false);
   const [resumeImages, setResumeImages] = useState<ResumeImage[] | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  // Language of the currently-shown analysis, the accumulated per-language
+  // version library, and the target language the user dismissed the sync banner
+  // for (so we don't re-nag). Powers the "switch vs regenerate" language banner.
+  const [analysisLang, setAnalysisLang] = useState<string | null>(null);
+  const [analysisLib, setAnalysisLib] = useState<LanguageVersionLibrary<AnalysisResult> | null>(null);
+  const [langSyncDismissed, setLangSyncDismissed] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [market, setMarket] = useState<string>(DEFAULT_MARKET);
@@ -460,6 +475,20 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
     }
   }, [resumeText, session, isProfileLoaded, profile?.role, addToast, t]);
 
+  // Load the persisted per-language analysis versions for this user, so the
+  // language-sync banner can offer a free switch to an already-generated
+  // language instead of a paid re-run.
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid) { setAnalysisLib(null); return; }
+    let cancelled = false;
+    loadToolResult<LanguageVersionLibrary<AnalysisResult>>(uid, 'resume-analysis').then((saved) => {
+      if (!cancelled && saved && isLanguageVersionLibrary<AnalysisResult>(saved.result)) {
+        setAnalysisLib(saved.result);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
 
   const getProfile = useCallback(async () => {
     try {
@@ -905,6 +934,18 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       }
       
       setAnalysisResult(result);
+      // Track the analysis language and fold it into the per-language version
+      // library (persisted for paid tiers), so switching UI language can offer a
+      // free swap to this version later instead of a paid re-run.
+      setAnalysisLang(currentLang);
+      setLangSyncDismissed(null);
+      setAnalysisLib((prev) => {
+        const nextLib = upsertLanguageVersion(prev, currentLang, result, Date.now());
+        if (session?.user && canSaveResults(userPlan)) {
+          void saveToolResult(session.user.id, 'resume-analysis', nextLib);
+        }
+        return nextLib;
+      });
       if (result.extractedText) {
           const extractedResumeText = resumeTextForProfile(result.extractedText);
           setResumeText(extractedResumeText);
@@ -1524,7 +1565,29 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         />
       );
     }
-    if (analysisResult) { return <React.Suspense fallback={<LoadingSpinner market={market} />}><AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} onContinueToToolkit={() => { setAnalysisResult(null); setActiveTool(null); setWorkspaceView('toolkit'); }} /></React.Suspense>; }
+    if (analysisResult) {
+      return (
+        <>
+          {analysisLang && analysisLang !== currentLang && langSyncDismissed !== currentLang && (
+            <LanguageSyncBanner
+              contentLang={analysisLang}
+              uiLang={currentLang}
+              availableLangs={listVersionLanguages(analysisLib)}
+              creditCost={analysisCost}
+              canPersist={canSaveResults(userPlan)}
+              t={t}
+              onSwitch={(lang) => {
+                const v = getLanguageVersion(analysisLib, lang);
+                if (v) { setAnalysisResult(v.result); setAnalysisLang(lang); }
+              }}
+              onRegenerate={() => { void performAnalysis(); }}
+              onDismiss={() => setLangSyncDismissed(currentLang)}
+            />
+          )}
+          <React.Suspense fallback={<LoadingSpinner market={market} />}><AnalysisDisplay t={t} result={analysisResult} onReset={handleReset} resumeText={resumeText} userPlan={userPlan} market={market} navigateToPricing={navigateToPricing} session={session} profile={profile} refreshProfile={getProfile} onApplyImprovements={handleApplyImprovements} activeTool={activeTool} setActiveTool={setActiveTool} onContinueToToolkit={() => { setAnalysisResult(null); setActiveTool(null); setWorkspaceView('toolkit'); }} /></React.Suspense>
+        </>
+      );
+    }
     if (session && !showHomePageOverride) {
         if (!isProfileLoaded || !isLangLoaded) { return <div className="flex flex-col items-center justify-center space-y-4 my-24"><div className="w-16 h-16 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div><p className="text-lg text-gray-600 dark:text-gray-400">{t('dashboard_loading')}</p></div>; }
         if (profile?.role === 'agency') {

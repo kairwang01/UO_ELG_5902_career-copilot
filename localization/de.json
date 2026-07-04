@@ -3634,5 +3634,13 @@
   "verify_gate_resend_cooldown": "Erneut senden in {seconds}s",
   "verify_gate_typo_hint": "Falsche E-Mail-Adresse eingegeben? Melden Sie sich ab und registrieren Sie sich erneut mit der richtigen Adresse.",
   "verify_gate_signout": "Abmelden",
-  "verify_gate_spam_hint": "Keine E-Mail erhalten? Überprüfen Sie Ihren Spam- oder Junk-Ordner."
+  "verify_gate_spam_hint": "Keine E-Mail erhalten? Überprüfen Sie Ihren Spam- oder Junk-Ordner.",
+  "lang_sync_switch_title": "Sie sehen dies auf {content}. Zur {target}-Version wechseln?",
+  "lang_sync_regen_title": "Sie sehen dies auf {content}. Eine {target}-Version erstellen?",
+  "lang_sync_switch_cta": "Zu {target} wechseln",
+  "lang_sync_regen_cta": "Auf {target} erstellen",
+  "lang_sync_free_note": "Bereits erstellt – der Wechsel ist sofort und kostenlos.",
+  "lang_sync_regen_note": "Eine {target}-Version zu erstellen kostet {credits} Credits.",
+  "lang_sync_regen_note_free_tier": "Versionen in anderen Sprachen erfordern einen kostenpflichtigen Tarif; die Erstellung kostet Credits.",
+  "lang_sync_dismiss": "Bei {content} bleiben"
 }

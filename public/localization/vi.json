@@ -3634,5 +3634,13 @@
   "verify_gate_resend_cooldown": "Gửi lại sau {seconds}s",
   "verify_gate_typo_hint": "Nhập sai địa chỉ email? Hãy đăng xuất và đăng ký lại với địa chỉ chính xác.",
   "verify_gate_signout": "Đăng xuất",
-  "verify_gate_spam_hint": "Không thấy email? Hãy kiểm tra thư mục spam hoặc thư rác."
+  "verify_gate_spam_hint": "Không thấy email? Hãy kiểm tra thư mục spam hoặc thư rác.",
+  "lang_sync_switch_title": "Bạn đang xem nội dung này bằng {content}. Xem phiên bản {target}?",
+  "lang_sync_regen_title": "Bạn đang xem nội dung này bằng {content}. Tạo phiên bản {target}?",
+  "lang_sync_switch_cta": "Chuyển sang {target}",
+  "lang_sync_regen_cta": "Tạo bằng {target}",
+  "lang_sync_free_note": "Đã tạo — chuyển đổi tức thì và miễn phí.",
+  "lang_sync_regen_note": "Tạo phiên bản {target} tốn {credits} tín dụng.",
+  "lang_sync_regen_note_free_tier": "Phiên bản ngôn ngữ khác yêu cầu gói trả phí; việc tạo sẽ tốn tín dụng.",
+  "lang_sync_dismiss": "Giữ {content}"
 }

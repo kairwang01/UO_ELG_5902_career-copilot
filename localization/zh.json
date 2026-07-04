@@ -3634,5 +3634,13 @@
   "tool_skill_planner_prefill_target": "目标职位：{role}",
   "tool_event_scout_draft_email_button": "起草外联邮件",
   "unlock_modal_fee_preview": "已包含",
-  "unlock_modal_wallet_preview_note": "在此预览环境中无需进行钱包支付。"
+  "unlock_modal_wallet_preview_note": "在此预览环境中无需进行钱包支付。",
+  "lang_sync_switch_title": "当前以{content}显示。查看{target}版本？",
+  "lang_sync_regen_title": "当前以{content}显示。生成{target}版本？",
+  "lang_sync_switch_cta": "切换到{target}",
+  "lang_sync_regen_cta": "生成{target}版本",
+  "lang_sync_free_note": "已生成——切换即时且免费。",
+  "lang_sync_regen_note": "生成{target}版本需消耗 {credits} 个积分。",
+  "lang_sync_regen_note_free_tier": "其他语言版本需付费套餐；生成将消耗积分。",
+  "lang_sync_dismiss": "保持{content}"
 }

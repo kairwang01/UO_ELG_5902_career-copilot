@@ -3634,5 +3634,13 @@
   "mi_speech_listening": "جارٍ الاستماع",
   "mi_speech_auto_using": "تم الاكتشاف تلقائيًا:",
   "hero_title_part3": "",
-  "hero_title_part4": ""
+  "hero_title_part4": "",
+  "lang_sync_switch_title": "تعرض هذا بلغة {content}. هل تريد عرض نسخة {target}؟",
+  "lang_sync_regen_title": "تعرض هذا بلغة {content}. هل تريد إنشاء نسخة {target}؟",
+  "lang_sync_switch_cta": "التبديل إلى {target}",
+  "lang_sync_regen_cta": "الإنشاء بلغة {target}",
+  "lang_sync_free_note": "تم الإنشاء بالفعل — التبديل فوري ومجاني.",
+  "lang_sync_regen_note": "إنشاء نسخة {target} يكلّف {credits} رصيدًا.",
+  "lang_sync_regen_note_free_tier": "تتطلب النسخ بلغات أخرى خطة مدفوعة؛ وسيستهلك الإنشاء رصيدًا.",
+  "lang_sync_dismiss": "الإبقاء على {content}"
 }

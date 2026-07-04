@@ -3634,5 +3634,13 @@
   "verify_gate_resend_cooldown": "Renvoyer dans {seconds} s",
   "verify_gate_typo_hint": "Mauvaise adresse e-mail ? Déconnectez-vous et inscrivez-vous à nouveau avec la bonne adresse.",
   "verify_gate_signout": "Se déconnecter",
-  "verify_gate_spam_hint": "Vous ne voyez pas l'e-mail ? Vérifiez votre dossier spam ou courrier indésirable."
+  "verify_gate_spam_hint": "Vous ne voyez pas l'e-mail ? Vérifiez votre dossier spam ou courrier indésirable.",
+  "lang_sync_switch_title": "Vous consultez ceci en {content}. Voir la version en {target} ?",
+  "lang_sync_regen_title": "Vous consultez ceci en {content}. Créer une version en {target} ?",
+  "lang_sync_switch_cta": "Passer à {target}",
+  "lang_sync_regen_cta": "Générer en {target}",
+  "lang_sync_free_note": "Déjà générée — le changement est instantané et gratuit.",
+  "lang_sync_regen_note": "Générer une version en {target} coûte {credits} crédits.",
+  "lang_sync_regen_note_free_tier": "Les versions dans une autre langue nécessitent un forfait payant ; la génération coûte des crédits.",
+  "lang_sync_dismiss": "Garder {content}"
 }

@@ -3634,5 +3634,13 @@
   "verify_gate_resend_cooldown": "Resend in {seconds}s",
   "verify_gate_typo_hint": "Entered the wrong email? Sign out and register again with the correct address.",
   "verify_gate_signout": "Sign out",
-  "verify_gate_spam_hint": "Don't see the email? Check your spam or junk folder."
+  "verify_gate_spam_hint": "Don't see the email? Check your spam or junk folder.",
+  "lang_sync_switch_title": "You’re viewing this in {content}. See the {target} version?",
+  "lang_sync_regen_title": "You’re viewing this in {content}. Create a {target} version?",
+  "lang_sync_switch_cta": "Switch to {target}",
+  "lang_sync_regen_cta": "Generate in {target}",
+  "lang_sync_free_note": "Already generated — switching is instant and free.",
+  "lang_sync_regen_note": "Generating a {target} version costs {credits} credits.",
+  "lang_sync_regen_note_free_tier": "Generating another-language versions requires a paid plan; it will re-run and cost credits.",
+  "lang_sync_dismiss": "Keep {content}"
 }
