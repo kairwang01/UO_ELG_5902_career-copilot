@@ -625,18 +625,19 @@ export const extractTalentProfile = (resumeText: string, options?: { targetLangu
 export const convertResumeFormat = (resumeText: string, marketName: string, coverLetterText?: string, outputLanguage?: string) =>
   callTool<FormattedResume>('convertResumeFormat', { resumeText, marketName, coverLetterText, outputLanguage });
 
-export const generateCoverLetter = async (resumeText: string, jobDescription: string, marketName: string): Promise<CoverLetter> =>
+export const generateCoverLetter = async (resumeText: string, jobDescription: string, marketName: string, outputLanguage?: string): Promise<CoverLetter> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, CoverLetter>(firebaseFunctions, 'generateCoverLetter', { timeout: 190_000 });
     const res = await fn({
       resumeText,
       jobDescription,
       marketName,
+      outputLanguage,
       model: currentModelId,
       requestId: makeCallableRequestId('cover_letter'),
     });
     return res.data;
-  }, `coverLetter:${currentModelId ?? ''}:${stableStringify({ resumeText, jobDescription, marketName })}`);
+  }, `coverLetter:${currentModelId ?? ''}:${stableStringify({ resumeText, jobDescription, marketName, outputLanguage })}`);
 
 export const generateCareerPath = async (resumeText: string, desiredRole: string, marketName: string, _session?: Session): Promise<CareerPathResult> =>
   callDedicated(async () => {

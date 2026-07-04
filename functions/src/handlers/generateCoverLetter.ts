@@ -22,12 +22,27 @@ interface GenerateCoverLetterRequest {
   resumeText: string;
   jobDescription: string;
   marketName: string;
+  /** UI/output language requested by the user, e.g. "zh", "en", "fr". */
+  outputLanguage?: string;
   requestId?: string;
 }
 
 interface CoverLetter {
   letter: string;
 }
+
+const outputLanguageName = (value?: string): string => {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized.startsWith("zh")) return "Simplified Chinese";
+  if (normalized.startsWith("fr")) return "French";
+  if (normalized.startsWith("de")) return "German";
+  if (normalized.startsWith("ja")) return "Japanese";
+  if (normalized.startsWith("vi")) return "Vietnamese";
+  if (normalized.startsWith("ar")) return "Arabic";
+  if (normalized.startsWith("es")) return "Spanish";
+  if (normalized.startsWith("ko")) return "Korean";
+  return "English";
+};
 
 export const COVER_LETTER_SCHEMA = {
   type: Type.OBJECT,
@@ -59,10 +74,18 @@ export const generateCoverLetterFunction = onCall({ invoker: "public", timeoutSe
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();
 
+  // When the user asked for a specific UI/output language, instruct the model to
+  // write in it (this overrides the market's default business language). Left
+  // blank when unset, so behaviour is unchanged for callers that omit it.
+  const outputLanguageInstruction = data.outputLanguage
+    ? `Write the cover letter entirely in ${outputLanguageName(data.outputLanguage)}, regardless of the ${data.marketName} market's default business language. Keep proper nouns (employer names, product names, URLs, programming languages, frameworks) in their original form.`
+    : "";
+
   const prompt = buildPrompt("handler_cover_letter", {
     marketName: data.marketName,
     resumeText: data.resumeText,
     jobDescription: data.jobDescription,
+    outputLanguageInstruction,
   });
 
   try {
