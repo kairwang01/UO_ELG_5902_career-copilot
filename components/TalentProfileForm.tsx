@@ -14,6 +14,21 @@ import {
 import { loadTalentProfile, saveTalentProfile } from '../services/talentProfile';
 import { extractTalentProfile } from '../services/aiClient';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
+import { LanguageSyncBanner } from './LanguageSyncBanner';
+import {
+  type LanguageVersionLibrary,
+  adoptBareResult,
+  getLanguageVersion,
+  isLanguageVersionLibrary,
+  listVersionLanguages,
+  setActiveLanguage,
+  upsertLanguageVersion,
+} from '../lib/languageVersions';
+import { canSaveResults, loadToolResult, saveToolResult } from '../services/toolResults';
+
+// The per-language store holds the extraction OUTPUT (the schema-coerced draft we
+// merge into empty fields), keyed by the language it was generated in.
+type ExtractionDraft = Partial<TalentProfile>;
 
 interface TalentProfileFormProps {
   uid: string;
@@ -25,6 +40,12 @@ interface TalentProfileFormProps {
   primaryLabel?: string;
   onPrimary?: (profile: TalentProfile) => void;
   onSaved?: (profile: TalentProfile) => void;
+  /** Current UI language — drives the language-sync banner. */
+  currentLang?: string;
+  /** Localization function (for the language-sync banner copy). */
+  t?: (key: string) => string;
+  /** Subscription status — paid tiers persist per-language extraction versions. */
+  subscriptionStatus?: string | null;
 }
 
 const inputCls =
@@ -308,7 +329,13 @@ const FieldGrid: React.FC<{
 );
 
 // ── Main form ───────────────────────────────────────────────────────────────
-const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resumeText, primaryLabel, onPrimary, onSaved }) => {
+// Resume→profile extraction is a free convenience (TOOL_REGISTRY.extractTalentProfile
+// has creditKey:null — the server charges nothing). There is no distinct
+// TOOL_CREDIT_COSTS key for it, so regeneration in a new language is free too and
+// the banner shows a 0-credit cost.
+const PROFILE_EXTRACT_CREDIT_COST = 0;
+
+const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resumeText, primaryLabel, onPrimary, onSaved, currentLang = 'en', t = (key) => key, subscriptionStatus }) => {
   const [profile, setProfile] = useState<TalentProfile>(emptyTalentProfile());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -323,6 +350,11 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
   const [loadError, setLoadError] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // Language-sync: per-language store of extraction drafts, the language of the
+  // draft last applied, and the UI language the user dismissed the nudge for.
+  const [profileLib, setProfileLib] = useState<LanguageVersionLibrary<ExtractionDraft> | null>(null);
+  const [resultLang, setResultLang] = useState<string | null>(null);
+  const [langSyncDismissed, setLangSyncDismissed] = useState<string | null>(null);
   const prefillButtonRef = useRef<HTMLButtonElement | null>(null);
   const prefillRunRef = useRef(0);
   const mountedRef = useRef(true);
@@ -334,6 +366,27 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
       prefillRunRef.current += 1;
     };
   }, []);
+
+  // Load any saved per-language extraction versions (paid tiers only persist).
+  // A stored library lets a later UI-language change offer a FREE switch to an
+  // already-generated draft instead of a paid re-run. Bare pre-versioning saves
+  // are adopted as a single version in the current UI language (backward-compat).
+  useEffect(() => {
+    let cancelled = false;
+    setProfileLib(null);
+    loadToolResult<LanguageVersionLibrary<ExtractionDraft> | ExtractionDraft>(uid, 'talent-profile').then((saved) => {
+      if (cancelled || !saved) return;
+      if (isLanguageVersionLibrary<ExtractionDraft>(saved.result)) {
+        setProfileLib(saved.result);
+      } else {
+        setProfileLib(adoptBareResult<ExtractionDraft>(saved.result as ExtractionDraft, currentLang, saved.savedAt || Date.now()));
+      }
+    });
+    return () => { cancelled = true; };
+    // currentLang is only the fallback lang for a legacy bare result; re-running
+    // on every UI-language change would needlessly refetch, so it's excluded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid]);
 
   const markReviewPath = (path: string) => {
     // Any edit makes the persisted "Saved" indicator stale — clear it so the user
@@ -385,6 +438,92 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
     });
   };
 
+  // Merge an extraction draft into the CURRENT profile (empty fields / empty list
+  // sections only — never overwrites what the candidate typed; skills are unioned)
+  // and surface the review highlights. Shared by a fresh extraction and by a free
+  // "switch to a stored version" from the language-sync banner.
+  const applyExtractionDraft = (ex: ExtractionDraft, langLabel: string) => {
+    const before = cloneProfile(profile);
+    // Decide which sections will actually receive data (from current state) so
+    // we can expand exactly those — the user must see everything before saving.
+    const touched = new Set<string>();
+    const reviewPaths = new Set<string>();
+    (['basic', 'intention', 'additional'] as const).forEach((id) => {
+      const exObj = ex[id] as Record<string, string> | undefined;
+      if (!exObj) return;
+      Object.keys(exObj).forEach((k) => {
+        const cur = (profile[id] as Record<string, string>)[k];
+        if ((!cur || !String(cur).trim()) && hasVisibleValue(exObj[k])) {
+          touched.add(id);
+          reviewPaths.add(`${id}.${k}`);
+        }
+      });
+    });
+    (['education', 'experience', 'projects', 'awards', 'portfolio'] as const).forEach((id) => {
+      const exList = ex[id] as Record<string, string | string[]>[] | undefined;
+      if (exList && exList.length && !(profile[id] ?? []).some(hasMeaningfulEntry)) {
+        touched.add(id);
+        exList.forEach((item, index) => {
+          Object.keys(item).forEach((key) => {
+            if (hasVisibleValue(item[key])) reviewPaths.add(`${id}.${index}.${key}`);
+          });
+        });
+      }
+    });
+    if (ex.skills) {
+      Object.keys(ex.skills).forEach((g) => {
+        const hasNewSkill = ((ex.skills as Record<string, string[]>)[g] ?? []).some((s) => !(profile.skills[g] ?? []).includes(s));
+        if (hasNewSkill) {
+          touched.add('skills');
+          reviewPaths.add(`skills.${g}`);
+        }
+      });
+    }
+
+    setProfile((p) => {
+      const next: TalentProfile = { ...p, basic: { ...p.basic }, intention: { ...p.intention }, additional: { ...p.additional }, skills: { ...p.skills } };
+      (['basic', 'intention', 'additional'] as const).forEach((id) => {
+        const exObj = ex[id] as Record<string, string> | undefined;
+        if (!exObj) return;
+        const cur = next[id] as Record<string, string>;
+        Object.keys(exObj).forEach((k) => {
+          if (!cur[k] || !String(cur[k]).trim()) cur[k] = exObj[k];
+        });
+      });
+      (['education', 'experience', 'projects', 'awards', 'portfolio'] as const).forEach((id) => {
+        const exList = ex[id] as Record<string, string | string[]>[] | undefined;
+        if (exList && exList.length && !(next[id] ?? []).some(hasMeaningfulEntry)) next[id] = exList;
+      });
+      if (ex.skills) {
+        Object.keys(ex.skills).forEach((g) => {
+          next.skills[g] = Array.from(new Set([...(next.skills[g] ?? []), ...((ex.skills as Record<string, string[]>)[g] ?? [])]));
+        });
+      }
+      return next;
+    });
+    if (touched.size) setOpen((o) => ({ ...o, ...Object.fromEntries([...touched].map((id) => [id, true])) }));
+    if (reviewPaths.size) {
+      setShowAllPrefillPaths(false);
+      setPrefillReview({ before, paths: [...reviewPaths], languageLabel: langLabel });
+      setPrefillMsg({ kind: 'ok', text: `Drafted ${reviewPaths.size} fields from your resume in ${langLabel}. Review the highlighted fields before saving.` });
+    } else {
+      setPrefillReview(null);
+      setPrefillMsg({ kind: 'info', text: 'No empty fields were filled. Your existing Talent Profile already has the matching resume details.' });
+    }
+  };
+
+  // Fold a fresh extraction into the per-language library, track its language for
+  // the banner, and persist for paid tiers (free saves are rejected by rules).
+  const recordExtractionVersion = (lang: string, ex: ExtractionDraft) => {
+    setResultLang(lang);
+    setLangSyncDismissed(null);
+    setProfileLib((prev) => {
+      const nextLib = upsertLanguageVersion<ExtractionDraft>(prev, lang, ex, Date.now());
+      if (canSaveResults(subscriptionStatus)) void saveToolResult(uid, 'talent-profile', nextLib);
+      return nextLib;
+    });
+  };
+
   const handlePrefill = async (targetLanguage: string) => {
     if (!resumeText || resumeText.trim().length < 40) {
       setPrefillMsg({ kind: 'info', text: 'Add or upload your resume first (the “Resume” tab), then prefill here.' });
@@ -398,74 +537,9 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
     try {
       const ex = sanitizeExtractedProfile(await extractTalentProfile(resumeText, { targetLanguage }));
       if (!mountedRef.current || prefillRunRef.current !== runId) return;
-      const before = cloneProfile(profile);
-      // Decide which sections will actually receive data (from current state) so
-      // we can expand exactly those — the user must see everything before saving.
-      const touched = new Set<string>();
-      const reviewPaths = new Set<string>();
-      (['basic', 'intention', 'additional'] as const).forEach((id) => {
-        const exObj = ex[id] as Record<string, string> | undefined;
-        if (!exObj) return;
-        Object.keys(exObj).forEach((k) => {
-          const cur = (profile[id] as Record<string, string>)[k];
-          if ((!cur || !String(cur).trim()) && hasVisibleValue(exObj[k])) {
-            touched.add(id);
-            reviewPaths.add(`${id}.${k}`);
-          }
-        });
-      });
-      (['education', 'experience', 'projects', 'awards', 'portfolio'] as const).forEach((id) => {
-        const exList = ex[id] as Record<string, string | string[]>[] | undefined;
-        if (exList && exList.length && !(profile[id] ?? []).some(hasMeaningfulEntry)) {
-          touched.add(id);
-          exList.forEach((item, index) => {
-            Object.keys(item).forEach((key) => {
-              if (hasVisibleValue(item[key])) reviewPaths.add(`${id}.${index}.${key}`);
-            });
-          });
-        }
-      });
-      if (ex.skills) {
-        Object.keys(ex.skills).forEach((g) => {
-          const hasNewSkill = ((ex.skills as Record<string, string[]>)[g] ?? []).some((s) => !(profile.skills[g] ?? []).includes(s));
-          if (hasNewSkill) {
-            touched.add('skills');
-            reviewPaths.add(`skills.${g}`);
-          }
-        });
-      }
-
-      setProfile((p) => {
-        const next: TalentProfile = { ...p, basic: { ...p.basic }, intention: { ...p.intention }, additional: { ...p.additional }, skills: { ...p.skills } };
-        (['basic', 'intention', 'additional'] as const).forEach((id) => {
-          const exObj = ex[id] as Record<string, string> | undefined;
-          if (!exObj) return;
-          const cur = next[id] as Record<string, string>;
-          Object.keys(exObj).forEach((k) => {
-            if (!cur[k] || !String(cur[k]).trim()) cur[k] = exObj[k];
-          });
-        });
-        (['education', 'experience', 'projects', 'awards', 'portfolio'] as const).forEach((id) => {
-          const exList = ex[id] as Record<string, string | string[]>[] | undefined;
-          if (exList && exList.length && !(next[id] ?? []).some(hasMeaningfulEntry)) next[id] = exList;
-        });
-        if (ex.skills) {
-          Object.keys(ex.skills).forEach((g) => {
-            next.skills[g] = Array.from(new Set([...(next.skills[g] ?? []), ...((ex.skills as Record<string, string[]>)[g] ?? [])]));
-          });
-        }
-        return next;
-      });
-      if (touched.size) setOpen((o) => ({ ...o, ...Object.fromEntries([...touched].map((id) => [id, true])) }));
       const langLabel = PREFILL_LANGUAGE_OPTIONS.find((opt) => opt.value === targetLanguage)?.label ?? 'your selected language';
-      if (reviewPaths.size) {
-        setShowAllPrefillPaths(false);
-        setPrefillReview({ before, paths: [...reviewPaths], languageLabel: langLabel });
-        setPrefillMsg({ kind: 'ok', text: `Drafted ${reviewPaths.size} fields from your resume in ${langLabel}. Review the highlighted fields before saving.` });
-      } else {
-        setPrefillReview(null);
-        setPrefillMsg({ kind: 'info', text: 'No empty fields were filled. Your existing Talent Profile already has the matching resume details.' });
-      }
+      applyExtractionDraft(ex, langLabel);
+      recordExtractionVersion(targetLanguage, ex);
     } catch (err) {
       if (mountedRef.current && prefillRunRef.current === runId) {
         setPrefillMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Could not read your resume. Please fill the form manually.' });
@@ -724,6 +798,31 @@ const TalentProfileForm: React.FC<TalentProfileFormProps> = ({ uid, seed, resume
           {savedAt && <span className="text-gray-400">Saved</span>}
         </p>
       </div>
+
+      {resultLang && resultLang !== currentLang && langSyncDismissed !== currentLang && (
+        <LanguageSyncBanner
+          contentLang={resultLang}
+          uiLang={currentLang}
+          availableLangs={listVersionLanguages(profileLib)}
+          creditCost={PROFILE_EXTRACT_CREDIT_COST}
+          canPersist={canSaveResults(subscriptionStatus)}
+          busy={prefilling}
+          t={t}
+          onSwitch={(lang) => {
+            // Free: replay a stored extraction draft in `lang` through the same
+            // merge path (fills still-empty fields; no network / no credits).
+            const v = getLanguageVersion(profileLib, lang);
+            if (!v) return;
+            const langLabel = PREFILL_LANGUAGE_OPTIONS.find((opt) => opt.value === lang)?.label ?? lang.toUpperCase();
+            applyExtractionDraft(v.result, langLabel);
+            setResultLang(lang);
+            setLangSyncDismissed(null);
+            setProfileLib((prev) => (prev ? setActiveLanguage(prev, lang) : prev));
+          }}
+          onRegenerate={() => { handlePrefill(currentLang).catch(() => {}); }}
+          onDismiss={() => setLangSyncDismissed(currentLang)}
+        />
+      )}
 
       {prefillReview && (
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/25">
