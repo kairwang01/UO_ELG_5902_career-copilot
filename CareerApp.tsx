@@ -1203,6 +1203,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               uid={session.user.id}
               seed={{ name: profile?.full_name ?? undefined, email: session.user.email ?? undefined }}
               resumeText={resumeText}
+              currentLang={currentLang}
+              t={t}
+              subscriptionStatus={userPlan}
             />
           </div>
         )}
