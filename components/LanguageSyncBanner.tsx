@@ -48,7 +48,9 @@ export const LanguageSyncBanner: React.FC<LanguageSyncBannerProps> = ({
           <p className="mt-0.5 text-xs text-blue-700/90 dark:text-blue-200/80">
             {canSwitch
               ? t('lang_sync_free_note')
-              : (canPersist ? fill('lang_sync_regen_note') : t('lang_sync_regen_note_free_tier'))}
+              : creditCost <= 0
+                ? fill('lang_sync_regen_note_nocost')
+                : (canPersist ? fill('lang_sync_regen_note') : t('lang_sync_regen_note_free_tier'))}
           </p>
         </div>
       </div>
@@ -79,9 +81,11 @@ export const LanguageSyncBanner: React.FC<LanguageSyncBannerProps> = ({
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {fill('lang_sync_regen_cta')}
-            <span className="inline-flex items-center gap-0.5 rounded bg-blue-500/60 px-1.5 py-0.5 text-[10px] font-semibold">
-              <Coins className="h-3 w-3" aria-hidden="true" />{creditCost}
-            </span>
+            {creditCost > 0 && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-blue-500/60 px-1.5 py-0.5 text-[10px] font-semibold">
+                <Coins className="h-3 w-3" aria-hidden="true" />{creditCost}
+              </span>
+            )}
           </button>
         )}
       </div>

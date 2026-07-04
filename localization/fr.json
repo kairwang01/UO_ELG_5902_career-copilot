@@ -3642,5 +3642,6 @@
   "lang_sync_free_note": "Déjà générée — le changement est instantané et gratuit.",
   "lang_sync_regen_note": "Générer une version en {target} coûte {credits} crédits.",
   "lang_sync_regen_note_free_tier": "Les versions dans une autre langue nécessitent un forfait payant ; la génération coûte des crédits.",
-  "lang_sync_dismiss": "Garder {content}"
+  "lang_sync_dismiss": "Garder {content}",
+  "lang_sync_regen_note_nocost": "Générer une version en {target} est gratuit."
 }

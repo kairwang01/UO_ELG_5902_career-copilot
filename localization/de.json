@@ -3642,5 +3642,6 @@
   "lang_sync_free_note": "Bereits erstellt – der Wechsel ist sofort und kostenlos.",
   "lang_sync_regen_note": "Eine {target}-Version zu erstellen kostet {credits} Credits.",
   "lang_sync_regen_note_free_tier": "Versionen in anderen Sprachen erfordern einen kostenpflichtigen Tarif; die Erstellung kostet Credits.",
-  "lang_sync_dismiss": "Bei {content} bleiben"
+  "lang_sync_dismiss": "Bei {content} bleiben",
+  "lang_sync_regen_note_nocost": "Eine {target}-Version zu erstellen ist kostenlos."
 }

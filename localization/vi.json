@@ -3642,5 +3642,6 @@
   "lang_sync_free_note": "Đã tạo — chuyển đổi tức thì và miễn phí.",
   "lang_sync_regen_note": "Tạo phiên bản {target} tốn {credits} tín dụng.",
   "lang_sync_regen_note_free_tier": "Phiên bản ngôn ngữ khác yêu cầu gói trả phí; việc tạo sẽ tốn tín dụng.",
-  "lang_sync_dismiss": "Giữ {content}"
+  "lang_sync_dismiss": "Giữ {content}",
+  "lang_sync_regen_note_nocost": "Tạo phiên bản {target} là miễn phí."
 }

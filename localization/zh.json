@@ -3642,5 +3642,6 @@
   "lang_sync_free_note": "已生成——切换即时且免费。",
   "lang_sync_regen_note": "生成{target}版本需消耗 {credits} 个积分。",
   "lang_sync_regen_note_free_tier": "其他语言版本需付费套餐；生成将消耗积分。",
-  "lang_sync_dismiss": "保持{content}"
+  "lang_sync_dismiss": "保持{content}",
+  "lang_sync_regen_note_nocost": "生成{target}版本是免费的。"
 }
