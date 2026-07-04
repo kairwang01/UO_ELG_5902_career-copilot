@@ -13,6 +13,9 @@ import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle } from 
 import { getMarketLocalLanguage, resolveOutputLanguageName, type OutputLanguageChoice } from '../../lib/resumeLanguage';
 import { ResumeFormatterDownloadGate } from './ResumeFormatterActions';
 import { buildLinkedInContextFromFormattedResume } from '../../lib/toolPrefill';
+import { LanguageSyncBanner } from '../LanguageSyncBanner';
+import { useLocalization } from '../../hooks/useLocalization';
+import { TOOL_CREDIT_COSTS } from '../../config/credits';
 import {
   getResumeVersionDisplayLabel,
   getPreferredResumeFormatterVersion,
@@ -35,6 +38,40 @@ const MARKET_HINT_KEY: Record<string, string> = {
   'Vietnam':        'resume_market_hint_vietnam',
   'Singapore':      'resume_market_hint_singapore',
   'Australia':      'resume_market_hint_australia',
+};
+
+// Maps the fixed English language NAME used by resumeLanguage.ts to the 2-letter
+// code used by SUPPORTED_LANGUAGES (the language-sync UI codes).
+const RESUME_LANG_NAME_TO_CODE: Record<string, string> = {
+  German: 'de',
+  French: 'fr',
+  Japanese: 'ja',
+  'Simplified Chinese': 'zh',
+  Vietnamese: 'vi',
+  Arabic: 'ar',
+};
+
+// The content language code of a stored/displayed version: English unless the
+// version was generated in its market's distinct local language.
+const resumeContentLangCode = (
+  market: string | null | undefined,
+  outputLanguage?: FormattedResume['outputLanguage'] | null,
+): string => {
+  if (outputLanguage === 'local') {
+    const local = getMarketLocalLanguage(market ?? '');
+    if (local) return RESUME_LANG_NAME_TO_CODE[local.name] ?? 'en';
+  }
+  return 'en';
+};
+
+// Reverse lookup: the market whose local language equals a UI language code
+// (data-driven from resumeLanguage.ts so it stays in sync with the markets).
+const marketForLocalLangCode = (code: string): string | null => {
+  for (const m of SUPPORTED_MARKETS) {
+    const local = getMarketLocalLanguage(m);
+    if (local && RESUME_LANG_NAME_TO_CODE[local.name] === code) return m;
+  }
+  return null;
 };
 
 // (b) sample cover letter — does NOT touch resumeText
@@ -164,6 +201,7 @@ interface ResumeFormatterProps {
 }
 
 const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialInput = '', market, openTool, t }) => {
+  const { currentLang } = useLocalization();
   const { loading, begin, end, cancel } = useCancellableLoading();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FormattedResume | null>(null);
@@ -176,6 +214,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
     () => (getMarketLocalLanguage(market) ? 'local' : 'en'),
   );
   const [coverLetterPrefillActive, setCoverLetterPrefillActive] = useState(false);
+  const [langSyncDismissed, setLangSyncDismissed] = useState<string | null>(null);
   const consumedInitialInputRef = useRef('');
   const savedHydratedRef = useRef(false);
 
@@ -235,25 +274,32 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
     setError(null);
   }, [initialInput]);
 
-  const runTool = async (options: { coverLetter?: string } = {}) => {
+  const runTool = async (options: { coverLetter?: string; market?: string; outputLanguage?: OutputLanguageChoice } = {}) => {
     if (!resumeText?.trim()) {
       setError(t('tool_resume_required_error'));
       return;
     }
+    // Overrides let the language-sync banner regenerate in a specific market/
+    // language without waiting on async setState; default to the selected values.
+    const runMarket = options.market ?? targetMarket;
+    const runLanguage = options.outputLanguage ?? outputLanguage;
     const alive = begin();
     setError(null);
     setResult(null);
+    setLangSyncDismissed(null);
+    if (runMarket !== targetMarket) setTargetMarket(runMarket);
+    if (runLanguage !== outputLanguage) setOutputLanguage(runLanguage);
     try {
-      const languageName = resolveOutputLanguageName(targetMarket, outputLanguage);
-      const apiResult = await convertResumeFormat(resumeText, targetMarket, options.coverLetter, languageName);
+      const languageName = resolveOutputLanguageName(runMarket, runLanguage);
+      const apiResult = await convertResumeFormat(resumeText, runMarket, options.coverLetter, languageName);
       if (!alive()) return;
       const formattedText = cleanResumeDisplay(apiResult.formattedText);
       const validation = assessFormattedResume(formattedText, { outputLanguage: languageName });
       const normalizedResult = {
         ...apiResult,
         formattedText,
-        targetMarket,
-        outputLanguage,
+        targetMarket: runMarket,
+        outputLanguage: runLanguage,
       };
       setResult(normalizedResult);
       setFromSaved(false);
@@ -504,8 +550,51 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
       : readinessState === 'review'
         ? localizedCopy(t, 'tool_resume_readiness_badge_review', 'Review')
         : localizedCopy(t, 'tool_resume_readiness_badge_regenerate', 'Regenerate');
+
+    // Language-sync nudge: the resume stays market-driven, but if the shown
+    // version's content language differs from the UI language, offer to switch to
+    // an already-stored version (free) or regenerate in the UI language (paid).
+    const contentLang = resumeContentLangCode(generatedMarket, result.outputLanguage ?? outputLanguage);
+    const availableLangs = Array.from(new Set(
+      Object.values(getResumeFormatterVersions(saved?.result)).map((v) => resumeContentLangCode(v.targetMarket, v.outputLanguage)),
+    ));
+    const currentCoverLetter = includeCoverLetter ? coverLetterForFormatting : undefined;
+    const switchToStoredLang = (lang: string) => {
+      const matches = Object.values(getResumeFormatterVersions(saved?.result))
+        .filter((v) => resumeContentLangCode(v.targetMarket, v.outputLanguage) === lang);
+      const chosen = matches.find((v) => v.targetMarket === generatedMarket) ?? matches[0];
+      if (!chosen) return;
+      setResult(chosen);
+      setFromSaved(true);
+      setTargetMarket(chosen.targetMarket || targetMarket);
+      setOutputLanguage(chosen.outputLanguage || (getMarketLocalLanguage(chosen.targetMarket || targetMarket) ? 'local' : 'en'));
+      setError(null);
+      setLangSyncDismissed(null);
+    };
+    const regenerateInLang = (lang: string) => {
+      if (lang === 'en') {
+        void runTool({ coverLetter: currentCoverLetter, market: generatedMarket, outputLanguage: 'en' });
+        return;
+      }
+      const localMarket = marketForLocalLangCode(lang);
+      if (localMarket) void runTool({ coverLetter: currentCoverLetter, market: localMarket, outputLanguage: 'local' });
+    };
     return (
       <div className="space-y-4 animate-fade-in">
+        {langSyncDismissed !== currentLang && (
+          <LanguageSyncBanner
+            contentLang={contentLang}
+            uiLang={currentLang}
+            availableLangs={availableLangs}
+            creditCost={TOOL_CREDIT_COSTS['resume-formatter']}
+            canPersist={canSave}
+            busy={loading}
+            t={t}
+            onSwitch={switchToStoredLang}
+            onRegenerate={regenerateInLang}
+            onDismiss={() => setLangSyncDismissed(currentLang)}
+          />
+        )}
         {validation.status !== 'needs_regen' && (
           <SavedResultBar
             t={t}
