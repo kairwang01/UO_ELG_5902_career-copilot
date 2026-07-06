@@ -7,6 +7,7 @@ import { SampleReportPage } from './pages/SampleReportPage';
 import { PricingPage } from './pages/PricingPage';
 import SimulatedCheckoutPage from './pages/SimulatedCheckoutPage';
 import SimulatedManagePage from './pages/SimulatedManagePage';
+import SiteSeo from './components/SiteSeo';
 
 const MvpApp = React.lazy(() => import('../CareerApp'));
 const AdminPortal = React.lazy(() => import('../components/admin/AdminPortal'));
@@ -54,6 +55,7 @@ const ScrollToHash: React.FC = () => {
  */
 export const SiteRouter: React.FC = () => (
   <>
+  <SiteSeo />
   <ScrollToHash />
   <Routes>
     <Route path="/app/*" element={<Navigate to="/workspace" replace />} />
