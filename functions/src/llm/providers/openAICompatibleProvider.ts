@@ -4,9 +4,10 @@
  * "auto" gateway today, and reusable for Qwen / DeepSeek / GPT / a user's custom
  * provider later — they all speak the same wire format.
  *
- * Supports: text generation, JSON output (response_format: json_object + parse),
- * and multimodal images (OpenAI vision content parts). Google-Search grounding is
- * Gemini-only, so useGoogleSearch is ignored here (no groundingChunks returned).
+ * Supports: text generation, JSON output (response_format: json_object hint with
+ * a one-shot bare retry for models that reject it + prompt-embedded schema +
+ * parse), and multimodal images (OpenAI vision content parts). Google-Search
+ * grounding is Gemini-only, so useGoogleSearch is ignored here.
  */
 
 import { LLMProvider, LLMRequest, LLMResult } from "../LLMProvider";
@@ -81,22 +82,44 @@ export class OpenAICompatibleProvider implements LLMProvider {
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.maxOutputTokens !== undefined) body.max_tokens = req.maxOutputTokens;
 
-    const resp = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      // Free community routers (KairLLM auto) regularly take 60-90s for large
-      // structured outputs — 60s aborted convertResumeFormat/findOpportunities
-      // mid-flight. The callable layer enforces its own deadline above this.
-      signal: AbortSignal.timeout(150_000),
-    });
+    const post = (payload: Record<string, unknown>) =>
+      fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        // Free community routers (KairLLM auto) regularly take 60-90s for large
+        // structured outputs — 60s aborted convertResumeFormat/findOpportunities
+        // mid-flight. The callable layer enforces its own deadline above this.
+        signal: AbortSignal.timeout(150_000),
+      });
+
+    let resp = await post(body);
 
     if (!resp.ok) {
       const detail = await resp.text().catch(() => "");
-      throw new Error(`LLM provider error ${resp.status}: ${detail.slice(0, 500)}`);
+      // Some gateways/models reject `response_format: json_object` (e.g. Novita
+      // via OpenRouter: "Model 'x' does not support 'json_object' response
+      // format. Supported formats: json_schema."). The format flag is only a
+      // belt-and-suspenders hint here — the exact schema is already embedded in
+      // the prompt above and extractJson() parses fenced/prefixed output — so
+      // retry ONCE without it instead of failing the tool run.
+      const formatRejected =
+        resp.status === 400 &&
+        "response_format" in body &&
+        /response_format|json_object/i.test(detail);
+      if (formatRejected) {
+        const { response_format: _dropped, ...bare } = body;
+        resp = await post(bare);
+        if (!resp.ok) {
+          const retryDetail = await resp.text().catch(() => "");
+          throw new Error(`LLM provider error ${resp.status}: ${retryDetail.slice(0, 500)}`);
+        }
+      } else {
+        throw new Error(`LLM provider error ${resp.status}: ${detail.slice(0, 500)}`);
+      }
     }
 
     const json: any = await resp.json();
