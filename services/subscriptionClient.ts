@@ -54,8 +54,11 @@ export async function createSubscriptionCheckout(planKey: string): Promise<Check
   return result.data;
 }
 
-export async function createEmbeddedSubscriptionCheckout(planKey: string): Promise<CheckoutSessionResult> {
-  const result = await createCheckoutSessionCallable({ planKey, uiMode: 'embedded' });
+export async function createEmbeddedSubscriptionCheckout(
+  planKey: string,
+  uiMode: 'hosted' | 'embedded' = 'embedded',
+): Promise<CheckoutSessionResult> {
+  const result = await createCheckoutSessionCallable({ planKey, uiMode });
   return result.data;
 }
 
@@ -75,8 +78,11 @@ export async function confirmSimulatedCheckout(planKey: string, sessionId?: stri
  * subscription path — the backend routes by pack key to a payment-mode session that
  * grants credits without changing the buyer's plan or role.
  */
-export async function createEmbeddedCreditPackCheckout(packKey: string): Promise<CheckoutSessionResult> {
-  const result = await createCheckoutSessionCallable({ planKey: packKey, uiMode: 'embedded' });
+export async function createEmbeddedCreditPackCheckout(
+  packKey: string,
+  uiMode: 'hosted' | 'embedded' = 'embedded',
+): Promise<CheckoutSessionResult> {
+  const result = await createCheckoutSessionCallable({ planKey: packKey, uiMode });
   return result.data;
 }
 

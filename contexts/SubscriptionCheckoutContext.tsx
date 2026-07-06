@@ -92,7 +92,7 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
       kind: 'plan' | 'pack',
       key: string,
       label: string,
-      create: (key: string) => Promise<{ mode?: 'hosted' | 'embedded'; clientSecret?: string; simulated?: boolean; id?: string }>,
+      create: (key: string, uiMode: 'hosted' | 'embedded') => Promise<{ mode?: 'hosted' | 'embedded'; clientSecret?: string; simulated?: boolean; id?: string; url?: string }>,
       options?: StartSubscriptionCheckoutOptions,
     ) => {
       if (isOpening || openingRef.current) return;
@@ -102,9 +102,19 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
       completeHandlerRef.current = options?.onComplete ?? null;
 
       try {
-        const session = await create(key);
+        // Request the mode this build can actually render: without a Stripe
+        // publishable key there is no embedded modal, so ask the server for a
+        // hosted Checkout session (redirect) instead of failing after the fact.
+        const session = await create(key, stripePromise ? 'embedded' : 'hosted');
         if (session.mode === 'embedded' && session.clientSecret) {
           if (!stripePromise) {
+            // Server returned embedded anyway (older deploy ignoring uiMode).
+            // Fall back to the hosted URL when one is included; only give up
+            // when there is truly no way to collect payment.
+            if (session.url) {
+              window.location.assign(session.url);
+              return;
+            }
             throw new Error('Embedded checkout is not configured. Add VITE_STRIPE_PUBLISHABLE_KEY and rebuild the frontend.');
           }
           setClientSecret(session.clientSecret);
@@ -123,7 +133,15 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
           return;
         }
 
-        throw new Error('Embedded checkout is unavailable. Please try again after billing configuration is deployed.');
+        // REAL hosted Stripe Checkout: hand the browser to Stripe. Payment
+        // completion returns to the success URL the server configured
+        // (APP_BASE_URL), where the webhook-granted entitlement is picked up.
+        if (session.url && !session.simulated) {
+          window.location.assign(session.url);
+          return;
+        }
+
+        throw new Error('Checkout is unavailable. Please try again after billing configuration is deployed.');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Checkout could not be started.';
         setCheckoutError(message);
