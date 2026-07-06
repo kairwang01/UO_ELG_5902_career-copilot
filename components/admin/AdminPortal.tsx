@@ -135,10 +135,12 @@ type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
 type ModelSectionId = 'health' | 'credentials' | 'registry';
 type QuotaSectionId = 'global' | 'plans' | 'tools' | 'posting' | 'interview';
 
+// Ordered by how often an operator touches each surface: the registry is the
+// primary working area, credentials are set-and-forget, health is monitoring.
 const MODEL_SECTIONS: { id: ModelSectionId; label: string }[] = [
-  { id: 'health', label: 'Key health' },
-  { id: 'credentials', label: 'Provider credentials' },
   { id: 'registry', label: 'Model registry' },
+  { id: 'credentials', label: 'Provider credentials' },
+  { id: 'health', label: 'Key health' },
 ];
 
 const QUOTA_SECTIONS: { id: QuotaSectionId; label: string }[] = [
@@ -837,7 +839,7 @@ const AdminPortal: React.FC = () => {
   const [quotas, setQuotas] = useState<AdminQuotas>({});
   const [savedQuotas, setSavedQuotas] = useState<AdminQuotas | null>(null);
   const [quotasLoadedAt, setQuotasLoadedAt] = useState<number | null>(null);
-  const [activeModelSection, setActiveModelSection] = useState<ModelSectionId>('health');
+  const [activeModelSection, setActiveModelSection] = useState<ModelSectionId>('registry');
   const [modelNavScrolled, setModelNavScrolled] = useState(false);
   const [activeQuotaSection, setActiveQuotaSection] = useState<QuotaSectionId>('global');
   const [quotaNavScrolled, setQuotaNavScrolled] = useState(false);
@@ -2527,15 +2529,697 @@ const AdminPortal: React.FC = () => {
               </div>
             </div>
 
-            {/* SECTION 0: KEY POOL HEALTH */}
+            {/* OVERVIEW STRIP — the at-a-glance state everything below manages */}
+            {modelsLoaded && models.length > 0 && (() => {
+              const enabledModels = models.filter((m) => m.enabled);
+              const disabledCount = models.length - enabledModels.length;
+              const cooling = enabledModels.filter((m) => m.keyHealth?.anyCooled).length;
+              const defaultModel = models.find((m) => m.id === defaultModelId);
+              return (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <Card className="px-4 py-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Default model</p>
+                    <p className="mt-1 flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {defaultModel ? (
+                        <>
+                          <LlmProviderIcon text={`${defaultModel.id} ${defaultModel.label}`} />
+                          <span className="truncate">{defaultModel.label}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">not set</span>
+                      )}
+                    </p>
+                  </Card>
+                  <Card className="px-4 py-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Models</p>
+                    <p className="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {enabledModels.length} enabled
+                      {disabledCount > 0 && (
+                        <span className="ml-1.5 text-xs font-normal text-gray-500">· {disabledCount} disabled</span>
+                      )}
+                    </p>
+                  </Card>
+                  <Card className="px-4 py-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Key health</p>
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
+                      <span className={`h-2 w-2 rounded-full ${cooling ? 'bg-amber-400' : 'bg-emerald-500'}`} aria-hidden="true" />
+                      <span className={cooling ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}>
+                        {cooling ? `${cooling} model${cooling > 1 ? 's' : ''} cooling down` : 'all keys healthy'}
+                      </span>
+                    </p>
+                  </Card>
+                </div>
+              );
+            })()}
+
+            {/* SECTION A: MODEL REGISTRY (primary working surface) */}
             <section
-              ref={(node) => { modelSectionRefs.current.health = node; }}
+              ref={(node) => { modelSectionRefs.current.registry = node; }}
               className="scroll-mt-32"
             >
-              <KeyPoolHealthSection models={models} />
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <SectionHeading>Model registry</SectionHeading>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Changes propagate to every user's model picker within ~60 seconds.
+                  </p>
+                </div>
+                {modelForm === null && (
+                  <button
+                    type="button"
+                    onClick={() => openModelForm('new')}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
+                  >
+                    <span className="text-base leading-none">+</span>
+                    Add model
+                  </button>
+                )}
+              </div>
+
+              {/* ADD / EDIT FORM */}
+              {modelForm !== null && (
+                <Card className="p-5 space-y-5 mb-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <SectionHeading>
+                      {modelForm === 'new' ? 'Add new model' : `Edit ? ${mfId}`}
+                    </SectionHeading>
+                    <button
+                      type="button"
+                      onClick={() => { setModelForm(null); setError(null); setTest('__form__', { state: 'idle' }); }}
+                      className="text-sm text-gray-500 hover:text-gray-700 transition-colors focus:outline-none focus:underline"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  {/* ── Identity ─────────────────────────────────────────── */}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-3">Identity</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                    {/* ID */}
+                    <div>
+                      <FieldLabel htmlFor="mf-id">
+                        Model id{' '}
+                        <span className="font-normal text-gray-500 text-xs">
+                          (immutable once created)
+                        </span>
+                      </FieldLabel>
+                      <input
+                        id="mf-id"
+                        value={mfId}
+                        onChange={(e) => setMfId(e.target.value)}
+                        disabled={modelForm !== 'new'}
+                        placeholder="my-model"
+                        className={`${textInput} ${modelForm !== 'new' ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
+                      />
+                    </div>
+
+                    {/* Label */}
+                    <div>
+                      <FieldLabel htmlFor="mf-label">Display label</FieldLabel>
+                      <input
+                        id="mf-label"
+                        value={mfLabel}
+                        onChange={(e) => setMfLabel(e.target.value)}
+                        placeholder="KairLLM (Fast)"
+                        className={textInput}
+                      />
+                    </div>
+                    </div>
+                  </div>
+
+                  {/* ── Connection — provider, endpoint, and keys ─────────── */}
+                  <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-3">Connection</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+
+                    {/* Provider */}
+                    <div>
+                      <FieldLabel htmlFor="mf-provider">Provider</FieldLabel>
+                      <select
+                        id="mf-provider"
+                        value={mfProvider}
+                        onChange={(e) => setMfProvider(e.target.value as ModelEntry['provider'])}
+                        className={textInput}
+                      >
+                        <option value="gemini">gemini</option>
+                        <option value="openai-compatible">openai-compatible</option>
+                      </select>
+                    </div>
+
+                    {/* Builtin */}
+                    <div>
+                      <FieldLabel htmlFor="mf-builtin">
+                        Built-in{' '}
+                        <span className="font-normal text-gray-500 text-xs">
+                          (inherits platform key/url)
+                        </span>
+                      </FieldLabel>
+                      <select
+                        id="mf-builtin"
+                        value={mfBuiltin}
+                        onChange={(e) => setMfBuiltin(e.target.value as ModelEntry['builtin'] | '')}
+                        className={textInput}
+                      >
+                          <option value="">none</option>
+                        <option value="kairllm">kairllm</option>
+                        <option value="deepseek">deepseek</option>
+                      </select>
+                    </div>
+
+                    {/* Base URL ? only relevant for openai-compatible non-builtin */}
+                    {mfProvider === 'openai-compatible' && !mfBuiltin && (
+                      <div className="sm:col-span-2">
+                        <FieldLabel htmlFor="mf-base-url">Base URL</FieldLabel>
+                        <input
+                          id="mf-base-url"
+                          value={mfBaseUrl}
+                          onChange={(e) => setMfBaseUrl(e.target.value)}
+                          placeholder="https://api.example.com/v1"
+                          className={textInput}
+                        />
+                      </div>
+                    )}
+
+                    {/* API Key ? only for openai-compatible non-builtin */}
+                    {mfProvider === 'openai-compatible' && !mfBuiltin && (
+                      <div className="sm:col-span-2 space-y-3">
+                        <div>
+                          <FieldLabel htmlFor="mf-api-key">API key (single)</FieldLabel>
+                          <input
+                            id="mf-api-key"
+                            type="password"
+                            value={mfApiKey}
+                            onChange={(e) => setMfApiKey(e.target.value)}
+                            placeholder={modelForm !== 'new' ? 'leave blank to keep existing key' : 'sk-...'}
+                            className={textInput}
+                            autoComplete="off"
+                          />
+                        </div>
+
+                        {/* Multi-key pool: masked saved keys listed read-only with per-key Test */}
+                        {modelForm !== 'new' && (modelForm as ModelEntry).api_keys && (modelForm as ModelEntry).api_keys!.length > 0 && (
+                          <div>
+                            <FieldLabel>{t('admin.model.masked_keys')}</FieldLabel>
+                            <ul className="space-y-1 mt-1">
+                              {(modelForm as ModelEntry).api_keys!.map((k, idx) => {
+                                const keyTestId = `${mfId}__key_${idx}`;
+                                const kts = testStatus[keyTestId] ?? { state: 'idle' };
+                                const runKeyTest = async () => {
+                                  setTest(keyTestId, { state: 'running' });
+                                  try {
+                                    const res = await adminTestModel({ id: mfId, keyIndex: idx });
+                                    setTest(keyTestId, { state: 'done', ...res });
+                                  } catch (e) {
+                                    setTest(keyTestId, { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
+                                  }
+                                };
+                                return (
+                                  <li key={idx} className="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300">
+                                    <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded flex-1 truncate">{k}</span>
+                                    <button
+                                      type="button"
+                                      disabled={kts.state === 'running'}
+                                      onClick={runKeyTest}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                                    >
+                                      {kts.state === 'running' ? <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" /> : <Zap className="h-3 w-3" aria-hidden="true" />}
+                                      {t('admin.model.test_key')}
+                                    </button>
+                                    {kts.state === 'done' && (
+                                      <span className={`inline-flex items-center gap-1 ${kts.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                                        {kts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
+                                        {kts.ok && kts.latencyMs !== undefined ? `${kts.latencyMs}ms` : null}
+                                      </span>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* New keys textarea */}
+                        <div>
+                          <FieldLabel htmlFor="mf-api-keys">{t('admin.model.api_keys_label')}</FieldLabel>
+                          <textarea
+                            id="mf-api-keys"
+                            value={mfApiKeys}
+                            onChange={(e) => setMfApiKeys(e.target.value)}
+                            rows={3}
+                            placeholder={t('admin.model.api_keys_placeholder')}
+                            className={`${textInput} font-mono text-xs resize-y`}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <p className="text-[11px] text-gray-400 mt-0.5">One key per line. Appended to the pool ? existing keys are not removed.</p>
+                        </div>
+                      </div>
+                    )}
+                    </div>
+                  </div>
+
+                  {/* ── Access & routing — who can pick it, how it fails over ── */}
+                  <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-3">Access &amp; routing</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+
+                    {/* Fallback chain + priority ? available for all provider types */}
+                    <div className="sm:col-span-2">
+                      <FieldLabel htmlFor="mf-fallback">{t('admin.model.fallback_chain')}</FieldLabel>
+                      <p className="text-[11px] text-gray-500 mb-1">{t('admin.model.fallback_chain_hint')}</p>
+                      <select
+                        id="mf-fallback"
+                        multiple
+                        value={mfFallbackChain}
+                        onChange={(e) => {
+                          const selected = Array.from<HTMLOptionElement>(e.target.selectedOptions).map((o) => o.value);
+                          setMfFallbackChain(selected);
+                        }}
+                        size={Math.min(4, models.length + 1)}
+                        className={`${textInput} h-auto`}
+                      >
+                        {models
+                          .filter((m) => m.id !== mfId)
+                          .map((m) => (
+                            <option key={m.id} value={m.id}>{m.label} ({m.id})</option>
+                          ))}
+                      </select>
+                    </div>
+
+                    {/* Provider model */}
+                    <div>
+                      <FieldLabel htmlFor="mf-pm">
+                        Provider model{' '}
+                        <span className="font-normal text-gray-500 text-xs">
+                          (empty = provider default)
+                        </span>
+                      </FieldLabel>
+                      <input
+                        id="mf-pm"
+                        value={mfProviderModel}
+                        onChange={(e) => setMfProviderModel(e.target.value)}
+                        placeholder="gpt-4o-mini"
+                        className={textInput}
+                      />
+                    </div>
+
+                    {/* Min tier */}
+                    <div>
+                      <FieldLabel htmlFor="mf-tier">Minimum tier</FieldLabel>
+                      <select
+                        id="mf-tier"
+                        value={mfMinTier}
+                        onChange={(e) => setMfMinTier(e.target.value as ModelEntry['minTier'])}
+                        className={textInput}
+                      >
+                        <option value="free">free</option>
+                        <option value="paid">paid</option>
+                        <option value="business">business</option>
+                      </select>
+                    </div>
+
+                    {/* Priority */}
+                    <div>
+                      <FieldLabel htmlFor="mf-priority">{t('admin.model.priority')}</FieldLabel>
+                      <p className="text-[11px] text-gray-500 mb-1">{t('admin.model.priority_hint')}</p>
+                      <input
+                        id="mf-priority"
+                        type="number"
+                        min={0}
+                        value={mfPriority}
+                        onChange={(e) => setMfPriority(e.target.value)}
+                        placeholder="0"
+                        className={textInput}
+                      />
+                    </div>
+                    </div>
+
+                    {/* Enabled toggle */}
+                    <label className="mt-4 flex items-center gap-3 text-sm text-gray-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={mfEnabled}
+                        onChange={(e) => setMfEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded accent-blue-600"
+                      />
+                      Enabled (visible in the user picker)
+                    </label>
+                  </div>
+
+                  {/* Form Test + Save row */}
+                  {(() => {
+                    const fts = testStatus['__form__'] ?? { state: 'idle' };
+                    const runFormTest = async () => {
+                      setTest('__form__', { state: 'running' });
+                      try {
+                        const input = modelForm !== 'new' && !mfApiKey && !mfBaseUrl
+                          // saved model with no changes typed ? test by id
+                          ? { id: mfId }
+                          : {
+                              config: {
+                                provider: mfProvider,
+                                ...(mfBuiltin ? { builtin: mfBuiltin as 'kairllm' | 'deepseek' } : {}),
+                                ...(mfBaseUrl ? { base_url: mfBaseUrl } : {}),
+                                // only send api_key if the admin has typed a fresh one
+                                ...(mfApiKey ? { api_key: mfApiKey } : {}),
+                                ...(mfProviderModel ? { providerModel: mfProviderModel } : {}),
+                              },
+                            };
+                        const res = await adminTestModel(input);
+                        setTest('__form__', { state: 'done', ...res });
+                      } catch (e) {
+                        setTest('__form__', { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
+                      }
+                    };
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            disabled={fts.state === 'running'}
+                            onClick={runFormTest}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {fts.state === 'running' ? (
+                              <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                            ) : (
+                              <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                            Test connection
+                          </button>
+                          <SaveButton onClick={saveModel} loading={modelSaving} label="Save model" />
+                        </div>
+                        {fts.state === 'done' && (
+                          <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${fts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                            <span className="inline-flex items-center gap-1.5 font-medium">
+                              {fts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
+                              {fts.ok ? 'Connected' : 'Failed'}
+                              {fts.ok && fts.latencyMs !== undefined ? ` - ${fts.latencyMs}ms` : ''}
+                            </span>
+                            {fts.ok && fts.text && (
+                              <span className="text-emerald-700 font-mono text-[11px] truncate" title={fts.text}>
+                                reply: {fts.text}
+                              </span>
+                            )}
+                            {!fts.ok && fts.error && (
+                              <span className="text-red-700 font-mono text-[11px] break-all">{fts.error}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </Card>
+              )}
+
+              {/* MODEL LIST TABLE */}
+              <Card>
+                <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
+                  <SectionHeading>Configured models</SectionHeading>
+                  <button
+                    type="button"
+                    onClick={loadModels}
+                    className="text-xs text-blue-600 hover:text-blue-700 transition-colors focus:outline-none focus:underline"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                {setDefaultFeedback?.ok && (
+                  <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400">
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                    {setDefaultFeedback.ok}
+                    <button
+                      type="button"
+                      onClick={() => setSetDefaultFeedback(null)}
+                      className="ml-auto text-emerald-600 hover:text-emerald-800 focus:outline-none"
+                      aria-label="Dismiss"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+                {setDefaultFeedback?.err && (
+                  <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    {setDefaultFeedback.err}
+                    <button
+                      type="button"
+                      onClick={() => setSetDefaultFeedback(null)}
+                      className="ml-auto text-red-600 hover:text-red-800 focus:outline-none"
+                      aria-label="Dismiss"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+
+                {!modelsLoaded ? (
+                  <div className="flex items-center gap-2 px-5 py-8 text-sm text-gray-500">
+                    <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                    Loading models...
+                  </div>
+                ) : models.length === 0 ? (
+                  <EmptyState message="No models configured yet. Use 'Add model' to create one." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          {/* 6 columns: identity · connection · access · state · test · actions.
+                              Key-pool detail lives in the Key health section below; per-key
+                              config is inside Edit — neither is duplicated here. */}
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Model
+                          </th>
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Provider / key
+                          </th>
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Tier
+                          </th>
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Status
+                          </th>
+                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Connectivity
+                          </th>
+                          <th className="px-5 py-3 text-right text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {models.map((m) => {
+                          const isStructural = m.id === 'gemini' || m.id === 'custom';
+                          const iconText = [m.id, m.label, m.builtin, m.providerModel, m.base_url].filter(Boolean).join(' ');
+                          const rts = testStatus[m.id] ?? { state: 'idle' };
+                          const runRowTest = async () => {
+                            setTest(m.id, { state: 'running' });
+                            try {
+                              const res = await adminTestModel({ id: m.id });
+                              setTest(m.id, { state: 'done', ...res });
+                            } catch (e) {
+                              setTest(m.id, { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
+                            }
+                          };
+                          return (
+                            <tr key={m.id} className="hover:bg-gray-50 transition-colors align-middle">
+                              {/* Model — identity: icon, label, default badge, id */}
+                              <td className="px-5 py-3">
+                                <div className="flex items-start gap-2">
+                                  <LlmProviderIcon text={iconText} className="mt-0.5" />
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-gray-900 leading-snug flex items-center gap-1.5">
+                                      <span className="truncate">{m.label}</span>
+                                      {m.id === defaultModelId && (
+                                        <span
+                                          className="inline-flex items-center gap-0.5 shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700"
+                                          title="Platform default model"
+                                        >
+                                          <Star className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
+                                          {t('admin.model.default_badge')}
+                                        </span>
+                                      )}
+                                    </p>
+                                    <p className="font-mono text-[11px] text-gray-500 mt-0.5">{m.id}</p>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Provider / key — how the model connects and whose key it uses */}
+                              <td className="px-5 py-3 whitespace-nowrap">
+                                <p className="text-gray-700">
+                                  {m.provider}
+                                  {m.builtin && (
+                                    <span className="ml-1.5 text-[10px] uppercase tracking-wide bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-medium">
+                                      {m.builtin}
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="font-mono text-[11px] text-gray-500 mt-0.5">
+                                  {m.providerModel || <span className="text-gray-400">default model</span>}
+                                  <span className="mx-1 text-gray-300" aria-hidden="true">·</span>
+                                  {m.api_key
+                                    ? <span title={m.api_key}>own key</span>
+                                    : m.builtin
+                                    ? <span className="text-indigo-500">platform key</span>
+                                    : m.provider === 'gemini'
+                                    ? <span className="text-gray-400">env key</span>
+                                    : <span className="text-gray-400">no key</span>}
+                                </p>
+                              </td>
+
+                              {/* Tier — minimum plan that can select this model */}
+                              <td className="px-5 py-3">
+                                <span
+                                  className={`inline-block text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ${
+                                    m.minTier === 'free'
+                                      ? 'bg-gray-100 text-gray-700'
+                                      : m.minTier === 'paid'
+                                      ? 'bg-blue-50 text-blue-800'
+                                      : 'bg-violet-50 text-violet-800'
+                                  }`}
+                                >
+                                  {m.minTier}
+                                </span>
+                              </td>
+
+                              {/* Status — enabled/disabled pill + key-health dot in one glance
+                                  (full health detail lives in the Key health section below) */}
+                              <td className="px-5 py-3 whitespace-nowrap">
+                                <span className="inline-flex items-center gap-2">
+                                  <span
+                                    className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded ${
+                                      m.enabled
+                                        ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                        : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                                    }`}
+                                  >
+                                    {m.enabled ? 'enabled' : 'disabled'}
+                                  </span>
+                                  {m.keyHealth && (() => {
+                                    const h = m.keyHealth!;
+                                    const cooled = h.anyCooled;
+                                    const tip = cooled
+                                      ? `Cooling down until ${h.cooldownUntil ?? '?'}${h.lastErrorCode ? ` - last error: ${h.lastErrorCode}` : ''}${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}`
+                                      : `OK${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}${h.lastFailureAt ? ` - last failure: ${h.lastFailureAt.slice(0, 16).replace('T', ' ')}` : ''}`;
+                                    return (
+                                      <span
+                                        title={tip}
+                                        className={`inline-block w-2.5 h-2.5 rounded-full ${cooled ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                                        aria-label={cooled ? 'Key cooling' : 'Key healthy'}
+                                      />
+                                    );
+                                  })()}
+                                </span>
+                              </td>
+
+                              {/* Connectivity column */}
+                              <td className="px-5 py-3 whitespace-nowrap min-w-[180px]">
+                                {rts.state === 'idle' && (
+                                  <button
+                                    type="button"
+                                    onClick={runRowTest}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  >
+                                    <Zap className="h-3 w-3" aria-hidden="true" /> Test
+                                  </button>
+                                )}
+                                {rts.state === 'running' && (
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
+                                    <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                                    Testing...
+                                  </span>
+                                )}
+                                {rts.state === 'done' && (
+                                  <span
+                                    className={`inline-flex flex-col gap-0.5 text-[11px] ${rts.ok ? 'text-emerald-700' : 'text-red-600'}`}
+                                  >
+                                    <span className="font-medium flex items-center gap-1">
+                                      {rts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
+                                      <span>
+                                        {rts.ok
+                                          ? `ok${rts.latencyMs !== undefined ? ` - ${rts.latencyMs}ms` : ''}`
+                                          : 'failed'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={runRowTest}
+                                        title="Re-test"
+                                        className="ml-1 text-gray-400 hover:text-gray-600 text-[10px] leading-none focus:outline-none"
+                                      >
+                                        <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                                      </button>
+                                    </span>
+                                    {rts.ok && rts.text && (
+                                      <span
+                                        className="font-mono text-[10px] text-emerald-600 max-w-[160px] truncate block"
+                                        title={rts.text}
+                                      >
+                                        {rts.text}
+                                      </span>
+                                    )}
+                                    {!rts.ok && rts.error && (
+                                      <span
+                                        className="font-mono text-[10px] text-red-500 max-w-[160px] truncate block"
+                                        title={rts.error}
+                                      >
+                                        {rts.error}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Actions — set default (super), edit, delete */}
+                              <td className="px-5 py-3 whitespace-nowrap text-right">
+                                {canWriteModels && m.id !== defaultModelId && (
+                                  <button
+                                    type="button"
+                                    disabled={!m.enabled}
+                                    onClick={() => setModelAsDefault(m.id)}
+                                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 transition-colors focus:outline-none focus:underline disabled:opacity-40 disabled:cursor-not-allowed mr-3"
+                                    title={!m.enabled ? 'Model must be enabled to set as default' : ''}
+                                  >
+                                    {t('admin.model.set_default_btn')}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => openModelForm(m)}
+                                  className="text-xs text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:underline mr-3"
+                                >
+                                  Edit
+                                </button>
+                                {!isStructural ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteModel(m.id)}
+                                    className="text-xs text-red-500 hover:text-red-700 transition-colors focus:outline-none focus:underline"
+                                  >
+                                    Delete
+                                  </button>
+                                ) : (
+                                  <span
+                                    title="Structural id ? cannot be deleted"
+                                    className="text-xs text-gray-300 cursor-not-allowed select-none"
+                                  >
+                                    Delete
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
             </section>
 
-            {/* SECTION A: PROVIDER CREDENTIALS */}
+            {/* SECTION B: PROVIDER CREDENTIALS (platform keys) */}
             <section
               ref={(node) => { modelSectionRefs.current.credentials = node; }}
               className="scroll-mt-32"
@@ -2687,647 +3371,12 @@ const AdminPortal: React.FC = () => {
               )}
             </section>
 
-            {/* SECTION B: MODEL REGISTRY */}
+            {/* SECTION C: KEY POOL HEALTH (monitoring) */}
             <section
-              ref={(node) => { modelSectionRefs.current.registry = node; }}
+              ref={(node) => { modelSectionRefs.current.health = node; }}
               className="scroll-mt-32"
             >
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div>
-                  <SectionHeading>Model registry</SectionHeading>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Changes propagate to every user's model picker within ~60 seconds.
-                  </p>
-                </div>
-                {modelForm === null && (
-                  <button
-                    type="button"
-                    onClick={() => openModelForm('new')}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
-                  >
-                    <span className="text-base leading-none">+</span>
-                    Add model
-                  </button>
-                )}
-              </div>
-
-              {/* ADD / EDIT FORM */}
-              {modelForm !== null && (
-                <Card className="p-5 space-y-5 mb-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <SectionHeading>
-                      {modelForm === 'new' ? 'Add new model' : `Edit ? ${mfId}`}
-                    </SectionHeading>
-                    <button
-                      type="button"
-                      onClick={() => { setModelForm(null); setError(null); setTest('__form__', { state: 'idle' }); }}
-                      className="text-sm text-gray-500 hover:text-gray-700 transition-colors focus:outline-none focus:underline"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    {/* ID */}
-                    <div>
-                      <FieldLabel htmlFor="mf-id">
-                        Model id{' '}
-                        <span className="font-normal text-gray-500 text-xs">
-                          (immutable once created)
-                        </span>
-                      </FieldLabel>
-                      <input
-                        id="mf-id"
-                        value={mfId}
-                        onChange={(e) => setMfId(e.target.value)}
-                        disabled={modelForm !== 'new'}
-                        placeholder="my-model"
-                        className={`${textInput} ${modelForm !== 'new' ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
-                      />
-                    </div>
-
-                    {/* Label */}
-                    <div>
-                      <FieldLabel htmlFor="mf-label">Display label</FieldLabel>
-                      <input
-                        id="mf-label"
-                        value={mfLabel}
-                        onChange={(e) => setMfLabel(e.target.value)}
-                        placeholder="KairLLM (Fast)"
-                        className={textInput}
-                      />
-                    </div>
-
-                    {/* Provider */}
-                    <div>
-                      <FieldLabel htmlFor="mf-provider">Provider</FieldLabel>
-                      <select
-                        id="mf-provider"
-                        value={mfProvider}
-                        onChange={(e) => setMfProvider(e.target.value as ModelEntry['provider'])}
-                        className={textInput}
-                      >
-                        <option value="gemini">gemini</option>
-                        <option value="openai-compatible">openai-compatible</option>
-                      </select>
-                    </div>
-
-                    {/* Builtin */}
-                    <div>
-                      <FieldLabel htmlFor="mf-builtin">
-                        Built-in{' '}
-                        <span className="font-normal text-gray-500 text-xs">
-                          (inherits platform key/url)
-                        </span>
-                      </FieldLabel>
-                      <select
-                        id="mf-builtin"
-                        value={mfBuiltin}
-                        onChange={(e) => setMfBuiltin(e.target.value as ModelEntry['builtin'] | '')}
-                        className={textInput}
-                      >
-                          <option value="">none</option>
-                        <option value="kairllm">kairllm</option>
-                        <option value="deepseek">deepseek</option>
-                      </select>
-                    </div>
-
-                    {/* Base URL ? only relevant for openai-compatible non-builtin */}
-                    {mfProvider === 'openai-compatible' && !mfBuiltin && (
-                      <div className="sm:col-span-2">
-                        <FieldLabel htmlFor="mf-base-url">Base URL</FieldLabel>
-                        <input
-                          id="mf-base-url"
-                          value={mfBaseUrl}
-                          onChange={(e) => setMfBaseUrl(e.target.value)}
-                          placeholder="https://api.example.com/v1"
-                          className={textInput}
-                        />
-                      </div>
-                    )}
-
-                    {/* API Key ? only for openai-compatible non-builtin */}
-                    {mfProvider === 'openai-compatible' && !mfBuiltin && (
-                      <div className="sm:col-span-2 space-y-3">
-                        <div>
-                          <FieldLabel htmlFor="mf-api-key">API key (single)</FieldLabel>
-                          <input
-                            id="mf-api-key"
-                            type="password"
-                            value={mfApiKey}
-                            onChange={(e) => setMfApiKey(e.target.value)}
-                            placeholder={modelForm !== 'new' ? 'leave blank to keep existing key' : 'sk-...'}
-                            className={textInput}
-                            autoComplete="off"
-                          />
-                        </div>
-
-                        {/* Multi-key pool: masked saved keys listed read-only with per-key Test */}
-                        {modelForm !== 'new' && (modelForm as ModelEntry).api_keys && (modelForm as ModelEntry).api_keys!.length > 0 && (
-                          <div>
-                            <FieldLabel>{t('admin.model.masked_keys')}</FieldLabel>
-                            <ul className="space-y-1 mt-1">
-                              {(modelForm as ModelEntry).api_keys!.map((k, idx) => {
-                                const keyTestId = `${mfId}__key_${idx}`;
-                                const kts = testStatus[keyTestId] ?? { state: 'idle' };
-                                const runKeyTest = async () => {
-                                  setTest(keyTestId, { state: 'running' });
-                                  try {
-                                    const res = await adminTestModel({ id: mfId, keyIndex: idx });
-                                    setTest(keyTestId, { state: 'done', ...res });
-                                  } catch (e) {
-                                    setTest(keyTestId, { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
-                                  }
-                                };
-                                return (
-                                  <li key={idx} className="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300">
-                                    <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded flex-1 truncate">{k}</span>
-                                    <button
-                                      type="button"
-                                      disabled={kts.state === 'running'}
-                                      onClick={runKeyTest}
-                                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-                                    >
-                                      {kts.state === 'running' ? <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" /> : <Zap className="h-3 w-3" aria-hidden="true" />}
-                                      {t('admin.model.test_key')}
-                                    </button>
-                                    {kts.state === 'done' && (
-                                      <span className={`inline-flex items-center gap-1 ${kts.ok ? 'text-emerald-600' : 'text-red-600'}`}>
-                                        {kts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
-                                        {kts.ok && kts.latencyMs !== undefined ? `${kts.latencyMs}ms` : null}
-                                      </span>
-                                    )}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* New keys textarea */}
-                        <div>
-                          <FieldLabel htmlFor="mf-api-keys">{t('admin.model.api_keys_label')}</FieldLabel>
-                          <textarea
-                            id="mf-api-keys"
-                            value={mfApiKeys}
-                            onChange={(e) => setMfApiKeys(e.target.value)}
-                            rows={3}
-                            placeholder={t('admin.model.api_keys_placeholder')}
-                            className={`${textInput} font-mono text-xs resize-y`}
-                            autoComplete="off"
-                            spellCheck={false}
-                          />
-                          <p className="text-[11px] text-gray-400 mt-0.5">One key per line. Appended to the pool ? existing keys are not removed.</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Fallback chain + priority ? available for all provider types */}
-                    <div className="sm:col-span-2">
-                      <FieldLabel htmlFor="mf-fallback">{t('admin.model.fallback_chain')}</FieldLabel>
-                      <p className="text-[11px] text-gray-500 mb-1">{t('admin.model.fallback_chain_hint')}</p>
-                      <select
-                        id="mf-fallback"
-                        multiple
-                        value={mfFallbackChain}
-                        onChange={(e) => {
-                          const selected = Array.from<HTMLOptionElement>(e.target.selectedOptions).map((o) => o.value);
-                          setMfFallbackChain(selected);
-                        }}
-                        size={Math.min(4, models.length + 1)}
-                        className={`${textInput} h-auto`}
-                      >
-                        {models
-                          .filter((m) => m.id !== mfId)
-                          .map((m) => (
-                            <option key={m.id} value={m.id}>{m.label} ({m.id})</option>
-                          ))}
-                      </select>
-                    </div>
-
-                    {/* Provider model */}
-                    <div>
-                      <FieldLabel htmlFor="mf-pm">
-                        Provider model{' '}
-                        <span className="font-normal text-gray-500 text-xs">
-                          (empty = provider default)
-                        </span>
-                      </FieldLabel>
-                      <input
-                        id="mf-pm"
-                        value={mfProviderModel}
-                        onChange={(e) => setMfProviderModel(e.target.value)}
-                        placeholder="gpt-4o-mini"
-                        className={textInput}
-                      />
-                    </div>
-
-                    {/* Min tier */}
-                    <div>
-                      <FieldLabel htmlFor="mf-tier">Minimum tier</FieldLabel>
-                      <select
-                        id="mf-tier"
-                        value={mfMinTier}
-                        onChange={(e) => setMfMinTier(e.target.value as ModelEntry['minTier'])}
-                        className={textInput}
-                      >
-                        <option value="free">free</option>
-                        <option value="paid">paid</option>
-                        <option value="business">business</option>
-                      </select>
-                    </div>
-
-                    {/* Priority */}
-                    <div>
-                      <FieldLabel htmlFor="mf-priority">{t('admin.model.priority')}</FieldLabel>
-                      <p className="text-[11px] text-gray-500 mb-1">{t('admin.model.priority_hint')}</p>
-                      <input
-                        id="mf-priority"
-                        type="number"
-                        min={0}
-                        value={mfPriority}
-                        onChange={(e) => setMfPriority(e.target.value)}
-                        placeholder="0"
-                        className={textInput}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Enabled toggle */}
-                  <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={mfEnabled}
-                      onChange={(e) => setMfEnabled(e.target.checked)}
-                      className="w-4 h-4 rounded accent-blue-600"
-                    />
-                    Enabled (visible in the user picker)
-                  </label>
-
-                  {/* Form Test + Save row */}
-                  {(() => {
-                    const fts = testStatus['__form__'] ?? { state: 'idle' };
-                    const runFormTest = async () => {
-                      setTest('__form__', { state: 'running' });
-                      try {
-                        const input = modelForm !== 'new' && !mfApiKey && !mfBaseUrl
-                          // saved model with no changes typed ? test by id
-                          ? { id: mfId }
-                          : {
-                              config: {
-                                provider: mfProvider,
-                                ...(mfBuiltin ? { builtin: mfBuiltin as 'kairllm' | 'deepseek' } : {}),
-                                ...(mfBaseUrl ? { base_url: mfBaseUrl } : {}),
-                                // only send api_key if the admin has typed a fresh one
-                                ...(mfApiKey ? { api_key: mfApiKey } : {}),
-                                ...(mfProviderModel ? { providerModel: mfProviderModel } : {}),
-                              },
-                            };
-                        const res = await adminTestModel(input);
-                        setTest('__form__', { state: 'done', ...res });
-                      } catch (e) {
-                        setTest('__form__', { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
-                      }
-                    };
-                    return (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            type="button"
-                            disabled={fts.state === 'running'}
-                            onClick={runFormTest}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {fts.state === 'running' ? (
-                              <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                            ) : (
-                              <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-                            )}
-                            Test connection
-                          </button>
-                          <SaveButton onClick={saveModel} loading={modelSaving} label="Save model" />
-                        </div>
-                        {fts.state === 'done' && (
-                          <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${fts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                            <span className="inline-flex items-center gap-1.5 font-medium">
-                              {fts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
-                              {fts.ok ? 'Connected' : 'Failed'}
-                              {fts.ok && fts.latencyMs !== undefined ? ` - ${fts.latencyMs}ms` : ''}
-                            </span>
-                            {fts.ok && fts.text && (
-                              <span className="text-emerald-700 font-mono text-[11px] truncate" title={fts.text}>
-                                reply: {fts.text}
-                              </span>
-                            )}
-                            {!fts.ok && fts.error && (
-                              <span className="text-red-700 font-mono text-[11px] break-all">{fts.error}</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </Card>
-              )}
-
-              {/* MODEL LIST TABLE */}
-              <Card>
-                <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
-                  <SectionHeading>Configured models</SectionHeading>
-                  <button
-                    type="button"
-                    onClick={loadModels}
-                    className="text-xs text-blue-600 hover:text-blue-700 transition-colors focus:outline-none focus:underline"
-                  >
-                    Refresh
-                  </button>
-                </div>
-                {setDefaultFeedback?.ok && (
-                  <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400">
-                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    {setDefaultFeedback.ok}
-                    <button
-                      type="button"
-                      onClick={() => setSetDefaultFeedback(null)}
-                      className="ml-auto text-emerald-600 hover:text-emerald-800 focus:outline-none"
-                      aria-label="Dismiss"
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
-                )}
-                {setDefaultFeedback?.err && (
-                  <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    {setDefaultFeedback.err}
-                    <button
-                      type="button"
-                      onClick={() => setSetDefaultFeedback(null)}
-                      className="ml-auto text-red-600 hover:text-red-800 focus:outline-none"
-                      aria-label="Dismiss"
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
-                )}
-
-                {!modelsLoaded ? (
-                  <div className="flex items-center gap-2 px-5 py-8 text-sm text-gray-500">
-                    <span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                    Loading models...
-                  </div>
-                ) : models.length === 0 ? (
-                  <EmptyState message="No models configured yet. Use 'Add model' to create one." />
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Label / id
-                          </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Provider
-                          </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Model name
-                          </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Tier
-                          </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Key
-                          </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Status
-                          </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Health
-                          </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Default
-                          </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Connectivity
-                          </th>
-                          <th className="px-5 py-3" />
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {models.map((m) => {
-                          const isStructural = m.id === 'gemini' || m.id === 'custom';
-                          const iconText = [m.id, m.label, m.builtin, m.providerModel, m.base_url].filter(Boolean).join(' ');
-                          const rts = testStatus[m.id] ?? { state: 'idle' };
-                          const runRowTest = async () => {
-                            setTest(m.id, { state: 'running' });
-                            try {
-                              const res = await adminTestModel({ id: m.id });
-                              setTest(m.id, { state: 'done', ...res });
-                            } catch (e) {
-                              setTest(m.id, { state: 'done', ok: false, error: e instanceof Error ? e.message : 'Test failed' });
-                            }
-                          };
-                          return (
-                            <tr key={m.id} className="hover:bg-gray-50 transition-colors align-middle">
-                              {/* Label + id */}
-                              <td className="px-5 py-3">
-                                <div className="flex items-start gap-2">
-                                  <LlmProviderIcon text={iconText} className="mt-0.5" />
-                                  <div className="min-w-0">
-                                    <p className="font-medium text-gray-900 leading-snug">{m.label}</p>
-                                    <p className="font-mono text-[11px] text-gray-500 mt-0.5">{m.id}</p>
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* Provider + builtin tag */}
-                              <td className="px-5 py-3 whitespace-nowrap">
-                                <span className="text-gray-700">{m.provider}</span>
-                                {m.builtin && (
-                                  <span className="ml-1.5 text-[10px] uppercase tracking-wide bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-medium">
-                                    {m.builtin}
-                                  </span>
-                                )}
-                              </td>
-
-                              {/* Provider model */}
-                              <td className="px-5 py-3 font-mono text-[11px] text-gray-600">
-                                {m.providerModel || <span className="text-gray-400">default</span>}
-                              </td>
-
-                              {/* Min tier badge */}
-                              <td className="px-5 py-3">
-                                <span
-                                  className={`inline-block text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ${
-                                    m.minTier === 'free'
-                                      ? 'bg-gray-100 text-gray-700'
-                                      : m.minTier === 'paid'
-                                      ? 'bg-blue-50 text-blue-800'
-                                      : 'bg-violet-50 text-violet-800'
-                                  }`}
-                                >
-                                  {m.minTier}
-                                </span>
-                              </td>
-
-                              {/* Masked key */}
-                              <td className="px-5 py-3 font-mono text-[11px] text-gray-500">
-                                {m.api_key
-                                  ? m.api_key
-                                  : m.builtin
-                                  ? <span className="text-indigo-500">platform</span>
-                                  : m.provider === 'gemini'
-                                  ? <span className="text-gray-400">env key</span>
-                                  : <span className="text-gray-400">-</span>
-                                }
-                              </td>
-
-                              {/* Enabled pill */}
-                              <td className="px-5 py-3 whitespace-nowrap">
-                                <span
-                                  className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded ${
-                                    m.enabled
-                                      ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                      : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                                  }`}
-                                >
-                                  {m.enabled ? 'enabled' : 'disabled'}
-                                </span>
-                              </td>
-
-                              {/* Key health dot ? best-effort; absent when no health data */}
-                              <td className="px-5 py-3 whitespace-nowrap">
-                                {m.keyHealth ? (() => {
-                                  const h = m.keyHealth!;
-                                  const cooled = h.anyCooled;
-                                  const tip = cooled
-                                    ? `Cooling down until ${h.cooldownUntil ?? '?'}${h.lastErrorCode ? ` - last error: ${h.lastErrorCode}` : ''}${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}`
-                                    : `OK${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}${h.lastFailureAt ? ` - last failure: ${h.lastFailureAt.slice(0, 16).replace('T', ' ')}` : ''}`;
-                                  return (
-                                    <span
-                                      title={tip}
-                                      className={`inline-block w-2.5 h-2.5 rounded-full ${cooled ? 'bg-amber-400' : 'bg-emerald-500'}`}
-                                      aria-label={cooled ? 'Key cooling' : 'Key healthy'}
-                                    />
-                                  );
-                                })() : (
-                                  <span className="text-gray-300 text-[11px]" aria-label="No health data">-</span>
-                                )}
-                              </td>
-
-                              {/* Default column ? super only */}
-                              <td className="px-5 py-3 whitespace-nowrap">
-                                {m.id === defaultModelId ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700">
-                                    <Star className="h-3 w-3 fill-current" aria-hidden="true" />
-                                    {t('admin.model.default_badge')}
-                                  </span>
-                                ) : (
-                                  canWriteModels && (
-                                    <button
-                                      type="button"
-                                      disabled={!m.enabled}
-                                      onClick={() => setModelAsDefault(m.id)}
-                                      className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 transition-colors focus:outline-none focus:underline disabled:opacity-40 disabled:cursor-not-allowed"
-                                      title={!m.enabled ? 'Model must be enabled to set as default' : ''}
-                                    >
-                                      {t('admin.model.set_default_btn')}
-                                    </button>
-                                  )
-                                )}
-                              </td>
-
-                              {/* Connectivity column */}
-                              <td className="px-5 py-3 whitespace-nowrap min-w-[180px]">
-                                {rts.state === 'idle' && (
-                                  <button
-                                    type="button"
-                                    onClick={runRowTest}
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  >
-                                    <Zap className="h-3 w-3" aria-hidden="true" /> Test
-                                  </button>
-                                )}
-                                {rts.state === 'running' && (
-                                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
-                                    <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                                    Testing...
-                                  </span>
-                                )}
-                                {rts.state === 'done' && (
-                                  <span
-                                    className={`inline-flex flex-col gap-0.5 text-[11px] ${rts.ok ? 'text-emerald-700' : 'text-red-600'}`}
-                                  >
-                                    <span className="font-medium flex items-center gap-1">
-                                      {rts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
-                                      <span>
-                                        {rts.ok
-                                          ? `ok${rts.latencyMs !== undefined ? ` - ${rts.latencyMs}ms` : ''}`
-                                          : 'failed'}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={runRowTest}
-                                        title="Re-test"
-                                        className="ml-1 text-gray-400 hover:text-gray-600 text-[10px] leading-none focus:outline-none"
-                                      >
-                                        <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                                      </button>
-                                    </span>
-                                    {rts.ok && rts.text && (
-                                      <span
-                                        className="font-mono text-[10px] text-emerald-600 max-w-[160px] truncate block"
-                                        title={rts.text}
-                                      >
-                                        {rts.text}
-                                      </span>
-                                    )}
-                                    {!rts.ok && rts.error && (
-                                      <span
-                                        className="font-mono text-[10px] text-red-500 max-w-[160px] truncate block"
-                                        title={rts.error}
-                                      >
-                                        {rts.error}
-                                      </span>
-                                    )}
-                                  </span>
-                                )}
-                              </td>
-
-                              {/* Edit / Delete actions */}
-                              <td className="px-5 py-3 whitespace-nowrap text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => openModelForm(m)}
-                                  className="text-xs text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:underline mr-3"
-                                >
-                                  Edit
-                                </button>
-                                {!isStructural ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteModel(m.id)}
-                                    className="text-xs text-red-500 hover:text-red-700 transition-colors focus:outline-none focus:underline"
-                                  >
-                                    Delete
-                                  </button>
-                                ) : (
-                                  <span
-                                    title="Structural id ? cannot be deleted"
-                                    className="text-xs text-gray-300 cursor-not-allowed select-none"
-                                  >
-                                    Delete
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </Card>
+              <KeyPoolHealthSection models={models} />
             </section>
 
           </div>
