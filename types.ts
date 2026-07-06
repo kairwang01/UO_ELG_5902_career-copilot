@@ -21,6 +21,8 @@ export interface FormattedResume {
   formattedText: string;
   targetMarket?: string;
   outputLanguage?: 'en' | 'local';
+  /** Localization audit trail: one note per market-driven edit ("<change> — <market convention>"). */
+  changeNotes?: string[];
 }
 
 export interface Opportunity {

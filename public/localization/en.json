@@ -3643,5 +3643,6 @@
   "lang_sync_regen_note": "Generating a {target} version costs {credits} credits.",
   "lang_sync_regen_note_free_tier": "Generating another-language versions requires a paid plan; it will re-run and cost credits.",
   "lang_sync_dismiss": "Keep {content}",
-  "lang_sync_regen_note_nocost": "Generating a {target} version is free."
+  "lang_sync_regen_note_nocost": "Generating a {target} version is free.",
+  "tool_resume_formatter_change_notes_title": "Localization notes — what was adapted for {market}"
 }

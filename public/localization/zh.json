@@ -3643,5 +3643,6 @@
   "lang_sync_regen_note": "生成{target}版本需消耗 {credits} 个积分。",
   "lang_sync_regen_note_free_tier": "其他语言版本需付费套餐；生成将消耗积分。",
   "lang_sync_dismiss": "保持{content}",
-  "lang_sync_regen_note_nocost": "生成{target}版本是免费的。"
+  "lang_sync_regen_note_nocost": "生成{target}版本是免费的。",
+  "tool_resume_formatter_change_notes_title": "本地化调整说明 — 针对{market}所做的修改"
 }

@@ -3643,5 +3643,6 @@
   "lang_sync_regen_note": "{target}版の生成には{credits}クレジットかかります。",
   "lang_sync_regen_note_free_tier": "他言語版の生成には有料プランが必要です。再生成にはクレジットがかかります。",
   "lang_sync_dismiss": "{content}のままにする",
-  "lang_sync_regen_note_nocost": "{target}版の生成は無料です。"
+  "lang_sync_regen_note_nocost": "{target}版の生成は無料です。",
+  "tool_resume_formatter_change_notes_title": "ローカライズ調整メモ — {market}向けの変更点"
 }

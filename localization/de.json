@@ -3643,5 +3643,6 @@
   "lang_sync_regen_note": "Eine {target}-Version zu erstellen kostet {credits} Credits.",
   "lang_sync_regen_note_free_tier": "Versionen in anderen Sprachen erfordern einen kostenpflichtigen Tarif; die Erstellung kostet Credits.",
   "lang_sync_dismiss": "Bei {content} bleiben",
-  "lang_sync_regen_note_nocost": "Eine {target}-Version zu erstellen ist kostenlos."
+  "lang_sync_regen_note_nocost": "Eine {target}-Version zu erstellen ist kostenlos.",
+  "tool_resume_formatter_change_notes_title": "Lokalisierungshinweise — Anpassungen für {market}"
 }

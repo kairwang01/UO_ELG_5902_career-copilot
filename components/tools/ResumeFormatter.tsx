@@ -746,6 +746,28 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
           </div>
         </section>
 
+        {/* Localization audit trail — each note maps one edit to the market
+            convention it satisfies (returned by the model; absent on old saves). */}
+        {result.changeNotes && result.changeNotes.length > 0 && (
+          <details
+            className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+            data-qa="resume-formatter-change-notes"
+          >
+            <summary className="cursor-pointer select-none text-sm font-semibold text-slate-800 dark:text-slate-200">
+              {localizedCopy(t, 'tool_resume_formatter_change_notes_title', 'Localization notes — what was adapted for {market}')
+                .replace('{market}', generatedMarket)}
+            </summary>
+            <ul className="mt-2 space-y-1.5">
+              {result.changeNotes.map((note, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  <CheckCircle2 className="mt-1 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <span>{note}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-blue-700 dark:text-blue-300">

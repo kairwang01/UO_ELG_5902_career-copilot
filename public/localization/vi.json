@@ -3643,5 +3643,6 @@
   "lang_sync_regen_note": "Tạo phiên bản {target} tốn {credits} tín dụng.",
   "lang_sync_regen_note_free_tier": "Phiên bản ngôn ngữ khác yêu cầu gói trả phí; việc tạo sẽ tốn tín dụng.",
   "lang_sync_dismiss": "Giữ {content}",
-  "lang_sync_regen_note_nocost": "Tạo phiên bản {target} là miễn phí."
+  "lang_sync_regen_note_nocost": "Tạo phiên bản {target} là miễn phí.",
+  "tool_resume_formatter_change_notes_title": "Ghi chú bản địa hoá — các điều chỉnh cho {market}"
 }

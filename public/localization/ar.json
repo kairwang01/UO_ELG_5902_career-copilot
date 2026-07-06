@@ -3643,5 +3643,6 @@
   "lang_sync_regen_note": "إنشاء نسخة {target} يكلّف {credits} رصيدًا.",
   "lang_sync_regen_note_free_tier": "تتطلب النسخ بلغات أخرى خطة مدفوعة؛ وسيستهلك الإنشاء رصيدًا.",
   "lang_sync_dismiss": "الإبقاء على {content}",
-  "lang_sync_regen_note_nocost": "إنشاء نسخة {target} مجاني."
+  "lang_sync_regen_note_nocost": "إنشاء نسخة {target} مجاني.",
+  "tool_resume_formatter_change_notes_title": "ملاحظات التوطين — ما تم تكييفه لسوق {market}"
 }

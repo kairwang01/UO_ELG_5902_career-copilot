@@ -198,6 +198,11 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
       prompt: buildPrompt("convertResumeFormat", {
         marketName: p.marketName,
         outputLanguage: p.outputLanguage || "English",
+        // Optional target role/JD: activates the tailoring + keyword-mirroring
+        // rules in the prompt; empty when the client sends no job description.
+        jobTargetBlock: p.jobDescription
+          ? `==== P4 · TARGET ROLE (tailor to this) ====\nReorder emphasis and mirror terminology toward this job description. You MUST NOT add skills or facts the source resume does not evidence.\n\nJob Description:\n${p.jobDescription}`
+          : "",
         coverLetterBlock: p.coverLetterText
           ? `**Cover Letter:** If a cover letter is provided below, incorporate it seamlessly into the final document, either before or after the resume as is standard in ${p.marketName}.\n\nCover Letter:\n${p.coverLetterText}`
           : "",
@@ -205,7 +210,13 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
       }),
       responseSchema: {
         type: Type.OBJECT,
-        properties: { formattedText: { type: Type.STRING } },
+        properties: {
+          formattedText: { type: Type.STRING },
+          // Localization audit trail: each note maps one edit to the market
+          // convention it satisfies. Optional so older prompt overrides that
+          // return only formattedText keep working.
+          changeNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
+        },
         required: ["formattedText"],
       },
     }),
