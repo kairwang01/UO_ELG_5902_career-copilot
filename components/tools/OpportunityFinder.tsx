@@ -8,6 +8,7 @@ import {
   subscribeSavedOpportunities,
 } from '../../lib/savedOpportunities';
 import { findOpportunities, calculateCompatibility, generateProfessionalEmail } from '../../services/aiClient';
+import { safeUrl } from '../../lib/safeUrl';
 import ApplyReviewModal, { type ApplyReviewJob } from '../ApplyReviewModal';
 import ConfirmActionDialog from '../ConfirmActionDialog';
 import type { OpportunityResult, Opportunity, UserProfile } from '../../types';
@@ -793,7 +794,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
                                     {hasApplied ? t('tool_opportunity_finder_applied_button') : t('tool_opportunity_finder_apply_button')}
                                 </button>
                              ) : (
-                                <a href={job.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">{t('tool_opportunity_finder_view_apply_button')}</a>
+                                <a href={safeUrl(job.url) || undefined} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">{t('tool_opportunity_finder_view_apply_button')}</a>
                              )}
                              <button
                               type="button"
@@ -917,8 +918,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
         <div className="pt-2 border-t dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400">
           <p className="font-semibold mb-1">{t('tool_opportunity_finder_sources_label')}:</p>
           <ul className="list-disc list-inside">
-            {groundingChunks.filter((chunk: any) => chunk.web).map((chunk: any, i: number) => (
-              <li key={i}><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">{chunk.web.title}</a></li>
+            {groundingChunks.filter((chunk: any) => chunk.web && safeUrl(chunk.web.uri)).map((chunk: any, i: number) => (
+              <li key={i}><a href={safeUrl(chunk.web.uri) || undefined} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">{chunk.web.title}</a></li>
             ))}
           </ul>
         </div>

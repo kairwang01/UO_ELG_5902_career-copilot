@@ -91,13 +91,16 @@ export const normalizeApplicationScorecard = (id: string, d: DocumentData): Appl
 });
 
 export async function listScorecardsForApplication(applicationId: string, employerId: string): Promise<ApplicationScorecard[]> {
+  // Filter to the one application in Firestore (two equality filters need no
+  // composite index) instead of reading the employer's entire scorecard corpus
+  // and narrowing client-side. Rules still prove ownership via employer_id.
   const snap = await getDocs(query(
     collection(firestoreDb, 'application_scorecards'),
     where('employer_id', '==', employerId),
+    where('application_id', '==', applicationId),
   ));
   return snap.docs
     .map((d) => normalizeApplicationScorecard(d.id, d.data()))
-    .filter((scorecard) => scorecard.application_id === applicationId)
     .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
 }
 

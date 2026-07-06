@@ -20,6 +20,7 @@ import { requireAuth } from "../middleware/auth";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 import { isBusinessUser } from "../llm/models";
 import { maskSecret } from "../config/env";
+import { assertSafeUrl } from "./extractTextFromUrl";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -102,6 +103,10 @@ export const setBusinessLlmConfigFunction = onCall(
     const data = request.data as Record<string, unknown>;
 
     const base_url = validateHttpsUrl(data.base_url, "base_url");
+    // SSRF guard: the stored base_url is fetched server-side by the provider layer,
+    // so block localhost / link-local / .internal / .local / cloud-metadata hosts
+    // and private-IP literals (reuses the extractTextFromUrl allow-list).
+    assertSafeUrl(base_url);
     const api_key = validateNonEmptyString(data.api_key, "api_key", MAX_API_KEY_LENGTH);
     const model = validateNonEmptyString(data.model, "model", MAX_MODEL_LENGTH);
 

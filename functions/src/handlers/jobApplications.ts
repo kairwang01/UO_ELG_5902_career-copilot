@@ -180,6 +180,12 @@ export async function createJobApplicationImpl(
   const appRef = db.collection("job_applications").doc(applicationId);
   const snapRef = db.collection("application_snapshots").doc(applicationId);
   try {
+    // Clamp the client-supplied score to a sane 0-100 integer (or null) so a
+    // forged/garbage value can't be persisted on the application doc.
+    const rawScore = Number(data.compatibilityScore);
+    const compatibilityScore = Number.isFinite(rawScore)
+      ? Math.max(0, Math.min(100, Math.round(rawScore)))
+      : null;
     const batch = db.batch();
     batch.create(appRef, {
       job_id: data.jobId,
@@ -188,7 +194,7 @@ export async function createJobApplicationImpl(
       job_title: jobData.title ?? null,
       candidate_name: candidateName,
       status: "Applied",
-      compatibility_score: data.compatibilityScore ?? null,
+      compatibility_score: compatibilityScore,
       screener_answers: screenerAnswers,
       notes: null,
       application_date: FieldValue.serverTimestamp(),

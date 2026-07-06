@@ -12,6 +12,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { findIndustryEvents } from '../../services/aiClient';
+import { safeUrl } from '../../lib/safeUrl';
 import type { EventScoutResult, IndustryEvent } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
@@ -354,7 +355,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ openTool, t }) 
         <p data-qa="industry-event-summary" className="mt-4 flex-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{event.summary}</p>
         <div className="mt-5 flex flex-wrap gap-2">
           <a
-            href={event.url}
+            href={safeUrl(event.url) || undefined}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950/30"
@@ -462,7 +463,7 @@ const IndustryEventScout: React.FC<IndustryEventScoutProps> = ({ openTool, t }) 
               {groundingSources.map((chunk, index) => (
                 <a
                   key={`${chunk.web.uri ?? chunk.web.title ?? index}`}
-                  href={chunk.web.uri}
+                  href={safeUrl(chunk.web.uri) || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-medium text-blue-700 transition hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-blue-950/30"

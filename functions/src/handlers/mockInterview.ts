@@ -204,8 +204,9 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
   // ── Tier gate (服务分级 — the simulation is a paid feature by default; the
   //    post-MVP "which tier" decision is platform_config/quotas.mi_min_tier,
   //    a config flip rather than a deploy). Applies to BOTH generate and
-  //    evaluate_session so the report generation can't be farmed via the API.
-  if (data.mode === "generate" || data.mode === "evaluate_session") {
+  //    evaluate AND evaluate_session so no AI-producing mode can be farmed by
+  //    calling it directly (without generate) to bypass the paid-tier gate.
+  if (data.mode === "generate" || data.mode === "evaluate" || data.mode === "evaluate_session") {
     if (getMockInterviewMinTier() === "paid") {
       const userSnap = await db.collection("users").doc(uid).get();
       const tier = tierFromSubscription(userSnap.data()?.subscription_status as string | undefined);
@@ -259,13 +260,17 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       jobContextBlock,
     });
 
-    const provider = await resolveProvider(uid, modelId);
-    const result = await provider.generate({
-      prompt,
-      responseSchema: EVALUATE_SCHEMA,
-    });
-
-    return result.raw as EvaluateResult;
+    try {
+      const provider = await resolveProvider(uid, modelId);
+      const result = await provider.generate({
+        prompt,
+        responseSchema: EVALUATE_SCHEMA,
+      });
+      return result.raw as EvaluateResult;
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError("internal", err instanceof Error ? err.message : "Mock interview evaluation failed.");
+    }
   } else if (data.mode === "evaluate_session") {
     // evaluate_session — holistic end-of-interview report. Free within the
     // session: the single mock-interview charge happened at generate time.
@@ -282,11 +287,17 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       transcript,
     });
 
-    const provider = await resolveProvider(uid, modelId);
-    const result = await provider.generate({
-      prompt,
-      responseSchema: SESSION_EVAL_SCHEMA,
-    });
+    let result;
+    try {
+      const provider = await resolveProvider(uid, modelId);
+      result = await provider.generate({
+        prompt,
+        responseSchema: SESSION_EVAL_SCHEMA,
+      });
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError("internal", err instanceof Error ? err.message : "Mock interview session evaluation failed.");
+    }
 
     const report = result.raw as Record<string, unknown>;
 

@@ -304,7 +304,10 @@ export const analyzeResume = async (
       requestId: makeCallableRequestId('resume_analysis'),
     });
     return res.data;
-  });
+    // Content-based dedupeKey collapses concurrent/rapid re-submits into one
+    // in-flight request so a double-click cannot mint two requestIds and be
+    // charged twice server-side (mirrors generateCoverLetter / careerPath).
+  }, `resumeAnalysis:${currentModelId ?? ''}:${stableStringify({ resumeText, resumeImages, marketName, outputLanguage })}`);
 };
 
 // Model routing is platform-managed. The only client override is the business

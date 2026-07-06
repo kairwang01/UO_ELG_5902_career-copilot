@@ -62,6 +62,13 @@ export const grantMonthlyCreditsFunction = onSchedule(
     for (const userDoc of snap.docs) {
       const uid = userDoc.id;
       const plan = userDoc.get(USER_FIELDS.subscriptionStatus) as string;
+      // Free (and any non-paid) plans never hold a billing.active entitlement, so
+      // the gated transaction below always returns false for them. Skip before it
+      // to avoid two wasted Firestore reads per free user on every monthly run.
+      if (plan === "free") {
+        skipped++;
+        continue;
+      }
       const monthlyGrant = monthlyCreditsFor(plan);
       if (monthlyGrant <= 0) {
         skipped++;

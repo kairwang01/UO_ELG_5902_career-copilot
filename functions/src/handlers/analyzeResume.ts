@@ -127,6 +127,29 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
     );
   }
 
+  // Step 2b: Bound the payload BEFORE charging or calling the model, so an
+  // oversized request can't burn credits or hit the provider with a huge payload.
+  const MAX_IMAGES = 8;
+  const MAX_IMAGE_BASE64 = 8_000_000; // ~6MB decoded
+  const MAX_RESUME_TEXT = 200_000;
+  if (hasText && (data.resumeText?.length ?? 0) > MAX_RESUME_TEXT) {
+    throw new HttpsError("invalid-argument", "resumeText is too long.");
+  }
+  if (hasImages) {
+    const imgs = data.resumeImages as Array<{ data?: unknown; mimeType?: unknown }>;
+    if (imgs.length > MAX_IMAGES) {
+      throw new HttpsError("invalid-argument", `Too many images (max ${MAX_IMAGES}).`);
+    }
+    for (const img of imgs) {
+      if (typeof img?.data !== "string" || img.data.length === 0 || img.data.length > MAX_IMAGE_BASE64) {
+        throw new HttpsError("invalid-argument", "An image is missing or too large.");
+      }
+      if (typeof img?.mimeType !== "string" || !img.mimeType.startsWith("image/")) {
+        throw new HttpsError("invalid-argument", "Unsupported image type.");
+      }
+    }
+  }
+
   // Step 3: Deduct credits BEFORE the LLM call — atomic, server-side, un-bypassable.
   // If the user has insufficient credits, this throws and the LLM is never called.
   const metered = await meterToolRun(uid, "resume-analysis", TOOL_CREDIT_COSTS["resume-analysis"], {

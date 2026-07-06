@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BriefcaseBusiness, Building2, CheckCircle2, CircleDollarSign, Mail, MessageSquareText, ShieldCheck, Target, TrendingUp, Wallet } from 'lucide-react';
 import { generateSalaryNegotiationStrategy } from '../../services/aiClient';
+import { safeUrl } from '../../lib/safeUrl';
 import type { SalaryNegotiationResult } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
@@ -542,9 +543,9 @@ const SalaryNegotiator: React.FC<SalaryNegotiatorProps> = ({ resumeText, initial
               <CardShell className="p-5">
                 <h3 className="text-sm font-semibold text-slate-950 dark:text-slate-100">{t('tool_salary_negotiator_sources')}</h3>
                 <ul className="mt-3 space-y-2 text-sm">
-                  {groundingChunks.filter((chunk) => chunk.web).map((chunk, index) => (
+                  {groundingChunks.filter((chunk) => chunk.web && safeUrl(chunk.web?.uri)).map((chunk, index) => (
                     <li key={index}>
-                      <a href={chunk.web?.uri} target="_blank" rel="noopener noreferrer" className="break-words text-emerald-700 hover:underline dark:text-emerald-300">
+                      <a href={safeUrl(chunk.web?.uri) || undefined} target="_blank" rel="noopener noreferrer" className="break-words text-emerald-700 hover:underline dark:text-emerald-300">
                         {chunk.web?.title || chunk.web?.uri}
                       </a>
                     </li>
