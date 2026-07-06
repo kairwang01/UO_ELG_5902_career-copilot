@@ -2535,11 +2535,21 @@ const AdminPortal: React.FC = () => {
               const disabledCount = models.length - enabledModels.length;
               const cooling = enabledModels.filter((m) => m.keyHealth?.anyCooled).length;
               const defaultModel = models.find((m) => m.id === defaultModelId);
+              // Each card is a shortcut to the section that manages it — same
+              // visual language as Card, but an actual button for a11y.
+              const statCard =
+                'bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-3 text-left transition-colors ' +
+                'hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600';
               return (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <Card className="px-4 py-3">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Default model</p>
-                    <p className="mt-1 flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => scrollToModelSection('registry')}
+                    className={statCard}
+                    aria-label="Jump to the model registry"
+                  >
+                    <span className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">Default model</span>
+                    <span className="mt-1 flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                       {defaultModel ? (
                         <>
                           <LlmProviderIcon text={`${defaultModel.id} ${defaultModel.label}`} />
@@ -2548,26 +2558,36 @@ const AdminPortal: React.FC = () => {
                       ) : (
                         <span className="text-gray-400">not set</span>
                       )}
-                    </p>
-                  </Card>
-                  <Card className="px-4 py-3">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Models</p>
-                    <p className="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollToModelSection('registry')}
+                    className={statCard}
+                    aria-label="Jump to the model registry"
+                  >
+                    <span className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">Models</span>
+                    <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-gray-100">
                       {enabledModels.length} enabled
                       {disabledCount > 0 && (
                         <span className="ml-1.5 text-xs font-normal text-gray-500">· {disabledCount} disabled</span>
                       )}
-                    </p>
-                  </Card>
-                  <Card className="px-4 py-3">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Key health</p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollToModelSection('health')}
+                    className={statCard}
+                    aria-label="Jump to the key health section"
+                  >
+                    <span className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">Key health</span>
+                    <span className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
                       <span className={`h-2 w-2 rounded-full ${cooling ? 'bg-amber-400' : 'bg-emerald-500'}`} aria-hidden="true" />
                       <span className={cooling ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}>
                         {cooling ? `${cooling} model${cooling > 1 ? 's' : ''} cooling down` : 'all keys healthy'}
                       </span>
-                    </p>
-                  </Card>
+                    </span>
+                  </button>
                 </div>
               );
             })()}
