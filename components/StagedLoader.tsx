@@ -42,12 +42,24 @@ interface StagedLoaderProps {
   /** Ordered, tool-specific status messages. The component cycles through them
    *  and HOLDS on the last one — the parent unmounts it when the result lands. */
   steps: string[];
+  /**
+   * REAL progress mode: when provided, the timer is disabled and `steps` become
+   * actual milestones — the parent advances this index as each real phase
+   * completes (upload done, parse done, …). Only in this mode does the loader
+   * show a truthful "Step x of y" counter and a proportional progress bar.
+   * Without it (single opaque AI call), the loader shows honest signals only:
+   * rotating activity text, an indeterminate bar, and a live elapsed clock —
+   * never a fake step count or fake percentage.
+   */
+  activeStep?: number;
   /** Optional heading shown above the current step text. */
   title?: string;
   /** Extra Tailwind classes applied to the outermost container. */
   className?: string;
   /** Milliseconds between step advances (default 1800). */
   intervalMs?: number;
+  /** Label for the live elapsed clock (default "Elapsed"). */
+  elapsedLabel?: string;
   /** When provided, renders a Cancel button that calls this. */
   onCancel?: () => void;
   /** Label for the cancel button (default "Cancel"). */
@@ -68,18 +80,26 @@ interface StagedLoaderProps {
 }
 
 /**
- * StagedLoader — a tasteful, time-based progress indicator for long AI ops.
+ * StagedLoader — an honest progress indicator for long AI operations.
  *
- * - Cycles through `steps` every `intervalMs`, appends a shared "Almost done…"
- *   finale, then HOLDS there. Never claims 100% (bar caps ~88%).
- * - Each tool passes a distinct `icon` + `accent` so every loader looks unique.
- * - Surfaces randomly-ordered "Did you know?" hiring tips while the user waits.
+ * Two modes, both truthful about what they know:
+ * - Uncontrolled (single opaque AI call — the common case): `steps` rotate as
+ *   activity descriptions, the bar is INDETERMINATE, and a live elapsed clock
+ *   ticks every second. No fake step counter, no fake percentage — the model
+ *   call is atomic, so the only real signal we have is time.
+ * - Controlled (`activeStep` provided): the parent advances the index on REAL
+ *   milestones, so "Step x of y" and the proportional bar are actually true.
+ *
+ * Each tool passes a distinct `icon` + `accent`; rotating "Did you know?"
+ * hiring tips keep the wait informative.
  */
 const StagedLoader: React.FC<StagedLoaderProps> = ({
   steps,
+  activeStep,
   title,
   className = '',
   intervalMs = 1800,
+  elapsedLabel = 'Elapsed',
   onCancel,
   cancelLabel = 'Cancel',
   cancelHint,
@@ -90,18 +110,35 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
   accent = 'blue',
 }) => {
   const a = ACCENTS[accent] ?? ACCENTS.blue;
+  const controlled = activeStep !== undefined;
 
-  // Build displayed steps: append the shared finale unless it's already last.
+  // Build displayed steps. The shared "Almost done…" finale only makes sense in
+  // the uncontrolled rotation — in controlled mode the steps ARE the milestones.
   const displaySteps = useMemo(() => {
     const base = steps.length ? steps : ['Working…'];
-    if (finalStep && base[base.length - 1] !== finalStep) return [...base, finalStep];
+    if (!controlled && finalStep && base[base.length - 1] !== finalStep) return [...base, finalStep];
     return base;
-  }, [steps, finalStep]);
+  }, [steps, finalStep, controlled]);
 
-  const [stepIndex, setStepIndex] = useState(0);
+  const [timerStepIndex, setTimerStepIndex] = useState(0);
+  const stepIndex = controlled
+    ? Math.min(Math.max(activeStep, 0), displaySteps.length - 1)
+    : timerStepIndex;
   const [visible, setVisible] = useState(true);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Live elapsed clock — the one signal that is ALWAYS real.
+  const startedAtRef = useRef<number>(Date.now());
+  const [elapsedSec, setElapsedSec] = useState(0);
+  useEffect(() => {
+    const id = setInterval(
+      () => setElapsedSec(Math.floor((Date.now() - startedAtRef.current) / 1000)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, []);
+  const elapsedText = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
   // Tips: shuffle once per mount, then rotate.
   const tipsRef = useRef<string[] | null>(null);
@@ -126,20 +163,27 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.7; }
         }
+        @keyframes sl-indeterminate {
+          0%   { left: -35%; }
+          100% { left: 105%; }
+        }
         .sl-fade-in { animation: sl-fade-in 0.35s ease-out both; }
         .sl-progress-pulse { animation: sl-progress-pulse 2s ease-in-out infinite; }
+        .sl-indeterminate { animation: sl-indeterminate 1.6s ease-in-out infinite; }
       `;
       document.head.appendChild(style);
     }
   }, []);
 
-  // Advance through steps, hold on last.
+  // Uncontrolled: rotate the activity text on a timer (description, not progress).
+  // Controlled: the parent drives stepIndex from real milestones — no timer.
   useEffect(() => {
-    if (stepIndex >= displaySteps.length - 1) return; // Hold on last step.
+    if (controlled) return;
+    if (timerStepIndex >= displaySteps.length - 1) return; // Hold on last step.
     timerRef.current = setTimeout(() => {
       setVisible(false);
       fadeTimerRef.current = setTimeout(() => {
-        setStepIndex((i) => Math.min(i + 1, displaySteps.length - 1));
+        setTimerStepIndex((i) => Math.min(i + 1, displaySteps.length - 1));
         setVisible(true);
       }, 200); // matches fade-out duration
     }, intervalMs);
@@ -147,7 +191,7 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
       if (timerRef.current) clearTimeout(timerRef.current);
       if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
     };
-  }, [stepIndex, displaySteps.length, intervalMs]);
+  }, [controlled, timerStepIndex, displaySteps.length, intervalMs]);
 
   // Rotate the "Did you know?" tip.
   useEffect(() => {
@@ -165,10 +209,12 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
     };
   }, [showTips, tipIntervalMs, tips.length]);
 
-  // Progress bar target: spread across steps, cap at ~88% to avoid false "done".
+  // Controlled mode only: a REAL proportional bar (milestones completed / total).
+  // Uncontrolled mode renders an indeterminate bar instead — a single opaque AI
+  // call has no measurable progress, and pretending otherwise misleads users.
   const progressPct = displaySteps.length <= 1
-    ? 60
-    : Math.min(10 + (stepIndex / (displaySteps.length - 1)) * 78, 88);
+    ? 0
+    : Math.round((stepIndex / (displaySteps.length - 1)) * 95);
 
   const currentStep = displaySteps[stepIndex] ?? '';
   const dotCount = displaySteps.length;
@@ -221,8 +267,8 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
         </p>
       </div>
 
-      {/* Step dot indicators */}
-      {dotCount > 1 && (
+      {/* Milestone dots — only in controlled mode, where completion is real */}
+      {controlled && dotCount > 1 && (
         <div className="flex items-center gap-2" aria-hidden="true">
           {Array.from({ length: dotCount }).map((_, i) => (
             <span
@@ -239,19 +285,33 @@ const StagedLoader: React.FC<StagedLoaderProps> = ({
         </div>
       )}
 
-      {/* Slim indeterminate-style progress bar */}
-      <div className="w-64 sm:w-80 h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
-        <div
-          className={`h-full ${a.bar} rounded-full transition-all duration-[1200ms] ease-out sl-progress-pulse`}
-          style={{ width: `${progressPct}%` }}
-          aria-hidden="true"
-        />
+      {/* Progress bar: proportional when milestones are real, indeterminate otherwise */}
+      <div className="relative w-64 sm:w-80 h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+        {controlled ? (
+          <div
+            className={`h-full ${a.bar} rounded-full transition-all duration-500 ease-out`}
+            style={{ width: `${progressPct}%` }}
+            aria-hidden="true"
+          />
+        ) : (
+          <div
+            className={`absolute top-0 h-full w-1/3 ${a.bar} rounded-full sl-indeterminate`}
+            aria-hidden="true"
+          />
+        )}
       </div>
 
-      {/* Step counter */}
-      <p className="text-xs text-gray-400 dark:text-gray-500 font-medium tabular-nums">
-        Step {stepIndex + 1} of {dotCount}
-      </p>
+      {/* Controlled: truthful milestone counter. Uncontrolled: live elapsed clock —
+          the only honest number a single opaque AI call can show. */}
+      {controlled ? (
+        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium tabular-nums">
+          Step {stepIndex + 1} of {dotCount}
+        </p>
+      ) : (
+        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium tabular-nums">
+          {elapsedLabel} {elapsedText}
+        </p>
+      )}
 
       {/* Rotating "Did you know?" hiring tip */}
       {showTips && currentTip && (
