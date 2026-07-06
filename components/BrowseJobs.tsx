@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
+import MarkdownLite, { stripMarkdownLite } from './MarkdownLite';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from '../lib/firebaseClient';
 import { listAllActiveJobPostings } from '../lib/recruitingData';
@@ -1124,10 +1125,11 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                     </div>
                   </div>
 
-                  {/* description preview (3-line clamp) — hidden when expanded */}
+                  {/* description preview (3-line clamp) — hidden when expanded.
+                      Markdown syntax is stripped so the clamp shows prose, not "## Role Overview". */}
                   {!isExpanded && job.description && (
                     <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400 line-clamp-3">
-                      {job.description}
+                      {stripMarkdownLite(job.description)}
                     </p>
                   )}
                   {!isExpanded && (
@@ -1142,9 +1144,9 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
                 {isExpanded && (
                   <div id={detailsId} className="animate-panel-expand border-t border-slate-100 dark:border-slate-700 px-5 pb-5 pt-4">
                     {job.description && (
-                      <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line">
-                        {job.description}
-                      </p>
+                      // AI-generated descriptions arrive as Markdown (## headings,
+                      // **bold**, bullet lists) — render it instead of showing raw syntax.
+                      <MarkdownLite text={job.description} />
                     )}
 
                     {/* ── Structured posting fields ── rendered only when the
