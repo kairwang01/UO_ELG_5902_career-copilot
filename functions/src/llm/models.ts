@@ -180,8 +180,9 @@ export function tierFromSubscription(status: string | undefined): Tier {
     case "accelerator":
     case "executive":
       return "paid";
-    // Business subscriptions — tier is "free" for model-rank purposes but
-    // isBusinessUser() returns true (which unlocks BYOA "custom").
+    // Business subscriptions — tier is "free" for model-rank purposes. Note a
+    // business PLAN alone does NOT unlock BYOA "custom": isBusinessUser() gates
+    // on role === "employer" only (product role is authoritative).
     case "starter":
     case "growth":
     case "pro":
@@ -648,18 +649,18 @@ class FallbackProvider implements LLMProvider {
 }
 
 // ---------------------------------------------------------------------------
-// FreeTierOutputCapProvider — injects maxOutputTokens:4096 for free-tier (C)
+// FreeTierOutputCapProvider — caps maxOutputTokens for free-tier requests (C)
 // ---------------------------------------------------------------------------
 
 /**
  * Service-tiering wrapper (服务分级 — free/paid output-quality boundary).
  *
  * When a free-tier user's request arrives with maxOutputTokens undefined, this
- * wrapper injects maxOutputTokens: 4096 before delegating to the inner provider.
- * (1024 proved too tight: large structured outputs — career roadmaps, formatted
- * resumes, weekly summaries — truncated mid-JSON and failed to parse, bricking
- * those tools for free users. 4096 keeps a real free/paid boundary while fitting
- * every tool's full response; make the value admin-configurable later.)
+ * wrapper injects the admin-configurable cap from
+ * platform_config/quotas.free_max_output_tokens (default 8192) before delegating
+ * to the inner provider. (Earlier fixed values proved too tight: large structured
+ * outputs — career roadmaps, formatted resumes — truncated mid-JSON and failed to
+ * parse, bricking those tools for free users.)
  * Paid/business callers pass through unmodified (they may supply their own cap
  * or leave it undefined for the provider default).
  *

@@ -24,6 +24,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requireAuth } from "../middleware/auth";
 import { recordObservedToolRun } from "../admin/usageLog";
+import { recordFreeToolRun } from "../credits/deductCredits";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
@@ -158,6 +159,11 @@ export async function discoverTalentImpl(uid: string, data: Record<string, unkno
 
   // Match mode — one LLM call per candidate, hard-capped.
   await ensurePlatformCaches();
+  // One search fans out up to MATCH_CANDIDATE_CAP model calls: count the search
+  // toward the per-user daily run cap so repeated searches can't become an
+  // unmetered LLM fan-out. (recordObservedToolRun above is volume-only and
+  // deliberately never caps.)
+  await recordFreeToolRun(uid, "discover-talent-match", {});
   const spec = TOOL_REGISTRY["analyzeCandidateMatch"];
   if (!spec) {
     throw new HttpsError("internal", "analyzeCandidateMatch is not registered.");

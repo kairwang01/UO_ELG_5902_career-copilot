@@ -53,8 +53,10 @@ export interface LLMRequest {
    * Hard cap on generated tokens for this request.
    * Passed to generationConfig.maxOutputTokens (Gemini) or max_tokens (OpenAI-compatible).
    * When undefined, the provider uses its default limit.
-   * Service-tiering: resolveProvider injects 1024 for free-tier requests when
-   * this field is undefined (服务分级 — free/paid output-quality boundary).
+   * Service-tiering: for free-tier requests with this field undefined,
+   * resolveProvider injects the admin-configurable cap from
+   * platform_config/quotas.free_max_output_tokens (default 8192)
+   * (服务分级 — free/paid output-quality boundary).
    */
   maxOutputTokens?: number;
 }

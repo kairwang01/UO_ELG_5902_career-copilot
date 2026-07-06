@@ -112,7 +112,14 @@ export const SubscriptionCheckoutProvider: React.FC<React.PropsWithChildren> = (
         }
 
         if (session.mode === 'hosted' && session.simulated) {
-          setSimulatedItem({ kind, key, label, sessionId: session.id ?? null });
+          // Always carry a session id: it is the server-side dedupe key for
+          // credit-pack confirms, so a retry/double-confirm of THIS dialog can
+          // never grant twice. Synthesize one when the server omits it.
+          const sessionId = session.id
+            ?? (typeof globalThis.crypto?.randomUUID === 'function'
+              ? `sim_ui_${globalThis.crypto.randomUUID()}`
+              : `sim_ui_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+          setSimulatedItem({ kind, key, label, sessionId });
           return;
         }
 

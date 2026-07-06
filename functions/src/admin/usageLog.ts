@@ -54,12 +54,19 @@ function counterTotals(data: admin.firestore.DocumentData | undefined): { runs: 
   };
 }
 
+// Fallback scans run only when the per-day counter doc is missing (first run of
+// the day / legacy days). Bounded so a hot path can never page an unbounded
+// event collection: any configured daily cap is far below the bound, so a
+// truncated total still reads as "over the cap" for enforcement purposes.
+const USAGE_SCAN_LIMIT = 2000;
+
 async function scanTodayUsageTotals(): Promise<{ runs: number; credits: number }> {
   const dayStartTs = Timestamp.fromDate(utcDayStart());
   const snap = await db
     .collection(USAGE_EVENTS_COLLECTION)
     .where("created_at", ">=", dayStartTs)
     .where("status", "==", "deducted")
+    .limit(USAGE_SCAN_LIMIT)
     .get();
   let runs = 0;
   let credits = 0;
@@ -77,6 +84,7 @@ async function scanUserTodayUsage(uid: string): Promise<{ runs: number; credits:
     .where("uid", "==", uid)
     .where("created_at", ">=", dayStartTs)
     .where("status", "==", "deducted")
+    .limit(USAGE_SCAN_LIMIT)
     .get();
   let credits = 0;
   snap.forEach((doc) => { credits += doc.data().credit_cost ?? 0; });

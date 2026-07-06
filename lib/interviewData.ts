@@ -6,7 +6,7 @@
  * the employer schedules / reschedules / cancels / completes; the candidate only
  * confirms.
  */
-import { collection, getDocs, onSnapshot, query, where, type DocumentData } from 'firebase/firestore';
+import { collection, getDocs, limit, onSnapshot, query, where, type DocumentData } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from './firebaseClient';
 
@@ -92,8 +92,17 @@ export async function listInterviewsForApplication(applicationId: string, employ
   return snap.docs.map((d) => normalizeApplicationInterview(d.id, d.data())).sort(byScheduled);
 }
 
+// Bound per-user interview reads so a long-lived account can't page an unbounded
+// collection on every timeline render. A bare limit() (no orderBy) avoids new
+// composite indexes; scheduled_at is a plain string, so ordering stays client-side.
+const CANDIDATE_INTERVIEWS_LIMIT = 200;
+
 export async function listInterviewsForCandidate(uid: string): Promise<ApplicationInterview[]> {
-  const snap = await getDocs(query(collection(firestoreDb, 'application_interviews'), where('candidate_id', '==', uid)));
+  const snap = await getDocs(query(
+    collection(firestoreDb, 'application_interviews'),
+    where('candidate_id', '==', uid),
+    limit(CANDIDATE_INTERVIEWS_LIMIT),
+  ));
   return snap.docs.map((d) => normalizeApplicationInterview(d.id, d.data())).sort(byScheduled);
 }
 
@@ -105,7 +114,11 @@ export function subscribeInterviewsForCandidate(
   onError?: (error: unknown) => void,
 ): () => void {
   return onSnapshot(
-    query(collection(firestoreDb, 'application_interviews'), where('candidate_id', '==', uid)),
+    query(
+      collection(firestoreDb, 'application_interviews'),
+      where('candidate_id', '==', uid),
+      limit(CANDIDATE_INTERVIEWS_LIMIT),
+    ),
     (snap) => onChange(snap.docs.map((d) => normalizeApplicationInterview(d.id, d.data())).sort(byScheduled)),
     (error) => onError?.(error),
   );

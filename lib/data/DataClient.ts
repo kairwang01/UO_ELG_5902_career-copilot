@@ -42,7 +42,11 @@ export interface AuthApi {
   signInWithPassword(email: string, password: string): Promise<DataResult<AppSession>>;
   signUp(email: string, password: string): Promise<DataResult<AppUser>>;
   signInWithGoogle(): Promise<DataResult<{ isNewUser: boolean }>>;
-  signOut(scope?: 'local' | 'global'): Promise<DataResult<void>>;
+  // Signs out this browser session. (A 'global' sign-out-everywhere scope was
+  // declared here once but never implemented — Firebase client auth cannot
+  // revoke other sessions; that needs a server-side callable. Removed rather
+  // than left as a silent no-op.)
+  signOut(): Promise<DataResult<void>>;
   resetPassword(email: string): Promise<DataResult<void>>;
   updatePassword(password: string): Promise<DataResult<AppUser>>;
 }

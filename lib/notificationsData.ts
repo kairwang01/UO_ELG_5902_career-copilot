@@ -84,7 +84,9 @@ export const listNotifications = async (uid: string): Promise<AppNotification[]>
   );
   const snap = await getDocs(q);
   const rows = snap.docs.map((d) => mapNotification(d.id, d.data()));
-  rows.sort((a, b) => (b.created_at?.toMillis?.() ?? 0) - (a.created_at?.toMillis?.() ?? 0));
+  // Same fallback as subscribeNotifications: a pending server timestamp (null)
+  // sorts to the top, so the one-shot and live paths order identically.
+  rows.sort((a, b) => (b.created_at?.toMillis?.() ?? Date.now()) - (a.created_at?.toMillis?.() ?? Date.now()));
   return rows;
 };
 

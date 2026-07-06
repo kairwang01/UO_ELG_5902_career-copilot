@@ -139,6 +139,12 @@ const parseWeeklySummarySections = (summary: string): WeeklySummarySection[] => 
     .filter((section): section is WeeklySummarySection => Boolean(section));
 };
 
+// One weekly-summary generation attempt per user+week per app session. If the
+// generated insight failed to persist (or came back empty), a dashboard remount
+// must not silently fire another AI call — the persisted doc is the normal
+// dedupe, this set covers the persistence-failure window.
+const weeklySummaryAttempts = new Set<string>();
+
 const getStartOfWeek = () => {
   const now = new Date();
   const day = now.getDay();
@@ -420,9 +426,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, profile, t, hasResume = 
         unavailableHistorySections.push(t('dashboard_section_weekly_history'));
       }
 
+      const attemptKey = `${userId}:${startOfWeek}`;
       if (insight && typeof insight.summary_text === 'string' && insight.summary_text.trim().length > 0) {
         setWeeklySummary(insight.summary_text);
-      } else if (analyses.length > 0 || activities.length > 0) {
+      } else if ((analyses.length > 0 || activities.length > 0) && !weeklySummaryAttempts.has(attemptKey)) {
+        weeklySummaryAttempts.add(attemptKey);
         try {
           const { summary } = await generateWeeklySummary({
             scores: chartData,

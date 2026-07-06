@@ -5,7 +5,7 @@
  * request status. All writes/unlocks are callables so the client cannot forge
  * acceptance or access candidate PII before consent.
  */
-import { collection, getDocs, onSnapshot, query, where, type DocumentData } from 'firebase/firestore';
+import { collection, getDocs, limit, onSnapshot, query, where, type DocumentData } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from './firebaseClient';
 
@@ -79,13 +79,26 @@ export const normalizeSourcingOutreach = (id: string, data: DocumentData): Sourc
 
 const byNewest = (a: SourcingOutreach, b: SourcingOutreach) => b.created_at.localeCompare(a.created_at);
 
+// Bound per-user outreach reads so a long-lived account can't page an unbounded
+// collection on every render. Bare limit() (no orderBy) needs no composite index;
+// ordering stays client-side via byNewest.
+const OUTREACH_READ_LIMIT = 200;
+
 export async function listSourcingOutreachForCandidate(uid: string): Promise<SourcingOutreach[]> {
-  const snap = await getDocs(query(collection(firestoreDb, 'sourcing_outreach'), where('candidate_id', '==', uid)));
+  const snap = await getDocs(query(
+    collection(firestoreDb, 'sourcing_outreach'),
+    where('candidate_id', '==', uid),
+    limit(OUTREACH_READ_LIMIT),
+  ));
   return snap.docs.map((d) => normalizeSourcingOutreach(d.id, d.data())).sort(byNewest);
 }
 
 export async function listSourcingOutreachForEmployer(uid: string): Promise<SourcingOutreach[]> {
-  const snap = await getDocs(query(collection(firestoreDb, 'sourcing_outreach'), where('employer_id', '==', uid)));
+  const snap = await getDocs(query(
+    collection(firestoreDb, 'sourcing_outreach'),
+    where('employer_id', '==', uid),
+    limit(OUTREACH_READ_LIMIT),
+  ));
   return snap.docs.map((d) => normalizeSourcingOutreach(d.id, d.data())).sort(byNewest);
 }
 
@@ -95,7 +108,11 @@ export function subscribeSourcingOutreachForCandidate(
   onError?: (error: unknown) => void,
 ): () => void {
   return onSnapshot(
-    query(collection(firestoreDb, 'sourcing_outreach'), where('candidate_id', '==', uid)),
+    query(
+      collection(firestoreDb, 'sourcing_outreach'),
+      where('candidate_id', '==', uid),
+      limit(OUTREACH_READ_LIMIT),
+    ),
     (snap) => onChange(snap.docs.map((d) => normalizeSourcingOutreach(d.id, d.data())).sort(byNewest)),
     (error) => onError?.(error),
   );

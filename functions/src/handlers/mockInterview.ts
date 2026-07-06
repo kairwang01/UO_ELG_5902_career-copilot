@@ -29,7 +29,7 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider, tierFromSubscription } from "../llm/models";
-import { deductCredits, meterToolRun, refundCredits } from "../credits/deductCredits";
+import { deductCredits, meterToolRun, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
 import {
@@ -252,6 +252,10 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     }
 
   } else if (data.mode === "evaluate") {
+    // Uncharged within a session, but still counted toward the free-tier daily
+    // run cap — otherwise a standalone evaluate call (never preceded by a paid
+    // generate) is an unmetered LLM faucet.
+    await recordFreeToolRun(uid, "mock-interview-evaluate", { requestId: data.requestId });
     // evaluate mode (required fields already validated above, before charging)
     const jobContextBlock = data.jobDescription ? `Job Context:\n${data.jobDescription}\n\n` : "";
     const prompt = buildPrompt("handler_mock_interview_eval", {
@@ -274,6 +278,8 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
   } else if (data.mode === "evaluate_session") {
     // evaluate_session — holistic end-of-interview report. Free within the
     // session: the single mock-interview charge happened at generate time.
+    // Still counts toward the daily run cap (same faucet reasoning as evaluate).
+    await recordFreeToolRun(uid, "mock-interview-session-eval", { requestId: data.requestId });
     const jobContextBlock = data.jobDescription ? `Job Context:\n${data.jobDescription}\n\n` : "";
     const resumeBlock = data.resumeText?.trim() ? `Candidate Resume:\n${data.resumeText}\n\n` : "";
     const transcript = (data.qa as Array<{ question: string; answer: string }>)

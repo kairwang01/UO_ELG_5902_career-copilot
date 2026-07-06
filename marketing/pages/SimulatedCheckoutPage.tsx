@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, CreditCard, Loader2, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useSession } from '../../contexts/SessionContext';
@@ -41,12 +41,20 @@ const SimulatedCheckoutPage: React.FC = () => {
   const cancelUrl = audience === 'business' ? '/pricing?audience=employer&checkout=cancel' : '/pricing?checkout=cancel';
   const workspaceUrl = audience === 'business' ? '/portal' : '/workspace';
 
+  // Stable per-visit session id: the server dedupes credit-pack confirms on it,
+  // so a failed-then-retried Pay click cannot grant the same pack twice.
+  const sessionIdRef = useRef(
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? `sim_page_${globalThis.crypto.randomUUID()}`
+      : `sim_page_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+  );
+
   const handlePay = async () => {
     if (paying) return;
     setPaying(true);
     setError(null);
     try {
-      await confirmSimulatedCheckout(plan);
+      await confirmSimulatedCheckout(plan, sessionIdRef.current);
       window.location.assign(successUrl);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'We could not confirm this plan. Please try again.');

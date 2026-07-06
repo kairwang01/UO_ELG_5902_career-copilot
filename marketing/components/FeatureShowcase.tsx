@@ -212,6 +212,8 @@ export const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({ t }) => {
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onTouchStart={() => setPaused(true)}
+      onTouchEnd={() => setPaused(false)}
+      onTouchCancel={() => setPaused(false)}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8 grid gap-3 lg:grid-cols-[0.7fr_1fr] lg:items-end">

@@ -16,7 +16,7 @@ import {
   Target,
   X,
 } from 'lucide-react';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firestoreDb, firebaseFunctions } from '../lib/firebaseClient';
 import { listAllActiveJobPostings } from '../lib/recruitingData';
@@ -26,7 +26,6 @@ import { useToast } from './Toast';
 import {
   listCompanyReviews,
   aggregateRating,
-  getEmployerRating,
   type CompanyReview,
 } from '../lib/companyReviewsData';
 import {
@@ -349,61 +348,89 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ session, t, onEditProfile }) =>
   }, [expandedId, jobs]);
 
   // ── eager-load employer responsiveness for the visible jobs ─────────────────
+  // Both aggregate docs are keyed by employer id, so chunked `documentId() in`
+  // queries replace the per-employer getDoc fan-out: one read per ≤10 employers
+  // instead of N round-trips every time the job list changes.
   useEffect(() => {
     let cancelled = false;
-    const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)));
-    eids.forEach((eid) => {
-      if (respCacheRef.current[eid] !== undefined || fetchingResp.current.has(eid)) return;
-      fetchingResp.current.add(eid);
-      (async () => {
-        try {
-          const snap = await getDoc(doc(firestoreDb, 'employer_responsiveness', eid));
-          const d = snap.exists() ? snap.data() : undefined;
-          const count = typeof d?.count === 'number' ? d.count : 0;
-          const sum = typeof d?.sum_days === 'number' ? d.sum_days : 0;
-          const lastMs = d?.last_action_at?.toMillis?.() ?? null;
+    const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)))
+      .filter((eid) => respCacheRef.current[eid] === undefined && !fetchingResp.current.has(eid));
+    if (!eids.length) return;
+    eids.forEach((eid) => fetchingResp.current.add(eid));
+    (async () => {
+      try {
+        for (let i = 0; i < eids.length; i += 10) {
+          const chunk = eids.slice(i, i + 10);
+          const found: Record<string, RespEntry> = {};
+          try {
+            const snap = await getDocs(query(
+              collection(firestoreDb, 'employer_responsiveness'),
+              where(documentId(), 'in', chunk),
+            ));
+            snap.forEach((docSnap) => {
+              const d = docSnap.data();
+              const count = typeof d?.count === 'number' ? d.count : 0;
+              const sum = typeof d?.sum_days === 'number' ? d.sum_days : 0;
+              const lastMs = d?.last_action_at?.toMillis?.() ?? null;
+              found[docSnap.id] = { avgDays: count >= 3 ? sum / count : null, lastActionMs: lastMs };
+            });
+          } catch {
+            // non-fatal — every id in the chunk falls back to the empty entry below
+          }
           if (cancelled) return;
-          const entry: RespEntry = { avgDays: count >= 3 ? sum / count : null, lastActionMs: lastMs };
-          respCacheRef.current = { ...respCacheRef.current, [eid]: entry };
-          setRespCache((prev) => ({ ...prev, [eid]: entry }));
-        } catch {
-          if (cancelled) return;
-          const entry: RespEntry = { avgDays: null, lastActionMs: null };
-          respCacheRef.current = { ...respCacheRef.current, [eid]: entry };
-          setRespCache((prev) => ({ ...prev, [eid]: entry }));
-        } finally {
-          fetchingResp.current.delete(eid);
+          const entries: Record<string, RespEntry> = {};
+          chunk.forEach((eid) => { entries[eid] = found[eid] ?? { avgDays: null, lastActionMs: null }; });
+          respCacheRef.current = { ...respCacheRef.current, ...entries };
+          setRespCache((prev) => ({ ...prev, ...entries }));
         }
-      })();
-    });
+      } finally {
+        eids.forEach((eid) => fetchingResp.current.delete(eid));
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [jobs]);
 
   // ── eager-load company rating aggregate for the visible jobs ────────────────
+  // Same chunked `documentId() in` pattern as the responsiveness loader above
+  // (mirrors lib getEmployerRating's normalization for each returned doc).
   useEffect(() => {
     let cancelled = false;
-    const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)));
-    eids.forEach((eid) => {
-      if (ratingCacheRef.current[eid] !== undefined || fetchingRatings.current.has(eid)) return;
-      fetchingRatings.current.add(eid);
-      (async () => {
-        try {
-          const entry = await getEmployerRating(eid);
+    const eids = Array.from(new Set(jobs.map((j) => j.employer_id).filter((e): e is string => !!e)))
+      .filter((eid) => ratingCacheRef.current[eid] === undefined && !fetchingRatings.current.has(eid));
+    if (!eids.length) return;
+    eids.forEach((eid) => fetchingRatings.current.add(eid));
+    (async () => {
+      try {
+        for (let i = 0; i < eids.length; i += 10) {
+          const chunk = eids.slice(i, i + 10);
+          const found: Record<string, { avg: number; count: number }> = {};
+          try {
+            const snap = await getDocs(query(
+              collection(firestoreDb, 'employer_rating'),
+              where(documentId(), 'in', chunk),
+            ));
+            snap.forEach((docSnap) => {
+              const d = docSnap.data();
+              found[docSnap.id] = {
+                avg: typeof d?.avg === 'number' ? d.avg : 0,
+                count: typeof d?.count === 'number' ? d.count : 0,
+              };
+            });
+          } catch {
+            // non-fatal — every id in the chunk falls back to the empty entry below
+          }
           if (cancelled) return;
-          ratingCacheRef.current = { ...ratingCacheRef.current, [eid]: entry };
-          setRatingCache((prev) => ({ ...prev, [eid]: entry }));
-        } catch {
-          if (cancelled) return;
-          const entry = { avg: 0, count: 0 };
-          ratingCacheRef.current = { ...ratingCacheRef.current, [eid]: entry };
-          setRatingCache((prev) => ({ ...prev, [eid]: entry }));
-        } finally {
-          fetchingRatings.current.delete(eid);
+          const entries: Record<string, { avg: number; count: number }> = {};
+          chunk.forEach((eid) => { entries[eid] = found[eid] ?? { avg: 0, count: 0 }; });
+          ratingCacheRef.current = { ...ratingCacheRef.current, ...entries };
+          setRatingCache((prev) => ({ ...prev, ...entries }));
         }
-      })();
-    });
+      } finally {
+        eids.forEach((eid) => fetchingRatings.current.delete(eid));
+      }
+    })();
     return () => {
       cancelled = true;
     };

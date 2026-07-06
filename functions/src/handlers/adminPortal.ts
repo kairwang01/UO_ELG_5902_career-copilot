@@ -614,9 +614,16 @@ export const adminListUsersFunction = onCall({ invoker: "public" }, async (reque
         );
       })
     : rows;
-  const start = filtered && start_after_uid
-    ? Math.max(matching.findIndex((u) => u.uid === start_after_uid) + 1, 0)
-    : 0;
+  const cursorIdx = filtered && start_after_uid
+    ? matching.findIndex((u) => u.uid === start_after_uid)
+    : -1;
+  // A provided-but-unfound cursor means the results past the scan window are
+  // exhausted — return an empty page instead of silently resetting to page 1,
+  // which would loop the admin list forever.
+  if (filtered && start_after_uid && cursorIdx === -1) {
+    return { users: [], next_cursor: null };
+  }
+  const start = cursorIdx + 1; // -1 (no cursor) → 0
   const page = matching.slice(start, start + pageSize);
   return {
     users: page,
