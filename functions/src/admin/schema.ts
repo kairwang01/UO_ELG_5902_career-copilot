@@ -53,6 +53,12 @@ export interface ModelEntry {
   /** Admin-safe key picker entries. Derived at read time only; never stores raw keys. */
   key_previews?: ModelKeyPreview[];
   /**
+   * True when the model accepts inline image parts (multimodal resume upload).
+   * Gemini models are implicitly capable; openai-compatible gateway models
+   * default to text-only because most gateway routes 404 on image input.
+   */
+  supportsImageInput?: boolean;
+  /**
    * When set, inherits key + base_url from the named platform_config/llm entry
    * when `api_key` / `api_keys` / `base_url` on this entry are absent.
    */

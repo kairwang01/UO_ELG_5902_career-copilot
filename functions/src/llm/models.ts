@@ -178,6 +178,16 @@ registerDefaultModels(DEFAULT_MODELS);
 
 export const DEFAULT_MODEL_ID = "gemini";
 
+/**
+ * True when the entry can accept inline image parts. Gemini is natively
+ * multimodal; openai-compatible gateway models must be explicitly marked
+ * (supportsImageInput) because most gateway text routes reject images with
+ * a 404 ("No endpoints found that support image input").
+ */
+export function modelSupportsImageInput(entry: ModelEntry): boolean {
+  return entry.provider === "gemini" || entry.supportsImageInput === true;
+}
+
 const TIER_RANK: Record<Tier, number> = { free: 0, paid: 1, business: 0 };
 // Note: "business" shares rank 0 with "free" — business users get free-tier
 // models but NOT paid-tier premium ones. The business sentinel ("custom")
@@ -250,6 +260,10 @@ function isAvailabilityError(err: unknown): boolean {
   if (e?.code === 401 || e?.code === 403 || e?.code === 429) return true;
   // Detect status codes embedded in message strings (e.g. "LLM provider error 429: ...")
   if (/llm provider error (401|403|429)/.test(msg)) return true;
+  // Modality mismatch from gateway routers (e.g. OpenRouter-style
+  // "No endpoints found that support image input") — this model cannot serve
+  // THIS request; rotating to a multimodal fallback can.
+  if (msg.includes("support image input") || msg.includes("no endpoints found")) return true;
   // Timeout
   if (msg.includes("timeout") || msg.includes("timed out")) return true;
   // Empty response
@@ -834,7 +848,8 @@ export interface CustomProviderConfig {
 export async function resolveProvider(
   uid: string,
   requestedModelId?: string,
-  routeKey?: string
+  routeKey?: string,
+  opts?: { needsImageInput?: boolean }
 ): Promise<LLMProvider> {
   // E2E happy-path harness (SCRUM-42): deterministic, free, schema-valid output.
   // Gated on E2E_LLM_STUB so it can never short-circuit a real production request.
@@ -893,8 +908,16 @@ export async function resolveProvider(
   // Also allow the "auto" alias for paid users who may have it stored.
   // We look it up in the registry directly (it's excluded from modelsForTier).
   const autoOption = registry.find((m) => m.id === "auto" && m.enabled);
-  const allowedWithAuto =
+  const allowedWithAutoUnfiltered =
     tier === "paid" && autoOption ? [...allowed, autoOption] : allowed;
+  // Modality gate: an image-bearing request (multimodal resume upload) may
+  // only route to models that can accept image parts — routing pools and the
+  // standard path both read this set, so a text-only pool member is skipped
+  // instead of 404ing the whole request.
+  const needsImageInput = opts?.needsImageInput === true;
+  const allowedWithAuto = needsImageInput
+    ? allowedWithAutoUnfiltered.filter(modelSupportsImageInput)
+    : allowedWithAutoUnfiltered;
   const allowedIds = new Set(allowedWithAuto.map((m) => m.id));
 
   // Module routing pools take precedence over requestedModelId. This is safe
@@ -931,16 +954,22 @@ export async function resolveProvider(
       : undefined;
 
   // Absolute fallback: admin default (if valid) > hardcoded DEFAULT_MODEL_ID > first enabled.
+  // Image requests additionally require an image-capable entry — DEFAULT_MODELS[0]
+  // is gemini, which is always multimodal.
   const absoluteFallback =
     adminDefaultEntry ??
-    registry.find((m) => m.id === DEFAULT_MODEL_ID && m.enabled) ??
-    registry.find((m) => m.enabled) ??
-    DEFAULT_MODELS[0]; // always gemini
+    (needsImageInput
+      ? registry.find((m) => m.id === DEFAULT_MODEL_ID && m.enabled) ??
+        registry.find((m) => m.enabled && modelSupportsImageInput(m)) ??
+        DEFAULT_MODELS[0]
+      : registry.find((m) => m.id === DEFAULT_MODEL_ID && m.enabled) ??
+        registry.find((m) => m.enabled) ??
+        DEFAULT_MODELS[0]); // always gemini
 
   const chosen =
     allowedWithAuto.find((m) => m.id === requestedModelId) ??
     adminDefaultEntry ??
-    allowed.find((m) => m.id === DEFAULT_MODEL_ID) ??
+    allowedWithAuto.find((m) => m.id === DEFAULT_MODEL_ID) ??
     absoluteFallback;
 
   // Build the primary provider (with key-pool rotation)

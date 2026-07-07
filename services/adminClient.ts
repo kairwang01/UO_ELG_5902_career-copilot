@@ -262,6 +262,8 @@ export interface ModelEntry {
     index: number;
     source: 'api_key' | 'api_keys' | 'builtin';
   }[];
+  /** True when the model accepts inline image parts (multimodal). */
+  supportsImageInput?: boolean;
   /** Ordered list of model ids to fall back to when this model fails. */
   fallbackChain?: string[];
   /** Read-only admin preview; omitted when an explicit fallbackChain is configured. */

@@ -253,6 +253,9 @@ function validateEntry(raw: unknown, isCreate: boolean): ModelEntry {
   const api_key = typeof m.api_key === "string" ? m.api_key.trim() : undefined;
   const providerModel = typeof m.providerModel === "string" ? m.providerModel : "";
   const enabled = m.enabled !== false; // default true
+  // Multimodal capability: only an explicit boolean true marks a gateway model
+  // as image-capable (gemini models are implicitly capable at runtime).
+  const supportsImageInput = m.supportsImageInput === true;
 
   // --- api_keys pool validation ---
   let api_keys: string[] | undefined;
@@ -355,6 +358,7 @@ function validateEntry(raw: unknown, isCreate: boolean): ModelEntry {
   // priority / fallbackChain
   if (priority !== undefined) entry.priority = priority;
   if (fallbackChain && fallbackChain.length > 0) entry.fallbackChain = fallbackChain;
+  if (supportsImageInput) entry.supportsImageInput = true;
 
   return entry;
 }
