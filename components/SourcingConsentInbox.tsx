@@ -237,6 +237,11 @@ const SourcingConsentInbox: React.FC<SourcingConsentInboxProps> = ({ uid, t }) =
                     {request.company_name || t('sourcing_company_fallback')} · {request.job_title || t('talent_manual_role_label')}
                   </span>
                 </div>
+                {request.message && (
+                  <p className="line-clamp-2 whitespace-pre-line text-xs leading-5 text-slate-600 dark:text-slate-400 sm:max-w-md">
+                    {request.message}
+                  </p>
+                )}
                 <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-xs font-semibold ${statusClass(request.status)}`}>
                   {t(statusLabelKey(request.status))}
                 </span>

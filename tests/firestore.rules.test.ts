@@ -17,7 +17,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 const PROJECT_ID = 'demo-careercopilot';
 let testEnv: RulesTestEnvironment;
@@ -496,6 +496,24 @@ describe('sourcing_outreach access', () => {
   it('the requesting employer can read the outreach request', async () => {
     await seedOutreach();
     await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('emp1').firestore(), 'sourcing_outreach', 'out1')));
+  });
+  it('the requested candidate can list their outreach requests', async () => {
+    await seedOutreach();
+    const db = testEnv.authenticatedContext('cand1').firestore();
+    await assertSucceeds(getDocs(query(
+      collection(db, 'sourcing_outreach'),
+      where('candidate_id', '==', 'cand1'),
+      limit(200),
+    )));
+  });
+  it('the requesting employer can list their outreach requests', async () => {
+    await seedOutreach();
+    const db = testEnv.authenticatedContext('emp1').firestore();
+    await assertSucceeds(getDocs(query(
+      collection(db, 'sourcing_outreach'),
+      where('employer_id', '==', 'emp1'),
+      limit(200),
+    )));
   });
   it('an unrelated user CANNOT read the outreach request', async () => {
     await seedOutreach();
