@@ -16,6 +16,7 @@ import { resolveProvider } from "../llm/models";
 import { meterToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
+import { candidateAnalysisLanguageProtocol } from "../llm/languageProtocol";
 import { ensurePlatformCaches } from "../config/env";
 
 // ---------------------------------------------------------------------------
@@ -26,6 +27,8 @@ interface GenerateCareerPathRequest {
   resumeText: string;
   desiredRole: string;
   marketName: string;
+  /** UI/output language for user-visible prose, e.g. "zh", "en", "fr". */
+  outputLanguage?: string;
   requestId?: string;
 }
 
@@ -149,6 +152,10 @@ export const generateCareerPathFunction = onCall({ invoker: "public", timeoutSec
     marketName: data.marketName,
     desiredRole: data.desiredRole,
     resumeText: data.resumeText,
+    outputLanguageInstruction: candidateAnalysisLanguageProtocol({
+      outputLanguage: data.outputLanguage,
+      marketName: data.marketName,
+    }),
   });
 
   try {

@@ -160,6 +160,16 @@ type AiProxyPayload = {
 };
 
 const inFlightAiProxyCalls = new Map<string, Promise<unknown>>();
+
+/** UI language ("zh", "fr", …) — the app persists it under preferred_language.
+ *  Sent to the backend so AI coaching/analysis prose matches the user's UI. */
+const getUiLanguage = (): string | undefined => {
+  try {
+    return localStorage.getItem('preferred_language') || undefined;
+  } catch {
+    return undefined;
+  }
+};
 const PLATFORM_SAFE_DEFAULT_MODEL_ID = 'deepseek-v4-flash';
 
 function stableStringify(value: unknown): string {
@@ -183,6 +193,12 @@ async function callAiProxy<TResponse, TResult>(
   mapResult: (data: TResponse) => TResult
 ): Promise<TResult> {
   const model = getEffectiveAiModelId();
+  // Attach the UI language for the backend's shared multilingual protocol;
+  // explicit per-tool language params (e.g. outputLanguage, targetLanguage)
+  // always win over this default.
+  if (payload.outputLanguage === undefined && getUiLanguage()) {
+    payload = { ...payload, outputLanguage: getUiLanguage() };
+  }
   const key = `${mode}:${model}:${tool}:${stableStringify(payload)}`;
   const existing = inFlightAiProxyCalls.get(key);
   if (existing) return existing as Promise<TResult>;
@@ -216,6 +232,7 @@ export const generateInterviewQuestions = async (resumeText: string, jobDescript
       resumeText,
       jobDescription,
       marketName,
+      outputLanguage: getUiLanguage(),
       model: currentModelId,
       requestId: makeCallableRequestId('mock_interview'),
     });
@@ -225,7 +242,7 @@ export const generateInterviewQuestions = async (resumeText: string, jobDescript
 export const evaluateInterviewAnswer = async (question: string, answer: string, jobDescription: string): Promise<InterviewEvaluation> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, InterviewEvaluation>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
-    const res = await fn({ mode: 'evaluate', question, answer, jobDescription, model: currentModelId });
+    const res = await fn({ mode: 'evaluate', question, answer, jobDescription, outputLanguage: getUiLanguage(), model: currentModelId });
     return res.data;
   });
 
@@ -257,7 +274,7 @@ export const evaluateInterviewSession = async (
 ): Promise<SessionEvalResult> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, SessionEvalResult>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
-    const res = await fn({ mode: 'evaluate_session', qa, jobDescription, resumeText, model: currentModelId });
+    const res = await fn({ mode: 'evaluate_session', qa, jobDescription, resumeText, outputLanguage: getUiLanguage(), model: currentModelId });
     return res.data;
   });
 
@@ -282,7 +299,7 @@ export const careerCoach = async (payload: {
 }): Promise<string> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, { reply: string }>(firebaseFunctions, 'careerCoach', { timeout: 190_000 });
-    const res = await fn({ ...payload, model: currentModelId });
+    const res = await fn({ outputLanguage: getUiLanguage(), ...payload, model: currentModelId });
     return res.data.reply;
   });
 
@@ -649,6 +666,7 @@ export const generateCareerPath = async (resumeText: string, desiredRole: string
       resumeText,
       desiredRole,
       marketName,
+      outputLanguage: getUiLanguage(),
       model: currentModelId,
       requestId: makeCallableRequestId('career_path'),
     });

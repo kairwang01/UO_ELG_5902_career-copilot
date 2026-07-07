@@ -19,6 +19,10 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAuth } from "../middleware/auth";
 import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
+import {
+  candidateAnalysisLanguageProtocol,
+  employerAnalysisLanguageProtocol,
+} from "../llm/languageProtocol";
 import { meterToolRun, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
@@ -77,6 +81,41 @@ function addNotice(data: unknown, notice: string | undefined): unknown {
 
 // timeoutSeconds 180: free community routers (KairLLM auto) take 60-90s on the
 // heaviest structured tools; the global 60s default 504'd them mid-generation.
+// ---------------------------------------------------------------------------
+// Central multilingual protocol
+//
+// Most registry tools have no dedicated language plumbing; the client sends
+// its UI language as payload.outputLanguage and we append ONE shared protocol
+// block per audience. Tools that already manage language themselves are
+// skipped so instructions never conflict.
+// ---------------------------------------------------------------------------
+
+const EMPLOYER_TOOLS = new Set([
+  "generateJobDescription",
+  "analyzeSalary",
+  "checkInclusivity",
+  "formatJobDescription",
+  "analyzeCandidateMatch",
+  "anonymizeResume",
+  "generateClientPitchEmail",
+  "generateCandidatePrepKit",
+  "generateOutreachEmail",
+]);
+
+const LANGUAGE_SELF_MANAGED_TOOLS = new Set([
+  "convertResumeFormat", // outputLanguage is the tool's own core parameter
+  "extractTalentProfile", // targetLanguage is the tool's own core parameter
+]);
+
+function languageBlockForTool(tool: string, payload: Record<string, unknown> | undefined): string {
+  if (LANGUAGE_SELF_MANAGED_TOOLS.has(tool)) return "";
+  const outputLanguage = typeof payload?.outputLanguage === "string" ? payload.outputLanguage : undefined;
+  const marketName = typeof payload?.marketName === "string" ? payload.marketName : undefined;
+  return EMPLOYER_TOOLS.has(tool)
+    ? employerAnalysisLanguageProtocol({ outputLanguage })
+    : candidateAnalysisLanguageProtocol({ outputLanguage, marketName });
+}
+
 export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
   const uid = requireAuth(request);
 
@@ -120,6 +159,8 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
     // (spec.build reads getPromptOverride, which is otherwise cold on a fresh instance).
     await ensurePlatformCaches();
     const llmRequest = spec.build(payload ?? {});
+    const languageBlock = languageBlockForTool(tool, payload ?? {});
+    if (languageBlock) llmRequest.prompt = `${llmRequest.prompt}\n\n${languageBlock}`;
     const provider = await resolveProvider(uid, model, tool);
     let notice: string | undefined;
     let result;
@@ -130,7 +171,9 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
       if (!spec.quotaFallback || !isQuotaError(err)) {
         throw err;
       }
-      result = await provider.generate(spec.quotaFallback(payload ?? {}));
+      const fallbackRequest = spec.quotaFallback(payload ?? {});
+      if (languageBlock) fallbackRequest.prompt = `${fallbackRequest.prompt}\n\n${languageBlock}`;
+      result = await provider.generate(fallbackRequest);
       notice = spec.quotaFallbackNotice;
     }
 

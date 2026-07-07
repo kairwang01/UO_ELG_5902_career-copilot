@@ -19,6 +19,7 @@ import { requireAuth } from "../middleware/auth";
 import { recordObservedToolRun } from "../admin/usageLog";
 import { resolveProvider } from "../llm/models";
 import { buildPrompt } from "../llm/prompts";
+import { chatLanguageProtocol } from "../llm/languageProtocol";
 import { ensurePlatformCaches } from "../config/env";
 
 interface CoachMessage {
@@ -35,6 +36,8 @@ interface CareerCoachRequest {
   companyDescription?: string;
   /** Optional model id (tier-gated server-side). */
   model?: string;
+  /** UI language hint for ambiguous first messages, e.g. "zh", "en". */
+  outputLanguage?: string;
 }
 
 export const careerCoachFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
@@ -65,6 +68,10 @@ export const careerCoachFunction = onCall({ invoker: "public", timeoutSeconds: 1
   } else {
     systemInstruction = buildPrompt("handler_career_coach_base", {});
   }
+
+  // Appended AFTER the (possibly admin-overridden) template so language
+  // behaviour is consistent even when an override predates this protocol.
+  systemInstruction += "\n\n" + chatLanguageProtocol({ outputLanguage: data.outputLanguage });
 
   // Keep the last 20 turns to bound prompt size.
   const transcript =

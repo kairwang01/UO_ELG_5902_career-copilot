@@ -23,6 +23,7 @@ import { resolveProvider } from "../llm/models";
 import { meterToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
+import { candidateAnalysisLanguageProtocol } from "../llm/languageProtocol";
 import { ensurePlatformCaches } from "../config/env";
 
 // ---------------------------------------------------------------------------
@@ -62,19 +63,6 @@ interface AnalysisResult {
   keywords: string[];
   extractedText?: string;
 }
-
-const outputLanguageName = (value?: string): string => {
-  const normalized = String(value ?? "").toLowerCase();
-  if (normalized.startsWith("zh")) return "Simplified Chinese";
-  if (normalized.startsWith("fr")) return "French";
-  if (normalized.startsWith("de")) return "German";
-  if (normalized.startsWith("ja")) return "Japanese";
-  if (normalized.startsWith("vi")) return "Vietnamese";
-  if (normalized.startsWith("ar")) return "Arabic";
-  if (normalized.startsWith("es")) return "Spanish";
-  if (normalized.startsWith("ko")) return "Korean";
-  return "English";
-};
 
 // ---------------------------------------------------------------------------
 // Gemini response schema — mirrors the schema in the frontend geminiService.ts
@@ -163,10 +151,13 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
   let prompt: string;
   let parts: Array<{ inlineData: { mimeType: string; data: string } }> | undefined;
   const outputLanguageInstruction =
-    `Write every user-visible output field in ${outputLanguageName(data.outputLanguage)}: ` +
-    `summary, strengths, improvements.area, improvements.suggestion, and keywords. ` +
-    `Do not leave generic labels such as "quantifying impact", "Weak", "Stronger", or "ATS keyword alignment" in English unless the requested output language is English. ` +
-    `Keep proper nouns, employer names, school names, product names, URLs, programming languages, frameworks, and exact resume terms in their original form when translating them would be misleading.`;
+    candidateAnalysisLanguageProtocol({
+      outputLanguage: data.outputLanguage ?? "en",
+      marketName: data.marketName,
+    }) +
+    "\n- Prose fields here: summary, strengths, improvements.area, improvements.suggestion. Do not leave generic labels such as \"quantifying impact\", \"Weak\", \"Stronger\", or \"ATS keyword alignment\" in English unless English is the output language." +
+    "\n- keywords: apply the market hiring-language rule above (these are ATS terms, not prose)." +
+    "\n- extractedText (image path): transcribe the resume in its ORIGINAL language exactly as written — never translate the transcription.";
 
   if (hasImages) {
     // Multimodal: Gemini transcribes the images and analyzes

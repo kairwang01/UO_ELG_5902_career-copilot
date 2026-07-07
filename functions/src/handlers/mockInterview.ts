@@ -32,6 +32,7 @@ import { resolveProvider, tierFromSubscription } from "../llm/models";
 import { deductCredits, meterToolRun, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
+import { interviewLanguageProtocol } from "../llm/languageProtocol";
 import {
   ensurePlatformCaches,
   getMockInterviewMinTier,
@@ -67,6 +68,8 @@ interface MockInterviewRequest {
   qa?: Array<{ question: string; answer: string }>;
   // unlock_report mode
   reportId?: string;
+  /** UI/output language for coaching text, e.g. "zh", "en", "fr". */
+  outputLanguage?: string;
   /** Client-generated idempotency key for charged generate calls. */
   requestId?: string;
 }
@@ -230,6 +233,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       marketName: data.marketName ?? "Canadian",
       resumeText: data.resumeText,
       jobDescription: data.jobDescription,
+      outputLanguageInstruction: interviewLanguageProtocol({ outputLanguage: data.outputLanguage }),
     });
 
     try {
@@ -259,6 +263,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     // evaluate mode (required fields already validated above, before charging)
     const jobContextBlock = data.jobDescription ? `Job Context:\n${data.jobDescription}\n\n` : "";
     const prompt = buildPrompt("handler_mock_interview_eval", {
+      outputLanguageInstruction: interviewLanguageProtocol({ outputLanguage: data.outputLanguage }),
       question: data.question,
       answer: data.answer,
       jobContextBlock,
@@ -288,6 +293,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       .join("\n\n");
 
     const prompt = buildPrompt("handler_mock_interview_session_eval", {
+      outputLanguageInstruction: interviewLanguageProtocol({ outputLanguage: data.outputLanguage }),
       jobContextBlock,
       resumeBlock,
       transcript,
