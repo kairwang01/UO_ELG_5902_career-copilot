@@ -17,8 +17,11 @@
  *     Test a registry model using its configured key pool (full rotation),
  *     OR optionally target one specific key in the pool via:
  *       keyIndex: number  — 0-based index into api_keys (or api_key if no pool)
+ *       keyHash: string   — 16-hex hash of a pinnable saved key (the id used by
+ *                           routing-pool member pins); resolves via the SAME
+ *                           key-pool semantics as the runtime router
  *       rawKey: string    — ad-hoc raw key to substitute (bypasses pool entirely)
- *     At most one of keyIndex / rawKey may be set at a time.
+ *     At most one of keyIndex / keyHash / rawKey may be set at a time.
  *
  *   { config: AdHocConfig }
  *     Test an ad-hoc config (e.g. a key the admin just typed in the UI).
@@ -29,6 +32,8 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireRole } from "../admin/roles";
 import { ensurePlatformCaches, getModelRegistry } from "../admin/platformConfig";
 import { buildProvider } from "../llm/models";
+import { keyHash } from "../llm/keyHash";
+import { pinnableKeysForModel } from "../llm/routingPools";
 import { logAdminAction } from "../admin/usageLog";
 import { ModelEntry } from "../admin/schema";
 
@@ -71,6 +76,8 @@ interface TestModelRequest {
   config?: AdHocConfig;
   /** 0-based index into the model's key pool (api_keys or api_key). */
   keyIndex?: number;
+  /** Hash of a pinnable saved key — same identifier routing-pool pins use. */
+  keyHash?: string;
   /** Raw API key override — bypasses the stored pool entirely. */
   rawKey?: string;
 }
@@ -147,16 +154,18 @@ export const adminTestModelFunction = onCall(
 
     const data = (request.data ?? {}) as TestModelRequest;
 
-    // ── 3. Validate keyIndex / rawKey mutual exclusivity ─────────────────────
+    // ── 3. Validate keyIndex / keyHash / rawKey mutual exclusivity ───────────
     const hasKeyIndex =
       data.keyIndex !== undefined && data.keyIndex !== null;
+    const hasKeyHash =
+      typeof data.keyHash === "string" && data.keyHash.trim().length > 0;
     const hasRawKey =
       typeof data.rawKey === "string" && data.rawKey.trim().length > 0;
 
-    if (hasKeyIndex && hasRawKey) {
+    if ([hasKeyIndex, hasKeyHash, hasRawKey].filter(Boolean).length > 1) {
       throw new HttpsError(
         "invalid-argument",
-        "Provide at most one of keyIndex or rawKey, not both."
+        "Provide at most one of keyIndex, keyHash, or rawKey."
       );
     }
 
@@ -186,6 +195,21 @@ export const adminTestModelFunction = onCall(
       if (hasRawKey) {
         // Admin supplies a raw key to test (e.g. before adding to pool)
         rawKeyOverride = (data.rawKey as string).trim();
+        rawKeysForScrubbing.push(rawKeyOverride);
+      } else if (hasKeyHash) {
+        // Routing-pool pin test: resolve via the SAME pinnable-key semantics
+        // as the runtime router, so a green result here means the pinned key
+        // is the one the pool member will really use.
+        const wanted = (data.keyHash as string).trim();
+        const match = pinnableKeysForModel(found).find((k) => keyHash(k.key) === wanted);
+        if (!match) {
+          throw new HttpsError(
+            "invalid-argument",
+            `Model "${id}" has no pinnable saved key with that hash — the key was removed ` +
+              `or is shadowed by the model's key pool. Re-pick the key in the pool editor.`
+          );
+        }
+        rawKeyOverride = match.key;
         rawKeysForScrubbing.push(rawKeyOverride);
       } else if (hasKeyIndex) {
         // Admin wants to test a specific key from the pool by index
@@ -250,7 +274,7 @@ export const adminTestModelFunction = onCall(
           id_or_provider: idOrProvider,
           ok,
           latencyMs,
-          key_mode: hasRawKey ? "rawKey" : hasKeyIndex ? `keyIndex:${data.keyIndex}` : "pool",
+          key_mode: hasRawKey ? "rawKey" : hasKeyHash ? "keyHash" : hasKeyIndex ? `keyIndex:${data.keyIndex}` : "pool",
           ...(ok ? {} : { error_present: true }),
         },
       });
@@ -260,10 +284,10 @@ export const adminTestModelFunction = onCall(
 
     } else if (data.config && typeof data.config === "object") {
       // ── 4b. Ad-hoc config path ─────────────────────────────────────────────
-      if (hasKeyIndex || hasRawKey) {
+      if (hasKeyIndex || hasKeyHash || hasRawKey) {
         throw new HttpsError(
           "invalid-argument",
-          "keyIndex and rawKey are only valid when using the `id` path, not `config`."
+          "keyIndex, keyHash and rawKey are only valid when using the `id` path, not `config`."
         );
       }
 

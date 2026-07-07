@@ -3,7 +3,7 @@ import { SiteLayout } from '../components/SiteLayout';
 import { SiteButton } from '../components/SiteButton';
 import { CandidateMatchPreview } from '../components/CandidateMatchPreview';
 import { CaseSnapshots } from '../components/CaseSnapshots';
-import { WorkflowSteps } from '../components/WorkflowSteps';
+import { WorkflowSteps, workflowPreviewRow } from '../components/WorkflowSteps';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 
@@ -59,43 +59,43 @@ export const EmployerLandingPage: React.FC = () => {
             ]}
             previews={[
               {
-                label: 'Job Posting Reach',
-                scoreLabel: 'Post quality',
+                label: t('site_wf_emp_p1_label'),
+                scoreLabel: t('site_wf_emp_p1_score'),
                 score: 88,
                 rows: [
-                  ['Structure', 'Role, must-haves, and screeners captured as data', 'Strong'],
-                  ['Inclusivity', 'Two biased phrases flagged and rewritten', 'Fix'],
-                  ['Visibility', 'Live on the candidate job feed', 'Active'],
+                  workflowPreviewRow(t, 'site_wf_emp_p1_r1', 'good'),
+                  workflowPreviewRow(t, 'site_wf_emp_p1_r2', 'bad'),
+                  workflowPreviewRow(t, 'site_wf_emp_p1_r3', 'warn'),
                 ],
               },
               {
-                label: 'Candidate Match Evidence',
-                scoreLabel: 'Match confidence',
+                label: t('site_wf_emp_p2_label'),
+                scoreLabel: t('site_wf_emp_p2_score'),
                 score: 84,
                 rows: [
-                  ['Evidence', 'Led checkout redesign — maps to your funnel role', 'Strong'],
-                  ['Skill gap', 'No pricing-experiment exposure', 'Medium'],
-                  ['Screeners', '4 of 5 knockout answers align', 'Strong'],
+                  workflowPreviewRow(t, 'site_wf_emp_p2_r1', 'good'),
+                  workflowPreviewRow(t, 'site_wf_emp_p2_r2', 'warn'),
+                  workflowPreviewRow(t, 'site_wf_emp_p2_r3', 'good'),
                 ],
               },
               {
-                label: 'Applicant Review Queue',
-                scoreLabel: 'Shortlist rate',
+                label: t('site_wf_emp_p3_label'),
+                scoreLabel: t('site_wf_emp_p3_score'),
                 score: 62,
                 rows: [
-                  ['New today', '12 applicants, ranked by fit evidence', 'Active'],
-                  ['Bulk actions', '5 advanced, 3 politely declined with notes', 'Strong'],
-                  ['Next round', 'Interviews proposed to top 4', 'Next'],
+                  workflowPreviewRow(t, 'site_wf_emp_p3_r1', 'warn'),
+                  workflowPreviewRow(t, 'site_wf_emp_p3_r2', 'good'),
+                  workflowPreviewRow(t, 'site_wf_emp_p3_r3', 'good'),
                 ],
               },
               {
-                label: 'Consented Outreach',
-                scoreLabel: 'Reply rate',
+                label: t('site_wf_emp_p4_label'),
+                scoreLabel: t('site_wf_emp_p4_score'),
                 score: 71,
                 rows: [
-                  ['Consent', 'Contact unlocked only after candidate accepts', 'Strong'],
-                  ['Pending', '3 outreach requests awaiting a yes', 'Active'],
-                  ['Response SLA', 'Avg first reply in 1.8 days', 'Strong'],
+                  workflowPreviewRow(t, 'site_wf_emp_p4_r1', 'good'),
+                  workflowPreviewRow(t, 'site_wf_emp_p4_r2', 'warn'),
+                  workflowPreviewRow(t, 'site_wf_emp_p4_r3', 'good'),
                 ],
               },
             ]}

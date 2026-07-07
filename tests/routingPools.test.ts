@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   candidatesForPoolTier,
   implicitFallbackCandidates,
+  pinnableKeysForModel,
   routingPoolForRoute,
   routingPoolTiers,
   selectWeightedCandidate,
@@ -112,11 +113,34 @@ describe('LLM routing pools', () => {
 
     expect(() => _testRoutingValidation.validateRoutingPools([
       { id: 'quality', label: 'Quality', enabled: true, members: [{ modelId: 'deep', keyHash: 'bad-hash', tier: 1, weight: 1, enabled: true }] },
-    ], registry)).toThrow(/unknown saved key/);
+    ], registry)).toThrow(/pins a key the router would never use/);
 
     expect(_testRoutingValidation.validateRoutingPools([
       { id: 'quality', label: 'Quality', enabled: true, members: [{ modelId: 'deep', keyHash: validHash, tier: 1, weight: 1, enabled: true }] },
     ], registry)[0].members[0].keyHash).toBe(validHash);
+  });
+
+  it('only accepts pins on keys the runtime pool would use (resolveKeyPool parity)', () => {
+    // Legacy api_key is shadowed by a non-empty api_keys pool at runtime — a
+    // pin on it must be rejected, not saved and silently skipped.
+    const shadowed: ModelEntry[] = [{ ...model('deep'), api_key: 'sk-legacy', api_keys: ['sk-pool-a'] }];
+    expect(pinnableKeysForModel(shadowed[0]).map((k) => k.key)).toEqual(['sk-pool-a']);
+    expect(() => _testRoutingValidation.validateRoutingPools([
+      { id: 'q', label: 'Q', enabled: true, members: [{ modelId: 'deep', keyHash: keyHash('sk-legacy'), tier: 1, weight: 1, enabled: true }] },
+    ], shadowed)).toThrow(/pins a key the router would never use/);
+
+    // Without an api_keys pool, the legacy api_key IS the runtime pool.
+    const legacyOnly: ModelEntry[] = [{ ...model('deep'), api_key: 'sk-legacy' }];
+    expect(_testRoutingValidation.validateRoutingPools([
+      { id: 'q', label: 'Q', enabled: true, members: [{ modelId: 'deep', keyHash: keyHash('sk-legacy'), tier: 1, weight: 1, enabled: true }] },
+    ], legacyOnly)[0].members[0].keyHash).toBe(keyHash('sk-legacy'));
+
+    // Gemini models have an empty runtime key pool — nothing is pinnable.
+    const gemini: ModelEntry[] = [{ ...model('gem'), provider: 'gemini', api_key: 'sk-gem' }];
+    expect(pinnableKeysForModel(gemini[0])).toEqual([]);
+    expect(() => _testRoutingValidation.validateRoutingPools([
+      { id: 'q', label: 'Q', enabled: true, members: [{ modelId: 'gem', keyHash: keyHash('sk-gem'), tier: 1, weight: 1, enabled: true }] },
+    ], gemini)).toThrow(/pins a key the router would never use/);
   });
 
   it('rejects custom BYOA as an explicit model fallback', () => {

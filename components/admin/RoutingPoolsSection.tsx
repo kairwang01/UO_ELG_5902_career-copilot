@@ -7,19 +7,37 @@ import ConfirmActionDialog from '../ConfirmActionDialog';
 
 const ANY_KEY_VALUE = '__any_configured_key__';
 
-const clonePools = (pools: RoutingPool[]) => pools.map((pool) => ({
+// Client-only stable identities. Server state has no uids, and identity-free
+// keys (pool.id / row index) caused real bugs: editing pool.id remounted the
+// card on every keystroke (focus loss), and index-keyed test results migrated
+// onto neighbouring rows after a delete. uids are attached on load / row
+// creation and stripped before anything is sent to the backend.
+let editorUidCounter = 0;
+const nextEditorUid = () => `u${++editorUidCounter}`;
+
+type EditableMember = RoutingPoolMember & { uid: string };
+type EditablePool = Omit<RoutingPool, 'members'> & { uid: string; members: EditableMember[] };
+
+const toEditable = (pools: RoutingPool[]): EditablePool[] => pools.map((pool) => ({
   ...pool,
-  members: pool.members.map((member) => ({ ...member })),
+  uid: nextEditorUid(),
+  members: pool.members.map((member) => ({ ...member, uid: nextEditorUid() })),
 }));
 
-const emptyPool = (index: number): RoutingPool => ({
+const toPayload = (pools: EditablePool[]): RoutingPool[] => pools.map(({ uid: _poolUid, members, ...pool }) => ({
+  ...pool,
+  members: members.map(({ uid: _memberUid, ...member }) => member),
+}));
+
+const emptyPool = (index: number): EditablePool => ({
+  uid: nextEditorUid(),
   id: `pool_${index}`,
   label: `Pool ${index}`,
   enabled: true,
   members: [],
 });
 
-const nextPoolIndex = (pools: RoutingPool[]) => {
+const nextPoolIndex = (pools: EditablePool[]) => {
   const ids = new Set(pools.map((pool) => pool.id));
   let index = pools.length + 1;
   while (ids.has(`pool_${index}`)) index += 1;
@@ -133,15 +151,17 @@ export const RoutingPoolsSection: React.FC<{
   canManage: boolean;
   onSave: (routingPools: RoutingPool[], moduleRoutes: ModuleRoutes) => Promise<void>;
 }> = ({ models, routingPools, moduleRoutes, canManage, onSave }) => {
-  const [pools, setPools] = useState<RoutingPool[]>(() => clonePools(routingPools));
+  const [pools, setPools] = useState<EditablePool[]>(() => toEditable(routingPools));
   const [routes, setRoutes] = useState<ModuleRoutes>(() => ({ ...moduleRoutes }));
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ ok?: string; err?: string } | null>(null);
-  const [poolDeleteIndex, setPoolDeleteIndex] = useState<number | null>(null);
+  // Captured at click time so the confirm dialog keeps showing the right pool
+  // name while the async delete runs (indexes shift as soon as state updates).
+  const [poolPendingDelete, setPoolPendingDelete] = useState<{ uid: string; name: string } | null>(null);
   const [memberTests, setMemberTests] = useState<Record<string, MemberTestState>>({});
 
   useEffect(() => {
-    setPools(clonePools(routingPools));
+    setPools(toEditable(routingPools));
     setRoutes({ ...moduleRoutes });
   }, [routingPools, moduleRoutes]);
 
@@ -174,7 +194,19 @@ export const RoutingPoolsSection: React.FC<{
       .map((key) => `${MODULE_ROUTE_TOOL_LABELS[key] ?? key} (${key})`)
       .join('\n');
 
-  const updatePool = (index: number, patch: Partial<RoutingPool>) => {
+  const updatePool = (index: number, patch: Partial<Pick<EditablePool, 'id' | 'label' | 'enabled'>>) => {
+    // Renaming a pool id must drag its module routes along, otherwise every
+    // route pointing at the old id goes blank and the next save is rejected
+    // server-side with "references unknown pool".
+    if (patch.id !== undefined) {
+      const oldId = pools[index]?.id;
+      const newId = patch.id;
+      if (oldId && oldId !== newId) {
+        setRoutes((prev) => Object.fromEntries(
+          Object.entries(prev).map(([routeKey, poolId]) => [routeKey, poolId === oldId ? newId : poolId]),
+        ));
+      }
+    }
     setPools((prev) => prev.map((pool, i) => (i === index ? { ...pool, ...patch } : pool)));
     setFeedback(null);
   };
@@ -190,22 +222,21 @@ export const RoutingPoolsSection: React.FC<{
     setFeedback(null);
   };
 
-  const memberTestKey = (poolIndex: number, memberIndex: number, member: RoutingPoolMember) =>
-    `${poolIndex}:${memberIndex}:${member.modelId}:${member.keyHash ?? 'any'}`;
+  // Keyed by the row's stable uid (plus what is being tested) so results never
+  // migrate onto another row after deletes/reorders, and editing the member's
+  // model or key naturally resets it to the untested state.
+  const memberTestKey = (member: EditableMember) =>
+    `${member.uid}:${member.modelId}:${member.keyHash ?? 'any'}`;
 
-  const runMemberTest = async (testKey: string, member: RoutingPoolMember) => {
+  const runMemberTest = async (testKey: string, member: EditableMember) => {
     setMemberTests((prev) => ({ ...prev, [testKey]: { state: 'running' } }));
     try {
-      const model = models.find((entry) => entry.id === member.modelId);
-      if (!model) throw new Error('Model not found.');
-      const keyIndex = member.keyHash
-        ? model.key_previews?.find((key) => key.hash === member.keyHash)?.index
-        : undefined;
-      if (member.keyHash && keyIndex === undefined) throw new Error('Saved key not found.');
-
+      // keyHash goes to the backend as-is; adminTestModel resolves it with the
+      // same pinnable-key semantics as the runtime router, so a green badge
+      // means the exact key this member will use is healthy.
       const result = await adminTestModel({
         id: member.modelId,
-        ...(keyIndex !== undefined ? { keyIndex } : {}),
+        ...(member.keyHash ? { keyHash: member.keyHash } : {}),
       });
       setMemberTests((prev) => ({ ...prev, [testKey]: { state: 'done', ...result } }));
     } catch (err) {
@@ -225,7 +256,7 @@ export const RoutingPoolsSection: React.FC<{
     if (!firstModel) return;
     setPools((prev) => prev.map((pool, i) => (
       i === poolIndex
-        ? { ...pool, members: [...pool.members, { modelId: firstModel.id, tier: 1, weight: 100, enabled: true }] }
+        ? { ...pool, members: [...pool.members, { uid: nextEditorUid(), modelId: firstModel.id, tier: 1, weight: 100, enabled: true }] }
         : pool
     )));
     setFeedback(null);
@@ -238,11 +269,11 @@ export const RoutingPoolsSection: React.FC<{
     setFeedback(null);
   };
 
-  const removePool = async (poolIndex: number) => {
-    const removedPool = pools[poolIndex];
+  const removePool = async (poolUid: string) => {
+    const removedPool = pools.find((pool) => pool.uid === poolUid);
     if (!removedPool) return;
 
-    const nextPools = pools.filter((_, i) => i !== poolIndex);
+    const nextPools = pools.filter((pool) => pool.uid !== poolUid);
     const nextPoolIds = new Set(nextPools.map((pool) => pool.id).filter(Boolean));
     const fallbackPoolId = nextPools.find((pool) => pool.id.trim())?.id;
     const nextRoutes = nextPoolIds.has(removedPool.id)
@@ -259,14 +290,16 @@ export const RoutingPoolsSection: React.FC<{
     setSaving(true);
     setFeedback(null);
     try {
-      await onSave(nextPools, nextRoutes);
-      setPoolDeleteIndex(null);
+      await onSave(toPayload(nextPools), nextRoutes);
       setFeedback({ ok: 'Routing pool deleted.' });
     } catch (err) {
       setPools(pools);
       setRoutes(routes);
       setFeedback({ err: err instanceof Error ? err.message : 'Failed to delete routing pool.' });
     } finally {
+      // Close the dialog either way — on failure the state is already reverted
+      // and the error is shown in the feedback strip, not behind a stuck modal.
+      setPoolPendingDelete(null);
       setSaving(false);
     }
   };
@@ -275,7 +308,7 @@ export const RoutingPoolsSection: React.FC<{
     setSaving(true);
     setFeedback(null);
     try {
-      await onSave(pools, routes);
+      await onSave(toPayload(pools), routes);
       setFeedback({ ok: 'Routing pools saved.' });
     } catch (err) {
       setFeedback({ err: err instanceof Error ? err.message : 'Failed to save routing pools.' });
@@ -290,7 +323,7 @@ export const RoutingPoolsSection: React.FC<{
     setSaving(true);
     setFeedback(null);
     try {
-      await onSave(nextPools, routes);
+      await onSave(toPayload(nextPools), routes);
       setFeedback({ ok: 'Routing pool added.' });
     } catch (err) {
       setPools(pools);
@@ -359,7 +392,7 @@ export const RoutingPoolsSection: React.FC<{
         ) : (
           pools.map((pool, poolIndex) => (
             <div
-              key={`${pool.id}-${poolIndex}`}
+              key={pool.uid}
               className={`relative overflow-hidden rounded-lg border shadow-sm ${POOL_CARD_TONES[poolIndex % POOL_CARD_TONES.length]}`}
             >
               <div
@@ -400,7 +433,7 @@ export const RoutingPoolsSection: React.FC<{
                 {canManage && (
                   <button
                     type="button"
-                    onClick={() => setPoolDeleteIndex(poolIndex)}
+                    onClick={() => setPoolPendingDelete({ uid: pool.uid, name: pool.label || pool.id })}
                     className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-lg border border-red-200 bg-white/80 px-3 py-2 text-sm font-semibold text-red-600 shadow-sm transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500/20"
                     aria-label={`Delete routing pool ${pool.label || pool.id}`}
                   >
@@ -427,14 +460,14 @@ export const RoutingPoolsSection: React.FC<{
                     {pool.members.map((member, memberIndex) => {
                       const model = models.find((m) => m.id === member.modelId);
                       const keyOptions = model?.key_previews ?? [];
-                      const testKey = memberTestKey(poolIndex, memberIndex, member);
+                      const testKey = memberTestKey(member);
                       const testState = memberTests[testKey];
                       const savedKeyOptions = [
                         { value: ANY_KEY_VALUE, label: 'Any configured key' },
                         ...keyOptions.map((key) => ({ value: key.hash, label: `${key.masked} (${key.hash})` })),
                       ];
                       return (
-                        <tr key={`${member.modelId}-${member.keyHash ?? 'any'}-${memberIndex}`} className={tableRow}>
+                        <tr key={member.uid} className={tableRow}>
                           <td className={tableCell}>
                             <AdminSelect
                               value={member.modelId}
@@ -556,21 +589,21 @@ export const RoutingPoolsSection: React.FC<{
         )}
       </div>
       <ConfirmActionDialog
-        open={poolDeleteIndex !== null}
+        open={poolPendingDelete !== null}
         title="Delete routing pool"
         description="Delete this routing pool? Module routes that use it will be moved to the next available pool."
-        detail={poolDeleteIndex !== null ? (pools[poolDeleteIndex]?.label || pools[poolDeleteIndex]?.id) : undefined}
+        detail={poolPendingDelete?.name}
         cancelLabel="Cancel"
         confirmLabel="Delete pool"
         loadingLabel="Deleting..."
         loading={saving}
         tone="danger"
         onOpenChange={(open) => {
-          if (!open) setPoolDeleteIndex(null);
+          if (!open && !saving) setPoolPendingDelete(null);
         }}
-        onCancel={() => setPoolDeleteIndex(null)}
+        onCancel={() => setPoolPendingDelete(null)}
         onConfirm={() => {
-          if (poolDeleteIndex !== null) removePool(poolDeleteIndex);
+          if (poolPendingDelete) removePool(poolPendingDelete.uid);
         }}
       />
     </Card>

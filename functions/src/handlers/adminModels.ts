@@ -44,7 +44,7 @@ import {
 import { logAdminAction } from "../admin/usageLog";
 import { DEFAULT_MODEL_ID, DEFAULT_MODELS } from "../llm/models";
 import { keyHash } from "../llm/keyHash";
-import { implicitFallbackCandidates } from "../llm/routingPools";
+import { implicitFallbackCandidates, pinnableKeysForModel } from "../llm/routingPools";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -171,25 +171,25 @@ function aggregateKeyHealth(
   return byModel;
 }
 
+/**
+ * Hashes a pool member may pin. Built from pinnableKeysForModel — the runtime
+ * pool's view — NOT the raw stored fields, so validation never accepts a pin
+ * the router would silently skip (gemini keys, or a legacy api_key shadowed
+ * by a non-empty api_keys pool).
+ */
 function keyHashesForModel(entry: ModelEntry): Set<string> {
-  const hashes = new Set<string>();
-  if (entry.api_key) hashes.add(keyHash(entry.api_key));
-  for (const key of entry.api_keys ?? []) hashes.add(keyHash(key));
-  return hashes;
+  return new Set(pinnableKeysForModel(entry).map((k) => keyHash(k.key)));
 }
 
 function withAdminKeyPreviews(masked: ModelEntry, raw: ModelEntry): ModelEntry {
-  const previews = [
-    ...(raw.api_key
-      ? [{ hash: keyHash(raw.api_key), masked: maskSecret(raw.api_key), index: 0, source: "api_key" as const }]
-      : []),
-    ...(raw.api_keys ?? []).map((key, index) => ({
-      hash: keyHash(key),
-      masked: maskSecret(key),
-      index,
-      source: "api_keys" as const,
-    })),
-  ];
+  // key_previews feeds the admin key picker for pool pinning — offer only keys
+  // the runtime would actually use (same source as pool validation).
+  const previews = pinnableKeysForModel(raw).map(({ key, source, index }) => ({
+    hash: keyHash(key),
+    masked: maskSecret(key),
+    index,
+    source,
+  }));
   return {
     ...masked,
     ...(raw.api_key ? { api_key_hash: keyHash(raw.api_key) } : {}),
@@ -448,7 +448,11 @@ function validateRoutingPools(rawPools: unknown, registry: ModelEntry[]): Routin
       }
       const keyHashValue = typeof m.keyHash === "string" ? m.keyHash.trim() : "";
       if (keyHashValue && !keyHashesByModel.get(modelId)?.has(keyHashValue)) {
-        throw new HttpsError("invalid-argument", `routing pool "${id}" references an unknown saved key for model "${modelId}".`);
+        throw new HttpsError(
+          "invalid-argument",
+          `routing pool "${id}" pins a key the router would never use for model "${modelId}" ` +
+            `(not a saved key, or shadowed by the model's key pool). Re-pick the key or use "Any configured key".`
+        );
       }
       return {
         modelId,

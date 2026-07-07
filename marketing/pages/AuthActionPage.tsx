@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { firebaseAuth } from '@/lib/firebaseClient';
-import { completeAuthActionFromSearch, type AuthActionOutcome } from '@/lib/auth/completeAuthAction';
+import { completeAuthActionOnce, type AuthActionOutcome } from '@/lib/auth/completeAuthAction';
 import { SITE_ROUTES } from '../../config/site';
 import { useMarketingI18n } from '../hooks/useMarketingI18n';
 
@@ -18,7 +18,9 @@ export const AuthActionPage: React.FC = () => {
   useEffect(() => {
     let active = true;
     const run = async () => {
-      const outcome = await completeAuthActionFromSearch(firebaseAuth, searchParams.toString());
+      // Memoized per link: StrictMode's double effect and same-tab revisits
+      // share one applyActionCode call instead of consuming the code twice.
+      const outcome = await completeAuthActionOnce(firebaseAuth, searchParams.toString());
       if (active) setView({ phase: 'done', outcome });
     };
     void run();

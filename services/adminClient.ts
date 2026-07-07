@@ -525,7 +525,7 @@ export interface TestModelResult {
 }
 
 export type TestModelInput =
-  | { id: string; keyIndex?: number }
+  | { id: string; keyIndex?: number; keyHash?: string }
   | {
       config: {
         provider: 'gemini' | 'openai-compatible';

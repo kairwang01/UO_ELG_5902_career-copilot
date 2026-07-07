@@ -49,6 +49,34 @@ export function selectWeightedCandidate<T extends { member: { weight: number } }
   return candidates[candidates.length - 1] ?? null;
 }
 
+export interface PinnableKey {
+  key: string;
+  source: "api_key" | "api_keys";
+  /** Position within the runtime key pool (post-filter), NOT the raw stored array. */
+  index: number;
+}
+
+/**
+ * The saved keys a routing-pool member may pin via keyHash. MUST mirror the
+ * runtime pool in models.ts#resolveKeyPool so that admin previews, pool
+ * validation, and connectivity tests all describe keys the router will
+ * actually use: gemini models expose none (their runtime pool is empty), a
+ * non-empty api_keys pool shadows the legacy api_key entirely, and builtin
+ * platform keys are excluded (they have no admin-visible preview; leave the
+ * member unpinned to use them).
+ */
+export function pinnableKeysForModel(entry: ModelEntry): PinnableKey[] {
+  if (entry.provider === "gemini") return [];
+  const pooled = (entry.api_keys ?? []).filter((k) => k.trim().length > 0);
+  if (pooled.length > 0) {
+    return pooled.map((key, index) => ({ key, source: "api_keys" as const, index }));
+  }
+  if (entry.api_key && entry.api_key.trim()) {
+    return [{ key: entry.api_key, source: "api_key" as const, index: 0 }];
+  }
+  return [];
+}
+
 export function implicitFallbackCandidates(
   allowedModels: ModelEntry[],
   chosenId: string,
