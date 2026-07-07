@@ -370,7 +370,7 @@ function validateModuleRoutes(rawRoutes: unknown, pools: RoutingPool[]): ModuleR
  */
 export const adminListModelsFunction = onCall({ invoker: "public" }, async (request) => {
   await requireRole(request, "reviewer");
-  await ensurePlatformCaches();
+  await refreshPlatformCaches();
 
   // Fetch key health docs best-effort. The collection holds one doc per model id
   // (document id === model id). Missing docs → no health data for that model.

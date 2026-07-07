@@ -351,8 +351,8 @@ export const normalizeModelRouting = (
   routingPools?: RoutingPool[],
   moduleRoutes?: ModuleRoutes,
 ) => ({
-  routingPools: routingPools && routingPools.length > 0 ? routingPools : defaultRoutingPoolsForModels(models),
-  moduleRoutes: { ...DEFAULT_MODULE_ROUTES, ...(moduleRoutes ?? {}) },
+  routingPools: routingPools ?? defaultRoutingPoolsForModels(models),
+  moduleRoutes: moduleRoutes ?? { ...DEFAULT_MODULE_ROUTES },
 });
 
 export const adminListModels = () =>

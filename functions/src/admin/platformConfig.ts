@@ -285,15 +285,12 @@ export function getModelRegistry(): ModelEntry[] {
 
 export function getRoutingPools(): RoutingPool[] {
   const pools = modelsCache?.routing_pools;
-  if (Array.isArray(pools) && pools.length > 0) return cloneRoutingPools(pools);
+  if (Array.isArray(pools)) return cloneRoutingPools(pools);
   return defaultRoutingPoolsForRegistry(getModelRegistry());
 }
 
 export function getModuleRoutes(): ModuleRoutes {
-  return {
-    ...DEFAULT_MODULE_ROUTES,
-    ...(modelsCache?.module_routes ?? {}),
-  };
+  return modelsCache?.module_routes ? { ...modelsCache.module_routes } : { ...DEFAULT_MODULE_ROUTES };
 }
 
 /** Admin-safe view: api_key and api_keys replaced with masked previews. */
