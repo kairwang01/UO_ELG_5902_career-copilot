@@ -897,6 +897,13 @@ export async function resolveProvider(
     tier === "paid" && autoOption ? [...allowed, autoOption] : allowed;
   const allowedIds = new Set(allowedWithAuto.map((m) => m.id));
 
+  // Module routing pools take precedence over requestedModelId. This is safe
+  // ONLY because model routing is platform-managed: the client's aiClient
+  // discards every user pick except the business BYOA sentinel "custom"
+  // (handled above, before this point) and always sends the platform default.
+  // If a real per-user model picker is ever reintroduced, an explicit concrete
+  // pick must bypass the pool here — otherwise the user's choice is silently
+  // ignored.
   const routePool = routingPoolForRoute(routeKey, getModuleRoutes(), getRoutingPools());
   if (routePool) {
     const hasUsableCandidate = routingPoolTiers(routePool).some((poolTier) =>
