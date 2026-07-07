@@ -44,6 +44,15 @@ const POOL_CARD_TONES = [
   'border-cyan-200 bg-cyan-50/70 shadow-cyan-100/70',
 ];
 
+const POOL_NUMBER_TONES = [
+  'text-sky-400/35',
+  'text-orange-400/35',
+  'text-emerald-400/35',
+  'text-violet-400/35',
+  'text-rose-400/35',
+  'text-cyan-400/35',
+];
+
 type AdminSelectOption = {
   value: string;
   label: string;
@@ -73,14 +82,14 @@ const AdminSelect: React.FC<{
           position="popper"
           sideOffset={6}
           collisionPadding={8}
-          className="z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5"
+          className="z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl ring-1 ring-black/5"
         >
           <Select.Viewport className="p-1">
             {options.map((option) => (
               <Select.Item
                 key={option.value}
                 value={option.value}
-                className="relative flex cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-3 text-sm text-gray-700 outline-none data-[highlighted]:bg-blue-50 data-[highlighted]:text-blue-800"
+                className="relative flex cursor-pointer select-none items-center rounded-md py-2 pl-8 pr-3 text-sm text-gray-700 outline-none data-[highlighted]:bg-blue-50 data-[highlighted]:text-blue-800"
               >
                 <Select.ItemIndicator className="absolute left-2 inline-flex items-center">
                   <Check className="h-4 w-4" />
@@ -238,6 +247,36 @@ export const RoutingPoolsSection: React.FC<{
         {canManage && <SaveButton onClick={save} loading={saving} label="Save routing" />}
       </div>
 
+      <div className="border-b border-gray-200 border-l-4 border-l-sky-500 bg-sky-50/70 px-5 py-4">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <SectionHeading>Module routes</SectionHeading>
+          </div>
+          <span className="w-fit rounded-md border border-sky-200 bg-white/80 px-2 py-1 text-xs font-medium text-sky-700">
+            {routeRows.length} routes
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {routeRows.map((route) => (
+            <label key={route.key} className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-700">{route.label}</span>
+              <AdminSelect
+                value={routes[route.key]}
+                disabled={!canManage}
+                options={routePoolOptions}
+                placeholder="Select pool"
+                onChange={(value) => {
+                  setRoutes((prev) => ({ ...prev, [route.key]: value }));
+                  setFeedback(null);
+                }}
+              />
+            </label>
+          ))}
+        </div>
+        {feedback?.ok && <p className="mt-3 text-xs font-medium text-emerald-700">{feedback.ok}</p>}
+        {feedback?.err && <p className="mt-3 text-xs font-medium text-red-600">{feedback.err}</p>}
+      </div>
+
       <div className="space-y-5 p-5">
         {pools.length === 0 ? (
           <EmptyState message="No routing pools configured." />
@@ -245,9 +284,15 @@ export const RoutingPoolsSection: React.FC<{
           pools.map((pool, poolIndex) => (
             <div
               key={`${pool.id}-${poolIndex}`}
-              className={`overflow-hidden rounded-xl border shadow-sm ${POOL_CARD_TONES[poolIndex % POOL_CARD_TONES.length]}`}
+              className={`relative overflow-hidden rounded-lg border shadow-sm ${POOL_CARD_TONES[poolIndex % POOL_CARD_TONES.length]}`}
             >
-              <div className="grid gap-3 border-b border-white/70 bg-white/45 p-4 sm:grid-cols-[1fr_1fr_auto_auto]">
+              <div
+                aria-hidden="true"
+                className={`pointer-events-none absolute right-7 top-2 select-none text-[6.5rem] font-black leading-none ${POOL_NUMBER_TONES[poolIndex % POOL_NUMBER_TONES.length]} sm:right-10 sm:top-1 sm:text-[8rem]`}
+              >
+                {String(poolIndex + 1).padStart(2, '0')}
+              </div>
+              <div className="relative grid gap-3 border-b border-white/70 bg-white/45 p-4 sm:grid-cols-[1fr_1fr_auto_auto]">
                 <div>
                   <FieldLabel htmlFor={`pool-id-${poolIndex}`}>Pool id</FieldLabel>
                   <input
@@ -290,7 +335,7 @@ export const RoutingPoolsSection: React.FC<{
                 )}
               </div>
 
-              <div className="overflow-x-auto bg-white/60">
+              <div className="relative overflow-x-auto bg-white/60">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-white/70">
@@ -379,7 +424,7 @@ export const RoutingPoolsSection: React.FC<{
                 </table>
               </div>
               {canManage && (
-                <div className="border-t border-white/70 bg-white/45 px-4 py-3">
+                <div className="relative border-t border-white/70 bg-white/45 px-4 py-3">
                   <button
                     type="button"
                     onClick={() => addMember(poolIndex)}
@@ -404,29 +449,6 @@ export const RoutingPoolsSection: React.FC<{
             {saving ? 'Adding...' : 'Add pool'}
           </button>
         )}
-      </div>
-
-      <div className="border-t border-gray-200 px-5 py-4">
-        <SectionHeading>Module routes</SectionHeading>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {routeRows.map((route) => (
-            <label key={route.key} className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-600">{route.label}</span>
-              <AdminSelect
-                value={routes[route.key]}
-                disabled={!canManage}
-                options={routePoolOptions}
-                placeholder="Select pool"
-                onChange={(value) => {
-                  setRoutes((prev) => ({ ...prev, [route.key]: value }));
-                  setFeedback(null);
-                }}
-              />
-            </label>
-          ))}
-        </div>
-        {feedback?.ok && <p className="mt-3 text-xs text-emerald-700">{feedback.ok}</p>}
-        {feedback?.err && <p className="mt-3 text-xs text-red-600">{feedback.err}</p>}
       </div>
       <ConfirmActionDialog
         open={poolDeleteIndex !== null}
