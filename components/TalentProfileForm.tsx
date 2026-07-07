@@ -111,15 +111,6 @@ const isValidIsoDate = (value: string): boolean => {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 };
 
-const isValidHttpUrl = (value: string): boolean => {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
-
 const collectValidationIssues = (profile: TalentProfile): ValidationIssue[] => {
   const issues: ValidationIssue[] = [];
   const email = typeof profile.basic.email === 'string' ? profile.basic.email.trim() : '';
@@ -146,9 +137,6 @@ const collectValidationIssues = (profile: TalentProfile): ValidationIssue[] => {
         const path = `${section.id}.${index}.${field.key}`;
         if (field.type === 'date' && typeof value === 'string' && value.trim() && !isValidIsoDate(value.trim())) {
           issues.push({ path, message: 'Use YYYY-MM-DD.' });
-        }
-        if ((field.key === 'url' || field.key === 'link') && typeof value === 'string' && value.trim() && !isValidHttpUrl(value.trim())) {
-          issues.push({ path, message: 'Use a full http:// or https:// link.' });
         }
       });
 

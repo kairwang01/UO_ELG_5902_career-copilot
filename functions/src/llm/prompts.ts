@@ -236,7 +236,7 @@ STRICT RULES:
   * languages — spoken/written human languages (e.g. "English (Native)", "French").
   Each group is an array of short skill names; do not duplicate a skill across groups.
 - awards: name, type (e.g. Scholarship, Competition), date (year), organization.
-- portfolio: any links the resume lists (GitHub, personal site, portfolio) — each with a short title and the url.
+- portfolio: any links the resume lists (GitHub, personal site, portfolio) — each with a short title and the url. If a resume shows a web/domain-style link without a scheme, output it with https:// (for example, "github.com/name" -> "https://github.com/name"). Do not invent missing links.
 - additional.overallStrengths: a neutral 1-2 sentence summary of the candidate's strengths, grounded only in the resume.
 
 RESUME:
