@@ -9,6 +9,7 @@ import {
   type QualityCopyFn,
   type QualityValidationStatus,
   useQualityGateCopy,
+  hasFinishedEnding,
 } from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
@@ -85,7 +86,7 @@ export const assessNetworkingStrategy = (result: SavedNetworkingStrategy | null 
     } else if (countWords(strategy) < 35) {
       issues.push('thin_strategy');
     }
-    if (!/[.!?。！？]\s*$/.test(strategy)) issues.push('unfinished_strategy');
+    if (!hasFinishedEnding(strategy)) issues.push('unfinished_strategy');
   }
 
   contacts.forEach((contact) => {
@@ -112,7 +113,7 @@ export const assessNetworkingStrategy = (result: SavedNetworkingStrategy | null 
         issues.push('thin_outreach');
       }
       if (!hasCjkText(message) && messageWords > 130) issues.push('long_outreach');
-      if (!/[.!?。！？]\s*$/.test(message)) issues.push('unfinished_outreach');
+      if (!hasFinishedEnding(message)) issues.push('unfinished_outreach');
     }
   });
 

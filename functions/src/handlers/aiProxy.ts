@@ -23,6 +23,7 @@ import {
   candidateAnalysisLanguageProtocol,
   employerAnalysisLanguageProtocol,
 } from "../llm/languageProtocol";
+import { correctiveInstruction } from "../llm/draftQuality";
 import { meterToolRun, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
@@ -175,6 +176,32 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
       if (languageBlock) fallbackRequest.prompt = `${fallbackRequest.prompt}\n\n${languageBlock}`;
       result = await provider.generate(fallbackRequest);
       notice = spec.quotaFallbackNotice;
+    }
+
+    // Internal second-pass review (ToolSpec.qualityCheck): when the parsed
+    // draft would trip the client's export gate, retry ONCE with a corrective
+    // instruction inside the same charged call. Users get a finished draft on
+    // the first click instead of "Fix this draft before exporting".
+    if (spec.qualityCheck) {
+      const firstParsed = result.raw !== undefined ? result.raw : tryParseJson(result.text);
+      const issues = spec.qualityCheck(firstParsed);
+      if (issues.length > 0) {
+        console.warn(`[aiProxy] ${tool} draft failed review (${issues.join(",")}) — retrying once`);
+        try {
+          const retryRequest = {
+            ...llmRequest,
+            prompt: `${llmRequest.prompt}\n\n${correctiveInstruction(issues)}`,
+          };
+          const retryResult = await provider.generate(retryRequest);
+          const retryParsed = retryResult.raw !== undefined ? retryResult.raw : tryParseJson(retryResult.text);
+          if (spec.qualityCheck(retryParsed).length < issues.length) {
+            result = retryResult;
+          }
+        } catch {
+          // Retry is best-effort — keep the first draft; the client gate
+          // remains the final safety net.
+        }
+      }
     }
 
     const data = addNotice(

@@ -7,6 +7,7 @@ import {
   type QualityCopyFn,
   type QualityValidationStatus,
   useQualityGateCopy,
+  hasFinishedEnding,
 } from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
@@ -52,7 +53,7 @@ export const assessEmailDraft = (subject: string, body: string): EmailValidation
     issues.push('template_language');
   }
 
-  if (normalizedBody && !/[.!?。！？]\s*$/.test(normalizedBody)) issues.push('unfinished_ending');
+  if (normalizedBody && !hasFinishedEnding(normalizedBody)) issues.push('unfinished_ending');
   if (!hasCjkText(normalizedBody) && bodyWordCount > 260) issues.push('too_long');
 
   const uniqueIssues = Array.from(new Set(issues));

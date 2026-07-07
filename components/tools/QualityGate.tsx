@@ -3,6 +3,18 @@ import { AlertTriangle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useLocalization } from '../../hooks/useLocalization';
 
+/**
+ * Finished-sentence check that works across output languages: terminal
+ * punctuation (Latin, CJK, Arabic, Devanagari…) optionally followed by closing
+ * quotes/brackets or markdown emphasis. Mirrors functions/src/llm/draftQuality.ts.
+ */
+export const hasFinishedEnding = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  const stripped = trimmed.replace(/["'\u201d\u2019\u00bb\u203a\u300d\u300f\u3009\u300b)\]}*_`\s]+$/u, '');
+  return /[.!?\u3002\uff01\uff1f\u2026\u061f\u06d4\u0964]$/u.test(stripped);
+};
+
 export type QualityValidationStatus = 'ok' | 'warn' | 'needs_regen';
 
 export interface QualityValidationLike {

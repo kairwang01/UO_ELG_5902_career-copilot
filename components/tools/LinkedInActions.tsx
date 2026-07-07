@@ -8,6 +8,7 @@ import {
   type QualityCopyFn,
   type QualityValidationStatus,
   useQualityGateCopy,
+  hasFinishedEnding,
 } from './QualityGate';
 import { DownloadButtons } from './ToolUtils';
 
@@ -73,7 +74,7 @@ export const assessLinkedInOptimization = (result: Partial<LinkedInOptimization>
     } else if (countWords(summary) < 55) {
       issues.push('thin_summary');
     }
-    if (!/[.!?。！？]\s*$/.test(summary)) issues.push('unfinished_summary');
+    if (!hasFinishedEnding(summary)) issues.push('unfinished_summary');
   }
 
   if (suggestionBodies.length > 0) {

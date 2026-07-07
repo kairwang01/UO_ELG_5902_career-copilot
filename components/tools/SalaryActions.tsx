@@ -9,6 +9,7 @@ import {
   type QualityCopyFn,
   type QualityValidationStatus,
   useQualityGateCopy,
+  hasFinishedEnding,
 } from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
@@ -110,7 +111,7 @@ export const assessSalaryNegotiation = (result: SalaryDraft | null | undefined):
     } else if (countWords(marketAnalysis) < 30) {
       issues.push('thin_market_analysis');
     }
-    if (!/[.!?。！？]\s*$/.test(marketAnalysis)) issues.push('unfinished_market_analysis');
+    if (!hasFinishedEnding(marketAnalysis)) issues.push('unfinished_market_analysis');
   }
 
   strategy.forEach((step) => {
@@ -128,7 +129,7 @@ export const assessSalaryNegotiation = (result: SalaryDraft | null | undefined):
     } else if (emailWords < 55) {
       issues.push('thin_email');
     }
-    if (!/[.!?。！？]\s*$/.test(email)) issues.push('unfinished_email');
+    if (!hasFinishedEnding(email)) issues.push('unfinished_email');
     if (!hasCjkText(email) && emailWords > 320) issues.push('long_email');
   }
 

@@ -17,6 +17,7 @@ import { meterToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
 import { coverLetterLanguageProtocol } from "../llm/languageProtocol";
+import { correctiveInstruction, proseDraftIssues } from "../llm/draftQuality";
 import { ensurePlatformCaches } from "../config/env";
 
 interface GenerateCoverLetterRequest {
@@ -81,10 +82,35 @@ export const generateCoverLetterFunction = onCall({ invoker: "public", timeoutSe
     // resolveProvider builds the provider (and reads the API key) — keep it inside
     // the try so a missing-key/build failure also triggers the refund below.
     const provider = await resolveProvider(uid, (request.data as { model?: string })?.model, "generateCoverLetter");
-    const result = await provider.generate({
+    let result = await provider.generate({
       prompt,
       responseSchema: COVER_LETTER_SCHEMA,
     });
+
+    // Internal second-pass review: if the draft would trip the client's export
+    // gate (unfinished/placeholder/too short), retry ONCE with a corrective
+    // instruction — same charged call, so the user isn't billed twice and
+    // almost never sees "Fix this draft before exporting".
+    const firstIssues = proseDraftIssues((result.raw as CoverLetter | undefined)?.letter, {
+      minWords: 90,
+      minCjkChars: 220,
+    });
+    if (firstIssues.length > 0) {
+      console.warn(`[coverLetter] draft failed review (${firstIssues.join(",")}) — retrying once`);
+      try {
+        const retry = await provider.generate({
+          prompt: `${prompt}\n\n${correctiveInstruction(firstIssues)}`,
+          responseSchema: COVER_LETTER_SCHEMA,
+        });
+        const retryIssues = proseDraftIssues((retry.raw as CoverLetter | undefined)?.letter, {
+          minWords: 90,
+          minCjkChars: 220,
+        });
+        if (retryIssues.length < firstIssues.length) result = retry;
+      } catch {
+        // Keep the first draft; the client gate remains the final safety net.
+      }
+    }
 
     return result.raw as CoverLetter;
   } catch (err) {

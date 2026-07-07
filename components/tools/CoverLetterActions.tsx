@@ -7,6 +7,7 @@ import {
   type QualityCopyFn,
   type QualityValidationStatus,
   useQualityGateCopy,
+  hasFinishedEnding,
 } from './QualityGate';
 import { CopyButton, DownloadButtons } from './ToolUtils';
 
@@ -47,7 +48,7 @@ export const assessCoverLetterDraft = (text: string): CoverLetterValidation => {
   }
 
   if (paragraphs.length < 3) issues.push('thin_structure');
-  if (!/[.!?。！？]\s*$/.test(normalized)) issues.push('unfinished_ending');
+  if (!hasFinishedEnding(normalized)) issues.push('unfinished_ending');
   if (!hasCjkText(normalized) && wordCount > 520) issues.push('too_long');
 
   const blockingIssues = issues.filter((issue) => issue !== 'too_long');

@@ -20,6 +20,7 @@
 import { Type } from "@google/genai";
 import { LLMRequest } from "./LLMProvider";
 import { buildPrompt } from "./prompts";
+import { proseDraftIssues } from "./draftQuality";
 import { getOpportunityUseGoogleSearch } from "../config/env";
 
 export interface ToolSpec {
@@ -27,6 +28,13 @@ export interface ToolSpec {
   creditKey: string | null;
   /** Pure payload → LLMRequest builder. */
   build: (payload: any) => LLMRequest; // eslint-disable-line @typescript-eslint/no-explicit-any
+  /**
+   * Blocking-defect detector for the PARSED tool output (issue slugs, empty =
+   * ship). When set, aiProxy retries once with a corrective instruction inside
+   * the same charged call before returning — the internal second-pass review
+   * behind the client's "Fix this draft before exporting" gate.
+   */
+  qualityCheck?: (parsed: any) => string[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   quotaFallback?: (payload: any) => LLMRequest; // eslint-disable-line @typescript-eslint/no-explicit-any
   quotaFallbackNotice?: string;
 }
@@ -163,6 +171,19 @@ const TALENT_PROFILE_EXTRACT_SCHEMA = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Draft quality checks (see ToolSpec.qualityCheck) — mirror the client export
+// gates so a failing draft is repaired server-side before the user sees it.
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const field = (parsed: any, key: string): string | undefined =>
+  parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>)[key] as string | undefined : undefined;
+
+const prefixed = (prefix: string, issues: string[]): string[] =>
+  issues.map((issue) => `${prefix}:${issue}`);
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export const TOOL_REGISTRY: Record<string, ToolSpec> = {
   // Free convenience: auto-fill the candidate's OWN Talent Profile from their resume.
   extractTalentProfile: {
@@ -194,6 +215,7 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
 
   convertResumeFormat: {
     creditKey: "resume-formatter",
+    qualityCheck: (parsed) => prefixed("draft", proseDraftIssues(field(parsed, "formattedText"), { minWords: 120, minCjkChars: 300 })),
     build: (p) => ({
       prompt: buildPrompt("convertResumeFormat", {
         marketName: p.marketName,
@@ -271,6 +293,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
 
   optimizeLinkedInProfile: {
     creditKey: "linkedin-optimizer",
+    qualityCheck: (parsed) => [
+      ...prefixed("headline", proseDraftIssues(field(parsed, "headline"), { requireEnding: false })),
+      ...prefixed("summary", proseDraftIssues(field(parsed, "summary"), { minWords: 40, minCjkChars: 100 })),
+    ],
     build: (p) => ({
       prompt: buildPrompt("optimizeLinkedInProfile", {
         marketName: p.marketName,
@@ -282,6 +308,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
 
   optimizeLinkedInProfileFromText: {
     creditKey: "linkedin-optimizer",
+    qualityCheck: (parsed) => [
+      ...prefixed("headline", proseDraftIssues(field(parsed, "headline"), { requireEnding: false })),
+      ...prefixed("summary", proseDraftIssues(field(parsed, "summary"), { minWords: 40, minCjkChars: 100 })),
+    ],
     build: (p) => ({
       prompt: buildPrompt("optimizeLinkedInProfileFromText", {
         profileText: p.profileText,
@@ -346,6 +376,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
 
   generateSalaryNegotiationStrategy: {
     creditKey: "salary-negotiation",
+    qualityCheck: (parsed) => [
+      ...prefixed("analysis", proseDraftIssues(field(parsed, "marketAnalysisSummary"), { minWords: 30, minCjkChars: 80 })),
+      ...prefixed("email", proseDraftIssues(field(parsed, "counterOfferEmailDraft"), { minWords: 60, minCjkChars: 150 })),
+    ],
     build: (p) => ({
       prompt: buildPrompt("generateSalaryNegotiationStrategy", {
         jobTitle: p.jobTitle,
@@ -550,6 +584,10 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
 
   generateProfessionalEmail: {
     creditKey: "email-crafter",
+    qualityCheck: (parsed) => [
+      ...prefixed("subject", proseDraftIssues(field(parsed, "subject"), { requireEnding: false })),
+      ...prefixed("body", proseDraftIssues(field(parsed, "body"), { minWords: 30, minCjkChars: 80 })),
+    ],
     build: (p) => ({
       prompt: buildPrompt("generateProfessionalEmail", {
         scenario: p.scenario,
@@ -736,6 +774,7 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
 
   generateNetworkingStrategy: {
     creditKey: "networking-assistant",
+    qualityCheck: (parsed) => prefixed("strategy", proseDraftIssues(field(parsed, "strategySummary"), { minWords: 30, minCjkChars: 80 })),
     build: (p) => ({
       prompt: buildPrompt("generateNetworkingStrategy", {
         resumeText: p.resumeText,
