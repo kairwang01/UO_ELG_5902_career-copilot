@@ -480,12 +480,12 @@ export interface ApplicationStatusHistoryEvent {
  * match analysis. Resume text stays on the server (clients are rules-blocked
  * from reading other profiles); viewing applicants is free (no wallet unlock).
  */
-export const listJobApplicants = (jobId: string): Promise<ListJobApplicantsResult> =>
+export const listJobApplicants = (jobId: string, options: { includeAnalysis?: boolean } = {}): Promise<ListJobApplicantsResult> =>
   callDedicated(async () => {
-    const fn = httpsCallable<{ jobId: string }, ListJobApplicantsResult>(firebaseFunctions, 'listJobApplicants', { timeout: 190_000 });
-    const res = await fn({ jobId });
+    const fn = httpsCallable<{ jobId: string; includeAnalysis?: boolean }, ListJobApplicantsResult>(firebaseFunctions, 'listJobApplicants', { timeout: 190_000 });
+    const res = await fn({ jobId, ...options });
     return res.data;
-  });
+  }, `listJobApplicants:${jobId}:${options.includeAnalysis !== false ? 'analysis' : 'basic'}`);
 
 export const updateApplicationStatus = (
   applicationId: string,

@@ -1369,6 +1369,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
     const { addToast } = useToast();
     const [loading, setLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState(t('applicant_funnel_loading_initial'));
+    const [analysisLoading, setAnalysisLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
     const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
@@ -1393,6 +1394,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
     // Run token for the resume-view fetch: opening another applicant's resume (or closing)
     // supersedes an in-flight load so applicant A's resume can't paint under applicant B.
     const resumeViewRunRef = useRef(0);
+    const fetchRunRef = useRef(0);
     const mountedRef = useRef(true);
     const downloadingResumeRef = useRef<string | null>(null);
     const savingApplicantIdsRef = useRef(new Set<string>());
@@ -1403,6 +1405,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
         return () => {
             mountedRef.current = false;
             resumeViewRunRef.current += 1;
+            fetchRunRef.current += 1;
             downloadingResumeRef.current = null;
             savingApplicantIdsRef.current.clear();
             bulkSavingRef.current = false;
@@ -1539,34 +1542,58 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
     // "Filters" disclosure to keep the rail card-first; tiles + search + sort stay visible.
     const [filtersOpen, setFiltersOpen] = useState(false);
 
+    const applyApplicantResult = useCallback((result: JobApplicant[], resetSelection: boolean) => {
+        const next = normalizeApplicantsForFunnel(result);
+        setApplicants(next);
+        if (resetSelection) {
+            setSelectedApplicantIds(new Set());
+            setSelectedApplicant(null);
+            return;
+        }
+        setSelectedApplicant((current) => current ? next.find((applicant) => applicant.id === current.id) ?? null : null);
+    }, []);
+
     const fetchApplicants = useCallback(async () => {
+        const runId = ++fetchRunRef.current;
+        let showedBasic = false;
         try {
             setLoading(true);
+            setAnalysisLoading(false);
             setError(null);
-            setLoadingMessage(t('applicant_funnel_loading_analyzing'));
+            setLoadingMessage(t('applicant_funnel_loading_initial'));
 
-            // Single server-side call: reads applications + resumes with the Admin
-            // SDK, runs the match analysis on the server, and returns safe fields
-            // only (already sorted by match score). Resumes never reach the browser.
-            const { applicants: result } = await listJobApplicants(job.id);
+            // First paint: read applications, candidate names, Talent Profiles,
+            // status history, and screener answers. Skip AI so the review UI opens fast.
+            const { applicants: basicResult } = await listJobApplicants(job.id, { includeAnalysis: false });
 
-            if (!mountedRef.current) return;
-            setApplicants(normalizeApplicantsForFunnel(result));
-            setSelectedApplicantIds(new Set());
+            if (!mountedRef.current || fetchRunRef.current !== runId) return;
+            applyApplicantResult(basicResult, true);
+            showedBasic = true;
             // Don't auto-spotlight the top AI-scored applicant (result is score-sorted) —
             // let the selection effect pick filteredApplicants[0], i.e. the chronologically
             // newest under the default 'newest' sort, consistent with the advisory-not-
             // automated-ranking compliance posture.
-            setSelectedApplicant(null);
+            setLoading(false);
+            setLoadingMessage('');
+
+            if (basicResult.length === 0) return;
+
+            setAnalysisLoading(true);
+            const { applicants: analyzedResult } = await listJobApplicants(job.id, { includeAnalysis: true });
+            if (!mountedRef.current || fetchRunRef.current !== runId) return;
+            applyApplicantResult(analyzedResult, false);
         } catch (err) {
-            if (mountedRef.current) setError(err instanceof Error ? err.message : t('applicant_funnel_load_error'));
+            if (mountedRef.current && fetchRunRef.current === runId && !showedBasic) {
+                setError(err instanceof Error ? err.message : t('applicant_funnel_load_error'));
+            }
         } finally {
-            if (mountedRef.current) {
+            if (mountedRef.current && fetchRunRef.current === runId) {
                 setLoading(false);
+                setAnalysisLoading(false);
                 setLoadingMessage('');
             }
         }
-    }, [job.id, t]);
+    }, [applyApplicantResult, job.id, t]);
 
     useEffect(() => {
         fetchApplicants();
@@ -2071,6 +2098,12 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                     <span>{t('applicant_funnel_refresh')}</span>
                 </button>
             </div>
+            {analysisLoading && (
+                <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
+                    <RotateCcw className="h-4 w-4 animate-spin" />
+                    <span>{t('applicant_funnel_loading_analyzing')}</span>
+                </div>
+            )}
 
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
                 {statusUpdateError && (

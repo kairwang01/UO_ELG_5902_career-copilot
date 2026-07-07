@@ -134,8 +134,9 @@ function emptyApplicant(
 export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (request) => {
   const uid = requireAuth(request);
 
-  const raw = (request.data ?? {}) as { jobId?: unknown };
+  const raw = (request.data ?? {}) as { jobId?: unknown; includeAnalysis?: unknown };
   const jobId = typeof raw.jobId === "string" ? raw.jobId.trim() : "";
+  const includeAnalysis = raw.includeAnalysis !== false;
   if (!jobId) {
     throw new HttpsError("invalid-argument", "jobId is required.");
   }
@@ -291,6 +292,16 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
     const live = liveNameById.get(a.candidate_id);
     const stale = !a.candidate_name.trim() || a.candidate_name.includes("@");
     if (stale && live) a.candidate_name = live;
+  }
+
+  if (!includeAnalysis) {
+    return {
+      applicants: applications.map((a) => emptyApplicant(
+        a,
+        talentProfileById.get(a.candidate_id) ?? null,
+        statusHistoryByAppId.get(a.application_id) ?? [],
+      )),
+    };
   }
 
   // 4. Run analyzeCandidateMatch per applicant ON THE SERVER. Applicants without
