@@ -28,6 +28,27 @@ function isExpiredOrInvalidCode(err: unknown): boolean {
   );
 }
 
+/**
+ * Memoized wrapper — ONE apply per link for the lifetime of the tab.
+ *
+ * applyActionCode consumes the oobCode server-side, so it must run exactly
+ * once per link even when the caller's effect fires twice (React StrictMode
+ * dev double-invoke) or the user revisits the same URL in this tab: the
+ * second call would get auth/invalid-action-code and the page would show
+ * "link expired" for a verification that actually succeeded.
+ */
+const inflightBySearch = new Map<string, Promise<AuthActionOutcome>>();
+
+export function completeAuthActionOnce(auth: Auth, search: string): Promise<AuthActionOutcome> {
+  const key = search.startsWith('?') ? search.slice(1) : search;
+  let pending = inflightBySearch.get(key);
+  if (!pending) {
+    pending = completeAuthActionFromSearch(auth, search);
+    inflightBySearch.set(key, pending);
+  }
+  return pending;
+}
+
 /** Complete a Firebase email action from the query string on /auth/action. */
 export async function completeAuthActionFromSearch(
   auth: Auth,
