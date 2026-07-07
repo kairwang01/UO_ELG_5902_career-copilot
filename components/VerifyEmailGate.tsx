@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MailCheck, RefreshCw, LogOut } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { firebaseAuth } from '@/lib/firebaseClient';
-import { mapVerificationEmailError, sendAccountVerificationEmail } from '@/lib/auth/sendVerificationEmail';
+import { mapVerificationEmailError, sendAccountVerificationEmail, wasVerificationEmailDispatchedRecently } from '@/lib/auth/sendVerificationEmail';
 
 interface VerifyEmailGateProps {
   email: string | null;
@@ -50,7 +50,9 @@ export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t }) =>
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
-      setError(mapVerificationEmailError(message, t));
+      const code = err && typeof err === 'object' && 'code' in err ? String((err as { code: string }).code) : '';
+      if (import.meta.env.DEV) console.warn('VerifyEmailGate send failed:', code || message, err);
+      setError(mapVerificationEmailError(message, t, code));
       return false;
     } finally {
       setSending(false);
@@ -63,8 +65,13 @@ export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t }) =>
     // Auto-send once when the gate opens so recruiters are not stuck with no mail.
     if (initialSendStartedRef.current) return;
     initialSendStartedRef.current = true;
+    if (wasVerificationEmailDispatchedRecently()) {
+      setNotice(t('verify_gate_resent'));
+      startCooldown();
+      return;
+    }
     void sendVerification({ startCooldown: true });
-  }, [sendVerification]);
+  }, [sendVerification, startCooldown, t]);
 
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
