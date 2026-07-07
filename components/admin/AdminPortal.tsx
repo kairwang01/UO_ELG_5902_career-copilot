@@ -78,6 +78,7 @@ import { LlmProviderIcon } from './LlmProviderIcon';
 import Avatar from '../Avatar';
 import { ToastProvider } from '../Toast';
 import ConfirmActionDialog from '../ConfirmActionDialog';
+import { ViewportAwareDialog } from '../ViewportAwareDialog';
 
 // Minimal i18n stub ? keys returned in StructuredOutput.
 const STRINGS: Record<string, string> = {
@@ -1803,6 +1804,13 @@ const AdminPortal: React.FC = () => {
     });
   };
 
+  const closeModelForm = () => {
+    if (modelSaving) return;
+    setModelForm(null);
+    setError(null);
+    setTest('__form__', { state: 'idle' });
+  };
+
   /** Open the add/edit form, seeding controlled fields from entry (or blank for new). */
   const openModelForm = (entry: ModelEntry | 'new') => {
     if (entry === 'new') {
@@ -2646,21 +2654,33 @@ const AdminPortal: React.FC = () => {
                 )}
               </div>
 
-              {/* ADD / EDIT FORM */}
+              {/* ADD / EDIT DIALOG */}
               {modelForm !== null && (
-                <Card className="p-5 space-y-5 mb-4">
-                  <div className="flex items-center justify-between gap-3">
+                <ViewportAwareDialog
+                  open
+                  onClose={closeModelForm}
+                  closeOnBackdrop={!modelSaving}
+                  closeOnEscape={!modelSaving}
+                  ariaLabel={modelForm === 'new' ? 'Add new model' : `Edit model ${mfId}`}
+                  maxWidth={980}
+                  zIndex={105}
+                >
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
                     <SectionHeading>
-                      {modelForm === 'new' ? 'Add new model' : `Edit ? ${mfId}`}
+                      {modelForm === 'new' ? 'Add new model' : `Edit ${mfId}`}
                     </SectionHeading>
                     <button
                       type="button"
-                      onClick={() => { setModelForm(null); setError(null); setTest('__form__', { state: 'idle' }); }}
-                      className="text-sm text-gray-500 hover:text-gray-700 transition-colors focus:outline-none focus:underline"
+                      onClick={closeModelForm}
+                      disabled={modelSaving}
+                      className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 dark:hover:text-gray-200"
                     >
-                      Cancel
+                      <X className="h-5 w-5" aria-hidden="true" />
+                      <span className="sr-only">Close</span>
                     </button>
                   </div>
+                  <div className="max-h-[calc(100dvh-8rem)] space-y-5 overflow-y-auto px-5 py-5">
 
                   {/* ── Identity ─────────────────────────────────────────── */}
                   <div>
@@ -2980,7 +3000,9 @@ const AdminPortal: React.FC = () => {
                       </div>
                     );
                   })()}
-                </Card>
+                  </div>
+                </div>
+                </ViewportAwareDialog>
               )}
 
               {/* MODEL LIST TABLE */}

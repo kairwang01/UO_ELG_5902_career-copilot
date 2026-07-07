@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as Select from '@radix-ui/react-select';
-import { Check, ChevronDown, Trash2 } from 'lucide-react';
-import type { ModelEntry, ModuleRoutes, RoutingPool } from '../../services/adminClient';
+import { Check, ChevronDown, PlugZap, Trash2, X } from 'lucide-react';
+import { adminTestModel, type ModelEntry, type ModuleRoutes, type RoutingPool, type RoutingPoolMember, type TestModelResult } from '../../services/adminClient';
 import { Card, EmptyState, FieldLabel, SaveButton, SectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
 import ConfirmActionDialog from '../ConfirmActionDialog';
 
@@ -53,10 +53,41 @@ const POOL_NUMBER_TONES = [
   'text-cyan-400/35',
 ];
 
+type MemberTestState = { state: 'running' } | ({ state: 'done' } & TestModelResult);
+
 type AdminSelectOption = {
   value: string;
   label: string;
 };
+
+const ToggleSwitch: React.FC<{
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}> = ({ checked, disabled, label, onChange }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    disabled={disabled}
+    onClick={() => onChange(!checked)}
+    className="inline-flex items-center gap-2 rounded-full text-sm font-medium text-gray-700 transition disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    <span
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border p-0.5 shadow-inner transition-colors ${
+        checked ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-gray-200'
+      }`}
+    >
+      <span
+        className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? 'translate-x-5' : 'translate-x-0'
+        }`}
+      />
+    </span>
+    <span>{label}</span>
+  </button>
+);
 
 const AdminSelect: React.FC<{
   value?: string;
@@ -116,6 +147,7 @@ export const RoutingPoolsSection: React.FC<{
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ ok?: string; err?: string } | null>(null);
   const [poolDeleteIndex, setPoolDeleteIndex] = useState<number | null>(null);
+  const [memberTests, setMemberTests] = useState<Record<string, MemberTestState>>({});
 
   useEffect(() => {
     setPools(clonePools(routingPools));
@@ -153,6 +185,36 @@ export const RoutingPoolsSection: React.FC<{
       };
     }));
     setFeedback(null);
+  };
+
+  const memberTestKey = (poolIndex: number, memberIndex: number, member: RoutingPoolMember) =>
+    `${poolIndex}:${memberIndex}:${member.modelId}:${member.keyHash ?? 'any'}`;
+
+  const runMemberTest = async (testKey: string, member: RoutingPoolMember) => {
+    setMemberTests((prev) => ({ ...prev, [testKey]: { state: 'running' } }));
+    try {
+      const model = models.find((entry) => entry.id === member.modelId);
+      if (!model) throw new Error('Model not found.');
+      const keyIndex = member.keyHash
+        ? model.key_previews?.find((key) => key.hash === member.keyHash)?.index
+        : undefined;
+      if (member.keyHash && keyIndex === undefined) throw new Error('Saved key not found.');
+
+      const result = await adminTestModel({
+        id: member.modelId,
+        ...(keyIndex !== undefined ? { keyIndex } : {}),
+      });
+      setMemberTests((prev) => ({ ...prev, [testKey]: { state: 'done', ...result } }));
+    } catch (err) {
+      setMemberTests((prev) => ({
+        ...prev,
+        [testKey]: {
+          state: 'done',
+          ok: false,
+          error: err instanceof Error ? err.message : 'Test failed.',
+        },
+      }));
+    }
   };
 
   const addMember = (poolIndex: number) => {
@@ -313,15 +375,14 @@ export const RoutingPoolsSection: React.FC<{
                     className={textInput}
                   />
                 </div>
-                <label className="flex items-end gap-2 pb-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
+                <div className="flex items-end pb-2">
+                  <ToggleSwitch
                     checked={pool.enabled}
                     disabled={!canManage}
-                    onChange={(e) => updatePool(poolIndex, { enabled: e.target.checked })}
+                    label="Enabled"
+                    onChange={(enabled) => updatePool(poolIndex, { enabled })}
                   />
-                  Enabled
-                </label>
+                </div>
                 {canManage && (
                   <button
                     type="button"
@@ -341,9 +402,10 @@ export const RoutingPoolsSection: React.FC<{
                     <tr className="bg-white/70">
                       <th className={tableHead}>Model</th>
                       <th className={tableHead}>Saved key</th>
-                      <th className={tableHead}>Tier</th>
-                      <th className={tableHead}>Weight</th>
+                      <th className={`${tableHead} w-24`}>Tier</th>
+                      <th className={`${tableHead} w-28`}>Weight</th>
                       <th className={tableHead}>State</th>
+                      <th className={tableHead}>Connectivity</th>
                       <th className={tableHead}>Actions</th>
                     </tr>
                   </thead>
@@ -351,6 +413,8 @@ export const RoutingPoolsSection: React.FC<{
                     {pool.members.map((member, memberIndex) => {
                       const model = models.find((m) => m.id === member.modelId);
                       const keyOptions = model?.key_previews ?? [];
+                      const testKey = memberTestKey(poolIndex, memberIndex, member);
+                      const testState = memberTests[testKey];
                       const savedKeyOptions = [
                         { value: ANY_KEY_VALUE, label: 'Any configured key' },
                         ...keyOptions.map((key) => ({ value: key.hash, label: `${key.masked} (${key.hash})` })),
@@ -375,36 +439,63 @@ export const RoutingPoolsSection: React.FC<{
                               onChange={(value) => updateMember(poolIndex, memberIndex, { keyHash: value === ANY_KEY_VALUE ? undefined : value })}
                             />
                           </td>
-                          <td className={tableCell}>
+                          <td className={`${tableCell} w-24`}>
                             <input
                               type="number"
                               min={1}
                               value={member.tier}
                               disabled={!canManage}
                               onChange={(e) => updateMember(poolIndex, memberIndex, { tier: Math.max(1, Number(e.target.value)) })}
-                              className={`${textInput} w-24`}
+                              className={`${textInput} w-16`}
                             />
                           </td>
-                          <td className={tableCell}>
+                          <td className={`${tableCell} w-28`}>
                             <input
                               type="number"
                               min={1}
                               value={member.weight}
                               disabled={!canManage}
                               onChange={(e) => updateMember(poolIndex, memberIndex, { weight: Math.max(1, Number(e.target.value)) })}
-                              className={`${textInput} w-28`}
+                              className={`${textInput} w-20`}
                             />
                           </td>
                           <td className={tableCell}>
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={member.enabled}
-                                disabled={!canManage}
-                                onChange={(e) => updateMember(poolIndex, memberIndex, { enabled: e.target.checked })}
-                              />
-                              Active
-                            </label>
+                            <ToggleSwitch
+                              checked={member.enabled}
+                              disabled={!canManage}
+                              label="Active"
+                              onChange={(enabled) => updateMember(poolIndex, memberIndex, { enabled })}
+                            />
+                          </td>
+                          <td className={tableCell}>
+                            <div className="flex min-w-36 items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => runMemberTest(testKey, member)}
+                                disabled={!canManage || testState?.state === 'running'}
+                                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3 text-xs font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {testState?.state === 'running' ? (
+                                  <span className="h-3.5 w-3.5 rounded-full border-2 border-sky-200 border-t-sky-600 animate-spin" />
+                                ) : (
+                                  <PlugZap className="h-3.5 w-3.5" />
+                                )}
+                                {testState?.state === 'done' ? 'Re-test' : 'Test'}
+                              </button>
+                              {testState?.state === 'done' && (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${
+                                    testState.ok
+                                      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                                      : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                                  }`}
+                                  title={testState.ok ? testState.text : testState.error}
+                                >
+                                  {testState.ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                  {testState.ok ? `${testState.latencyMs ?? 0} ms` : 'Failed'}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className={tableCell}>
                             {canManage && (
