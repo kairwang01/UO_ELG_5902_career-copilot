@@ -312,7 +312,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
   if (!spec) {
     throw new HttpsError("internal", "analyzeCandidateMatch is not registered.");
   }
-  const provider = await resolveProvider(uid, undefined);
+  const provider = await resolveProvider(uid, undefined, "listJobApplicants");
 
   const strArr = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 10) : [];

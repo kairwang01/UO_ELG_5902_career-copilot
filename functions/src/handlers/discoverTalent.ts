@@ -168,7 +168,7 @@ export async function discoverTalentImpl(uid: string, data: Record<string, unkno
   if (!spec) {
     throw new HttpsError("internal", "analyzeCandidateMatch is not registered.");
   }
-  const provider = await resolveProvider(uid, undefined);
+  const provider = await resolveProvider(uid, undefined, "discoverTalent");
 
   const pool = withContext.slice(0, MATCH_CANDIDATE_CAP);
   const settled = await Promise.allSettled(

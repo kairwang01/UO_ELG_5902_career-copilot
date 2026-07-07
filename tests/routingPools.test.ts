@@ -8,7 +8,8 @@ import {
 } from '../functions/src/llm/routingPools';
 import { keyHash } from '../functions/src/llm/keyHash';
 import { _testRoutingValidation } from '../functions/src/handlers/adminModels';
-import { defaultRoutingPoolsForRegistry } from '../functions/src/admin/platformConfig';
+import { DEFAULT_MODULE_ROUTES, defaultRoutingPoolsForRegistry } from '../functions/src/admin/platformConfig';
+import { TOOL_REGISTRY } from '../functions/src/llm/toolRegistry';
 import type { ModelEntry, RoutingPool } from '../functions/src/admin/schema';
 
 const model = (id: string, minTier: ModelEntry['minTier'] = 'free'): ModelEntry => ({
@@ -156,6 +157,25 @@ describe('LLM routing pools', () => {
     expect(pools.find((pool) => pool.id === 'quality')?.members).toEqual([
       { modelId: 'deepseek-pro', tier: 1, weight: 100, enabled: true },
     ]);
+  });
+
+  it('has default module routes for every LLM-backed tool surface', () => {
+    const dedicatedRoutes = [
+      'careerCoach',
+      'mockInterview',
+      'analyzeResume',
+      'generateCoverLetter',
+      'generateCareerPath',
+      'discoverTalent',
+      'listJobApplicants',
+      'extractTextFromUrl',
+      'apiResumeAnalyze',
+      'apiCoverLetter',
+    ];
+    const expected = [...Object.keys(TOOL_REGISTRY), ...dedicatedRoutes].sort();
+    const actual = Object.keys(DEFAULT_MODULE_ROUTES).filter((key) => expected.includes(key)).sort();
+
+    expect(actual).toEqual(expected);
   });
 });
 

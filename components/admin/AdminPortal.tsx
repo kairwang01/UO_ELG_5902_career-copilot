@@ -175,9 +175,9 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   ai: {
-    description: 'Manage the model registry, per-model API key pools, module routing pools, explicit platform-model fallback, provider keys, backend-computed implicit fallback previews, and best-effort runtime key-health checks.',
+    description: 'Manage the model registry, per-model API key pools, grouped module routing pools for candidate, employer, agency, and public API AI routes, explicit platform-model fallback, provider keys, backend-computed implicit fallback previews, and best-effort runtime key-health checks.',
     roles: {
-      super: 'View and edit models, provider keys, key pools, module routing pools, explicit fallback chains, and the dashboard default model. Implicit fallback previews are read-only and computed by the backend.',
+      super: 'View and edit models, provider keys, key pools, grouped module routing pools across product areas, explicit fallback chains, and the dashboard default model. Module selections expand to the underlying tool routes; implicit fallback previews are read-only and computed by the backend.',
       admin: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
       reviewer: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
     },

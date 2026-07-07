@@ -73,7 +73,7 @@ export const careerCoachFunction = onCall({ invoker: "public", timeoutSeconds: 1
       .map((m) => `${m.role === "user" ? "User" : "Alex"}: ${m.content}`)
       .join("\n") + "\nAlex:";
 
-  const provider = await resolveProvider(uid, data.model);
+  const provider = await resolveProvider(uid, data.model, "careerCoach");
   const result = await provider.generate({ system: systemInstruction, prompt: transcript });
   return { reply: result.text };
 });

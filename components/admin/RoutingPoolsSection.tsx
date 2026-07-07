@@ -1,20 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as Select from '@radix-ui/react-select';
-import { Check, ChevronDown, PlugZap, Trash2, X } from 'lucide-react';
-import { adminTestModel, type ModelEntry, type ModuleRoutes, type RoutingPool, type RoutingPoolMember, type TestModelResult } from '../../services/adminClient';
+import { Check, ChevronDown, CircleHelp, PlugZap, Trash2, X } from 'lucide-react';
+import { MODULE_ROUTE_GROUPS, MODULE_ROUTE_TOOL_LABELS, adminTestModel, type ModelEntry, type ModuleRoutes, type RoutingPool, type RoutingPoolMember, type TestModelResult } from '../../services/adminClient';
 import { Card, EmptyState, FieldLabel, SaveButton, SectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
 import ConfirmActionDialog from '../ConfirmActionDialog';
 
 const ANY_KEY_VALUE = '__any_configured_key__';
-
-const MODULE_ROUTE_OPTIONS = [
-  { key: 'mockInterview', label: 'Mock interview' },
-  { key: 'analyzeResume', label: 'Resume analysis' },
-  { key: 'generateCoverLetter', label: 'Cover letter' },
-  { key: 'generateCareerPath', label: 'Career path' },
-  { key: 'applyResumeImprovements', label: 'Resume deep optimization' },
-  { key: 'convertResumeFormat', label: 'Resume formatter' },
-];
 
 const clonePools = (pools: RoutingPool[]) => pools.map((pool) => ({
   ...pool,
@@ -163,13 +154,25 @@ export const RoutingPoolsSection: React.FC<{
   );
   const poolOptions = pools.filter((pool) => pool.id.trim());
   const routePoolOptions = poolOptions.map((pool) => ({ value: pool.id, label: `${pool.label} (${pool.id})` }));
-  const routeRows = useMemo(() => {
-    const known = new Set(MODULE_ROUTE_OPTIONS.map((route) => route.key));
+  const moduleRows = useMemo(() => {
+    const known = new Set<string>(MODULE_ROUTE_GROUPS.flatMap((group) => [...group.routes]));
     const custom = Object.keys(routes)
       .filter((key) => !known.has(key))
-      .map((key) => ({ key, label: key }));
-    return [...MODULE_ROUTE_OPTIONS, ...custom];
+      .map((key) => ({ key, label: key, routes: [key] }));
+    return [...MODULE_ROUTE_GROUPS, ...custom];
   }, [routes]);
+  const routedToolCount = useMemo(
+    () => new Set(moduleRows.flatMap((row) => [...row.routes])).size,
+    [moduleRows],
+  );
+  const routeValueFor = (routeKeys: readonly string[]) => {
+    const first = routes[routeKeys[0]];
+    return first && routeKeys.every((key) => routes[key] === first) ? first : undefined;
+  };
+  const routeHintFor = (routeKeys: readonly string[]) =>
+    routeKeys
+      .map((key) => `${MODULE_ROUTE_TOOL_LABELS[key] ?? key} (${key})`)
+      .join('\n');
 
   const updatePool = (index: number, patch: Partial<RoutingPool>) => {
     setPools((prev) => prev.map((pool, i) => (i === index ? { ...pool, ...patch } : pool)));
@@ -315,20 +318,31 @@ export const RoutingPoolsSection: React.FC<{
             <SectionHeading>Module routes</SectionHeading>
           </div>
           <span className="w-fit rounded-md border border-sky-200 bg-white/80 px-2 py-1 text-xs font-medium text-sky-700">
-            {routeRows.length} routes
+            {moduleRows.length} modules / {routedToolCount} tools
           </span>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {routeRows.map((route) => (
+          {moduleRows.map((route) => (
             <label key={route.key} className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-700">{route.label}</span>
+              <span className="mb-1 flex items-center gap-1 text-xs font-medium text-gray-700">
+                {route.label}
+                <span
+                  aria-label={`${route.label} included tools`}
+                  title={routeHintFor(route.routes)}
+                >
+                  <CircleHelp className="h-3.5 w-3.5 cursor-help text-gray-400" aria-hidden="true" />
+                </span>
+              </span>
               <AdminSelect
-                value={routes[route.key]}
+                value={routeValueFor(route.routes)}
                 disabled={!canManage}
                 options={routePoolOptions}
-                placeholder="Select pool"
+                placeholder={route.routes.some((key) => routes[key]) ? 'Mixed pools' : 'Select pool'}
                 onChange={(value) => {
-                  setRoutes((prev) => ({ ...prev, [route.key]: value }));
+                  setRoutes((prev) => ({
+                    ...prev,
+                    ...Object.fromEntries(route.routes.map((key) => [key, value])),
+                  }));
                   setFeedback(null);
                 }}
               />

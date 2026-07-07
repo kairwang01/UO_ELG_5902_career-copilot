@@ -205,7 +205,7 @@ async function handleResumeAnalyze(key: AuthedKey, body: unknown): Promise<unkno
   // (contract req #6); the gateway never reads provider keys directly.
   let provider;
   try {
-    provider = await resolveProvider(key.created_by);
+    provider = await resolveProvider(key.created_by, undefined, "apiResumeAnalyze");
     const result = await provider.generate({ prompt, responseSchema: ANALYSIS_SCHEMA });
     return { analysis: result.raw };
   } catch (err) {
@@ -234,7 +234,7 @@ async function handleCoverLetter(key: AuthedKey, body: unknown): Promise<unknown
   await ensurePlatformCaches();
   const prompt = buildPrompt("handler_cover_letter", { marketName, resumeText, jobDescription });
   try {
-    const provider = await resolveProvider(key.created_by);
+    const provider = await resolveProvider(key.created_by, undefined, "apiCoverLetter");
     const result = await provider.generate({ prompt, responseSchema: COVER_LETTER_SCHEMA });
     return { cover_letter: result.raw };
   } catch (err) {

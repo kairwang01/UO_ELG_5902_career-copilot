@@ -283,7 +283,7 @@ export const extractTextFromUrlFunction = onCall({ invoker: "public" }, async (r
     );
   }
 
-  const provider = await resolveProvider(uid, model);
+  const provider = await resolveProvider(uid, model, "extractTextFromUrl");
   const result = await provider.generate({
     prompt: buildPrompt("handler_extract_url", { html }),
     responseSchema: {

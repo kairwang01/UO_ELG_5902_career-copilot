@@ -47,13 +47,51 @@ const DEFAULT_QUALITY_POOL_MEMBERS = [
   { label: "Deepseek-v4-Pro For Demo Only", weight: 100 },
 ];
 
-const DEFAULT_MODULE_ROUTES: ModuleRoutes = {
+export const DEFAULT_MODULE_ROUTES: ModuleRoutes = {
+  careerCoach: "speed",
   mockInterview: "speed",
   analyzeResume: "quality",
   generateCoverLetter: "quality",
   generateCareerPath: "quality",
+  extractTalentProfile: "quality",
   applyResumeImprovements: "quality",
   convertResumeFormat: "quality",
+  calculateCompatibility: "quality",
+  findOpportunities: "quality",
+  optimizeLinkedInProfile: "quality",
+  optimizeLinkedInProfileFromText: "quality",
+  generateSkillBridgeProject: "quality",
+  generateAgilePracticeTest: "quality",
+  generateSalaryNegotiationStrategy: "quality",
+  analyzeEnglishProficiency: "quality",
+  generateSpeakingTopics: "speed",
+  analyzeSpokenEnglish: "quality",
+  generateReadingPracticePassage: "quality",
+  analyzeEnglishReading: "quality",
+  evaluateReadingComprehension: "speed",
+  analyzeEnglishListening: "quality",
+  generateVocabularyFlashcards: "speed",
+  generateProfessionalEmail: "quality",
+  generateOutreachEmail: "quality",
+  generatePortfolioWebsite: "quality",
+  generateWeeklySummary: "speed",
+  generateJobDescription: "quality",
+  analyzeSalary: "quality",
+  checkInclusivity: "quality",
+  formatJobDescription: "quality",
+  analyzeCandidateMatch: "quality",
+  generateNetworkingStrategy: "quality",
+  generatePerformanceReviewPrep: "quality",
+  generateLearningPlan: "quality",
+  findIndustryEvents: "quality",
+  anonymizeResume: "quality",
+  generateClientPitchEmail: "quality",
+  generateCandidatePrepKit: "quality",
+  discoverTalent: "quality",
+  listJobApplicants: "quality",
+  extractTextFromUrl: "quality",
+  apiResumeAnalyze: "quality",
+  apiCoverLetter: "quality",
 };
 
 const normalizeModelLabel = (label: string): string => label.trim().toLowerCase();
@@ -290,7 +328,7 @@ export function getRoutingPools(): RoutingPool[] {
 }
 
 export function getModuleRoutes(): ModuleRoutes {
-  return modelsCache?.module_routes ? { ...modelsCache.module_routes } : { ...DEFAULT_MODULE_ROUTES };
+  return { ...DEFAULT_MODULE_ROUTES, ...(modelsCache?.module_routes ?? {}) };
 }
 
 /** Admin-safe view: api_key and api_keys replaced with masked previews. */
