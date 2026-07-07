@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { sendEmailVerification, updateProfile } from 'firebase/auth';
+import { updateProfile } from 'firebase/auth';
+import { sendAccountVerificationEmail } from '@/lib/auth/sendVerificationEmail';
 import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
 import { BUSINESS_PLANS } from '@/config';
@@ -268,7 +269,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           // them — without this, no paid user ever receives a verification email.
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
-              await sendEmailVerification(firebaseAuth.currentUser);
+              await sendAccountVerificationEmail(firebaseAuth.currentUser);
             }
           } catch (err) {
             console.warn('sendEmailVerification failed:', err);
@@ -295,7 +296,7 @@ const Auth: React.FC<AuthProps> = ({ onClose, initialView = 'sign_in', mode, t }
           // this on mount state was silently skipping every verification email.
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
-              await sendEmailVerification(firebaseAuth.currentUser);
+              await sendAccountVerificationEmail(firebaseAuth.currentUser);
             }
           } catch (err) {
             console.warn('sendEmailVerification failed:', err);

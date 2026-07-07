@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MailCheck, RefreshCw, LogOut } from 'lucide-react';
-import { sendEmailVerification, signOut } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { firebaseAuth } from '@/lib/firebaseClient';
+import { mapVerificationEmailError, sendAccountVerificationEmail } from '@/lib/auth/sendVerificationEmail';
 
 interface VerifyEmailGateProps {
   email: string | null;
@@ -23,6 +24,7 @@ export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t }) =>
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const initialSendStartedRef = useRef(false);
 
   const startCooldown = useCallback(() => {
     setCooldown(RESEND_COOLDOWN_SECONDS);
@@ -35,23 +37,40 @@ export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t }) =>
     }, 1000);
   }, []);
 
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
-
-  const handleResend = useCallback(async () => {
-    setError(null); setNotice(null);
+  const sendVerification = useCallback(async (options?: { startCooldown?: boolean }) => {
+    setError(null);
+    setNotice(null);
     const user = firebaseAuth.currentUser;
-    if (!user) return;
+    if (!user || user.emailVerified) return false;
     setSending(true);
     try {
-      await sendEmailVerification(user);
+      await sendAccountVerificationEmail(user);
       setNotice(t('verify_gate_resent'));
-      startCooldown();
-    } catch {
-      setError(t('verify_gate_send_failed'));
+      if (options?.startCooldown !== false) startCooldown();
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setError(mapVerificationEmailError(message, t));
+      return false;
     } finally {
       setSending(false);
     }
   }, [startCooldown, t]);
+
+  useEffect(() => {
+    // Paid employer signups land here after Stripe; signup may have sent mail
+    // before redirect, but that send is easy to miss (timing, spam, rate limit).
+    // Auto-send once when the gate opens so recruiters are not stuck with no mail.
+    if (initialSendStartedRef.current) return;
+    initialSendStartedRef.current = true;
+    void sendVerification({ startCooldown: true });
+  }, [sendVerification]);
+
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+
+  const handleResend = useCallback(async () => {
+    await sendVerification({ startCooldown: true });
+  }, [sendVerification]);
 
   const handleCheck = useCallback(async () => {
     setError(null); setNotice(null);

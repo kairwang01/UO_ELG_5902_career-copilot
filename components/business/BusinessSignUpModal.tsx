@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { sendEmailVerification } from 'firebase/auth';
+import { sendAccountVerificationEmail } from '@/lib/auth/sendVerificationEmail';
 import { data } from '@/lib/data';
 import { firebaseAuth } from '@/lib/firebaseClient';
 import { setUserSubscription } from '@/services/subscriptionClient';
@@ -117,7 +117,7 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
           // for them — without this, no paid employer ever receives a verification email.
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
-              await sendEmailVerification(firebaseAuth.currentUser);
+              await sendAccountVerificationEmail(firebaseAuth.currentUser);
             }
           } catch (err) {
             console.warn('sendEmailVerification failed:', err);
@@ -135,7 +135,7 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
           // was silently skipping every verification email.
           try {
             if (firebaseAuth.currentUser && !firebaseAuth.currentUser.emailVerified) {
-              await sendEmailVerification(firebaseAuth.currentUser);
+              await sendAccountVerificationEmail(firebaseAuth.currentUser);
             }
           } catch (err) {
             console.warn('sendEmailVerification failed:', err);
@@ -149,6 +149,7 @@ export default function BusinessSignUpModal({ isOpen, onOpenChange, onSwitchToSi
             // intentionally ignored — account creation succeeded
           }
           if (mountedRef.current) setMessage(t('auth_business_account_created'));
+          addToast(t('auth_signup_success_verify'), 'info');
         }
       }
     } catch (err) {
