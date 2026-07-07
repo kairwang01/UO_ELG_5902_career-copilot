@@ -674,6 +674,10 @@ class FallbackProvider implements LLMProvider {
  */
 function buildProviderForPoolMember(candidate: RoutingCandidate): LLMProvider | null {
   const { model, member } = candidate;
+  // Defensive mirror of the admin-side validation: the "custom" BYOA sentinel
+  // must never build from the registry (no key/URL — per-user config only). A
+  // stale or hand-edited pool doc would otherwise route into an empty provider.
+  if (model.id === "custom") return null;
   if (!member.keyHash) return buildProvider(model);
   const rawKey = resolveKeyPool(model).find((key) => keyHash(key) === member.keyHash);
   if (!rawKey) return null;

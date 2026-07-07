@@ -126,25 +126,18 @@ export const SampleReportPage: React.FC = () => {
   const intro = t('site_sample_intro')
     .replace('{name}', sampleReport.candidateName)
     .replace('{role}', sampleReport.targetRole);
-  const analysisSummary = `Alex's resume is technically readable and shows strong delivery experience, but the current positioning still reads more like a software profile than a product management submission.`;
+  // Report copy is localized; the illustrative sample RESUME body stays fixed
+  // demo content (a real English-market resume is part of the demonstration).
+  const analysisSummary = t('site_sample_analysis_summary');
   const strengths = [
-    'ATS-safe formatting with a clear single-column structure.',
-    'Strong technical delivery evidence across Agile, SQL, Jira, and cross-functional work.',
-    'One measurable business outcome is already present and can anchor the rewrite.',
+    t('site_sample_strength_1'),
+    t('site_sample_strength_2'),
+    t('site_sample_strength_3'),
   ];
   const improvements = [
-    {
-      area: 'Positioning',
-      suggestion: 'Lead with a bridge title such as Technical Product Owner instead of only Software Developer.',
-    },
-    {
-      area: 'Impact',
-      suggestion: 'Rewrite the top three bullets with one metric each: customer count, ticket reduction, delivery time, or revenue scope.',
-    },
-    {
-      area: 'Product discovery',
-      suggestion: 'Add evidence of customer interviews, problem validation, prioritization, and roadmap tradeoffs.',
-    },
+    { area: t('site_sample_improve_1_area'), suggestion: t('site_sample_improve_1_tip') },
+    { area: t('site_sample_improve_2_area'), suggestion: t('site_sample_improve_2_tip') },
+    { area: t('site_sample_improve_3_area'), suggestion: t('site_sample_improve_3_tip') },
   ];
 
   useEffect(() => {

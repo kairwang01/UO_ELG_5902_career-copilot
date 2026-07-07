@@ -57,6 +57,48 @@ export const EmployerLandingPage: React.FC = () => {
               { title: t('site_emp_workflow_review_title'), description: t('site_emp_workflow_review_desc') },
               { title: t('site_emp_workflow_contact_title'), description: t('site_emp_workflow_contact_desc') },
             ]}
+            previews={[
+              {
+                label: 'Job Posting Reach',
+                scoreLabel: 'Post quality',
+                score: 88,
+                rows: [
+                  ['Structure', 'Role, must-haves, and screeners captured as data', 'Strong'],
+                  ['Inclusivity', 'Two biased phrases flagged and rewritten', 'Fix'],
+                  ['Visibility', 'Live on the candidate job feed', 'Active'],
+                ],
+              },
+              {
+                label: 'Candidate Match Evidence',
+                scoreLabel: 'Match confidence',
+                score: 84,
+                rows: [
+                  ['Evidence', 'Led checkout redesign — maps to your funnel role', 'Strong'],
+                  ['Skill gap', 'No pricing-experiment exposure', 'Medium'],
+                  ['Screeners', '4 of 5 knockout answers align', 'Strong'],
+                ],
+              },
+              {
+                label: 'Applicant Review Queue',
+                scoreLabel: 'Shortlist rate',
+                score: 62,
+                rows: [
+                  ['New today', '12 applicants, ranked by fit evidence', 'Active'],
+                  ['Bulk actions', '5 advanced, 3 politely declined with notes', 'Strong'],
+                  ['Next round', 'Interviews proposed to top 4', 'Next'],
+                ],
+              },
+              {
+                label: 'Consented Outreach',
+                scoreLabel: 'Reply rate',
+                score: 71,
+                rows: [
+                  ['Consent', 'Contact unlocked only after candidate accepts', 'Strong'],
+                  ['Pending', '3 outreach requests awaiting a yes', 'Active'],
+                  ['Response SLA', 'Avg first reply in 1.8 days', 'Strong'],
+                ],
+              },
+            ]}
           />
         </div>
       </section>

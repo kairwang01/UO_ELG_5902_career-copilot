@@ -128,7 +128,20 @@ const renderFormattedMessage = (text: string) => {
 
 
 const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, session, profile, resumeText, t, onLaunchTool }) => {
-    useModalBehavior(onClose, isOpen);
+    // Two presentation modes with different a11y semantics: on mobile the panel
+    // covers the page (a true modal — lock scroll, aria-modal), while on desktop
+    // it docks in the corner and the page stays usable (non-modal — page scroll
+    // must NOT be hijacked). sm breakpoint mirrors the Tailwind classes below.
+    const [isDesktopDock, setIsDesktopDock] = useState(
+        () => typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches,
+    );
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 640px)');
+        const onChange = (e: MediaQueryListEvent) => setIsDesktopDock(e.matches);
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    }, []);
+    useModalBehavior(onClose, isOpen, !isDesktopDock);
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -206,7 +219,7 @@ const CareerCoachBot: React.FC<CareerCoachBotProps> = ({ isOpen, onClose, sessio
             <section
                 className="flex h-full w-full flex-col overflow-hidden border border-white/80 bg-gradient-to-b from-sky-50 via-cyan-50 to-blue-50 shadow-2xl shadow-blue-950/20 ring-1 ring-blue-100/70 dark:border-slate-700 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 sm:h-[calc(100dvh-3rem)] sm:max-h-[760px] sm:w-[440px] sm:rounded-[28px]"
                 role="dialog"
-                aria-modal="false"
+                aria-modal={isDesktopDock ? 'false' : 'true'}
                 aria-label={t('coach_title')}
                 data-qa="career-coach-panel"
             >

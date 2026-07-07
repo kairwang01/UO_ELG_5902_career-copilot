@@ -306,6 +306,12 @@ function validateRoutingPools(rawPools: unknown, registry: ModelEntry[]): Routin
       if (!modelIds.has(modelId)) {
         throw new HttpsError("invalid-argument", `routing pool "${id}" references unknown model "${modelId}".`);
       }
+      // The "custom" BYOA sentinel has no platform key/URL of its own — its real
+      // config lives per-user in users/{uid}.custom_provider and is resolved on
+      // the dedicated BYOA path. Inside a pool it would build an empty provider.
+      if (modelId === "custom") {
+        throw new HttpsError("invalid-argument", `routing pool "${id}" cannot include the per-user "custom" BYOA model.`);
+      }
       const tier = Number(m.tier);
       const weight = Number(m.weight);
       if (!Number.isInteger(tier) || tier <= 0) {

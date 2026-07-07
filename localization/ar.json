@@ -3644,5 +3644,15 @@
   "lang_sync_regen_note_free_tier": "تتطلب النسخ بلغات أخرى خطة مدفوعة؛ وسيستهلك الإنشاء رصيدًا.",
   "lang_sync_dismiss": "الإبقاء على {content}",
   "lang_sync_regen_note_nocost": "إنشاء نسخة {target} مجاني.",
-  "tool_resume_formatter_change_notes_title": "ملاحظات التوطين — ما تم تكييفه لسوق {market}"
+  "tool_resume_formatter_change_notes_title": "ملاحظات التوطين — ما تم تكييفه لسوق {market}",
+  "site_sample_analysis_summary": "سيرة Alex الذاتية سهلة القراءة تقنياً وتُظهر خبرة تنفيذ قوية، لكن التموضع الحالي يبدو أقرب إلى ملف مطوّر برمجيات منه إلى طلب لوظيفة إدارة المنتجات.",
+  "site_sample_strength_1": "تنسيق متوافق مع أنظمة الفرز (ATS) وبنية عمود واحد واضحة.",
+  "site_sample_strength_2": "أدلة تنفيذ تقنية قوية عبر Agile وSQL وJira والعمل بين الفرق.",
+  "site_sample_strength_3": "توجد نتيجة أعمال واحدة قابلة للقياس يمكن أن تكون مرتكز إعادة الصياغة.",
+  "site_sample_improve_1_area": "التموضع",
+  "site_sample_improve_1_tip": "ابدأ بمسمى انتقالي مثل Technical Product Owner بدلاً من Software Developer فقط.",
+  "site_sample_improve_2_area": "الأثر",
+  "site_sample_improve_2_tip": "أعد صياغة النقاط الثلاث الأولى مع مقياس واحد لكل منها: عدد العملاء، خفض التذاكر، زمن التسليم أو حجم الإيرادات.",
+  "site_sample_improve_3_area": "اكتشاف المنتج",
+  "site_sample_improve_3_tip": "أضف أدلة على مقابلات العملاء والتحقق من المشكلة وترتيب الأولويات وموازنات خارطة الطريق."
 }

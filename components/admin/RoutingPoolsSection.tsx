@@ -113,7 +113,9 @@ export const RoutingPoolsSection: React.FC<{
     setRoutes({ ...moduleRoutes });
   }, [routingPools, moduleRoutes]);
 
-  const enabledModels = useMemo(() => models.filter((model) => model.enabled), [models]);
+  // Poolable models exclude the "custom" BYOA sentinel: it has no platform
+  // key/URL (per-user config only) and the server rejects it as a pool member.
+  const enabledModels = useMemo(() => models.filter((model) => model.enabled && model.id !== 'custom'), [models]);
   const modelOptions = useMemo(
     () => enabledModels.map((model) => ({ value: model.id, label: `${model.label} (${model.id})` })),
     [enabledModels],

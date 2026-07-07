@@ -3644,5 +3644,15 @@
   "lang_sync_regen_note_free_tier": "他言語版の生成には有料プランが必要です。再生成にはクレジットがかかります。",
   "lang_sync_dismiss": "{content}のままにする",
   "lang_sync_regen_note_nocost": "{target}版の生成は無料です。",
-  "tool_resume_formatter_change_notes_title": "ローカライズ調整メモ — {market}向けの変更点"
+  "tool_resume_formatter_change_notes_title": "ローカライズ調整メモ — {market}向けの変更点",
+  "site_sample_analysis_summary": "Alex の履歴書は技術的に読みやすく、確かな開発・デリバリー経験を示していますが、現状の打ち出し方はプロダクトマネジメント志望というよりソフトウェアエンジニアのプロフィールに見えます。",
+  "site_sample_strength_1": "ATS で安全に解析できる、明快な 1 カラム構成。",
+  "site_sample_strength_2": "Agile・SQL・Jira・部門横断の業務での確かな実績が示されている。",
+  "site_sample_strength_3": "定量的なビジネス成果が既に 1 件あり、書き直しの軸にできる。",
+  "site_sample_improve_1_area": "ポジショニング",
+  "site_sample_improve_1_tip": "「Software Developer」だけでなく「Technical Product Owner」のような橋渡しの肩書きを先頭に。",
+  "site_sample_improve_2_area": "インパクト",
+  "site_sample_improve_2_tip": "上位 3 つの実績に各 1 つ指標を：顧客数、チケット削減率、納期、売上規模。",
+  "site_sample_improve_3_area": "プロダクトディスカバリー",
+  "site_sample_improve_3_tip": "顧客インタビュー、課題検証、優先順位付け、ロードマップのトレードオフの実例を追加。"
 }

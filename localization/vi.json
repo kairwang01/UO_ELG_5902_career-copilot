@@ -3644,5 +3644,15 @@
   "lang_sync_regen_note_free_tier": "Phiên bản ngôn ngữ khác yêu cầu gói trả phí; việc tạo sẽ tốn tín dụng.",
   "lang_sync_dismiss": "Giữ {content}",
   "lang_sync_regen_note_nocost": "Tạo phiên bản {target} là miễn phí.",
-  "tool_resume_formatter_change_notes_title": "Ghi chú bản địa hoá — các điều chỉnh cho {market}"
+  "tool_resume_formatter_change_notes_title": "Ghi chú bản địa hoá — các điều chỉnh cho {market}",
+  "site_sample_analysis_summary": "CV của Alex dễ đọc về mặt kỹ thuật và thể hiện kinh nghiệm triển khai vững, nhưng cách định vị hiện tại vẫn giống hồ sơ kỹ sư phần mềm hơn là hồ sơ ứng tuyển quản lý sản phẩm.",
+  "site_sample_strength_1": "Định dạng an toàn với ATS, cấu trúc một cột rõ ràng.",
+  "site_sample_strength_2": "Bằng chứng triển khai kỹ thuật vững chắc với Agile, SQL, Jira và làm việc liên phòng ban.",
+  "site_sample_strength_3": "Đã có một kết quả kinh doanh đo lường được, có thể làm trụ cho việc viết lại.",
+  "site_sample_improve_1_area": "Định vị",
+  "site_sample_improve_1_tip": "Mở đầu bằng chức danh cầu nối như Technical Product Owner thay vì chỉ Software Developer.",
+  "site_sample_improve_2_area": "Tác động",
+  "site_sample_improve_2_tip": "Viết lại ba gạch đầu dòng đầu tiên, mỗi dòng một chỉ số: số khách hàng, mức giảm ticket, thời gian giao hàng hoặc quy mô doanh thu.",
+  "site_sample_improve_3_area": "Khám phá sản phẩm",
+  "site_sample_improve_3_tip": "Bổ sung bằng chứng về phỏng vấn khách hàng, xác thực vấn đề, sắp xếp ưu tiên và cân nhắc lộ trình."
 }

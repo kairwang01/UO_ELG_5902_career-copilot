@@ -131,3 +131,59 @@ describe('LLM routing pools', () => {
     ]);
   });
 });
+
+describe('LLM routing pools — load-balancer edge cases', () => {
+  const twoModels = [model('key-a'), model('key-b')];
+  const allowAll = new Set(['key-a', 'key-b']);
+
+  it('selectWeightedCandidate returns null for an empty candidate list', () => {
+    expect(selectWeightedCandidate([], () => 0.5)).toBeNull();
+  });
+
+  it('selectWeightedCandidate returns null when every weight is zero (loop-break branch)', () => {
+    const candidates = [
+      { member: { weight: 0 } },
+      { member: { weight: 0 } },
+    ];
+    expect(selectWeightedCandidate(candidates, () => 0.5)).toBeNull();
+  });
+
+  it('candidatesForPoolTier drops a member that is disabled', () => {
+    const pool: RoutingPool = {
+      id: 'p',
+      label: 'P',
+      enabled: true,
+      members: [
+        { modelId: 'key-a', tier: 1, weight: 50, enabled: false },
+        { modelId: 'key-b', tier: 1, weight: 50, enabled: true },
+      ],
+    };
+    const candidates = candidatesForPoolTier(pool, twoModels, allowAll, 1);
+    expect(candidates.map((c) => c.member.modelId)).toEqual(['key-b']);
+  });
+
+  it('candidatesForPoolTier drops a member whose referenced MODEL is disabled', () => {
+    const disabledModel: ModelEntry = { ...model('key-a'), enabled: false };
+    const pool: RoutingPool = {
+      id: 'p',
+      label: 'P',
+      enabled: true,
+      members: [
+        { modelId: 'key-a', tier: 1, weight: 50, enabled: true },
+        { modelId: 'key-b', tier: 1, weight: 50, enabled: true },
+      ],
+    };
+    const candidates = candidatesForPoolTier(pool, [disabledModel, model('key-b')], allowAll, 1);
+    expect(candidates.map((c) => c.member.modelId)).toEqual(['key-b']);
+  });
+
+  it('rejects the per-user "custom" BYOA sentinel as a pool member', () => {
+    const registry: ModelEntry[] = [model('key-a'), { ...model('custom'), minTier: 'business' }];
+    expect(() =>
+      _testRoutingValidation.validateRoutingPools(
+        [{ id: 'p', label: 'P', enabled: true, members: [{ modelId: 'custom', tier: 1, weight: 100, enabled: true }] }],
+        registry,
+      ),
+    ).toThrow(/cannot include the per-user "custom"/i);
+  });
+});

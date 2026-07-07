@@ -3644,5 +3644,15 @@
   "lang_sync_regen_note_free_tier": "Generating another-language versions requires a paid plan; it will re-run and cost credits.",
   "lang_sync_dismiss": "Keep {content}",
   "lang_sync_regen_note_nocost": "Generating a {target} version is free.",
-  "tool_resume_formatter_change_notes_title": "Localization notes — what was adapted for {market}"
+  "tool_resume_formatter_change_notes_title": "Localization notes — what was adapted for {market}",
+  "site_sample_analysis_summary": "Alex's resume is technically readable and shows strong delivery experience, but the current positioning still reads more like a software profile than a product management submission.",
+  "site_sample_strength_1": "ATS-safe formatting with a clear single-column structure.",
+  "site_sample_strength_2": "Strong technical delivery evidence across Agile, SQL, Jira, and cross-functional work.",
+  "site_sample_strength_3": "One measurable business outcome is already present and can anchor the rewrite.",
+  "site_sample_improve_1_area": "Positioning",
+  "site_sample_improve_1_tip": "Lead with a bridge title such as Technical Product Owner instead of only Software Developer.",
+  "site_sample_improve_2_area": "Impact",
+  "site_sample_improve_2_tip": "Rewrite the top three bullets with one metric each: customer count, ticket reduction, delivery time, or revenue scope.",
+  "site_sample_improve_3_area": "Product discovery",
+  "site_sample_improve_3_tip": "Add evidence of customer interviews, problem validation, prioritization, and roadmap tradeoffs."
 }

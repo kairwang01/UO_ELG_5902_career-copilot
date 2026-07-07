@@ -5,11 +5,22 @@ interface Step {
   description: string;
 }
 
-interface WorkflowStepsProps {
-  steps: Step[];
+export interface WorkflowPreview {
+  label: string;
+  scoreLabel: string;
+  score: number;
+  rows: string[][];
 }
 
-const previews = [
+interface WorkflowStepsProps {
+  steps: Step[];
+  /** Audience-specific preview panels, one per step. Defaults to the jobseeker
+   *  set so the home page keeps working unchanged; the employer landing page
+   *  passes its own set (otherwise employer steps showed candidate previews). */
+  previews?: WorkflowPreview[];
+}
+
+const JOBSEEKER_PREVIEWS: WorkflowPreview[] = [
   {
     label: 'Resume Readiness Report',
     scoreLabel: 'Readiness score',
@@ -58,7 +69,7 @@ const statusTone = (status: string) => {
   return 'border-emerald-200 bg-emerald-50 text-emerald-700';
 };
 
-export const WorkflowSteps: React.FC<WorkflowStepsProps> = ({ steps }) => {
+export const WorkflowSteps: React.FC<WorkflowStepsProps> = ({ steps, previews = JOBSEEKER_PREVIEWS }) => {
   const [active, setActive] = useState(0);
   const preview = previews[active] ?? previews[0];
 

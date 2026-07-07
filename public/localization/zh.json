@@ -3644,5 +3644,15 @@
   "lang_sync_regen_note_free_tier": "其他语言版本需付费套餐；生成将消耗积分。",
   "lang_sync_dismiss": "保持{content}",
   "lang_sync_regen_note_nocost": "生成{target}版本是免费的。",
-  "tool_resume_formatter_change_notes_title": "本地化调整说明 — 针对{market}所做的修改"
+  "tool_resume_formatter_change_notes_title": "本地化调整说明 — 针对{market}所做的修改",
+  "site_sample_analysis_summary": "Alex 的简历在技术上易于解析，也展示了扎实的交付经验，但目前的定位读起来更像一份软件工程简历，而不是产品经理的求职材料。",
+  "site_sample_strength_1": "符合 ATS 解析的排版，单栏结构清晰。",
+  "site_sample_strength_2": "在 Agile、SQL、Jira 与跨职能协作方面有扎实的交付证据。",
+  "site_sample_strength_3": "已有一个可量化的业务成果，可作为改写的支点。",
+  "site_sample_improve_1_area": "定位",
+  "site_sample_improve_1_tip": "用\"技术产品负责人\"这类过渡头衔开头，而不是只写\"软件工程师\"。",
+  "site_sample_improve_2_area": "影响力",
+  "site_sample_improve_2_tip": "把前三条要点各加一个量化指标：客户数、工单降幅、交付时长或营收规模。",
+  "site_sample_improve_3_area": "产品探索",
+  "site_sample_improve_3_tip": "补充客户访谈、问题验证、优先级排序与路线图取舍的证据。"
 }

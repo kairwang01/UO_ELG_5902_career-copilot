@@ -158,10 +158,16 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
 
   // 2. Read applications for this job (Admin SDK). Name/date/status live on the
   //    application doc, so the candidate user doc is only needed for resume_text.
+  // Pathological-load cap, not pagination: far above realistic single-posting
+  // volume, it stops a runaway posting from paging the whole collection into
+  // memory. Note: beyond the cap Firestore truncates in doc-id order, so a
+  // posting that ever exceeds it needs real pagination (tracked separately).
+  const APPLICANTS_READ_CAP = 500;
   const appsSnap = await db
     .collection("job_applications")
     .where("job_id", "==", jobId)
     .where("employer_id", "==", uid)
+    .limit(APPLICANTS_READ_CAP)
     .get();
 
   if (appsSnap.empty) {

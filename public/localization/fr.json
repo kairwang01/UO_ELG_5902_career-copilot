@@ -3644,5 +3644,15 @@
   "lang_sync_regen_note_free_tier": "Les versions dans une autre langue nécessitent un forfait payant ; la génération coûte des crédits.",
   "lang_sync_dismiss": "Garder {content}",
   "lang_sync_regen_note_nocost": "Générer une version en {target} est gratuit.",
-  "tool_resume_formatter_change_notes_title": "Notes de localisation — adaptations pour {market}"
+  "tool_resume_formatter_change_notes_title": "Notes de localisation — adaptations pour {market}",
+  "site_sample_analysis_summary": "Le CV d'Alex est techniquement lisible et montre une solide expérience de livraison, mais son positionnement actuel ressemble davantage à un profil de développeur qu'à une candidature en gestion de produit.",
+  "site_sample_strength_1": "Mise en page compatible ATS avec une structure claire à une colonne.",
+  "site_sample_strength_2": "Solides preuves de livraison technique : Agile, SQL, Jira et travail transversal.",
+  "site_sample_strength_3": "Un résultat métier mesurable est déjà présent et peut ancrer la réécriture.",
+  "site_sample_improve_1_area": "Positionnement",
+  "site_sample_improve_1_tip": "Commencez par un titre de transition comme Technical Product Owner plutôt que seulement Software Developer.",
+  "site_sample_improve_2_area": "Impact",
+  "site_sample_improve_2_tip": "Réécrivez les trois premières puces avec une métrique chacune : nombre de clients, réduction des tickets, délai de livraison ou chiffre d'affaires.",
+  "site_sample_improve_3_area": "Découverte produit",
+  "site_sample_improve_3_tip": "Ajoutez des preuves d'entretiens clients, de validation du problème, de priorisation et d'arbitrages de roadmap."
 }
