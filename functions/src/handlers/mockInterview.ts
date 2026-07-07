@@ -235,7 +235,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     try {
       // resolveProvider builds the provider (and reads the API key) — keep it inside
       // the try so a missing-key/build failure also triggers the refund below.
-      const provider = await resolveProvider(uid, modelId);
+      const provider = await resolveProvider(uid, modelId, "mockInterview");
       const result = await provider.generate({
         prompt,
         responseSchema: GENERATE_SCHEMA,
@@ -265,7 +265,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     });
 
     try {
-      const provider = await resolveProvider(uid, modelId);
+      const provider = await resolveProvider(uid, modelId, "mockInterview");
       const result = await provider.generate({
         prompt,
         responseSchema: EVALUATE_SCHEMA,
@@ -295,7 +295,7 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
 
     let result;
     try {
-      const provider = await resolveProvider(uid, modelId);
+      const provider = await resolveProvider(uid, modelId, "mockInterview");
       result = await provider.generate({
         prompt,
         responseSchema: SESSION_EVAL_SCHEMA,

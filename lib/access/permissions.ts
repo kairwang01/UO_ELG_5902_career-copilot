@@ -47,6 +47,8 @@ export type AdminPermission =
 const REVIEWER_PERMISSIONS: AdminPermission[] = [
   'admin.dashboard.read',
   'admin.audit.read',
+  'admin.models.read',
+  'admin.keys.read',
 ];
 
 const ADMIN_PERMISSIONS: AdminPermission[] = [
@@ -90,9 +92,9 @@ export const hasAdminPermission = (
 
 /** Human-readable summaries rendered in the Access Control permission matrix. */
 export const ADMIN_ROLE_DESCRIPTIONS: Record<AdminRole, string> = {
-  reviewer: 'Read-only oversight: platform dashboard and the audit trail.',
-  admin: 'Day-to-day operations: users, credits, subscriptions, sample accounts, prompts (drafts), quotas.',
-  super: 'Full control: everything above plus model routing, provider keys, prompt publishing, admin invitations, API platform, billing and Web3 settings.',
+  reviewer: 'Read-only oversight: platform dashboard, audit trail, and masked model routing.',
+  admin: 'Day-to-day operations: users, credits, subscriptions, sample accounts, prompts (drafts), quotas, and read-only model routing.',
+  super: 'Full control: everything above plus model routing edits, provider keys, prompt publishing, admin invitations, API platform, billing and Web3 settings.',
 };
 
 /**
@@ -110,6 +112,7 @@ export const ADMIN_PERMISSION_MATRIX: { label: string; permission: AdminPermissi
   { label: 'Edit prompt drafts', permission: 'admin.prompts.draft' },
   { label: 'Publish / roll back prompts', permission: 'admin.prompts.publish' },
   { label: 'Edit platform quotas', permission: 'admin.quotas.write' },
+  { label: 'View models & routing', permission: 'admin.models.read' },
   { label: 'Manage models & routing', permission: 'admin.models.write' },
   { label: 'View / rotate provider keys', permission: 'admin.keys.rotate' },
   { label: 'View console access', permission: 'admin.admins.read' },

@@ -9,10 +9,12 @@ import {
   LlmConfigDoc,
   ModelEntry,
   ModelsDoc,
+  ModuleRoutes,
   PLATFORM_CONFIG_COLLECTION,
   PLATFORM_DOCS,
   PlanQuota,
   QuotasDoc,
+  RoutingPool,
   ToolQuota,
 } from "./schema";
 import {
@@ -34,6 +36,61 @@ let promptsCache: Record<string, string> | null = null;
 let appCache: AppConfigDoc | null = null;
 let cacheAt = 0;
 const TTL_MS = 60_000;
+
+const DEFAULT_SPEED_POOL_MEMBERS = [
+  { label: "Tencent Hunyuan 3", weight: 50 },
+  { label: "Auto · multi-model (legacy)", weight: 30 },
+  { label: "Deepseek V4 Flash(Limited Testing)", weight: 20 },
+];
+
+const DEFAULT_QUALITY_POOL_MEMBERS = [
+  { label: "Deepseek-v4-Pro For Demo Only", weight: 100 },
+];
+
+const DEFAULT_MODULE_ROUTES: ModuleRoutes = {
+  mockInterview: "speed",
+  analyzeResume: "quality",
+  generateCoverLetter: "quality",
+  generateCareerPath: "quality",
+  applyResumeImprovements: "quality",
+  convertResumeFormat: "quality",
+};
+
+const normalizeModelLabel = (label: string): string => label.trim().toLowerCase();
+
+function defaultPoolMembersForLabels(
+  registry: ModelEntry[],
+  specs: Array<{ label: string; weight: number }>
+): RoutingPool["members"] {
+  return specs.flatMap((spec) => {
+    const model = registry.find((entry) => normalizeModelLabel(entry.label) === normalizeModelLabel(spec.label));
+    return model ? [{ modelId: model.id, tier: 1, weight: spec.weight, enabled: true }] : [];
+  });
+}
+
+function cloneRoutingPools(pools: RoutingPool[]): RoutingPool[] {
+  return pools.map((pool) => ({
+    ...pool,
+    members: pool.members.map((member) => ({ ...member })),
+  }));
+}
+
+export function defaultRoutingPoolsForRegistry(registry: ModelEntry[]): RoutingPool[] {
+  return [
+    {
+      id: "speed",
+      label: "Speed priority",
+      enabled: true,
+      members: defaultPoolMembersForLabels(registry, DEFAULT_SPEED_POOL_MEMBERS),
+    },
+    {
+      id: "quality",
+      label: "Quality priority",
+      enabled: true,
+      members: defaultPoolMembersForLabels(registry, DEFAULT_QUALITY_POOL_MEMBERS),
+    },
+  ];
+}
 
 export function maskSecret(value: string | undefined): string {
   if (!value) return "";
@@ -224,6 +281,19 @@ export function getModelRegistry(): ModelEntry[] {
     return firestoreModels;
   }
   return _defaultModels ?? [];
+}
+
+export function getRoutingPools(): RoutingPool[] {
+  const pools = modelsCache?.routing_pools;
+  if (Array.isArray(pools) && pools.length > 0) return cloneRoutingPools(pools);
+  return defaultRoutingPoolsForRegistry(getModelRegistry());
+}
+
+export function getModuleRoutes(): ModuleRoutes {
+  return {
+    ...DEFAULT_MODULE_ROUTES,
+    ...(modelsCache?.module_routes ?? {}),
+  };
 }
 
 /** Admin-safe view: api_key and api_keys replaced with masked previews. */

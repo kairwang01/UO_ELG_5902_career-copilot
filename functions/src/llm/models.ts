@@ -35,11 +35,18 @@
 
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import * as crypto from "crypto";
 import { LLMProvider, LLMRequest, LLMResult } from "./LLMProvider";
 import { llmStubEnabled, makeStubProvider } from "./stubProvider";
 import { GeminiProvider } from "./providers/geminiProvider";
 import { OpenAICompatibleProvider } from "./providers/openAICompatibleProvider";
+import { keyHash } from "./keyHash";
+import {
+  candidatesForPoolTier,
+  routingPoolForRoute,
+  routingPoolTiers,
+  selectWeightedCandidate,
+  RoutingCandidate,
+} from "./routingPools";
 import {
   ensurePlatformCaches,
   getKairllmApiKey,
@@ -47,11 +54,13 @@ import {
   getDeepseekApiKey,
   getDeepseekBaseUrl,
   getModelRegistry,
+  getModuleRoutes,
+  getRoutingPools,
   registerDefaultModels,
   getDefaultModelId,
   getFreeMaxOutputTokens,
 } from "../config/env";
-import { ModelEntry } from "../admin/schema";
+import { ModelEntry, RoutingPool } from "../admin/schema";
 import { USERS_COLLECTION, USER_FIELDS } from "../credits/schema";
 
 if (!admin.apps.length) {
@@ -228,10 +237,6 @@ export function modelsForTier(tier: Tier, business = false): ModelEntry[] {
 // ---------------------------------------------------------------------------
 
 /** Stable 16-hex-char ID derived from a key — never stores the raw key. */
-function keyHash(rawKey: string): string {
-  return crypto.createHash("sha256").update(rawKey).digest("hex").slice(0, 16);
-}
-
 /**
  * Failure classes that trigger key rotation (availability errors).
  * HTTP 401/403/429, timeout, empty response, provider quota errors.
@@ -667,6 +672,52 @@ class FallbackProvider implements LLMProvider {
  * Admins can deepen the gap later via per-tier prompt variants without touching
  * provider code — the token cap is the enforceable output boundary.
  */
+function buildProviderForPoolMember(candidate: RoutingCandidate): LLMProvider | null {
+  const { model, member } = candidate;
+  if (!member.keyHash) return buildProvider(model);
+  const rawKey = resolveKeyPool(model).find((key) => keyHash(key) === member.keyHash);
+  if (!rawKey) return null;
+  return new RotatingKeyProvider(model, [rawKey]);
+}
+
+class RoutingPoolProvider implements LLMProvider {
+  readonly name: string;
+  private readonly pool: RoutingPool;
+  private readonly registry: ModelEntry[];
+  private readonly allowedModelIds: Set<string>;
+
+  constructor(pool: RoutingPool, registry: ModelEntry[], allowedModelIds: Set<string>) {
+    this.name = pool.id;
+    this.pool = pool;
+    this.registry = registry;
+    this.allowedModelIds = allowedModelIds;
+  }
+
+  async generate(req: LLMRequest): Promise<LLMResult> {
+    let lastErr: unknown;
+    for (const tier of routingPoolTiers(this.pool)) {
+      let candidates = candidatesForPoolTier(this.pool, this.registry, this.allowedModelIds, tier);
+      while (candidates.length > 0) {
+        const selected = selectWeightedCandidate(candidates);
+        if (!selected) break;
+        candidates = candidates.filter((candidate) => candidate !== selected);
+        const provider = buildProviderForPoolMember(selected);
+        if (!provider) continue;
+        try {
+          return await provider.generate(req);
+        } catch (err: unknown) {
+          lastErr = err;
+          if (!isAvailabilityError(err)) throw err;
+          console.warn(
+            `[routing-pool] Pool "${this.pool.id}" tier ${tier} member "${selected.member.modelId}" unavailable.`
+          );
+        }
+      }
+    }
+    throw lastErr ?? new Error(`No available routing-pool member for "${this.pool.id}".`);
+  }
+}
+
 class FreeTierOutputCapProvider implements LLMProvider {
   readonly name: string;
   private readonly inner: LLMProvider;
@@ -777,7 +828,8 @@ export interface CustomProviderConfig {
  */
 export async function resolveProvider(
   uid: string,
-  requestedModelId?: string
+  requestedModelId?: string,
+  routeKey?: string
 ): Promise<LLMProvider> {
   // E2E happy-path harness (SCRUM-42): deterministic, free, schema-valid output.
   // Gated on E2E_LLM_STUB so it can never short-circuit a real production request.
@@ -838,6 +890,24 @@ export async function resolveProvider(
   const autoOption = registry.find((m) => m.id === "auto" && m.enabled);
   const allowedWithAuto =
     tier === "paid" && autoOption ? [...allowed, autoOption] : allowed;
+  const allowedIds = new Set(allowedWithAuto.map((m) => m.id));
+
+  const routePool = routingPoolForRoute(routeKey, getModuleRoutes(), getRoutingPools());
+  if (routePool) {
+    const hasUsableCandidate = routingPoolTiers(routePool).some((poolTier) =>
+      candidatesForPoolTier(routePool, registry, allowedIds, poolTier).some((candidate) =>
+        !candidate.member.keyHash ||
+        resolveKeyPool(candidate.model).some((key) => keyHash(key) === candidate.member.keyHash)
+      )
+    );
+    if (hasUsableCandidate) {
+      const provider = new RoutingPoolProvider(routePool, registry, allowedIds);
+      if (tier === "free") {
+        return new FreeTierOutputCapProvider(provider, getFreeMaxOutputTokens());
+      }
+      return provider;
+    }
+  }
 
   // --- Feature A: admin-configured default model ---
   // Prefer the admin-set default when it exists in the registry, is enabled,

@@ -2,15 +2,16 @@
  * Admin portal callables — platform config, quotas, usage reports, user management.
  *
  * Role matrix (enforced server-side — frontend hiding is NOT sufficient):
- *   reviewer : adminGetDashboard, adminGetAuditLog, adminCheckAccess, adminWhoAmI
- *   admin    : + adminGetLlmConfig, adminUpdateLlmConfig, adminGetQuotas,
+ *   reviewer : adminGetDashboard, adminGetAuditLog, adminCheckAccess, adminWhoAmI,
+ *              adminGetLlmConfig, adminListModels
+ *   admin    : + adminGetQuotas,
  *                adminUpdateQuotas, adminListUsers, adminGetUserReport,
  *                adminAdjustCredits, adminSetSubscription, adminDeleteUser,
  *                adminCreateSampleAccounts, adminGetPrompts, adminUpdatePrompt,
- *                adminResetPrompt, adminListModels, adminUpsertModel,
- *                adminDeleteModel, adminTestModel
- *   super    : + adminSetAdmin (LEGACY, deprecated), adminInviteAdmin,
- *                adminSetAdminRole, adminRemoveAdmin
+ *                adminResetPrompt
+ *   super    : + adminUpdateLlmConfig, adminUpsertModel, adminDeleteModel,
+ *                adminTestModel, adminSetAdmin (LEGACY, deprecated),
+ *                adminInviteAdmin, adminSetAdminRole, adminRemoveAdmin
  *
  * Security audit fixes applied (Sprint 3 Phase-0):
  *   A1  CRITICAL  Credit delta capped: |delta| ≤ 5000 per call; daily totals
@@ -301,7 +302,7 @@ export const adminGetDashboardFunction = onCall({ invoker: "public" }, async (re
 
 /** Masked LLM config for the settings form. */
 export const adminGetLlmConfigFunction = onCall({ invoker: "public" }, async (request) => {
-  await requireRole(request, "admin");
+  await requireRole(request, "reviewer");
   return getLlmConfigMasked();
 });
 
@@ -317,7 +318,7 @@ interface UpdateLlmRequest {
 
 /** Update API keys / models (empty string = leave unchanged). */
 export const adminUpdateLlmConfigFunction = onCall({ invoker: "public" }, async (request) => {
-  const { uid: adminUid } = await requireRole(request, "admin");
+  const { uid: adminUid } = await requireRole(request, "super");
   const data = (request.data ?? {}) as UpdateLlmRequest;
 
   const ref = db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.llm);

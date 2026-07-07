@@ -120,7 +120,7 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
     // (spec.build reads getPromptOverride, which is otherwise cold on a fresh instance).
     await ensurePlatformCaches();
     const llmRequest = spec.build(payload ?? {});
-    const provider = await resolveProvider(uid, model);
+    const provider = await resolveProvider(uid, model, tool);
     let notice: string | undefined;
     let result;
 

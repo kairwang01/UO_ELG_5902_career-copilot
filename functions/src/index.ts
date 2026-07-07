@@ -87,6 +87,7 @@ export { adminListModelsFunction       as adminListModels      } from "./handler
 export { adminUpsertModelFunction      as adminUpsertModel     } from "./handlers/adminModels";
 export { adminDeleteModelFunction      as adminDeleteModel     } from "./handlers/adminModels";
 export { adminSetDefaultModelFunction  as adminSetDefaultModel } from "./handlers/adminModels";
+export { adminUpdateModelRoutingFunction as adminUpdateModelRouting } from "./handlers/adminModels";
 export { createCompanyReviewFunction   as createCompanyReview  } from "./handlers/companyReviews";
 export { listCompanyReviewsFunction    as listCompanyReviews   } from "./handlers/companyReviews";
 export { onCompanyReviewWrittenFunction as onCompanyReviewWritten } from "./handlers/companyReviews";

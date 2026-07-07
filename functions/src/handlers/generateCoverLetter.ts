@@ -91,7 +91,7 @@ export const generateCoverLetterFunction = onCall({ invoker: "public", timeoutSe
   try {
     // resolveProvider builds the provider (and reads the API key) — keep it inside
     // the try so a missing-key/build failure also triggers the refund below.
-    const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
+    const provider = await resolveProvider(uid, (request.data as { model?: string })?.model, "generateCoverLetter");
     const result = await provider.generate({
       prompt,
       responseSchema: COVER_LETTER_SCHEMA,

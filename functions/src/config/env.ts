@@ -28,6 +28,8 @@ export {
   maskSecret,
   getModelRegistry,
   getModelRegistryMasked,
+  getRoutingPools,
+  getModuleRoutes,
   registerDefaultModels,
   getPromptOverride,
   getAllPromptOverrides,

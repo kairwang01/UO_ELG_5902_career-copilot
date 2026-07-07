@@ -46,6 +46,12 @@ export interface ModelEntry {
    * Max 10 keys; each must be a non-empty string ≤ 200 chars.
    */
   api_keys?: string[];
+  /** Admin-safe preview for the legacy single key. Derived at read time only. */
+  api_key_hash?: string;
+  /** Admin-safe previews for api_keys[]. Derived at read time only. */
+  api_key_hashes?: string[];
+  /** Admin-safe key picker entries. Derived at read time only; never stores raw keys. */
+  key_previews?: ModelKeyPreview[];
   /**
    * When set, inherits key + base_url from the named platform_config/llm entry
    * when `api_key` / `api_keys` / `base_url` on this entry are absent.
@@ -72,11 +78,40 @@ export interface ModelEntry {
   fallbackChain?: string[];
 }
 
+export interface ModelKeyPreview {
+  hash: string;
+  masked: string;
+  index: number;
+  source: "api_key" | "api_keys" | "builtin";
+}
+
+export interface RoutingPoolMember {
+  modelId: string;
+  /** Optional key hash. Omit to let the model use its whole configured key pool. */
+  keyHash?: string;
+  /** Lower tier numbers are tried first; higher tiers are fallback. */
+  tier: number;
+  /** Relative traffic share inside the same tier. */
+  weight: number;
+  enabled: boolean;
+}
+
+export interface RoutingPool {
+  id: string;
+  label: string;
+  enabled: boolean;
+  members: RoutingPoolMember[];
+}
+
+export type ModuleRoutes = Record<string, string>;
+
 /** Firestore shape of platform_config/models. */
 export interface ModelsDoc {
   models?: ModelEntry[];
   /** Admin-configured default model id. When set, overrides the hardcoded DEFAULT_MODEL_ID. */
   default_model_id?: string;
+  routing_pools?: RoutingPool[];
+  module_routes?: ModuleRoutes;
 }
 
 export const USAGE_EVENTS_COLLECTION = "usage_events";

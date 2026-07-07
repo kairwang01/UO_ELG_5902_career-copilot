@@ -254,6 +254,14 @@ export interface ModelEntry {
    * On upsert: existing saved keys are not echoed back; new entries are appended server-side.
    */
   api_keys?: string[];
+  api_key_hash?: string;
+  api_key_hashes?: string[];
+  key_previews?: {
+    hash: string;
+    masked: string;
+    index: number;
+    source: 'api_key' | 'api_keys' | 'builtin';
+  }[];
   /** Ordered list of model ids to fall back to when this model fails. */
   fallbackChain?: string[];
   /** Numeric routing priority (lower = higher priority). */
@@ -276,8 +284,84 @@ export interface ModelEntry {
   };
 }
 
+export interface RoutingPoolMember {
+  modelId: string;
+  keyHash?: string;
+  tier: number;
+  weight: number;
+  enabled: boolean;
+}
+
+export interface RoutingPool {
+  id: string;
+  label: string;
+  enabled: boolean;
+  members: RoutingPoolMember[];
+}
+
+export type ModuleRoutes = Record<string, string>;
+
+export const DEFAULT_MODULE_ROUTES: ModuleRoutes = {
+  mockInterview: 'speed',
+  analyzeResume: 'quality',
+  generateCoverLetter: 'quality',
+  generateCareerPath: 'quality',
+  applyResumeImprovements: 'quality',
+  convertResumeFormat: 'quality',
+};
+
+const DEFAULT_SPEED_POOL_MEMBERS = [
+  { label: 'Tencent Hunyuan 3', weight: 50 },
+  { label: 'Auto · multi-model (legacy)', weight: 30 },
+  { label: 'Deepseek V4 Flash(Limited Testing)', weight: 20 },
+];
+
+const DEFAULT_QUALITY_POOL_MEMBERS = [
+  { label: 'Deepseek-v4-Pro For Demo Only', weight: 100 },
+];
+
+const normalizeModelLabel = (label: string) => label.trim().toLowerCase();
+
+const defaultPoolMembersForLabels = (
+  models: ModelEntry[],
+  specs: Array<{ label: string; weight: number }>,
+): RoutingPoolMember[] =>
+  specs.flatMap((spec) => {
+    const model = models.find((entry) => normalizeModelLabel(entry.label) === normalizeModelLabel(spec.label));
+    return model ? [{ modelId: model.id, tier: 1, weight: spec.weight, enabled: true }] : [];
+  });
+
+export const defaultRoutingPoolsForModels = (models: ModelEntry[]): RoutingPool[] => [
+  {
+    id: 'speed',
+    label: 'Speed priority',
+    enabled: true,
+    members: defaultPoolMembersForLabels(models, DEFAULT_SPEED_POOL_MEMBERS),
+  },
+  {
+    id: 'quality',
+    label: 'Quality priority',
+    enabled: true,
+    members: defaultPoolMembersForLabels(models, DEFAULT_QUALITY_POOL_MEMBERS),
+  },
+];
+
+export const normalizeModelRouting = (
+  models: ModelEntry[],
+  routingPools?: RoutingPool[],
+  moduleRoutes?: ModuleRoutes,
+) => ({
+  routingPools: routingPools && routingPools.length > 0 ? routingPools : defaultRoutingPoolsForModels(models),
+  moduleRoutes: { ...DEFAULT_MODULE_ROUTES, ...(moduleRoutes ?? {}) },
+});
+
 export const adminListModels = () =>
-  call<Record<string, never>, { models: ModelEntry[]; defaultModelId: string | null }>(
+  call<Record<string, never>, {
+    models: ModelEntry[];
+    defaultModelId: string | null;
+    routingPools?: RoutingPool[];
+    moduleRoutes?: ModuleRoutes;
+  }>(
     'adminListModels',
   )({}).then((r) => r.data);
 
@@ -294,6 +378,14 @@ export const adminUpsertModel = (model: ModelEntry) =>
 
 export const adminDeleteModel = (id: string) =>
   call<{ id: string }, { models: ModelEntry[] }>('adminDeleteModel')({ id }).then((r) => r.data);
+
+export const adminUpdateModelRouting = (input: {
+  routingPools: RoutingPool[];
+  moduleRoutes: ModuleRoutes;
+}) =>
+  call<typeof input, { routingPools: RoutingPool[]; moduleRoutes: ModuleRoutes }>(
+    'adminUpdateModelRouting',
+  )(input).then((r) => r.data);
 
 export interface TestModelResult {
   ok: boolean;

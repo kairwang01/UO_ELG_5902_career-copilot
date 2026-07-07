@@ -6,7 +6,7 @@
  * model picker within one TTL cycle (≤60 s) without any redeploy.
  *
  * Security invariants:
- *   - adminListModels requires 'admin' role — returns masked keys only.
+ *   - adminListModels requires 'reviewer' role — returns masked keys only.
  *   - adminUpsertModel / adminDeleteModel require 'super' role — they can
  *     create/overwrite api_key / api_keys material.
  *   - api_key and api_keys are NEVER returned raw — masked via maskSecret.
@@ -28,16 +28,22 @@ import {
   PLATFORM_DOCS,
   ModelEntry,
   ModelsDoc,
+  ModuleRoutes,
+  RoutingPool,
+  RoutingPoolMember,
 } from "../admin/schema";
 import {
   ensurePlatformCaches,
   getDefaultModelId,
   getModelRegistry,
-  getModelRegistryMasked,
+  getModuleRoutes,
+  getRoutingPools,
+  maskSecret,
   refreshPlatformCaches,
 } from "../admin/platformConfig";
 import { logAdminAction } from "../admin/usageLog";
 import { DEFAULT_MODEL_ID, DEFAULT_MODELS } from "../llm/models";
+import { keyHash } from "../llm/keyHash";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -55,6 +61,46 @@ const VALID_BUILTINS = new Set(["kairllm", "deepseek", undefined]);
 const MAX_API_KEYS = 10;
 const MAX_API_KEY_LEN = 200;
 const MAX_FALLBACK_CHAIN = 5;
+const MAX_ROUTING_POOLS = 12;
+const MAX_POOL_MEMBERS = 60;
+const MAX_MODULE_ROUTES = 80;
+const SLUG_RE = /^[a-zA-Z0-9_-]{1,48}$/;
+
+function keyHashesForModel(entry: ModelEntry): Set<string> {
+  const hashes = new Set<string>();
+  if (entry.api_key) hashes.add(keyHash(entry.api_key));
+  for (const key of entry.api_keys ?? []) hashes.add(keyHash(key));
+  return hashes;
+}
+
+function withAdminKeyPreviews(masked: ModelEntry, raw: ModelEntry): ModelEntry {
+  const previews = [
+    ...(raw.api_key
+      ? [{ hash: keyHash(raw.api_key), masked: maskSecret(raw.api_key), index: 0, source: "api_key" as const }]
+      : []),
+    ...(raw.api_keys ?? []).map((key, index) => ({
+      hash: keyHash(key),
+      masked: maskSecret(key),
+      index,
+      source: "api_keys" as const,
+    })),
+  ];
+  return {
+    ...masked,
+    ...(raw.api_key ? { api_key_hash: keyHash(raw.api_key) } : {}),
+    ...(raw.api_keys?.length ? { api_key_hashes: raw.api_keys.map(keyHash) } : {}),
+    ...(previews.length > 0 ? { key_previews: previews } : {}),
+  };
+}
+
+function modelsForAdminResponse(): ModelEntry[] {
+  const rawModels = getModelRegistry();
+  return rawModels.map((raw) => withAdminKeyPreviews({
+    ...raw,
+    api_key: raw.api_key ? maskSecret(raw.api_key) : undefined,
+    api_keys: raw.api_keys?.length ? raw.api_keys.map(maskSecret) : undefined,
+  }, raw));
+}
 
 /** Validates and normalises an incoming ModelEntry, throwing HttpsError on bad input. */
 function validateEntry(raw: unknown, isCreate: boolean): ModelEntry {
@@ -219,8 +265,98 @@ function validateChainReferences(
   }
 }
 
+function validateRoutingPools(rawPools: unknown, registry: ModelEntry[]): RoutingPool[] {
+  if (!Array.isArray(rawPools)) {
+    throw new HttpsError("invalid-argument", "routing_pools must be an array.");
+  }
+  if (rawPools.length > MAX_ROUTING_POOLS) {
+    throw new HttpsError("invalid-argument", `routing_pools must contain at most ${MAX_ROUTING_POOLS} pools.`);
+  }
+
+  const modelIds = new Set(registry.map((m) => m.id));
+  const keyHashesByModel = new Map(registry.map((m) => [m.id, keyHashesForModel(m)]));
+  const seenIds = new Set<string>();
+
+  return rawPools.map((raw, poolIndex) => {
+    if (!raw || typeof raw !== "object") {
+      throw new HttpsError("invalid-argument", `routing_pools[${poolIndex}] must be an object.`);
+    }
+    const p = raw as Record<string, unknown>;
+    const id = typeof p.id === "string" ? p.id.trim() : "";
+    if (!SLUG_RE.test(id)) {
+      throw new HttpsError("invalid-argument", `routing_pools[${poolIndex}].id must be a slug up to 48 chars.`);
+    }
+    if (seenIds.has(id)) {
+      throw new HttpsError("invalid-argument", `routing pool "${id}" is duplicated.`);
+    }
+    seenIds.add(id);
+
+    const label = typeof p.label === "string" && p.label.trim() ? p.label.trim().slice(0, 80) : id;
+    const membersRaw = Array.isArray(p.members) ? p.members : [];
+    if (membersRaw.length > MAX_POOL_MEMBERS) {
+      throw new HttpsError("invalid-argument", `routing pool "${id}" has too many members.`);
+    }
+
+    const members: RoutingPoolMember[] = membersRaw.map((rawMember, memberIndex) => {
+      if (!rawMember || typeof rawMember !== "object") {
+        throw new HttpsError("invalid-argument", `routing pool "${id}" member ${memberIndex} must be an object.`);
+      }
+      const m = rawMember as Record<string, unknown>;
+      const modelId = typeof m.modelId === "string" ? m.modelId.trim() : "";
+      if (!modelIds.has(modelId)) {
+        throw new HttpsError("invalid-argument", `routing pool "${id}" references unknown model "${modelId}".`);
+      }
+      const tier = Number(m.tier);
+      const weight = Number(m.weight);
+      if (!Number.isInteger(tier) || tier <= 0) {
+        throw new HttpsError("invalid-argument", `routing pool "${id}" member tier must be a positive integer.`);
+      }
+      if (!Number.isInteger(weight) || weight <= 0) {
+        throw new HttpsError("invalid-argument", `routing pool "${id}" member weight must be a positive integer.`);
+      }
+      const keyHashValue = typeof m.keyHash === "string" ? m.keyHash.trim() : "";
+      if (keyHashValue && !keyHashesByModel.get(modelId)?.has(keyHashValue)) {
+        throw new HttpsError("invalid-argument", `routing pool "${id}" references an unknown saved key for model "${modelId}".`);
+      }
+      return {
+        modelId,
+        ...(keyHashValue ? { keyHash: keyHashValue } : {}),
+        tier,
+        weight,
+        enabled: m.enabled !== false,
+      };
+    });
+
+    return { id, label, enabled: p.enabled !== false, members };
+  });
+}
+
+function validateModuleRoutes(rawRoutes: unknown, pools: RoutingPool[]): ModuleRoutes {
+  if (!rawRoutes || typeof rawRoutes !== "object" || Array.isArray(rawRoutes)) {
+    throw new HttpsError("invalid-argument", "module_routes must be an object.");
+  }
+  const poolIds = new Set(pools.map((p) => p.id));
+  const entries = Object.entries(rawRoutes as Record<string, unknown>);
+  if (entries.length > MAX_MODULE_ROUTES) {
+    throw new HttpsError("invalid-argument", `module_routes must contain at most ${MAX_MODULE_ROUTES} entries.`);
+  }
+  const routes: ModuleRoutes = {};
+  for (const [rawKey, rawPoolId] of entries) {
+    const key = rawKey.trim();
+    const poolId = typeof rawPoolId === "string" ? rawPoolId.trim() : "";
+    if (!SLUG_RE.test(key)) {
+      throw new HttpsError("invalid-argument", `module route "${rawKey}" must be a slug up to 48 chars.`);
+    }
+    if (!poolIds.has(poolId)) {
+      throw new HttpsError("invalid-argument", `module route "${key}" references unknown pool "${poolId}".`);
+    }
+    routes[key] = poolId;
+  }
+  return routes;
+}
+
 // ---------------------------------------------------------------------------
-// adminListModels  (requires 'admin')
+// adminListModels  (requires 'reviewer')
 // ---------------------------------------------------------------------------
 
 /**
@@ -230,10 +366,10 @@ function validateChainReferences(
  * If Firestore has no models doc (or empty array), returns DEFAULT_MODELS.
  * Seeds nothing — read-only.
  *
- * Role requirement: 'admin' (reading masked keys is safe for non-super admins).
+ * Role requirement: 'reviewer' (reading masked keys is safe for read-only admins).
  */
 export const adminListModelsFunction = onCall({ invoker: "public" }, async (request) => {
-  await requireRole(request, "admin");
+  await requireRole(request, "reviewer");
   await ensurePlatformCaches();
 
   // Fetch key health docs best-effort. The collection holds one doc per model id
@@ -273,7 +409,7 @@ export const adminListModelsFunction = onCall({ invoker: "public" }, async (requ
     // Health fetch is strictly best-effort; never block the response.
   }
 
-  const maskedModels = getModelRegistryMasked().map((m) => {
+  const maskedModels = modelsForAdminResponse().map((m) => {
     const h = healthByModelId[m.id];
     if (!h) return m;
     return { ...m, keyHealth: h };
@@ -283,6 +419,8 @@ export const adminListModelsFunction = onCall({ invoker: "public" }, async (requ
     models: maskedModels,
     // Include the admin-configured default so the UI can render the badge.
     defaultModelId: getDefaultModelId() ?? DEFAULT_MODEL_ID,
+    routingPools: getRoutingPools(),
+    moduleRoutes: getModuleRoutes(),
   };
 });
 
@@ -353,7 +491,7 @@ export const adminUpsertModelFunction = onCall({ invoker: "public" }, async (req
     nextRegistry = [...current.slice(0, existingIndex), merged, ...current.slice(existingIndex + 1)];
   }
 
-  await ref.set({ models: nextRegistry } satisfies ModelsDoc);
+  await ref.set({ models: nextRegistry } satisfies Partial<ModelsDoc>, { merge: true });
   await refreshPlatformCaches();
 
   await logAdminAction({
@@ -374,7 +512,7 @@ export const adminUpsertModelFunction = onCall({ invoker: "public" }, async (req
     },
   });
 
-  return { models: getModelRegistryMasked() };
+  return { models: modelsForAdminResponse() };
 });
 
 // ---------------------------------------------------------------------------
@@ -406,7 +544,8 @@ export const adminDeleteModelFunction = onCall({ invoker: "public" }, async (req
   await ensurePlatformCaches();
   const ref = db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.models);
   const snap = await ref.get();
-  const fsModels = snap.exists ? (snap.data() as ModelsDoc).models : undefined;
+  const doc = snap.exists ? (snap.data() as ModelsDoc) : {};
+  const fsModels = doc.models;
   // First mutation on an unconfigured registry materialises the FULL defaults, so
   // editing/deleting one model never drops the others (getModelRegistry treats a
   // non-empty Firestore array as the complete registry).
@@ -417,7 +556,15 @@ export const adminDeleteModelFunction = onCall({ invoker: "public" }, async (req
     throw new HttpsError("not-found", `Model "${id}" not found in the registry.`);
   }
 
-  await ref.set({ models: nextRegistry } satisfies ModelsDoc);
+  const cleanedRoutingPools = doc.routing_pools?.map((pool) => ({
+    ...pool,
+    members: pool.members.filter((member) => member.modelId !== id),
+  }));
+
+  await ref.set({
+    models: nextRegistry,
+    ...(cleanedRoutingPools ? { routing_pools: cleanedRoutingPools } : {}),
+  } satisfies Partial<ModelsDoc>, { merge: true });
   await refreshPlatformCaches();
 
   await logAdminAction({
@@ -426,8 +573,42 @@ export const adminDeleteModelFunction = onCall({ invoker: "public" }, async (req
     details: { id },
   });
 
-  return { models: getModelRegistryMasked() };
+  return { models: modelsForAdminResponse() };
 });
+
+export const adminUpdateModelRoutingFunction = onCall({ invoker: "public" }, async (request) => {
+  const { uid: adminUid } = await requireRole(request, "super");
+  const data = (request.data ?? {}) as { routingPools?: unknown; moduleRoutes?: unknown };
+
+  await ensurePlatformCaches();
+  const registry = getModelRegistry();
+  const routingPools = validateRoutingPools(data.routingPools, registry);
+  const moduleRoutes = validateModuleRoutes(data.moduleRoutes, routingPools);
+
+  const ref = db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.models);
+  await ref.set(
+    { routing_pools: routingPools, module_routes: moduleRoutes } satisfies Partial<ModelsDoc>,
+    { merge: true }
+  );
+  await refreshPlatformCaches();
+
+  await logAdminAction({
+    admin_uid: adminUid,
+    action: "update_model_routing",
+    details: {
+      pool_count: routingPools.length,
+      member_count: routingPools.reduce((sum, pool) => sum + pool.members.length, 0),
+      module_route_count: Object.keys(moduleRoutes).length,
+    },
+  });
+
+  return { routingPools: getRoutingPools(), moduleRoutes: getModuleRoutes() };
+});
+
+export const _testRoutingValidation = {
+  validateRoutingPools,
+  validateModuleRoutes,
+};
 
 // ---------------------------------------------------------------------------
 // adminSetDefaultModel  (requires 'super' — changes the global default model)

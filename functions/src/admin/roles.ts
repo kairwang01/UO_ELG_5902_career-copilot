@@ -48,9 +48,9 @@ const ROLE_ORDER: Record<AdminRole, number> = {
 };
 
 const ROLE_SUMMARIES: Record<AdminRole, string> = {
-  reviewer: "Reviewer can view the dashboard and audit log only.",
-  admin: "Admin can manage users, credits, subscriptions, prompt drafts, quotas, and API platform read-only views.",
-  super: "Super can do everything admin can, plus model/key management, prompt publishing, console access, billing, API platform management, and Web3 settings.",
+  reviewer: "Reviewer can view the dashboard, audit log, and masked model routing settings.",
+  admin: "Admin can manage users, credits, subscriptions, prompt drafts, quotas, API platform read-only views, and masked model routing settings.",
+  super: "Super can do everything admin can, plus model/key edits, prompt publishing, console access, billing, API platform management, and Web3 settings.",
 };
 
 /** Returns true when `actual` satisfies the `required` minimum. */

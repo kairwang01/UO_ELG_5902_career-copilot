@@ -42,11 +42,13 @@ import {
   adminSetDefaultModel,
   adminSetSubscription,
   adminTestModel,
+  adminUpdateModelRouting,
   adminUpdateLlmConfig,
   adminUpdatePrompt,
   adminUpdateQuotas,
   adminUpsertModel,
   adminWhoAmI,
+  normalizeModelRouting,
   type AdminDashboard,
   type AdminUserFilters,
   type AdminPlanKey,
@@ -58,8 +60,10 @@ import {
   type AdminUserRow,
   type AuditLogEntry,
   type ModelEntry,
+  type ModuleRoutes,
   type PromptEntry,
   type PromptVersion,
+  type RoutingPool,
   type TestModelResult,
 } from '../../services/adminClient';
 import { TOOL_CREDIT_COSTS } from '../../config/credits';
@@ -67,6 +71,7 @@ import { ADMIN_ROLE_DESCRIPTIONS, hasAdminPermission, type AdminRole } from '../
 import { subscriptionPlansForRole } from '../../lib/access/subscriptionPlans';
 import { PermissionMatrix, ProductRoleOverview } from './AccessControlSections';
 import { KeyPoolHealthSection } from './KeyPoolHealthSection';
+import { RoutingPoolsSection } from './RoutingPoolsSection';
 import { ApiPlatformPanel } from './ApiPlatformPanel';
 import { Web3SettingsPanel } from './Web3SettingsPanel';
 import { LlmProviderIcon } from './LlmProviderIcon';
@@ -132,13 +137,14 @@ const t = (key: string) => STRINGS[key] ?? key;
 
 type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'billing' | 'apiplatform' | 'web3' | 'audit';
 type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
-type ModelSectionId = 'health' | 'credentials' | 'registry';
+type ModelSectionId = 'routing' | 'health' | 'credentials' | 'registry';
 type QuotaSectionId = 'global' | 'plans' | 'tools' | 'posting' | 'interview';
 
 // Ordered by how often an operator touches each surface: the registry is the
 // primary working area, credentials are set-and-forget, health is monitoring.
 const MODEL_SECTIONS: { id: ModelSectionId; label: string }[] = [
   { id: 'registry', label: 'Model registry' },
+  { id: 'routing', label: 'Routing pools' },
   { id: 'credentials', label: 'Provider credentials' },
   { id: 'health', label: 'Key health' },
 ];
@@ -154,17 +160,19 @@ const QUOTA_SECTIONS: { id: QuotaSectionId; label: string }[] = [
 // Keep this in sync with admin page behavior, role permissions, and sidebar changes.
 const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
   dashboard: {
-    description: 'Overview of platform health, usage, and revenue. Model routing status is visible to super users only.',
+    description: 'Overview of platform health, usage, revenue, and model routing status for roles with model read access.',
     roles: {
       super: 'View dashboard data and change the default model routing.',
-      admin: 'View dashboard data.',
-      reviewer: 'View dashboard data.',
+      admin: 'View dashboard data and masked model routing status.',
+      reviewer: 'View dashboard data and masked model routing status.',
     },
   },
   ai: {
-    description: 'Manage model routing, provider keys, provider icons, fallback chains, model testing, and key-health checks with sticky section shortcuts.',
+    description: 'Review model routing pools, provider keys, weighted tier fallback, provider icons, model testing, and key-health checks with sticky section shortcuts.',
     roles: {
-      super: 'View and edit models, provider keys, defaults, and routing settings.',
+      super: 'View and edit models, provider keys, routing pools, module routes, defaults, and routing settings.',
+      admin: 'View masked model and routing settings without editing keys or routing.',
+      reviewer: 'View masked model and routing settings without editing keys or routing.',
     },
   },
   prompts: {
@@ -887,6 +895,8 @@ const AdminPortal: React.FC = () => {
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
+  const [routingPools, setRoutingPools] = useState<RoutingPool[]>([]);
+  const [moduleRoutes, setModuleRoutes] = useState<ModuleRoutes>({});
   const [setDefaultFeedback, setSetDefaultFeedback] = useState<{ ok?: string; err?: string } | null>(null);
   // null = list view; 'new' = blank add form; ModelEntry = edit form
   const [modelForm, setModelForm] = useState<ModelEntry | 'new' | null>(null);
@@ -1300,8 +1310,11 @@ const AdminPortal: React.FC = () => {
     try {
       const res = await adminListModels();
       if (!mountedRef.current) return;
+      const routing = normalizeModelRouting(res.models, res.routingPools, res.moduleRoutes);
       setModels(res.models);
       setDefaultModelId(res.defaultModelId ?? null);
+      setRoutingPools(routing.routingPools);
+      setModuleRoutes(routing.moduleRoutes);
     } catch (e) {
       if (mountedRef.current) setError(formatAdminPortalError(e, adminRole, 'Load models', 'Failed to load models'));
     } finally {
@@ -1875,6 +1888,23 @@ const AdminPortal: React.FC = () => {
     }
   };
 
+  const saveModelRouting = async (nextPools: RoutingPool[], nextRoutes: ModuleRoutes) => {
+    setError(null);
+    try {
+      const res = await adminUpdateModelRouting({
+        routingPools: nextPools,
+        moduleRoutes: nextRoutes,
+      });
+      const routing = normalizeModelRouting(models, res.routingPools, res.moduleRoutes);
+      setRoutingPools(routing.routingPools);
+      setModuleRoutes(routing.moduleRoutes);
+    } catch (e) {
+      const message = formatAdminPortalError(e, adminRole, 'Save model routing', 'Failed to save model routing');
+      setError(message);
+      throw new Error(message);
+    }
+  };
+
   const deleteModel = async (id: string) => {
     setAdminConfirm({
       title: 'Delete model',
@@ -1952,9 +1982,9 @@ const AdminPortal: React.FC = () => {
 
   // Role-gating helpers.
   // Server is authoritative; these just drive UI visibility.
-  // reviewer: Dashboard + Audit Log only
-  // admin:    + Users (with credits), Prompts (draft-only), Quotas
-  // super:    everything + Admins management + Models & Keys + Publish/Rollback
+  // reviewer: Dashboard, Audit Log, and read-only Models & Keys
+  // admin:    + Users (with credits), Prompts (draft-only), Quotas, API Platform read-only
+  // super:    everything + write access for Models & Keys, Admins, Publish/Rollback
 
   const role = adminRole ?? 'admin'; // default to admin while loading
   const isReviewer = role === 'reviewer';
@@ -1989,7 +2019,7 @@ const AdminPortal: React.FC = () => {
 
   const allTabs: { id: Tab; label: string; visible: boolean; superOnly?: boolean; help: AdminNavHelp }[] = [
     { id: 'dashboard', label: 'Dashboard', visible: hasAdminPermission(role, 'admin.dashboard.read'), help: ADMIN_TAB_HELP.dashboard },
-    { id: 'ai', label: 'Models & Keys', visible: hasAdminPermission(role, 'admin.models.read'), superOnly: true, help: ADMIN_TAB_HELP.ai },
+    { id: 'ai', label: 'Models & Keys', visible: hasAdminPermission(role, 'admin.models.read'), help: ADMIN_TAB_HELP.ai },
     { id: 'prompts', label: 'Prompts', visible: hasAdminPermission(role, 'admin.prompts.read'), superOnly: true, help: ADMIN_TAB_HELP.prompts },
     { id: 'quotas', label: 'Quotas', visible: hasAdminPermission(role, 'admin.quotas.read'), help: ADMIN_TAB_HELP.quotas },
     { id: 'users', label: 'Users', visible: hasAdminPermission(role, 'admin.users.read'), help: ADMIN_TAB_HELP.users },
@@ -2604,7 +2634,7 @@ const AdminPortal: React.FC = () => {
                     Changes propagate to every user's model picker within ~60 seconds.
                   </p>
                 </div>
-                {modelForm === null && (
+                {canWriteModels && modelForm === null && (
                   <button
                     type="button"
                     onClick={() => openModelForm('new')}
@@ -3137,58 +3167,64 @@ const AdminPortal: React.FC = () => {
 
                               {/* Connectivity column */}
                               <td className="px-5 py-3 whitespace-nowrap min-w-[180px]">
-                                {rts.state === 'idle' && (
-                                  <button
-                                    type="button"
-                                    onClick={runRowTest}
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  >
-                                    <Zap className="h-3 w-3" aria-hidden="true" /> Test
-                                  </button>
-                                )}
-                                {rts.state === 'running' && (
-                                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
-                                    <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                                    Testing...
-                                  </span>
-                                )}
-                                {rts.state === 'done' && (
-                                  <span
-                                    className={`inline-flex flex-col gap-0.5 text-[11px] ${rts.ok ? 'text-emerald-700' : 'text-red-600'}`}
-                                  >
-                                    <span className="font-medium flex items-center gap-1">
-                                      {rts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
-                                      <span>
-                                        {rts.ok
-                                          ? `ok${rts.latencyMs !== undefined ? ` - ${rts.latencyMs}ms` : ''}`
-                                          : 'failed'}
-                                      </span>
+                                {!canWriteModels ? (
+                                  <span className="text-[11px] text-gray-400">Super only</span>
+                                ) : (
+                                  <>
+                                    {rts.state === 'idle' && (
                                       <button
                                         type="button"
                                         onClick={runRowTest}
-                                        title="Re-test"
-                                        className="ml-1 text-gray-400 hover:text-gray-600 text-[10px] leading-none focus:outline-none"
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50 text-[11px] font-medium text-gray-600 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
                                       >
-                                        <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                                        <Zap className="h-3 w-3" aria-hidden="true" /> Test
                                       </button>
-                                    </span>
-                                    {rts.ok && rts.text && (
-                                      <span
-                                        className="font-mono text-[10px] text-emerald-600 max-w-[160px] truncate block"
-                                        title={rts.text}
-                                      >
-                                        {rts.text}
+                                    )}
+                                    {rts.state === 'running' && (
+                                      <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
+                                        <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                                        Testing...
                                       </span>
                                     )}
-                                    {!rts.ok && rts.error && (
+                                    {rts.state === 'done' && (
                                       <span
-                                        className="font-mono text-[10px] text-red-500 max-w-[160px] truncate block"
-                                        title={rts.error}
+                                        className={`inline-flex flex-col gap-0.5 text-[11px] ${rts.ok ? 'text-emerald-700' : 'text-red-600'}`}
                                       >
-                                        {rts.error}
+                                        <span className="font-medium flex items-center gap-1">
+                                          {rts.ok ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
+                                          <span>
+                                            {rts.ok
+                                              ? `ok${rts.latencyMs !== undefined ? ` - ${rts.latencyMs}ms` : ''}`
+                                              : 'failed'}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={runRowTest}
+                                            title="Re-test"
+                                            className="ml-1 text-gray-400 hover:text-gray-600 text-[10px] leading-none focus:outline-none"
+                                          >
+                                            <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                                          </button>
+                                        </span>
+                                        {rts.ok && rts.text && (
+                                          <span
+                                            className="font-mono text-[10px] text-emerald-600 max-w-[160px] truncate block"
+                                            title={rts.text}
+                                          >
+                                            {rts.text}
+                                          </span>
+                                        )}
+                                        {!rts.ok && rts.error && (
+                                          <span
+                                            className="font-mono text-[10px] text-red-500 max-w-[160px] truncate block"
+                                            title={rts.error}
+                                          >
+                                            {rts.error}
+                                          </span>
+                                        )}
                                       </span>
                                     )}
-                                  </span>
+                                  </>
                                 )}
                               </td>
 
@@ -3205,28 +3241,34 @@ const AdminPortal: React.FC = () => {
                                     {t('admin.model.set_default_btn')}
                                   </button>
                                 )}
-                                <button
-                                  type="button"
-                                  onClick={() => openModelForm(m)}
-                                  className="text-xs text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:underline mr-3"
-                                >
-                                  Edit
-                                </button>
-                                {!isStructural ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteModel(m.id)}
-                                    className="text-xs text-red-500 hover:text-red-700 transition-colors focus:outline-none focus:underline"
-                                  >
-                                    Delete
-                                  </button>
+                                {canWriteModels ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openModelForm(m)}
+                                      className="text-xs text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:underline mr-3"
+                                    >
+                                      Edit
+                                    </button>
+                                    {!isStructural ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteModel(m.id)}
+                                        className="text-xs text-red-500 hover:text-red-700 transition-colors focus:outline-none focus:underline"
+                                      >
+                                        Delete
+                                      </button>
+                                    ) : (
+                                      <span
+                                        title="Structural id ? cannot be deleted"
+                                        className="text-xs text-gray-300 cursor-not-allowed select-none"
+                                      >
+                                        Delete
+                                      </span>
+                                    )}
+                                  </>
                                 ) : (
-                                  <span
-                                    title="Structural id ? cannot be deleted"
-                                    className="text-xs text-gray-300 cursor-not-allowed select-none"
-                                  >
-                                    Delete
-                                  </span>
+                                  <span className="text-xs text-gray-400">Read-only</span>
                                 )}
                               </td>
                             </tr>
@@ -3239,7 +3281,21 @@ const AdminPortal: React.FC = () => {
               </Card>
             </section>
 
-            {/* SECTION B: PROVIDER CREDENTIALS (platform keys) */}
+            {/* SECTION B: ROUTING POOLS */}
+            <section
+              ref={(node) => { modelSectionRefs.current.routing = node; }}
+              className="scroll-mt-32"
+            >
+              <RoutingPoolsSection
+                models={models}
+                routingPools={routingPools}
+                moduleRoutes={moduleRoutes}
+                canManage={canWriteModels}
+                onSave={saveModelRouting}
+              />
+            </section>
+
+            {/* SECTION C: PROVIDER CREDENTIALS (platform keys) */}
             <section
               ref={(node) => { modelSectionRefs.current.credentials = node; }}
               className="scroll-mt-32"
@@ -3247,7 +3303,7 @@ const AdminPortal: React.FC = () => {
               <div className="mb-4">
                 <SectionHeading>Provider credentials</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
-                  Rotate keys, update endpoints, and verify live connectivity before saving.
+                  {canWriteModels ? 'Rotate keys, update endpoints, and verify live connectivity before saving.' : 'Review masked provider keys and endpoints.'}
                   Raw keys are never echoed - only masked previews are shown.
                 </p>
               </div>
@@ -3339,34 +3395,36 @@ const AdminPortal: React.FC = () => {
 
                     <div>
                       <FieldLabel htmlFor="provider-key">New API key</FieldLabel>
-                      <input id="provider-key" type="password" value={newKey} onChange={(e) => onKeyChange(e.target.value)} placeholder={meta.keyPlaceholder} className={textInput} autoComplete="off" />
+                      <input id="provider-key" type="password" value={newKey} onChange={(e) => onKeyChange(e.target.value)} placeholder={meta.keyPlaceholder} disabled={!canWriteModels} className={textInput} autoComplete="off" />
                     </div>
 
                     {providerTab === 'gemini' ? (
                       <>
                         <div>
                           <FieldLabel htmlFor="gemini-model">Model</FieldLabel>
-                          <input id="gemini-model" value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} placeholder="gemini-2.0-flash" className={textInput} />
+                          <input id="gemini-model" value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} placeholder="gemini-2.0-flash" disabled={!canWriteModels} className={textInput} />
                         </div>
                         <div>
                           <FieldLabel htmlFor="gemini-fallback-model">Fallback model</FieldLabel>
-                          <input id="gemini-fallback-model" value={geminiFallbackModel} onChange={(e) => setGeminiFallbackModel(e.target.value)} placeholder="gemini-flash-latest" className={textInput} />
+                          <input id="gemini-fallback-model" value={geminiFallbackModel} onChange={(e) => setGeminiFallbackModel(e.target.value)} placeholder="gemini-flash-latest" disabled={!canWriteModels} className={textInput} />
                         </div>
                       </>
                     ) : (
                       <div>
                         <FieldLabel htmlFor="provider-url">Base URL</FieldLabel>
-                        <input id="provider-url" value={providerTab === 'kairllm' ? kairllmUrl : deepseekUrl} onChange={(e) => (providerTab === 'kairllm' ? setKairllmUrl(e.target.value) : setDeepseekUrl(e.target.value))} placeholder={providerTab === 'kairllm' ? 'https://ai.gogosling.ca/v1' : 'https://api.deepseek.com/v1'} className={textInput} />
+                        <input id="provider-url" value={providerTab === 'kairllm' ? kairllmUrl : deepseekUrl} onChange={(e) => (providerTab === 'kairllm' ? setKairllmUrl(e.target.value) : setDeepseekUrl(e.target.value))} placeholder={providerTab === 'kairllm' ? 'https://ai.gogosling.ca/v1' : 'https://api.deepseek.com/v1'} disabled={!canWriteModels} className={textInput} />
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2 pt-1 flex-wrap">
-                      <button type="button" disabled={ts.state === 'running'} onClick={runTest} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-xs font-medium text-gray-700 dark:text-gray-200 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed">
-                        {ts.state === 'running' ? (<span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />) : (<Zap className="h-3.5 w-3.5" aria-hidden="true" />)}
-                        Test connection
-                      </button>
-                      <SaveButton onClick={save} loading={loading} label="Save" />
-                    </div>
+                    {canWriteModels && (
+                      <div className="flex items-center gap-2 pt-1 flex-wrap">
+                        <button type="button" disabled={ts.state === 'running'} onClick={runTest} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-xs font-medium text-gray-700 dark:text-gray-200 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                          {ts.state === 'running' ? (<span className="w-3 h-3 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />) : (<Zap className="h-3.5 w-3.5" aria-hidden="true" />)}
+                          Test connection
+                        </button>
+                        <SaveButton onClick={save} loading={loading} label="Save" />
+                      </div>
+                    )}
 
                     {ts.state === 'done' && (
                       <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${ts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800/50' : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800/50'}`}>
@@ -3391,7 +3449,7 @@ const AdminPortal: React.FC = () => {
               )}
             </section>
 
-            {/* SECTION C: KEY POOL HEALTH (monitoring) */}
+            {/* SECTION D: KEY POOL HEALTH (monitoring) */}
             <section
               ref={(node) => { modelSectionRefs.current.health = node; }}
               className="scroll-mt-32"

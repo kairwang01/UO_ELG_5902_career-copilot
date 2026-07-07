@@ -191,7 +191,7 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
   try {
     // resolveProvider builds the provider (and reads the API key) — keep it inside
     // the try so a missing-key/build failure also triggers the refund below.
-    const provider = await resolveProvider(uid, (request.data as { model?: string })?.model);
+    const provider = await resolveProvider(uid, (request.data as { model?: string })?.model, "analyzeResume");
     const result = await provider.generate({
       prompt,
       parts,
