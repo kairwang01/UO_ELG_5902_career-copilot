@@ -76,6 +76,8 @@ export interface ModelEntry {
    * At most 5 entries.
    */
   fallbackChain?: string[];
+  /** Admin response only: implicit fallback candidates by caller tier. Not stored. */
+  implicitFallbackPreviewByTier?: Record<"free" | "paid" | "business", string[]>;
 }
 
 export interface ModelKeyPreview {

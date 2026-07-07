@@ -264,6 +264,8 @@ export interface ModelEntry {
   }[];
   /** Ordered list of model ids to fall back to when this model fails. */
   fallbackChain?: string[];
+  /** Read-only admin preview; omitted when an explicit fallbackChain is configured. */
+  implicitFallbackPreviewByTier?: Record<'free' | 'paid' | 'business', string[]>;
   /** Numeric routing priority (lower = higher priority). */
   priority?: number;
   /** Platform-managed builtin — inherits key/base from platform_config/llm. */

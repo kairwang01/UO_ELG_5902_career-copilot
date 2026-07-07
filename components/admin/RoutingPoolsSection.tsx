@@ -303,7 +303,7 @@ export const RoutingPoolsSection: React.FC<{
         <div>
           <SectionHeading>Routing pools</SectionHeading>
           <p className="mt-1 text-xs text-gray-500">
-            Modules choose a pool; lower tiers run first, and weights split traffic inside the same tier.
+            Modules choose a pool before the dashboard default model is considered; lower tiers run first, and weights split traffic inside the same tier.
           </p>
         </div>
         {canManage && <SaveButton onClick={save} loading={saving} label="Save routing" />}

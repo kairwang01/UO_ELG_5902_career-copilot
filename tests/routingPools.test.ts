@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   candidatesForPoolTier,
+  implicitFallbackCandidates,
   routingPoolForRoute,
   routingPoolTiers,
   selectWeightedCandidate,
@@ -82,6 +83,24 @@ describe('LLM routing pools', () => {
     expect(routingPoolForRoute('missingTool', { mockInterview: 'speed' }, pools)).toBeNull();
   });
 
+  it('builds implicit fallback candidates by priority and excludes unusable entries', () => {
+    const registry: ModelEntry[] = [
+      { ...model('chosen'), priority: 0 },
+      { ...model('third'), priority: 3 },
+      { ...model('first'), priority: 1 },
+      { ...model('disabled'), priority: 0, enabled: false },
+      { ...model('custom', 'business'), priority: 0 },
+      { ...model('second'), priority: 2 },
+      { ...model('fourth'), priority: 4 },
+    ];
+
+    expect(implicitFallbackCandidates(registry, 'chosen').map((m) => m.id)).toEqual([
+      'first',
+      'second',
+      'third',
+    ]);
+  });
+
   it('rejects routing members that reference unknown models or keys', () => {
     const registry: ModelEntry[] = [{ ...model('deep'), api_keys: ['sk-live-a'] }];
     const validHash = keyHash('sk-live-a');
@@ -97,6 +116,14 @@ describe('LLM routing pools', () => {
     expect(_testRoutingValidation.validateRoutingPools([
       { id: 'quality', label: 'Quality', enabled: true, members: [{ modelId: 'deep', keyHash: validHash, tier: 1, weight: 1, enabled: true }] },
     ], registry)[0].members[0].keyHash).toBe(validHash);
+  });
+
+  it('rejects custom BYOA as an explicit model fallback', () => {
+    expect(() => _testRoutingValidation.validateEntry({
+      ...model('hunyuan'),
+      provider: 'gemini',
+      fallbackChain: ['custom'],
+    }, false)).toThrow(/custom BYOA/);
   });
 
   it('rejects non-positive tier and weight values', () => {
@@ -181,6 +208,31 @@ describe('admin model key health aggregation', () => {
       anyCooled: false,
     });
     expect(health.missing).toBeUndefined();
+  });
+});
+
+describe('admin implicit fallback preview', () => {
+  it('returns tier-specific previews only when no explicit fallback is configured', () => {
+    const registry: ModelEntry[] = [
+      { ...model('chosen'), priority: 9 },
+      { ...model('free-a'), priority: 2 },
+      { ...model('paid-a', 'paid'), priority: 1 },
+      { ...model('business-a', 'business'), priority: 0 },
+      { ...model('auto', 'paid'), priority: 0 },
+      { ...model('custom', 'business'), priority: 0 },
+    ];
+
+    expect(_testRoutingValidation.implicitFallbackPreviewByTier(registry, registry[0])).toEqual({
+      free: ['free-a'],
+      paid: ['auto', 'paid-a', 'free-a'],
+      business: ['business-a', 'free-a'],
+    });
+    expect(
+      _testRoutingValidation.implicitFallbackPreviewByTier(
+        registry,
+        { ...registry[0], fallbackChain: ['free-a'] },
+      ),
+    ).toBeUndefined();
   });
 });
 

@@ -1,6 +1,6 @@
 /**
  * Copy for the platform-round admin panels (API Platform, Access Control,
- * Key Pool Health, Web3). Same inline-stub convention as the STRINGS map in
+ * Key Health, Web3). Same inline-stub convention as the STRINGS map in
  * AdminPortal.tsx: the console ships English-only as an internal tool, and
  * keeping every visible string behind at() means a future i18n migration is a
  * lookup swap in exactly two files (this one and AdminPortal's stub) — no
@@ -78,21 +78,24 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.error.load': 'Could not load the API platform data.',
   'api.error.retry': 'Retry',
 
-  // ── Key pool health section ──
-  'pool.title': 'Key pool health',
+  // ── Key health section ──
+  'pool.title': 'Key health',
   'pool.subtitle':
-    'Live rotation state per model, aggregated from key_health. Failed keys cool down for 10 minutes and are skipped automatically; on 401/403/429/timeouts the router rotates to the next key, then walks the fallback chain.',
+    'Runtime key-pool observations from key_health. This is not a live Test result: records appear only after routed model calls use or fail a key.',
   'pool.col_model': 'Model',
   'pool.col_keys': 'Keys',
   'pool.col_status': 'Status',
-  'pool.col_failures': 'Failures',
+  'pool.col_failures': 'Runtime failures',
   'pool.col_cooldown': 'Cooldown until',
   'pool.col_last_error': 'Last error',
-  'pool.col_route': 'Routing preview',
-  'pool.status_no_data': 'no data',
+  'pool.col_route': 'Model fallback',
+  'pool.status_no_data': 'no runtime data',
   'pool.status_cooling': 'cooling',
   'pool.status_healthy': 'healthy',
-  'pool.route_auto': 'auto (priority order)',
+  'pool.route_auto': 'implicit fallback by priority',
+  'pool.route_explicit': 'Explicit',
+  'pool.route_implicit': 'Implicit by priority',
+  'pool.route_none': 'none',
 
   // ── Access control sections ──
   'access.matrix.title': 'Roles & permissions',

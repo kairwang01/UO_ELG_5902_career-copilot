@@ -42,6 +42,7 @@ import { OpenAICompatibleProvider } from "./providers/openAICompatibleProvider";
 import { keyHash } from "./keyHash";
 import {
   candidatesForPoolTier,
+  implicitFallbackCandidates,
   routingPoolForRoute,
   routingPoolTiers,
   selectWeightedCandidate,
@@ -950,6 +951,10 @@ export async function resolveProvider(
     if (explicitChain && explicitChain.length > 0) {
       // Explicit chain: respect the admin-defined order, apply tier check.
       for (const chainId of explicitChain) {
+        if (chainId === "custom") {
+          console.warn(`[fallback-chain] Chain entry "custom" is per-user BYOA. Skipping.`);
+          continue;
+        }
         const chainEntry = registry.find((m) => m.id === chainId && m.enabled);
         if (!chainEntry) {
           console.warn(
@@ -970,10 +975,7 @@ export async function resolveProvider(
 
     // Implicit chain: other enabled models accessible to the user's tier,
     // sorted by (priority ?? 999) ascending then registry order, capped at 3.
-    const candidates = allowedWithAuto
-      .filter((m) => m.id !== chosen.id && m.enabled)
-      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
-      .slice(0, 3);
+    const candidates = implicitFallbackCandidates(allowedWithAuto, chosen.id);
 
     for (const entry of candidates) {
       fallbacks.push({ modelId: entry.id, provider: buildProvider(entry) });

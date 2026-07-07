@@ -115,26 +115,32 @@ const STRINGS: Record<string, string> = {
   'admin.credits.apply': 'Apply',
   'admin.model.api_keys_label': 'API keys (one per line)',
   'admin.model.api_keys_placeholder': 'sk-... (new keys; existing masked keys listed below)',
-  'admin.model.fallback_chain': 'Fallback chain',
-  'admin.model.fallback_chain_hint': 'Model ids to try in order if this model fails.',
+  'admin.model.fallback_chain': 'Explicit model fallback chain',
+  'admin.model.fallback_chain_hint': 'Tried in order only after this model key pool is exhausted on availability errors. Custom BYOA is not a platform fallback target.',
   'admin.model.priority': 'Priority',
-  'admin.model.priority_hint': 'Lower = higher priority. Leave blank for default.',
+  'admin.model.priority_hint': 'Lower numbers are tried earlier for implicit fallback. This is not traffic weight.',
   'admin.model.test_key': 'Test',
   'admin.model.masked_keys': 'Saved keys (masked)',
   'admin.model.default_badge': 'Default',
   'admin.model.set_default_btn': 'Set as default',
-  'admin.set_default_confirm': 'Set this model as the platform routing default? All auto-routed requests will use it.',
+  'admin.set_default_confirm': 'Set this model as the fallback default when no module routing pool can serve the request?',
   'admin.model.set_default_ok': 'Default model updated.',
   'admin.dashboard.model_routing_title': 'Model Routing',
   'admin.dashboard.model_routing_default': 'Default model',
+  'admin.dashboard.model_routing_default_hint': 'Used only when no module route or routing-pool candidate can serve the request.',
   'admin.dashboard.model_routing_enabled': 'Enabled models',
-  'admin.dashboard.model_routing_chain': 'Fallback chain',
+  'admin.dashboard.model_routing_chain': 'Explicit fallback for default model',
+  'admin.dashboard.model_routing_no_chain': 'No explicit fallback. Runtime may still use implicit fallback by priority.',
+  'admin.dashboard.model_routing_implicit': 'Implicit fallback preview',
+  'admin.dashboard.model_routing_implicit_inactive': 'Implicit fallback is inactive because an explicit fallback chain is configured.',
   'admin.dashboard.model_routing_none': 'Not configured',
   'admin.access.reviewer_only': 'You have reviewer access. Only Dashboard and Audit Log are available.',
   'admin_free_cap_help': 'Free-tier output-token ceiling (鏈嶅姟鍒嗙骇). Requests from free users will be capped at this many output tokens. Default 8192 = Gemini Flash native max (no artificial truncation). Lower this value to create a harder free/paid quality boundary.',
   'admin.dashboard.model_routing_select': 'Change default model',
 };
 const t = (key: string) => STRINGS[key] ?? key;
+
+const FALLBACK_PREVIEW_TIERS = ['free', 'paid', 'business'] as const;
 
 type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'billing' | 'apiplatform' | 'web3' | 'audit';
 type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
@@ -169,11 +175,11 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   ai: {
-    description: 'Review model routing pools, provider keys, weighted tier fallback, provider icons, model testing, and best-effort runtime key-health checks; models without runtime health records show no data.',
+    description: 'Manage the model registry, per-model API key pools, module routing pools, explicit platform-model fallback, provider keys, backend-computed implicit fallback previews, and best-effort runtime key-health checks.',
     roles: {
-      super: 'View and edit models, provider keys, routing pools, module routes, defaults, and routing settings.',
-      admin: 'View masked model and routing settings without editing keys or routing.',
-      reviewer: 'View masked model and routing settings without editing keys or routing.',
+      super: 'View and edit models, provider keys, key pools, module routing pools, explicit fallback chains, and the dashboard default model. Implicit fallback previews are read-only and computed by the backend.',
+      admin: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
+      reviewer: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
     },
   },
   prompts: {
@@ -1834,7 +1840,7 @@ const AdminPortal: React.FC = () => {
       setMfBaseUrl(entry.base_url ?? '');
       setMfApiKey(''); // never pre-fill ? masked value is display-only
       setMfApiKeys(''); // new keys textarea starts empty
-      setMfFallbackChain(entry.fallbackChain ?? []);
+      setMfFallbackChain((entry.fallbackChain ?? []).filter((id) => id !== 'custom'));
       setMfPriority(entry.priority !== undefined ? String(entry.priority) : '');
       setMfProviderModel(entry.providerModel);
       setMfMinTier(entry.minTier);
@@ -2020,6 +2026,21 @@ const AdminPortal: React.FC = () => {
   const activeAccessTab = accessTabs.some((item) => item.id === accessTab)
     ? accessTab
     : accessTabs[0].id;
+
+  const modelLabel = (id: string) => models.find((m) => m.id === id)?.label ?? id;
+  const renderImplicitFallbackPreview = (preview?: ModelEntry['implicitFallbackPreviewByTier']) => (
+    <div className="space-y-0.5 font-mono text-[11px] text-gray-600 dark:text-gray-300">
+      {FALLBACK_PREVIEW_TIERS.map((tier) => {
+        const chain = preview?.[tier] ?? [];
+        return (
+          <div key={tier}>
+            <span className="font-sans text-[10px] font-semibold uppercase text-gray-400">{tier}</span>
+            <span className="ml-2">{chain.length ? chain.map(modelLabel).join(' -> ') : 'none'}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   // Tab definitions.
   // Visibility is driven by the central registry (lib/access/permissions.ts);
@@ -2318,6 +2339,9 @@ const AdminPortal: React.FC = () => {
                         <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
                           {t('admin.dashboard.model_routing_default')}
                         </p>
+                        <p className="mb-2 max-w-xs text-[11px] leading-snug text-gray-500">
+                          {t('admin.dashboard.model_routing_default_hint')}
+                        </p>
                         {canWriteModels ? (
                           <div className="space-y-1.5">
                             <UserSingleFilterDropdown
@@ -2403,25 +2427,41 @@ const AdminPortal: React.FC = () => {
                       {defaultModelId && (() => {
                         const defaultModel = models.find((m) => m.id === defaultModelId);
                         const chain = defaultModel?.fallbackChain ?? [];
-                        if (chain.length === 0) return null;
                         return (
-                          <div>
+                          <div className="min-w-[220px]">
                             <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
                               {t('admin.dashboard.model_routing_chain')}
                             </p>
-                            <div className="flex items-center flex-wrap gap-1 text-xs">
-                              <span className="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-medium">
-                                {defaultModel?.label ?? defaultModelId}
-                              </span>
-                              {chain.map((chainId) => (
-                                <React.Fragment key={chainId}>
-                                  <ArrowRight className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
-                                  <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded font-mono">
-                                    {models.find((m) => m.id === chainId)?.label ?? chainId}
+                            {chain.length === 0 ? (
+                              <div className="space-y-2">
+                                <p className="max-w-sm text-xs text-gray-500">
+                                  {t('admin.dashboard.model_routing_no_chain')}
+                                </p>
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                                  {t('admin.dashboard.model_routing_implicit')}
+                                </p>
+                                {renderImplicitFallbackPreview(defaultModel?.implicitFallbackPreviewByTier)}
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center flex-wrap gap-1 text-xs">
+                                  <span className="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-medium">
+                                    {defaultModel?.label ?? defaultModelId}
                                   </span>
-                                </React.Fragment>
-                              ))}
-                            </div>
+                                  {chain.map((chainId) => (
+                                    <React.Fragment key={chainId}>
+                                      <ArrowRight className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+                                      <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded font-mono">
+                                        {modelLabel(chainId)}
+                                      </span>
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                                <p className="max-w-sm text-xs text-gray-500">
+                                  {t('admin.dashboard.model_routing_implicit_inactive')}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -2844,7 +2884,9 @@ const AdminPortal: React.FC = () => {
                             autoComplete="off"
                             spellCheck={false}
                           />
-                          <p className="text-[11px] text-gray-400 mt-0.5">One key per line. Appended to the pool ? existing keys are not removed.</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            One key per line. These keys rotate inside this model before any model fallback is tried. New keys are appended; existing keys are not removed.
+                          </p>
                         </div>
                       </div>
                     )}
@@ -2872,11 +2914,25 @@ const AdminPortal: React.FC = () => {
                         className={`${textInput} h-auto`}
                       >
                         {models
-                          .filter((m) => m.id !== mfId)
+                          .filter((m) => m.id !== mfId && m.id !== 'custom')
                           .map((m) => (
                             <option key={m.id} value={m.id}>{m.label} ({m.id})</option>
                           ))}
                       </select>
+                      <div className="mt-2 rounded border border-gray-100 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/50">
+                        {mfFallbackChain.length > 0 ? (
+                          <p className="text-xs text-gray-500">
+                            Explicit fallback is configured; implicit fallback by priority will not be used for this model.
+                          </p>
+                        ) : (
+                          <>
+                            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                              Implicit fallback preview
+                            </p>
+                            {renderImplicitFallbackPreview(models.find((m) => m.id === mfId)?.implicitFallbackPreviewByTier)}
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {/* Provider model */}
@@ -3473,7 +3529,7 @@ const AdminPortal: React.FC = () => {
               )}
             </section>
 
-            {/* SECTION D: KEY POOL HEALTH (monitoring) */}
+            {/* SECTION D: KEY HEALTH (monitoring) */}
             <section
               ref={(node) => { modelSectionRefs.current.health = node; }}
               className="scroll-mt-32"

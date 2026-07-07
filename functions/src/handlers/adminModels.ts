@@ -44,6 +44,7 @@ import {
 import { logAdminAction } from "../admin/usageLog";
 import { DEFAULT_MODEL_ID, DEFAULT_MODELS } from "../llm/models";
 import { keyHash } from "../llm/keyHash";
+import { implicitFallbackCandidates } from "../llm/routingPools";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -74,6 +75,33 @@ type ModelKeyHealth = {
   lastFailureAt: string | null;
   anyCooled: boolean;
 };
+
+const FALLBACK_PREVIEW_TIERS = ["free", "paid", "business"] as const;
+type FallbackPreviewTier = typeof FALLBACK_PREVIEW_TIERS[number];
+
+function allowedForFallbackPreview(registry: ModelEntry[], tier: FallbackPreviewTier): ModelEntry[] {
+  return registry.filter((m) => {
+    if (!m.enabled) return false;
+    if (m.id === "custom") return false;
+    if (m.id === "auto") return tier === "paid";
+    if (m.minTier === "business") return tier === "business";
+    if (tier === "paid") return m.minTier === "free" || m.minTier === "paid";
+    return m.minTier === "free";
+  });
+}
+
+function implicitFallbackPreviewByTier(
+  registry: ModelEntry[],
+  chosen: ModelEntry
+): Record<FallbackPreviewTier, string[]> | undefined {
+  if (chosen.fallbackChain?.length) return undefined;
+  return Object.fromEntries(
+    FALLBACK_PREVIEW_TIERS.map((tier) => [
+      tier,
+      implicitFallbackCandidates(allowedForFallbackPreview(registry, tier), chosen.id).map((m) => m.id),
+    ])
+  ) as Record<FallbackPreviewTier, string[]>;
+}
 
 function timestampMs(value: unknown): number | null {
   if (value && typeof (value as { toMillis?: unknown }).toMillis === "function") {
@@ -170,13 +198,27 @@ function withAdminKeyPreviews(masked: ModelEntry, raw: ModelEntry): ModelEntry {
   };
 }
 
+function withoutCustomFallback(entry: ModelEntry): ModelEntry {
+  const fallbackChain = entry.fallbackChain?.filter((id) => id !== "custom");
+  return {
+    ...entry,
+    ...(fallbackChain?.length ? { fallbackChain } : { fallbackChain: undefined }),
+  };
+}
+
 function modelsForAdminResponse(): ModelEntry[] {
   const rawModels = getModelRegistry();
-  return rawModels.map((raw) => withAdminKeyPreviews({
-    ...raw,
-    api_key: raw.api_key ? maskSecret(raw.api_key) : undefined,
-    api_keys: raw.api_keys?.length ? raw.api_keys.map(maskSecret) : undefined,
-  }, raw));
+  const displayModels = rawModels.map(withoutCustomFallback);
+  return rawModels.map((raw, index) => {
+    const displayModel = displayModels[index];
+    const preview = implicitFallbackPreviewByTier(displayModels, displayModel);
+    return withAdminKeyPreviews({
+      ...displayModel,
+      ...(preview ? { implicitFallbackPreviewByTier: preview } : {}),
+      api_key: raw.api_key ? maskSecret(raw.api_key) : undefined,
+      api_keys: raw.api_keys?.length ? raw.api_keys.map(maskSecret) : undefined,
+    }, raw);
+  });
 }
 
 /** Validates and normalises an incoming ModelEntry, throwing HttpsError on bad input. */
@@ -267,7 +309,11 @@ function validateEntry(raw: unknown, isCreate: boolean): ModelEntry {
       if (typeof chain[i] !== "string" || !(chain[i] as string).trim()) {
         throw new HttpsError("invalid-argument", `model.fallbackChain[${i}] must be a non-empty string.`);
       }
-      cleanedChain.push((chain[i] as string).trim());
+      const chainId = (chain[i] as string).trim();
+      if (chainId === "custom") {
+        throw new HttpsError("invalid-argument", `model.fallbackChain[${i}] cannot reference custom BYOA.`);
+      }
+      cleanedChain.push(chainId);
     }
     if (cleanedChain.length > 0) fallbackChain = cleanedChain;
   }
@@ -332,6 +378,9 @@ function validateChainReferences(
   // would just be a no-op cycle).  Validate against existing ids + the entry being saved.
   ids.add(entry.id);
   for (const chainId of entry.fallbackChain) {
+    if (chainId === "custom") {
+      throw new HttpsError("invalid-argument", "model.fallbackChain cannot reference custom BYOA.");
+    }
     if (!ids.has(chainId)) {
       throw new HttpsError(
         "invalid-argument",
@@ -662,6 +711,8 @@ export const adminUpdateModelRoutingFunction = onCall({ invoker: "public" }, asy
 
 export const _testRoutingValidation = {
   aggregateKeyHealth,
+  implicitFallbackPreviewByTier,
+  validateEntry,
   validateRoutingPools,
   validateModuleRoutes,
 };

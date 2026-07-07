@@ -48,3 +48,14 @@ export function selectWeightedCandidate<T extends { member: { weight: number } }
   }
   return candidates[candidates.length - 1] ?? null;
 }
+
+export function implicitFallbackCandidates(
+  allowedModels: ModelEntry[],
+  chosenId: string,
+  limit = 3
+): ModelEntry[] {
+  return allowedModels
+    .filter((m) => m.id !== chosenId && m.id !== "custom" && m.enabled)
+    .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+    .slice(0, limit);
+}
