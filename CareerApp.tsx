@@ -46,7 +46,6 @@ import Sidebar from './components/Sidebar';
 import MyApplications from './components/MyApplications';
 import TalentProfileForm from './components/TalentProfileForm';
 import { VerifyEmailGate } from './components/VerifyEmailGate';
-import { deferEmailVerification, isEmailVerificationDeferred } from './lib/auth/emailVerificationDefer';
 import type { PortalPage } from './components/employer/EmployerPortal';
 const CareerCoachBot = React.lazy(() => import('./components/CareerCoachBot'));
 import VerifiedTalentSection from './components/VerifiedTalentSection';
@@ -203,7 +202,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // the whole app) — `authHydrated` is the provider's settled flag, `sessionResolved`
   // fires earlier (first session value known) and gates sign-in/out detection below.
   const { session, ready: authHydrated, sessionResolved } = useSession();
-  const [verificationDeferred, setVerificationDeferred] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'home' | 'auth' | 'account' | 'business' | 'agency' | 'api_docs'>('home');
   const [initialAuthView, setInitialAuthView] = useState<'sign_in' | 'sign_up' | 'forgot_password'>('sign_in');
@@ -256,11 +254,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   const { addToast } = useToast();
   const { startSubscriptionCheckout } = useSubscriptionCheckout();
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
-
-  useEffect(() => {
-    const uid = session?.user?.id;
-    setVerificationDeferred(uid ? isEmailVerificationDeferred(uid) : false);
-  }, [session?.user?.id]);
   const analysisCost = TOOL_CREDIT_COSTS['resume-analysis'];
 
   const { t, isLoaded: isLangLoaded, currentLang, changeLanguage } = useLocalization();
@@ -1638,20 +1631,8 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
 
   const rootClass = `beta-root min-h-screen w-full ${showCandidateShell || showEmployerShell ? 'flex' : 'block'}`;
 
-  // Email-verification gate: withheld until the user verifies, unless they defer
-  // (Firebase default sender often misses corporate / CN ISP mail — see
-  // docs/email-deliverability.md). Google/SSO sign-ins are auto-verified.
-  if (session?.user && session.user.emailVerified === false && !verificationDeferred) {
-    return (
-      <VerifyEmailGate
-        email={session.user.email ?? null}
-        t={t}
-        onDefer={() => {
-          deferEmailVerification(session.user!.id);
-          setVerificationDeferred(true);
-        }}
-      />
-    );
+  if (session?.user && session.user.emailVerified === false) {
+    return <VerifyEmailGate email={session.user.email ?? null} t={t} />;
   }
 
   return (
