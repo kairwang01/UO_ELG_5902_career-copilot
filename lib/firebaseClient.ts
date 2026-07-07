@@ -17,18 +17,32 @@ const missingFirebaseConfig = Object.entries(firebaseConfig)
   .filter(([, value]) => !value)
   .map(([key]) => key);
 
-if (missingFirebaseConfig.length > 0) {
-  throw new Error(`Missing Firebase config: ${missingFirebaseConfig.join(', ')}`);
-}
+/** False when any VITE_FIREBASE_* var is unset — marketing can still render via stubDataClient. */
+export const isFirebaseConfigured = missingFirebaseConfig.length === 0;
 
-export const app = initializeApp(firebaseConfig);
-export const firebaseAuth = getAuth(app);
-export const firestoreDb = getFirestore(app);
-export const firebaseStorage = getStorage(app);
-export const firebaseFunctions = getFunctions(
-  app,
-  import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1',
-);
+export const missingFirebaseConfigKeys = missingFirebaseConfig;
+
+export let app!: ReturnType<typeof initializeApp>;
+export let firebaseAuth!: ReturnType<typeof getAuth>;
+export let firestoreDb!: ReturnType<typeof getFirestore>;
+export let firebaseStorage!: ReturnType<typeof getStorage>;
+export let firebaseFunctions!: ReturnType<typeof getFunctions>;
+
+if (isFirebaseConfigured) {
+  app = initializeApp(firebaseConfig);
+  firebaseAuth = getAuth(app);
+  firestoreDb = getFirestore(app);
+  firebaseStorage = getStorage(app);
+  firebaseFunctions = getFunctions(
+    app,
+    import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1',
+  );
+} else if (import.meta.env.DEV) {
+  console.warn(
+    '[Career CoPilot] Missing Firebase config (%s). Public marketing pages will render in logged-out mode; auth and data features need .env.local.',
+    missingFirebaseConfig.join(', '),
+  );
+}
 
 declare global {
   // Vite HMR can re-run this module in dev; Firebase only allows each emulator
@@ -38,6 +52,7 @@ declare global {
 }
 
 if (
+  isFirebaseConfigured &&
   import.meta.env.VITE_FIREBASE_USE_EMULATOR === 'true' &&
   !globalThis.__careerCopilotFirebaseEmulatorsConnected
 ) {

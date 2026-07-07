@@ -9,20 +9,9 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import { ToastProvider } from '../components/Toast';
 import { SubscriptionCheckoutProvider } from '../contexts/SubscriptionCheckoutContext';
 
-// After a deploy, a returning tab may hold stale lazy-chunk URLs; importing one
-// 404s and React throws a blank-screen "Failed to fetch dynamically imported
-// module". Vite raises `vite:preloadError` for exactly this — recover by doing a
-// one-time hard reload (guarded against a reload loop) to fetch the new chunks.
-if (typeof window !== 'undefined') {
-  window.addEventListener('vite:preloadError', () => {
-    const KEY = 'cc_preload_reloaded_at';
-    const last = Number(sessionStorage.getItem(KEY) || '0');
-    if (Date.now() - last > 10_000) {
-      sessionStorage.setItem(KEY, String(Date.now()));
-      window.location.reload();
-    }
-  });
-}
+// The `vite:preloadError` self-heal for stale post-deploy chunks is registered
+// in the entry (`index.tsx`) so it also covers this SiteApp chunk itself — a
+// handler registered here could not fire when SiteApp is the chunk that 404s.
 
 /** Public marketing shell at /; resume tools lazy-load at /workspace. */
 const SiteApp: React.FC = () => (
