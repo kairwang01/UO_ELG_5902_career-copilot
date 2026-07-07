@@ -5,6 +5,8 @@ export const SITE_ROUTES = {
   sampleReport: '/sample-report',
   pricing: '/pricing',
   portal: '/portal',
+  /** Firebase email-action links (verify email, etc.) land here for in-app handling. */
+  authAction: '/auth/action',
   /** Resume analysis and signed-in candidate tools (avoid `/app` — conflicts with App.tsx on macOS). */
   workspace: '/workspace',
   admin: '/admin',

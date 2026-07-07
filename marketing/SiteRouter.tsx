@@ -7,6 +7,7 @@ import { SampleReportPage } from './pages/SampleReportPage';
 import { PricingPage } from './pages/PricingPage';
 import SimulatedCheckoutPage from './pages/SimulatedCheckoutPage';
 import SimulatedManagePage from './pages/SimulatedManagePage';
+import { AuthActionPage } from './pages/AuthActionPage';
 import SiteSeo from './components/SiteSeo';
 
 const MvpApp = React.lazy(() => import('../CareerApp'));
@@ -71,6 +72,8 @@ export const SiteRouter: React.FC = () => (
     <Route path={SITE_ROUTES.employers} element={<EmployerLandingPage />} />
     <Route path={SITE_ROUTES.sampleReport} element={<SampleReportPage />} />
     <Route path={SITE_ROUTES.pricing} element={<PricingPage />} />
+    <Route path={SITE_ROUTES.authAction} element={<AuthActionPage />} />
+    <Route path="/__/auth/action" element={<AuthActionPage />} />
     <Route path="/billing/checkout" element={<SimulatedCheckoutPage />} />
     <Route path="/billing/manage" element={<SimulatedManagePage />} />
     <Route
