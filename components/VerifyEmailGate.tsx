@@ -4,9 +4,12 @@ import { signOut } from 'firebase/auth';
 import { firebaseAuth } from '@/lib/firebaseClient';
 import { mapVerificationEmailError, sendAccountVerificationEmail, wasVerificationEmailDispatchedRecently } from '@/lib/auth/sendVerificationEmail';
 
+import { isLowDeliverabilityMailbox } from '@/lib/auth/emailDeliverability';
+
 interface VerifyEmailGateProps {
   email: string | null;
   t: (key: string) => string;
+  onDefer: () => void;
 }
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -16,8 +19,11 @@ const RESEND_COOLDOWN_SECONDS = 60;
  * The session exists (Firebase auth resolved) but the portal is withheld until
  * they click the verification link. Google/SSO sign-ins are auto-verified and
  * never land here. Paid signups reach this AFTER completing Stripe checkout.
+ *
+ * Firebase's default sender often reaches only Gmail; a defer path keeps
+ * corporate / CN ISP mailboxes usable until custom SMTP is configured.
  */
-export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t }) => {
+export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t, onDefer }) => {
   const [cooldown, setCooldown] = useState(0);
   const [sending, setSending] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -117,6 +123,11 @@ export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t }) =>
         <p className="mt-2 text-center text-xs font-medium text-slate-500">
           {t('verify_gate_spam_hint')}
         </p>
+        {isLowDeliverabilityMailbox(email) && (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs leading-relaxed text-amber-900">
+            {t('verify_gate_deliverability_hint')}
+          </p>
+        )}
 
         {notice && (
           <div className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-center text-sm text-emerald-800" role="status">{notice}</div>
@@ -143,9 +154,17 @@ export const VerifyEmailGate: React.FC<VerifyEmailGateProps> = ({ email, t }) =>
           >
             {cooldown > 0 ? t('verify_gate_resend_cooldown').replace('{seconds}', String(cooldown)) : t('verify_gate_resend')}
           </button>
+          <button
+            type="button"
+            onClick={onDefer}
+            className="inline-flex w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+          >
+            {t('verify_gate_continue_unverified')}
+          </button>
         </div>
 
-        <p className="mt-6 text-center text-xs leading-relaxed text-slate-500">{t('verify_gate_typo_hint')}</p>
+        <p className="mt-4 text-center text-xs leading-relaxed text-slate-500">{t('verify_gate_continue_unverified_note')}</p>
+        <p className="mt-3 text-center text-xs leading-relaxed text-slate-500">{t('verify_gate_typo_hint')}</p>
         <button
           type="button"
           onClick={handleSignOut}
