@@ -7,7 +7,7 @@ describe('adminRoleDeniedMessage', () => {
 
     expect(message).toContain('Current admin role: reviewer.');
     expect(message).toContain('Required role: admin or higher.');
-    expect(message).toContain('Reviewer can view the dashboard and audit log only.');
+    expect(message).toContain('Reviewer can view the dashboard, audit log, and masked model routing settings.');
     expect(message).toContain('Admin can manage users');
   });
 });

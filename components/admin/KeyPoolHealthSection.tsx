@@ -30,7 +30,7 @@ const describeError = (code: string): string => {
  * this component — only masked previews and hashes-derived health counters.
  */
 export const KeyPoolHealthSection: React.FC<{ models: ModelEntry[] }> = ({ models }) => {
-  const enabled = models.filter((m) => m.enabled);
+  const enabled = models.filter((m) => m.enabled && m.id !== 'custom');
   if (enabled.length === 0) return null;
 
   const fmtTime = (iso: string | null | undefined) =>

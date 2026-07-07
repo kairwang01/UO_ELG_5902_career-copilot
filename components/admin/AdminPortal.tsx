@@ -169,7 +169,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   ai: {
-    description: 'Review model routing pools, provider keys, weighted tier fallback, provider icons, model testing, and key-health checks with sticky section shortcuts.',
+    description: 'Review model routing pools, provider keys, weighted tier fallback, provider icons, model testing, and best-effort runtime key-health checks; models without runtime health records show no data.',
     roles: {
       super: 'View and edit models, provider keys, routing pools, module routes, defaults, and routing settings.',
       admin: 'View masked model and routing settings without editing keys or routing.',
@@ -2570,8 +2570,10 @@ const AdminPortal: React.FC = () => {
             {/* OVERVIEW STRIP — the at-a-glance state everything below manages */}
             {modelsLoaded && models.length > 0 && (() => {
               const enabledModels = models.filter((m) => m.enabled);
+              const healthTrackedModels = enabledModels.filter((m) => m.id !== 'custom');
               const disabledCount = models.length - enabledModels.length;
-              const cooling = enabledModels.filter((m) => m.keyHealth?.anyCooled).length;
+              const cooling = healthTrackedModels.filter((m) => m.keyHealth?.anyCooled).length;
+              const hasKeyHealthData = healthTrackedModels.some((m) => m.keyHealth);
               const defaultModel = models.find((m) => m.id === defaultModelId);
               // Each card is a shortcut to the section that manages it — same
               // visual language as Card, but an actual button for a11y.
@@ -2620,9 +2622,9 @@ const AdminPortal: React.FC = () => {
                   >
                     <span className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">Key health</span>
                     <span className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
-                      <span className={`h-2 w-2 rounded-full ${cooling ? 'bg-amber-400' : 'bg-emerald-500'}`} aria-hidden="true" />
-                      <span className={cooling ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}>
-                        {cooling ? `${cooling} model${cooling > 1 ? 's' : ''} cooling down` : 'all keys healthy'}
+                      <span className={`h-2 w-2 rounded-full ${!hasKeyHealthData ? 'bg-gray-300' : cooling ? 'bg-amber-400' : 'bg-emerald-500'}`} aria-hidden="true" />
+                      <span className={!hasKeyHealthData ? 'text-gray-500 dark:text-gray-400' : cooling ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}>
+                        {!hasKeyHealthData ? 'no health data' : cooling ? `${cooling} model${cooling > 1 ? 's' : ''} cooling down` : 'all keys healthy'}
                       </span>
                     </span>
                   </button>

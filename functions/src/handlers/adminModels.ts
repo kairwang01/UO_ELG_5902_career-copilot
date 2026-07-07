@@ -65,6 +65,83 @@ const MAX_ROUTING_POOLS = 12;
 const MAX_POOL_MEMBERS = 60;
 const MAX_MODULE_ROUTES = 80;
 const SLUG_RE = /^[a-zA-Z0-9_-]{1,48}$/;
+const KEY_HEALTH_COLLECTION = "key_health";
+
+type ModelKeyHealth = {
+  failureCount: number;
+  cooldownUntil: string | null;
+  lastErrorCode: string | null;
+  lastFailureAt: string | null;
+  anyCooled: boolean;
+};
+
+function timestampMs(value: unknown): number | null {
+  if (value && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (value && typeof (value as { toDate?: unknown }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  if (typeof value === "string") {
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+}
+
+function timestampIso(value: unknown): string | null {
+  const ms = timestampMs(value);
+  return ms === null ? null : new Date(ms).toISOString();
+}
+
+function aggregateKeyHealth(
+  docs: Array<Record<string, unknown>>,
+  nowMs = Date.now()
+): Record<string, ModelKeyHealth> {
+  const byModel: Record<string, ModelKeyHealth> = {};
+  const latestFailureMs: Record<string, number> = {};
+  const latestCooldownMs: Record<string, number> = {};
+
+  for (const doc of docs) {
+    const modelId = typeof doc.modelId === "string" ? doc.modelId.trim() : "";
+    if (!modelId) continue;
+
+    const current = byModel[modelId] ?? {
+      failureCount: 0,
+      cooldownUntil: null,
+      lastErrorCode: null,
+      lastFailureAt: null,
+      anyCooled: false,
+    };
+
+    if (typeof doc.failureCount === "number" && Number.isFinite(doc.failureCount)) {
+      current.failureCount += doc.failureCount;
+    }
+
+    const cooldownMs = timestampMs(doc.cooldownUntil);
+    if (cooldownMs !== null && cooldownMs > nowMs) {
+      current.anyCooled = true;
+      if (cooldownMs > (latestCooldownMs[modelId] ?? 0)) {
+        latestCooldownMs[modelId] = cooldownMs;
+        current.cooldownUntil = new Date(cooldownMs).toISOString();
+      }
+    }
+
+    const failureMs = timestampMs(doc.lastFailureAt);
+    if (failureMs !== null && failureMs > (latestFailureMs[modelId] ?? 0)) {
+      latestFailureMs[modelId] = failureMs;
+      current.lastFailureAt = new Date(failureMs).toISOString();
+      current.lastErrorCode = typeof doc.lastErrorCode === "string" ? doc.lastErrorCode : null;
+    } else if (!current.lastFailureAt) {
+      current.lastFailureAt = timestampIso(doc.lastFailureAt);
+      current.lastErrorCode = typeof doc.lastErrorCode === "string" ? doc.lastErrorCode : null;
+    }
+
+    byModel[modelId] = current;
+  }
+
+  return byModel;
+}
 
 function keyHashesForModel(entry: ModelEntry): Set<string> {
   const hashes = new Set<string>();
@@ -368,7 +445,7 @@ function validateModuleRoutes(rawRoutes: unknown, pools: RoutingPool[]): ModuleR
 /**
  * Returns the effective model registry with api_key and api_keys masked.
  * Includes lightweight key health info (failureCount, cooldownUntil, lastErrorCode)
- * sourced from platform_config/key_health docs (best-effort — missing docs are skipped).
+ * sourced from key_health/{keyHash} docs (best-effort; missing docs are skipped).
  * If Firestore has no models doc (or empty array), returns DEFAULT_MODELS.
  * Seeds nothing — read-only.
  *
@@ -378,39 +455,11 @@ export const adminListModelsFunction = onCall({ invoker: "public" }, async (requ
   await requireRole(request, "reviewer");
   await refreshPlatformCaches();
 
-  // Fetch key health docs best-effort. The collection holds one doc per model id
-  // (document id === model id). Missing docs → no health data for that model.
-  let healthByModelId: Record<string, {
-    failureCount?: number;
-    cooldownUntil?: string | null;
-    lastErrorCode?: string | null;
-    lastFailureAt?: string | null;
-    anyCooled?: boolean;
-  }> = {};
+  // Runtime writes one health doc per key hash; aggregate them per model.
+  let healthByModelId: Record<string, ModelKeyHealth> = {};
   try {
-    const healthSnap = await db
-      .collection(PLATFORM_CONFIG_COLLECTION)
-      .doc("key_health")
-      .get();
-    if (healthSnap.exists) {
-      const raw = healthSnap.data() ?? {};
-      // Each field at the top level is keyed by model id.
-      for (const [modelId, entry] of Object.entries(raw)) {
-        if (entry && typeof entry === "object") {
-          const e = entry as Record<string, unknown>;
-          const now = Date.now();
-          const cooldownUntil = typeof e.cooldown_until === "string" ? e.cooldown_until : null;
-          const anyCooled = cooldownUntil !== null && new Date(cooldownUntil).getTime() > now;
-          healthByModelId[modelId] = {
-            failureCount: typeof e.failure_count === "number" ? e.failure_count : undefined,
-            cooldownUntil: cooldownUntil,
-            lastErrorCode: typeof e.last_error_code === "string" ? e.last_error_code : null,
-            lastFailureAt: typeof e.last_failure_at === "string" ? e.last_failure_at : null,
-            anyCooled,
-          };
-        }
-      }
-    }
+    const healthSnap = await db.collection(KEY_HEALTH_COLLECTION).get();
+    healthByModelId = aggregateKeyHealth(healthSnap.docs.map((doc) => doc.data()));
   } catch {
     // Health fetch is strictly best-effort; never block the response.
   }
@@ -612,6 +661,7 @@ export const adminUpdateModelRoutingFunction = onCall({ invoker: "public" }, asy
 });
 
 export const _testRoutingValidation = {
+  aggregateKeyHealth,
   validateRoutingPools,
   validateModuleRoutes,
 };

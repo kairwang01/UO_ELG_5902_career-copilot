@@ -132,6 +132,58 @@ describe('LLM routing pools', () => {
   });
 });
 
+describe('admin model key health aggregation', () => {
+  const ts = (iso: string) => ({
+    toMillis: () => new Date(iso).getTime(),
+    toDate: () => new Date(iso),
+  });
+
+  it('aggregates runtime key_health docs by model', () => {
+    const now = new Date('2026-07-07T12:00:00.000Z').getTime();
+    const health = _testRoutingValidation.aggregateKeyHealth([
+      {
+        modelId: 'deep',
+        failureCount: 2,
+        cooldownUntil: ts('2026-07-07T12:05:00.000Z'),
+        lastFailureAt: ts('2026-07-07T11:50:00.000Z'),
+        lastErrorCode: '429',
+      },
+      {
+        modelId: 'deep',
+        failureCount: 3,
+        cooldownUntil: ts('2026-07-07T11:55:00.000Z'),
+        lastFailureAt: ts('2026-07-07T11:59:00.000Z'),
+        lastErrorCode: '401',
+      },
+      {
+        modelId: 'fast',
+        lastSuccessAt: ts('2026-07-07T11:58:00.000Z'),
+        cooldownUntil: null,
+      },
+      {
+        modelId: '',
+        failureCount: 99,
+      },
+    ], now);
+
+    expect(health.deep).toEqual({
+      failureCount: 5,
+      cooldownUntil: '2026-07-07T12:05:00.000Z',
+      lastErrorCode: '401',
+      lastFailureAt: '2026-07-07T11:59:00.000Z',
+      anyCooled: true,
+    });
+    expect(health.fast).toEqual({
+      failureCount: 0,
+      cooldownUntil: null,
+      lastErrorCode: null,
+      lastFailureAt: null,
+      anyCooled: false,
+    });
+    expect(health.missing).toBeUndefined();
+  });
+});
+
 describe('LLM routing pools — load-balancer edge cases', () => {
   const twoModels = [model('key-a'), model('key-b')];
   const allowAll = new Set(['key-a', 'key-b']);
