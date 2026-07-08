@@ -167,9 +167,9 @@ const QUOTA_SECTIONS: { id: QuotaSectionId; label: string }[] = [
 // Keep this in sync with admin page behavior, role permissions, and sidebar changes.
 const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
   dashboard: {
-    description: 'Overview of platform health, usage, revenue, and model routing status for roles with model read access.',
+    description: 'Overview of usage, revenue, quotas, and read-only model routing status for roles with model read access.',
     roles: {
-      super: 'View dashboard data and change the default model routing.',
+      super: 'View dashboard data and read-only model routing status.',
       admin: 'View dashboard data and masked model routing status.',
       reviewer: 'View dashboard data and masked model routing status.',
     },
@@ -177,7 +177,7 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
   ai: {
     description: 'Manage the model registry, per-model API key pools, grouped module routing pools for candidate, employer, agency, and public API AI routes, explicit platform-model fallback, provider keys, backend-computed implicit fallback previews, and best-effort runtime key-health checks.',
     roles: {
-      super: 'View and edit models, provider keys, key pools, grouped module routing pools across product areas, explicit fallback chains, and the dashboard default model. Module selections expand to the underlying tool routes; implicit fallback previews are read-only and computed by the backend.',
+      super: 'View and edit models, provider keys, key pools, grouped module routing pools across product areas, explicit fallback chains, and the platform default model used only as a fallback. Module selections expand to the underlying tool routes; implicit fallback previews are read-only and computed by the backend.',
       admin: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
       reviewer: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
     },
@@ -977,9 +977,6 @@ const AdminPortal: React.FC = () => {
   const [accountPasswordSaving, setAccountPasswordSaving] = useState(false);
   const [accountMessage, setAccountMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Dashboard model routing inline selector state
-  const [defaultModelChanging, setDefaultModelChanging] = useState(false);
-  const [defaultModelToast, setDefaultModelToast] = useState<{ ok?: string; err?: string } | null>(null);
   const [adminConfirm, setAdminConfirm] = useState<AdminConfirmState | null>(null);
   const [adminConfirmLoading, setAdminConfirmLoading] = useState(false);
 
@@ -1939,6 +1936,7 @@ const AdminPortal: React.FC = () => {
   };
 
   const setModelAsDefault = async (id: string) => {
+    if (!id || id === defaultModelId) return;
     setAdminConfirm({
       title: t('admin.model.set_default_btn'),
       description: t('admin.set_default_confirm'),
@@ -1952,29 +1950,6 @@ const AdminPortal: React.FC = () => {
           setSetDefaultFeedback({ ok: t('admin.model.set_default_ok') });
         } catch (e) {
           setSetDefaultFeedback({ err: e instanceof Error ? e.message : 'Failed to set default model' });
-        }
-      },
-    });
-  };
-
-  const changeDashboardDefaultModel = async (newId: string) => {
-    if (!newId || newId === defaultModelId || defaultModelChanging) return;
-    setAdminConfirm({
-      title: t('admin.dashboard.model_routing_select'),
-      description: t('admin.set_default_confirm'),
-      detail: newId,
-      confirmLabel: t('admin.model.set_default_btn'),
-      run: async () => {
-        setDefaultModelChanging(true);
-        setDefaultModelToast(null);
-        try {
-          const res = await adminSetDefaultModel(newId);
-          setDefaultModelId(res.defaultModelId);
-          setDefaultModelToast({ ok: t('admin.model.set_default_ok') });
-        } catch (ex) {
-          setDefaultModelToast({ err: ex instanceof Error ? ex.message : 'Failed to set default model' });
-        } finally {
-          setDefaultModelChanging(false);
         }
       },
     });
@@ -2028,6 +2003,7 @@ const AdminPortal: React.FC = () => {
     : accessTabs[0].id;
 
   const modelLabel = (id: string) => models.find((m) => m.id === id)?.label ?? id;
+  const currentDefaultModel = models.find((m) => m.id === defaultModelId);
   const renderImplicitFallbackPreview = (preview?: ModelEntry['implicitFallbackPreviewByTier']) => (
     <div className="space-y-0.5 font-mono text-[11px] text-gray-600 dark:text-gray-300">
       {FALLBACK_PREVIEW_TIERS.map((tier) => {
@@ -2280,44 +2256,6 @@ const AdminPortal: React.FC = () => {
                   ))}
                 </div>
 
-                {/* AI provider health ? visible to every admin so a "keys missing ->
-                    all AI down" outage is obvious, even though editing keys is super-only. */}
-                {dashboard.ai_providers && (
-                  dashboard.ai_providers.any_configured ? (
-                    <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
-                      <span className="font-semibold text-gray-700 dark:text-gray-200">AI providers</span>
-                      {([['Gemini', 'gemini'], ['KAIRLLM', 'kairllm'], ['DeepSeek', 'deepseek']] as const).map(([label, key]) => (
-                        <span key={key} className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
-                          <LlmProviderIcon text={label} />
-                          <span className={dashboard.ai_providers![key] ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500'}>
-                            {dashboard.ai_providers![key] ? 'on' : 'off'}
-                          </span>
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div role="alert" className="rounded-lg border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-800 dark:text-red-200">
-                      <p className="flex items-start gap-2 font-semibold">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                        <span>No provider keys are configured ? generation tools are currently failing.</span>
-                      </p>
-                      <p className="mt-1 text-red-700 dark:text-red-300">
-                        A super-admin must add a provider key under <span className="font-medium">Models &amp; Keys</span> (or set it in the functions environment). Services recover within ~60s of saving.
-                      </p>
-                      {hasAdminPermission(role, 'admin.models.read') && (
-                        <button
-                          type="button"
-                          onClick={() => setTab('ai')}
-                          className="mt-2 inline-flex items-center gap-1 rounded-md bg-red-700 hover:bg-red-800 px-3 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-offset-red-950"
-                        >
-                            Go to Models &amp; Keys &gt;
-                        </button>
-                      )}
-                    </div>
-                  )
-                )}
-
                 {(dashboard.users_truncated || dashboard.week_usage_truncated) && (
                   <p className="text-xs text-amber-700 flex items-center gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -2334,81 +2272,20 @@ const AdminPortal: React.FC = () => {
                       {t('admin.dashboard.model_routing_title')}
                     </p>
                     <div className="flex flex-wrap gap-6 items-start">
-                      {/* Default model ? selectable for super; read-only for admin/reviewer */}
+                      {/* Default model is read-only here; editing lives in Models & Keys. */}
                       <div className="min-w-[180px]">
                         <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
                           {t('admin.dashboard.model_routing_default')}
                         </p>
-                        <p className="mb-2 max-w-xs text-[11px] leading-snug text-gray-500">
-                          {t('admin.dashboard.model_routing_default_hint')}
-                        </p>
-                        {canWriteModels ? (
-                          <div className="space-y-1.5">
-                            <UserSingleFilterDropdown
-                              label={t('admin.dashboard.model_routing_select')}
-                              options={[
-                                { value: '', label: t('admin.dashboard.model_routing_none') },
-                                ...models.filter((m) => m.enabled).map((m) => ({ value: m.id, label: m.label })),
-                              ]}
-                              value={defaultModelId ?? ''}
-                              onChange={changeDashboardDefaultModel}
-                            />
-                            <select
-                              value={defaultModelId ?? ''}
-                              disabled={defaultModelChanging}
-                              aria-label={t('admin.dashboard.model_routing_select')}
-                              onChange={(e) => {
-                                const newId = e.target.value;
-                                if (!newId || newId === defaultModelId) return;
-                                void changeDashboardDefaultModel(newId);
-                              }}
-                              className="hidden"
-                            >
-                              {!defaultModelId && (
-                                <option value="" disabled>
-                                  {t('admin.dashboard.model_routing_none')}
-                                </option>
-                              )}
-                              {models.filter((m) => m.enabled).map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.label}
-                                </option>
-                              ))}
-                            </select>
-                            {defaultModelChanging && (
-                              <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                                <span className="w-2.5 h-2.5 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin" />
-                                Saving...
-                              </span>
-                            )}
-                            {/* Live region so the set-default result is announced to screen readers. */}
-                            <span role="status" aria-live="polite">
-                              {defaultModelToast?.ok && (
-                                <span className="text-[11px] text-emerald-700 flex items-center gap-1">
-                                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                                  {defaultModelToast.ok}
-                                </span>
-                              )}
-                              {defaultModelToast?.err && (
-                                <span className="text-[11px] text-red-600 flex items-center gap-1">
-                                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                                  {defaultModelToast.err}
-                                </span>
-                              )}
+                        {defaultModelId ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              {currentDefaultModel?.label ?? defaultModelId}
                             </span>
-                          </div>
+                          </span>
                         ) : (
-                          /* Read-only for admin/reviewer */
-                          defaultModelId ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                {models.find((m) => m.id === defaultModelId)?.label ?? defaultModelId}
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-400">{t('admin.dashboard.model_routing_none')}</span>
-                          )
+                          <span className="text-sm text-gray-400">{t('admin.dashboard.model_routing_none')}</span>
                         )}
                       </div>
 
@@ -2695,6 +2572,74 @@ const AdminPortal: React.FC = () => {
                   </button>
                 )}
               </div>
+              {modelsLoaded && (
+                <Card className="mb-4 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
+                        {t('admin.dashboard.model_routing_default')}
+                      </p>
+                      <p className="max-w-xl text-xs text-gray-500">
+                        {t('admin.dashboard.model_routing_default_hint')}
+                      </p>
+                    </div>
+                    {canWriteModels ? (
+                      <div className="w-full sm:w-72">
+                        <UserSingleFilterDropdown
+                          label={t('admin.dashboard.model_routing_select')}
+                          options={[
+                            { value: '', label: t('admin.dashboard.model_routing_none') },
+                            ...models
+                              .filter((m) => m.enabled || m.id === defaultModelId)
+                              .map((m) => ({ value: m.id, label: m.label })),
+                          ]}
+                          value={defaultModelId ?? ''}
+                          onChange={(id) => void setModelAsDefault(id)}
+                        />
+                      </div>
+                    ) : defaultModelId ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          {currentDefaultModel?.label ?? defaultModelId}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">{t('admin.dashboard.model_routing_none')}</span>
+                    )}
+                  </div>
+                  <span role="status" aria-live="polite">
+                    {setDefaultFeedback?.ok && (
+                      <span className="mt-3 flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400">
+                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                        {setDefaultFeedback.ok}
+                        <button
+                          type="button"
+                          onClick={() => setSetDefaultFeedback(null)}
+                          className="ml-auto text-emerald-600 hover:text-emerald-800 focus:outline-none"
+                          aria-label="Dismiss"
+                        >
+                          <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </span>
+                    )}
+                    {setDefaultFeedback?.err && (
+                      <span className="mt-3 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        {setDefaultFeedback.err}
+                        <button
+                          type="button"
+                          onClick={() => setSetDefaultFeedback(null)}
+                          className="ml-auto text-red-600 hover:text-red-800 focus:outline-none"
+                          aria-label="Dismiss"
+                        >
+                          <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </span>
+                    )}
+                  </span>
+                </Card>
+              )}
 
               {/* ADD / EDIT DIALOG */}
               {modelForm !== null && (
@@ -3075,34 +3020,6 @@ const AdminPortal: React.FC = () => {
                     Refresh
                   </button>
                 </div>
-                {setDefaultFeedback?.ok && (
-                  <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400">
-                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    {setDefaultFeedback.ok}
-                    <button
-                      type="button"
-                      onClick={() => setSetDefaultFeedback(null)}
-                      className="ml-auto text-emerald-600 hover:text-emerald-800 focus:outline-none"
-                      aria-label="Dismiss"
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
-                )}
-                {setDefaultFeedback?.err && (
-                  <div className="mx-5 mt-3 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    {setDefaultFeedback.err}
-                    <button
-                      type="button"
-                      onClick={() => setSetDefaultFeedback(null)}
-                      className="ml-auto text-red-600 hover:text-red-800 focus:outline-none"
-                      aria-label="Dismiss"
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
-                )}
 
                 {!modelsLoaded ? (
                   <div className="flex items-center gap-2 px-5 py-8 text-sm text-gray-500">

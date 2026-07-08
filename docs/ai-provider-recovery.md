@@ -56,9 +56,9 @@ but cannot edit keys. Confirm/obtain super:
    Repeat for **KairLLM** (paid) / **DeepSeek** (business) if your tiers use them.
 
 3. **Verify.** `adminUpdateLlmConfig` calls `refreshPlatformCaches()`, so the
-   change is immediate (the `aiProxy` cache TTL is 60s on other instances). The
-   dashboard banner clears and the **AI providers** row shows the provider as
-   configured. Run any AI tool (e.g. resume analysis) to confirm a real response.
+   change is immediate (the `aiProxy` cache TTL is 60s on other instances). Check
+   **Models & Keys** for masked provider keys and key health, then run any AI tool
+   (e.g. resume analysis) to confirm a real response.
 
 ### Alternative (no console)
 

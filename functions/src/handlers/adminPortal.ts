@@ -49,7 +49,6 @@ import {
 import {
   ensurePlatformCaches,
   getLlmConfigMasked,
-  getProviderConfigStatus,
   getQuotasConfigForAdmin,
   refreshPlatformCaches,
 } from "../admin/platformConfig";
@@ -276,12 +275,8 @@ export const adminGetDashboardFunction = onCall({ invoker: "public" }, async (re
   });
 
   const quotas = await getQuotasConfigForAdmin();
-  // AI provider key presence (booleans only) so any admin can see at a glance
-  // whether AI is configured — when all false, every AI tool is down.
-  const ai_providers = await getProviderConfigStatus();
 
   return {
-    ai_providers,
     user_count: usersSnap.size,
     users_truncated: usersSnap.size >= 2000,
     today_runs: today.runs,
