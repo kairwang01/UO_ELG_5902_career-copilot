@@ -14,7 +14,14 @@ export const Card: React.FC<{ className?: string; children: React.ReactNode }> =
 );
 
 export const SectionHeading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <h2 className="text-sm font-semibold text-gray-900">{children}</h2>
+  <h2 className="inline-flex items-center gap-2 text-base font-semibold tracking-tight text-gray-950">
+    <span className="h-4 w-1 rounded-full bg-blue-600" aria-hidden="true" />
+    <span>{children}</span>
+  </h2>
+);
+
+export const SubsectionHeading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h3 className="text-sm font-semibold text-gray-900">{children}</h3>
 );
 
 export const FieldLabel: React.FC<{ htmlFor?: string; children: React.ReactNode }> = ({

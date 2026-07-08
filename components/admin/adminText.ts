@@ -8,7 +8,7 @@
  */
 const ADMIN_TEXT: Record<string, string> = {
   // ── API Platform panel ──
-  'api.banner.title': 'Live server-backed registry.',
+  'api.banner.title': 'Live Server-Backed Registry',
   'api.banner.body':
     'Applications and keys are stored server-side. Secrets are generated once, hashed at rest, and never shown again after the creation dialog closes.',
   'api.stats.requests': 'Requests this month',
@@ -33,7 +33,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.apps.col_keys': 'Keys',
   'api.apps.col_created': 'Created',
   'api.apps.issue_key': 'Issue key',
-  'api.keys.title': 'API keys',
+  'api.keys.title': 'API Keys',
   'api.keys.subtitle': 'Only the prefix is stored for display — full secrets are shown once at creation.',
   'api.keys.empty': 'No keys issued yet.',
   'api.keys.col_name': 'Name',
@@ -46,7 +46,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.keys.enable': 'Enable',
   'api.keys.revoke': 'Revoke',
   'api.keys.never': 'Never',
-  'api.logs.title': 'Recent requests',
+  'api.logs.title': 'Recent Requests',
   'api.logs.subtitle': 'Recent partner API calls recorded by the server gateway.',
   'api.logs.empty': 'No requests recorded.',
   'api.logs.col_time': 'Time',
@@ -60,7 +60,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.docs.link': 'Open API reference',
   'api.docs.endpoints': 'Gateway endpoints',
   'api.docs.auth_hint': 'Partners authenticate every request with their key:',
-  'api.modal.issue_title': 'Issue key',
+  'api.modal.issue_title': 'Issue Key',
   'api.modal.key_name': 'Key name',
   'api.modal.key_name_ph': 'e.g. Server-to-server',
   'api.modal.scopes': 'Scopes',
@@ -68,7 +68,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.modal.generate': 'Generate key',
   'api.modal.prod_confirm':
     'This issues a PRODUCTION key. It will count against live quotas and should only be shared over a secure channel. Continue?',
-  'api.secret.title': 'Copy your new key',
+  'api.secret.title': 'Copy Your New Key',
   'api.secret.warning': 'This secret is shown once. After closing, only the prefix remains visible.',
   'api.secret.copy': 'Copy',
   'api.secret.copied': 'Copied',
@@ -79,7 +79,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.error.retry': 'Retry',
 
   // ── Key health section ──
-  'pool.title': 'Key health',
+  'pool.title': 'Key Health',
   'pool.subtitle':
     'Runtime key-pool observations from key_health. This is not a live Test result: records appear only after routed model calls use or fail a key.',
   'pool.col_model': 'Model',
@@ -98,19 +98,19 @@ const ADMIN_TEXT: Record<string, string> = {
   'pool.route_none': 'none',
 
   // ── Access control sections ──
-  'access.matrix.title': 'Roles & permissions',
+  'access.matrix.title': 'Roles & Permissions',
   'access.matrix.subtitle':
     'Predefined roles — the server enforces every action; this matrix mirrors the registry in lib/access/permissions.ts.',
   'access.matrix.col_capability': 'Capability',
-  'access.product.title': 'Product roles',
+  'access.product.title': 'Product Roles',
   'access.product.subtitle':
     'Application-side access by account type. Enforced by route guards and the server-side model tier gate (resolveProvider).',
 
   // ── Web3 settings panel ──
-  'web3.banner.title': 'Preview module.',
+  'web3.banner.title': 'Preview Module',
   'web3.banner.body':
     'Runs as an optional Sepolia preview. The core product never requires a wallet.',
-  'web3.toggle.title': 'Web3 identity module',
+  'web3.toggle.title': 'Web3 Identity Module',
   'web3.toggle.desc':
     'Controls the candidate-facing surface: the wallet section in Account and the Identity & Wallet workspace view (Proof-of-Talent credential, staking, rewards). When off, both are hidden entirely — sign-in, payments and all AI features are unaffected.',
   'web3.toggle.aria': 'Toggle Web3 module',
@@ -121,11 +121,11 @@ const ADMIN_TEXT: Record<string, string> = {
   'web3.error.load': 'Could not load Web3 settings.',
   'web3.error.save': 'Could not save Web3 settings.',
   'web3.updated_prefix': 'Last updated',
-  'web3.usage.title': 'What this module covers',
+  'web3.usage.title': 'What This Module Covers',
   'web3.contract.title': 'Contract',
   'web3.contract.network': 'Network',
   'web3.contract.address': 'Proof-of-Talent',
-  'web3.runtime.title': 'Runtime mode',
+  'web3.runtime.title': 'Runtime Mode',
   'web3.runtime.desc':
     'Preview saves credential state to the user profile. Live sends Sepolia transactions to the configured contract.',
   'web3.runtime.preview': 'Preview mode — no on-chain transactions.',

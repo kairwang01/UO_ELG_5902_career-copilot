@@ -13,6 +13,7 @@ import {
   PlanBadge,
   SaveButton,
   SectionHeading,
+  SubsectionHeading,
   textInput,
 } from './adminUi';
 import {
@@ -85,7 +86,7 @@ const STRINGS: Record<string, string> = {
   'admin.role.super': 'Super',
   'admin.role.admin': 'Admin',
   'admin.role.reviewer': 'Reviewer',
-  'admin.admins.title': 'Admin management',
+  'admin.admins.title': 'Admin Management',
   'admin.admins.subtitle': 'Invite admins and reviewers. Super-only. Every action is audit-logged.',
   'admin.admins.invite_label': 'Invite by email',
   'admin.admins.invite_placeholder': 'person@company.com',
@@ -104,7 +105,7 @@ const STRINGS: Record<string, string> = {
   'admin.prompts.publish_confirm': 'Publish this version? It will take effect immediately for all users.',
   'admin.prompts.rollback': 'Roll back',
   'admin.prompts.rollback_confirm': 'Roll back to this version? It will become the active prompt immediately.',
-  'admin.prompts.versions': 'Version history',
+  'admin.prompts.versions': 'Version History',
   'admin.prompts.versions_empty': 'No versions yet.',
   'admin.prompts.status_draft': 'draft',
   'admin.prompts.status_published': 'published',
@@ -150,18 +151,18 @@ type QuotaSectionId = 'global' | 'plans' | 'tools' | 'posting' | 'interview';
 // Ordered by how often an operator touches each surface: registry and routing
 // first, health next, shared credentials last because most models use key pools.
 const MODEL_SECTIONS: { id: ModelSectionId; label: string }[] = [
-  { id: 'registry', label: 'Model registry' },
-  { id: 'routing', label: 'Routing pools' },
-  { id: 'health', label: 'Key health' },
-  { id: 'credentials', label: 'Shared credentials' },
+  { id: 'registry', label: 'Model Registry' },
+  { id: 'routing', label: 'Routing Pools' },
+  { id: 'health', label: 'Key Health' },
+  { id: 'credentials', label: 'Shared Credentials' },
 ];
 
 const QUOTA_SECTIONS: { id: QuotaSectionId; label: string }[] = [
-  { id: 'global', label: 'Global quotas' },
-  { id: 'plans', label: 'Plan quotas' },
-  { id: 'tools', label: 'Tool access' },
-  { id: 'posting', label: 'Employer posting' },
-  { id: 'interview', label: 'Mock interview' },
+  { id: 'global', label: 'Global Quotas' },
+  { id: 'plans', label: 'Plan Quotas' },
+  { id: 'tools', label: 'Tool Access' },
+  { id: 'posting', label: 'Employer Posting' },
+  { id: 'interview', label: 'Mock Interview' },
 ];
 
 // Keep this in sync with admin page behavior, role permissions, and sidebar changes.
@@ -2161,7 +2162,7 @@ const AdminPortal: React.FC = () => {
                 </form>
 
                 <form className="space-y-3 border-t border-gray-200 pt-4" onSubmit={updateAccountPassword}>
-                  <SectionHeading>Change password</SectionHeading>
+                  <SubsectionHeading>Change Password</SubsectionHeading>
                   <div>
                     <FieldLabel htmlFor="admin-account-password">New password</FieldLabel>
                     <input
@@ -2349,7 +2350,7 @@ const AdminPortal: React.FC = () => {
                 {/* 7-day breakdown */}
                 <Card>
                   <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <SectionHeading>7-day usage by tool</SectionHeading>
+                    <SubsectionHeading>7-Day Usage by Tool</SubsectionHeading>
                   </div>
                   <div className="overflow-x-auto">
                     {Object.keys(dashboard.week_tool_breakdown).length === 0 ? (
@@ -2390,7 +2391,7 @@ const AdminPortal: React.FC = () => {
                 {/* Free / uncharged tool volume ? observability only, never billed or capped */}
                 <Card>
                   <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <SectionHeading>7-day free tool usage (no charge)</SectionHeading>
+                    <SubsectionHeading>7-Day Free Tool Usage (No Charge)</SubsectionHeading>
                   </div>
                   <div className="overflow-x-auto">
                     {Object.keys(dashboard.free_tool_breakdown ?? {}).length === 0 ? (
@@ -2425,7 +2426,7 @@ const AdminPortal: React.FC = () => {
                 {/* Recent events */}
                 <Card>
                   <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <SectionHeading>Recent events</SectionHeading>
+                    <SubsectionHeading>Recent Events</SubsectionHeading>
                   </div>
                   <div className="p-4">
                     {dashboard.recent_events.length === 0 ? (
@@ -2556,7 +2557,7 @@ const AdminPortal: React.FC = () => {
             >
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
-                  <SectionHeading>Model registry</SectionHeading>
+                  <SectionHeading>Model Registry</SectionHeading>
                   <p className="mt-1 text-xs text-gray-500">
                     Changes propagate to every user's model picker within ~60 seconds.
                   </p>
@@ -2654,9 +2655,9 @@ const AdminPortal: React.FC = () => {
                 >
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
                   <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
-                    <SectionHeading>
-                      {modelForm === 'new' ? 'Add new model' : `Edit ${mfId}`}
-                    </SectionHeading>
+                    <SubsectionHeading>
+                      {modelForm === 'new' ? 'Add New Model' : `Edit ${mfId}`}
+                    </SubsectionHeading>
                     <button
                       type="button"
                       onClick={closeModelForm}
@@ -3011,7 +3012,7 @@ const AdminPortal: React.FC = () => {
               {/* MODEL LIST TABLE */}
               <Card>
                 <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
-                  <SectionHeading>Configured models</SectionHeading>
+                  <SubsectionHeading>Configured Models</SubsectionHeading>
                   <button
                     type="button"
                     onClick={loadModels}
@@ -3306,7 +3307,7 @@ const AdminPortal: React.FC = () => {
               className="scroll-mt-32"
             >
               <div className="mb-4">
-                <SectionHeading>Shared credentials</SectionHeading>
+                <SectionHeading>Shared Credentials</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   Shared keys are used only by Gemini direct routes and models marked as builtin. Model registry key pools take precedence.
                   {' '}
@@ -3334,9 +3335,9 @@ const AdminPortal: React.FC = () => {
 
               {(() => {
                 const meta = {
-                  gemini: { label: 'Gemini shared credentials', iconText: 'gemini', tier: 'direct routes', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza... (leave blank to keep current)', note: 'Used by Gemini direct routes and as the Gemini environment fallback.' },
-                  kairllm: { label: 'KairLLM shared credentials', iconText: 'kairllm', tier: 'builtin only', tierClass: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/50', masked: llm.kairllm_api_key_masked, keyPlaceholder: 'leave blank to keep current', note: 'Used only by models whose Built-in field is set to kairllm.' },
-                  deepseek: { label: 'DeepSeek shared credentials', iconText: 'deepseek', tier: 'builtin only', tierClass: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', masked: llm.deepseek_api_key_masked, keyPlaceholder: 'leave blank to keep current', note: 'Used only by models whose Built-in field is set to deepseek.' },
+                  gemini: { label: 'Gemini Shared Credentials', iconText: 'gemini', tier: 'direct routes', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza... (leave blank to keep current)', note: 'Used by Gemini direct routes and as the Gemini environment fallback.' },
+                  kairllm: { label: 'KairLLM Shared Credentials', iconText: 'kairllm', tier: 'builtin only', tierClass: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/50', masked: llm.kairllm_api_key_masked, keyPlaceholder: 'leave blank to keep current', note: 'Used only by models whose Built-in field is set to kairllm.' },
+                  deepseek: { label: 'DeepSeek Shared Credentials', iconText: 'deepseek', tier: 'builtin only', tierClass: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', masked: llm.deepseek_api_key_masked, keyPlaceholder: 'leave blank to keep current', note: 'Used only by models whose Built-in field is set to deepseek.' },
                 }[providerTab];
 
                 const newKey = providerTab === 'gemini' ? geminiKey : providerTab === 'kairllm' ? kairllmKey : deepseekKey;
@@ -3388,7 +3389,7 @@ const AdminPortal: React.FC = () => {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <LlmProviderIcon text={meta.iconText} />
-                        <SectionHeading>{meta.label}</SectionHeading>
+                        <SubsectionHeading>{meta.label}</SubsectionHeading>
                       </div>
                       <span className={`text-[10px] border px-2 py-0.5 rounded font-medium ${meta.tierClass}`}>{meta.tier}</span>
                     </div>
@@ -3979,7 +3980,7 @@ const AdminPortal: React.FC = () => {
             >
             <Card className="p-5 space-y-5">
               <div>
-                <SectionHeading>Global quotas</SectionHeading>
+                <SectionHeading>Global Quotas</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   UTC day rolling window. Set to 0 for no limit on that dimension.
                 </p>
@@ -4049,7 +4050,7 @@ const AdminPortal: React.FC = () => {
             >
             <Card className="p-5 space-y-4">
               <div>
-                <SectionHeading>Plan quotas</SectionHeading>
+                <SectionHeading>Plan Quotas</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   Per-user limits by subscription status. For daily runs &amp; credits, <strong>0 = Unlimited</strong>;
                   for active jobs, <strong>0 = none allowed</strong> (blocks posting). Hover a column for details.
@@ -4123,7 +4124,7 @@ const AdminPortal: React.FC = () => {
             >
             <Card className="p-5 space-y-4">
               <div>
-                <SectionHeading>Tool access</SectionHeading>
+                <SectionHeading>Tool Access</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   Disable tools, edit credit prices, and choose which plans can run them.
                 </p>
@@ -4192,7 +4193,7 @@ const AdminPortal: React.FC = () => {
             >
             <Card className="p-5 space-y-4">
               <div>
-                <SectionHeading>Employer posting</SectionHeading>
+                <SectionHeading>Employer Posting</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   Active job caps are stored in the plan matrix above and enforced by job-posting callables.
                 </p>
@@ -4216,7 +4217,7 @@ const AdminPortal: React.FC = () => {
             >
             <Card className="p-5 space-y-4">
               <div>
-                <SectionHeading>Mock interview</SectionHeading>
+                <SectionHeading>Mock Interview</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
                   Timed simulation access and locked-report unlock pricing.
                 </p>
@@ -4470,7 +4471,7 @@ const AdminPortal: React.FC = () => {
             {selectedUid && userReport ? (
               <Card className="p-4 space-y-4 md:sticky md:top-4">
                 <div className="space-y-1">
-                  <SectionHeading>User detail</SectionHeading>
+                  <SectionHeading>User Detail</SectionHeading>
                   <p className="mt-1 font-mono text-[11px] text-gray-500 break-all">{selectedUid}</p>
                 </div>
 
@@ -4912,7 +4913,7 @@ const AdminPortal: React.FC = () => {
         {tab === 'billing' && hasAdminPermission(role, 'admin.billing.manage') && (
           <Card>
             <div className="px-5 py-4 border-b border-gray-200">
-              <SectionHeading>Billing controls</SectionHeading>
+              <SectionHeading>Billing Controls</SectionHeading>
               <p className="mt-0.5 text-xs text-gray-500">
                 Subscription and top-up controls are in development.
               </p>
@@ -4930,7 +4931,7 @@ const AdminPortal: React.FC = () => {
           <Card>
             <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
               <div>
-                <SectionHeading>Audit log</SectionHeading>
+                <SectionHeading>Audit Log</SectionHeading>
                 <p className="mt-0.5 text-xs text-gray-500">
                   {AUDIT_PAGE_SIZE} admin actions per page, newest first. Raw keys are never stored; key changes
                   appear as boolean flags only.

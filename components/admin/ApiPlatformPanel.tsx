@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Info, X } from 'lucide-react';
-import { Card, EmptyState, FieldLabel, PrimaryButton, SectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
+import { Card, EmptyState, FieldLabel, PrimaryButton, SectionHeading, SubsectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
 import { at } from './adminText';
 import { ViewportAwareDialog } from '../ViewportAwareDialog';
 import ConfirmActionDialog from '../ConfirmActionDialog';
@@ -487,7 +487,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       {keyModalApp && !createdSecret && (
         <ViewportAwareDialog open onClose={() => setKeyModalApp(null)} closeOnBackdrop ariaLabel={`${at('api.modal.issue_title')} — ${keyModalApp.name}`} maxWidth={448} zIndex={80}>
           <div className="rounded-lg bg-white p-6 shadow-xl">
-            <SectionHeading>{at('api.modal.issue_title')} — {keyModalApp.name}</SectionHeading>
+            <SubsectionHeading>{at('api.modal.issue_title')} — {keyModalApp.name}</SubsectionHeading>
             <div className="mt-4 space-y-4">
               <div>
                 <FieldLabel htmlFor="new-key-name">{at('api.modal.key_name')}</FieldLabel>
@@ -536,7 +536,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
       {createdSecret && (
         <ViewportAwareDialog open onClose={closeSecretModal} closeOnBackdrop={false} closeOnEscape={false} ariaLabel={at('api.secret.title')} maxWidth={448} zIndex={80}>
           <div className="rounded-lg bg-white p-6 shadow-xl">
-            <SectionHeading>{at('api.secret.title')}</SectionHeading>
+            <SubsectionHeading>{at('api.secret.title')}</SubsectionHeading>
             <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               {at('api.secret.warning')}
             </p>

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import * as Select from '@radix-ui/react-select';
 import { Check, ChevronDown, CircleHelp, PlugZap, Trash2, X } from 'lucide-react';
 import { MODULE_ROUTE_GROUPS, MODULE_ROUTE_TOOL_LABELS, adminTestModel, type ModelEntry, type ModuleRoutes, type RoutingPool, type RoutingPoolMember, type TestModelResult } from '../../services/adminClient';
-import { Card, EmptyState, FieldLabel, SaveButton, SectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
+import { Card, EmptyState, FieldLabel, SaveButton, SectionHeading, SubsectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
 import ConfirmActionDialog from '../ConfirmActionDialog';
 
 const ANY_KEY_VALUE = '__any_configured_key__';
@@ -337,7 +337,7 @@ export const RoutingPoolsSection: React.FC<{
     <Card className="overflow-hidden">
       <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <SectionHeading>Routing pools</SectionHeading>
+          <SectionHeading>Routing Pools</SectionHeading>
           <p className="mt-1 text-xs text-gray-500">
             Modules choose a pool before the dashboard default model is considered; lower tiers run first, and weights split traffic inside the same tier.
           </p>
@@ -348,7 +348,7 @@ export const RoutingPoolsSection: React.FC<{
       <div className="border-b border-gray-200 border-l-4 border-l-sky-500 bg-sky-50/70 px-5 py-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <SectionHeading>Module routes</SectionHeading>
+            <SubsectionHeading>Module Routes</SubsectionHeading>
           </div>
           <span className="w-fit rounded-md border border-sky-200 bg-white/80 px-2 py-1 text-xs font-medium text-sky-700">
             {moduleRows.length} modules / {routedToolCount} tools
