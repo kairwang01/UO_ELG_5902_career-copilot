@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   correctiveInstruction,
+  formattedResumeIssues,
   hasFinishedEnding,
   proseDraftIssues,
 } from '../functions/src/llm/draftQuality';
@@ -49,5 +50,32 @@ describe('server-side draft quality review', () => {
     expect(instruction).toContain('cut off mid-sentence');
     expect(instruction).toContain('placeholders or template instructions');
     expect(instruction).toContain('Regenerate the COMPLETE');
+  });
+
+  it('formatted resume: no ending requirement, catches pipe tables and photo placeholders', () => {
+    const resume = `JOHN DOE\nSoftware Engineer\n\nEXPERIENCE\n${'Shipped payment platform features across three teams. '.repeat(20)}\n\nSKILLS\nPython, SQL, Docker`;
+    expect(formattedResumeIssues(resume)).toEqual([]); // ends in a skills list — fine
+
+    const withTable = `${resume}\n\n| Skill | Level |\n| Python | Expert |`;
+    expect(formattedResumeIssues(withTable)).toContain('pipe_table');
+
+    expect(formattedResumeIssues(`${resume}\n[Photo]`)).toContain('photo_placeholder');
+  });
+
+  it('formatted resume: detects requested-language mismatch', () => {
+    const englishResume = `SUMMARY\n${'Experienced product engineer delivering measurable results. '.repeat(12)}\n\nEXPERIENCE\nLed team.`;
+    expect(formattedResumeIssues(englishResume, 'Simplified Chinese')).toContain('language_mismatch');
+    expect(formattedResumeIssues(englishResume, 'French')).toContain('language_mismatch'); // English headers survived
+    expect(formattedResumeIssues(englishResume, 'English')).not.toContain('language_mismatch');
+
+    const chineseResume = `个人简介\n${'负责支付平台的核心功能开发，跨三个团队协作交付，显著提升了系统稳定性与转化率。'.repeat(8)}\n\n技能\nPython、SQL`;
+    expect(formattedResumeIssues(chineseResume, 'Simplified Chinese')).toEqual([]);
+  });
+
+  it('formatted resume corrective instruction covers the new slugs', () => {
+    const instruction = correctiveInstruction(['draft:pipe_table', 'draft:language_mismatch', 'draft:photo_placeholder']);
+    expect(instruction).toContain('pipe tables');
+    expect(instruction).toContain('requested output language');
+    expect(instruction).toContain('photo/image placeholder');
   });
 });

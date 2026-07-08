@@ -10,7 +10,7 @@ import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
 import ResumePreview from '../ResumePreview';
 import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle } from '../../lib/resumePreview';
-import { getMarketLocalLanguage, resolveOutputLanguageName, type OutputLanguageChoice } from '../../lib/resumeLanguage';
+import { getMarketLocalLanguage, marketDefaultLanguage, resolveOutputLanguageName, type OutputLanguageChoice } from '../../lib/resumeLanguage';
 import { ResumeFormatterDownloadGate } from './ResumeFormatterActions';
 import { buildLinkedInContextFromFormattedResume } from '../../lib/toolPrefill';
 import { LanguageSyncBanner } from '../LanguageSyncBanner';
@@ -211,7 +211,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
   const [coverLetterForFormatting, setCoverLetterForFormatting] = useState('');
   const [targetMarket, setTargetMarket] = useState<string>(market);
   const [outputLanguage, setOutputLanguage] = useState<OutputLanguageChoice>(
-    () => (getMarketLocalLanguage(market) ? 'local' : 'en'),
+    () => marketDefaultLanguage(market),
   );
   const [coverLetterPrefillActive, setCoverLetterPrefillActive] = useState(false);
   const [langSyncDismissed, setLangSyncDismissed] = useState<string | null>(null);
@@ -219,7 +219,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
   const savedHydratedRef = useRef(false);
 
   const changeTargetMarket = (next: string) => {
-    const nextLanguage = getMarketLocalLanguage(next) ? 'local' : 'en';
+    const nextLanguage = marketDefaultLanguage(next);
     setTargetMarket(next);
     setOutputLanguage(nextLanguage);
     const savedVersion = getSavedResumeFormatterVersion(saved?.result, next, nextLanguage);
@@ -567,7 +567,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
       setResult(chosen);
       setFromSaved(true);
       setTargetMarket(chosen.targetMarket || targetMarket);
-      setOutputLanguage(chosen.outputLanguage || (getMarketLocalLanguage(chosen.targetMarket || targetMarket) ? 'local' : 'en'));
+      setOutputLanguage(chosen.outputLanguage || marketDefaultLanguage(chosen.targetMarket || targetMarket));
       setError(null);
       setLangSyncDismissed(null);
     };

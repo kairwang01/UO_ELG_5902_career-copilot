@@ -184,7 +184,7 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
     // the first click instead of "Fix this draft before exporting".
     if (spec.qualityCheck) {
       const firstParsed = result.raw !== undefined ? result.raw : tryParseJson(result.text);
-      const issues = spec.qualityCheck(firstParsed);
+      const issues = spec.qualityCheck(firstParsed, payload ?? {});
       if (issues.length > 0) {
         console.warn(`[aiProxy] ${tool} draft failed review (${issues.join(",")}) — retrying once`);
         try {
@@ -194,7 +194,7 @@ export const aiProxyFunction = onCall({ invoker: "public", timeoutSeconds: 180 }
           };
           const retryResult = await provider.generate(retryRequest);
           const retryParsed = retryResult.raw !== undefined ? retryResult.raw : tryParseJson(retryResult.text);
-          if (spec.qualityCheck(retryParsed).length < issues.length) {
+          if (spec.qualityCheck(retryParsed, payload ?? {}).length < issues.length) {
             result = retryResult;
           }
         } catch {

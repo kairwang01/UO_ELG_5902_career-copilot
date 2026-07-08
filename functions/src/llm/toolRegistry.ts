@@ -20,7 +20,7 @@
 import { Type } from "@google/genai";
 import { LLMRequest } from "./LLMProvider";
 import { buildPrompt } from "./prompts";
-import { proseDraftIssues } from "./draftQuality";
+import { formattedResumeIssues, proseDraftIssues } from "./draftQuality";
 import { getOpportunityUseGoogleSearch } from "../config/env";
 
 export interface ToolSpec {
@@ -34,7 +34,7 @@ export interface ToolSpec {
    * the same charged call before returning — the internal second-pass review
    * behind the client's "Fix this draft before exporting" gate.
    */
-  qualityCheck?: (parsed: any) => string[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  qualityCheck?: (parsed: any, payload: any) => string[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   quotaFallback?: (payload: any) => LLMRequest; // eslint-disable-line @typescript-eslint/no-explicit-any
   quotaFallbackNotice?: string;
 }
@@ -215,7 +215,8 @@ export const TOOL_REGISTRY: Record<string, ToolSpec> = {
 
   convertResumeFormat: {
     creditKey: "resume-formatter",
-    qualityCheck: (parsed) => prefixed("draft", proseDraftIssues(field(parsed, "formattedText"), { minWords: 120, minCjkChars: 300 })),
+    qualityCheck: (parsed, payload) =>
+      prefixed("draft", formattedResumeIssues(field(parsed, "formattedText"), typeof payload?.outputLanguage === "string" ? payload.outputLanguage : undefined)),
     build: (p) => ({
       prompt: buildPrompt("convertResumeFormat", {
         marketName: p.marketName,
