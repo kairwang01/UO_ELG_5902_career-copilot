@@ -99,7 +99,7 @@ export interface ModelOption {
   provider: "gemini" | "kairllm" | "openai-compatible";
   /** Model name passed to the provider ("" = provider default). */
   providerModel: string;
-  /** Minimum tier allowed to select this model. */
+  /** Minimum caller access allowed to use this model. */
   minTier: Tier;
 }
 
@@ -1034,7 +1034,7 @@ export async function resolveProvider(
   // via platform_config/quotas.free_max_output_tokens. Default 8192 = the model's
   // native max, i.e. NO artificial truncation (a lower value previously cut large
   // structured outputs — career roadmaps, formatted resumes — mid-JSON and broke
-  // those tools). The genuine free/paid quality gap is the model tier; admins can
+  // those tools). The genuine free/paid quality gap is the model access class; admins can
   // lower this knob for a harder boundary. Paid/business pass through uncapped.
   if (tier === "free") {
     return new FreeTierOutputCapProvider(finalProvider, getFreeMaxOutputTokens());

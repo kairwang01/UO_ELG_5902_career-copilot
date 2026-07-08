@@ -27,6 +27,10 @@ const ICONS: Record<string, IconMeta> = {
     label: 'Kimi',
     src: '/llm-icons/kimi.ico',
   },
+  hunyuan: {
+    label: 'Hunyuan / Tencent Hunyuan',
+    src: '/llm-icons/hunyuan.svg',
+  },
   custom: {
     label: 'Custom LLM',
     mark: 'AI',
@@ -40,6 +44,7 @@ export const getLlmProviderIconMeta = (text: string): IconMeta => {
   if (/deepseek/.test(value)) return ICONS.deepseek;
   if (/(claude|anthropic)/.test(value)) return ICONS.claude;
   if (/(kimi|moonshot)/.test(value)) return ICONS.kimi;
+  if (/(hunyuan|混元)/.test(value)) return ICONS.hunyuan;
   return ICONS.custom;
 };
 

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as Select from '@radix-ui/react-select';
 import { AlertTriangle, ArrowRight, Calendar, Check, ChevronDown, CircleHelp, RotateCcw, Search, Star, Trash2, UserPlus, X, Zap } from 'lucide-react';
 import { data } from '@/lib/data';
 import AdminSignIn from './AdminSignIn';
@@ -129,7 +130,6 @@ const STRINGS: Record<string, string> = {
   'admin.dashboard.model_routing_title': 'Model Routing',
   'admin.dashboard.model_routing_default': 'Default model',
   'admin.dashboard.model_routing_default_hint': 'Used only when no module route or routing-pool candidate can serve the request.',
-  'admin.dashboard.model_routing_enabled': 'Enabled models',
   'admin.dashboard.model_routing_chain': 'Explicit fallback for default model',
   'admin.dashboard.model_routing_no_chain': 'No explicit fallback. Runtime may still use implicit fallback by priority.',
   'admin.dashboard.model_routing_implicit': 'Implicit fallback preview',
@@ -147,6 +147,45 @@ type Tab = 'dashboard' | 'ai' | 'prompts' | 'quotas' | 'users' | 'admins' | 'bil
 type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
 type ModelSectionId = 'routing' | 'health' | 'credentials' | 'registry';
 type QuotaSectionId = 'global' | 'plans' | 'tools' | 'posting' | 'interview';
+
+const ModelFormSelect: React.FC<{
+  id: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}> = ({ id, value, options, onChange }) => (
+  <Select.Root value={value} onValueChange={onChange}>
+    <Select.Trigger id={id} className={`${textInput} flex items-center justify-between gap-2 text-left`}>
+      <Select.Value />
+      <Select.Icon asChild>
+        <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
+      </Select.Icon>
+    </Select.Trigger>
+    <Select.Portal>
+      <Select.Content
+        position="popper"
+        sideOffset={6}
+        collisionPadding={8}
+        className="z-[120] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl ring-1 ring-black/5"
+      >
+        <Select.Viewport className="p-1">
+          {options.map((option) => (
+            <Select.Item
+              key={option.value}
+              value={option.value}
+              className="relative flex cursor-pointer select-none items-center rounded-md py-2 pl-8 pr-3 text-sm text-gray-700 outline-none data-[highlighted]:bg-blue-50 data-[highlighted]:text-blue-800"
+            >
+              <Select.ItemIndicator className="absolute left-2 inline-flex items-center">
+                <Check className="h-4 w-4" />
+              </Select.ItemIndicator>
+              <Select.ItemText>{option.label}</Select.ItemText>
+            </Select.Item>
+          ))}
+        </Select.Viewport>
+      </Select.Content>
+    </Select.Portal>
+  </Select.Root>
+);
 
 // Ordered by how often an operator touches each surface: registry and routing
 // first, health next, shared credentials last because most models use key pools.
@@ -176,11 +215,11 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   ai: {
-    description: 'Manage the model registry, per-model API key pools, grouped module routing pools for candidate, employer, agency, and public API AI routes, explicit platform-model fallback, shared builtin credentials, backend-computed implicit fallback previews, and best-effort runtime key-health checks.',
+    description: 'Manage the model registry, per-model caller access, API key pools, grouped module routing pools for candidate, employer, agency, and public API AI routes, explicit platform-model fallback, shared builtin credentials, backend-computed implicit fallback previews, and best-effort runtime key-health checks.',
     roles: {
-      super: 'View and edit models, per-model key pools, grouped module routing pools across product areas, explicit fallback chains, shared builtin credentials, and the platform default model used only as a fallback. Module selections expand to the underlying tool routes; implicit fallback previews are read-only and computed by the backend.',
-      admin: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
-      reviewer: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
+      super: 'View and edit models, per-model caller access, key pools, grouped module routing pools across product areas, explicit fallback chains, shared builtin credentials, and the platform default model used only as a fallback. Module selections expand to the underlying tool routes; routing-pool failover order is separate from caller access; implicit fallback previews are read-only and computed by the backend.',
+      admin: 'View masked model, caller-access, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
+      reviewer: 'View masked model, caller-access, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
     },
   },
   prompts: {
@@ -773,14 +812,16 @@ const UserFilterDropdown: React.FC<{
 
 const UserSingleFilterDropdown: React.FC<{
   label: string;
-  options: readonly { value: string; label: string }[];
+  options: readonly { value: string; label: string; icon?: React.ReactNode }[];
   value: string;
   onChange: (next: string) => void;
   leadingIcon?: React.ReactNode;
   ariaLabel?: string;
-}> = ({ label, options, value, onChange, leadingIcon, ariaLabel }) => {
+  menuClassName?: string;
+}> = ({ label, options, value, onChange, leadingIcon, ariaLabel, menuClassName = 'w-60' }) => {
   const detailsRef = useRef<HTMLDetailsElement>(null);
-  const selectedLabel = options.find((option) => option.value === value)?.label ?? options[0]?.label ?? label;
+  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+  const selectedLabel = selectedOption?.label ?? label;
 
   useEffect(() => {
     const closeOnOutsideClick = (event: PointerEvent) => {
@@ -799,7 +840,7 @@ const UserSingleFilterDropdown: React.FC<{
         aria-label={ariaLabel ?? `Filter users by ${label.toLowerCase()}`}
       >
         <span className="flex min-w-0 items-center gap-2">
-          {leadingIcon ?? <Calendar className="h-4 w-4 shrink-0 text-gray-400" />}
+          {leadingIcon ?? selectedOption?.icon ?? <Calendar className="h-4 w-4 shrink-0 text-gray-400" />}
           <span className="min-w-0">
             <span className="block text-[11px] font-medium leading-3 text-gray-500">{label}</span>
             <span className="block truncate text-sm leading-5">{selectedLabel}</span>
@@ -807,7 +848,7 @@ const UserSingleFilterDropdown: React.FC<{
         </span>
         <ChevronDown className="h-4 w-4 shrink-0 text-gray-400 transition group-open:rotate-180" />
       </summary>
-      <div className="absolute left-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg">
+      <div className={`absolute left-0 top-full z-30 mt-2 overflow-hidden rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${menuClassName}`}>
         {options.map((option) => {
           const checked = value === option.value;
           return (
@@ -828,6 +869,7 @@ const UserSingleFilterDropdown: React.FC<{
               >
                 <Check className="h-3 w-3" />
               </span>
+              {option.icon}
               {option.label}
             </button>
           );
@@ -2290,17 +2332,6 @@ const AdminPortal: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Enabled models count */}
-                      <div className="min-w-[120px]">
-                        <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1">
-                          {t('admin.dashboard.model_routing_enabled')}
-                        </p>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
-                          {models.filter((m) => m.enabled).length}
-                          <span className="font-normal text-gray-400 text-xs"> / {models.length}</span>
-                        </p>
-                      </div>
-
                       {/* Fallback chain for the default model */}
                       {defaultModelId && (() => {
                         const defaultModel = models.find((m) => m.id === defaultModelId);
@@ -2486,10 +2517,9 @@ const AdminPortal: React.FC = () => {
             </div>
 
             {/* OVERVIEW STRIP — the at-a-glance state everything below manages */}
-            {modelsLoaded && models.length > 0 && (() => {
+            {false && modelsLoaded && models.length > 0 && (() => {
               const enabledModels = models.filter((m) => m.enabled);
               const healthTrackedModels = enabledModels.filter((m) => m.id !== 'custom');
-              const disabledCount = models.length - enabledModels.length;
               const cooling = healthTrackedModels.filter((m) => m.keyHealth?.anyCooled).length;
               const hasKeyHealthData = healthTrackedModels.some((m) => m.keyHealth);
               const defaultModel = models.find((m) => m.id === defaultModelId);
@@ -2499,7 +2529,7 @@ const AdminPortal: React.FC = () => {
                 'bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-3 text-left transition-colors ' +
                 'hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600';
               return (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => scrollToModelSection('registry')}
@@ -2515,20 +2545,6 @@ const AdminPortal: React.FC = () => {
                         </>
                       ) : (
                         <span className="text-gray-400">not set</span>
-                      )}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => scrollToModelSection('registry')}
-                    className={statCard}
-                    aria-label="Jump to the model registry"
-                  >
-                    <span className="block text-[11px] font-medium uppercase tracking-wide text-gray-400">Models</span>
-                    <span className="mt-1 block text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {enabledModels.length} enabled
-                      {disabledCount > 0 && (
-                        <span className="ml-1.5 text-xs font-normal text-gray-500">· {disabledCount} disabled</span>
                       )}
                     </span>
                   </button>
@@ -2585,17 +2601,22 @@ const AdminPortal: React.FC = () => {
                       </p>
                     </div>
                     {canWriteModels ? (
-                      <div className="w-full sm:w-72">
+                      <div className="w-full sm:w-[28rem]">
                         <UserSingleFilterDropdown
                           label={t('admin.dashboard.model_routing_select')}
                           options={[
                             { value: '', label: t('admin.dashboard.model_routing_none') },
                             ...models
                               .filter((m) => m.enabled || m.id === defaultModelId)
-                              .map((m) => ({ value: m.id, label: m.label })),
+                              .map((m) => ({
+                                value: m.id,
+                                label: m.label,
+                                icon: <LlmProviderIcon text={`${m.id} ${m.label} ${m.builtin ?? ''} ${m.providerModel ?? ''}`} />,
+                              })),
                           ]}
                           value={defaultModelId ?? ''}
                           onChange={(id) => void setModelAsDefault(id)}
+                          menuClassName="w-[28rem] max-w-[calc(100vw-2rem)]"
                         />
                       </div>
                     ) : defaultModelId ? (
@@ -2714,15 +2735,15 @@ const AdminPortal: React.FC = () => {
                     {/* Provider */}
                     <div>
                       <FieldLabel htmlFor="mf-provider">Provider</FieldLabel>
-                      <select
+                      <ModelFormSelect
                         id="mf-provider"
                         value={mfProvider}
-                        onChange={(e) => setMfProvider(e.target.value as ModelEntry['provider'])}
-                        className={textInput}
-                      >
-                        <option value="gemini">gemini</option>
-                        <option value="openai-compatible">openai-compatible</option>
-                      </select>
+                        onChange={(value) => setMfProvider(value as ModelEntry['provider'])}
+                        options={[
+                          { value: 'gemini', label: 'gemini' },
+                          { value: 'openai-compatible', label: 'openai-compatible' },
+                        ]}
+                      />
                     </div>
 
                     {/* Builtin */}
@@ -2733,16 +2754,16 @@ const AdminPortal: React.FC = () => {
                           (inherits platform key/url)
                         </span>
                       </FieldLabel>
-                      <select
+                      <ModelFormSelect
                         id="mf-builtin"
-                        value={mfBuiltin}
-                        onChange={(e) => setMfBuiltin(e.target.value as ModelEntry['builtin'] | '')}
-                        className={textInput}
-                      >
-                          <option value="">none</option>
-                        <option value="kairllm">kairllm</option>
-                        <option value="deepseek">deepseek</option>
-                      </select>
+                        value={mfBuiltin || '__none__'}
+                        onChange={(value) => setMfBuiltin(value === '__none__' ? '' : value as ModelEntry['builtin'])}
+                        options={[
+                          { value: '__none__', label: 'none' },
+                          { value: 'kairllm', label: 'kairllm' },
+                          { value: 'deepseek', label: 'deepseek' },
+                        ]}
+                      />
                     </div>
 
                     {/* Base URL ? only relevant for openai-compatible non-builtin */}
@@ -2857,7 +2878,7 @@ const AdminPortal: React.FC = () => {
                           setMfFallbackChain(selected);
                         }}
                         size={Math.min(4, models.length + 1)}
-                        className={`${textInput} h-auto`}
+                        className={`${textInput} h-auto rounded-lg`}
                       >
                         {models
                           .filter((m) => m.id !== mfId && m.id !== 'custom')
@@ -2898,19 +2919,22 @@ const AdminPortal: React.FC = () => {
                       />
                     </div>
 
-                    {/* Min tier */}
+                    {/* Caller access */}
                     <div>
-                      <FieldLabel htmlFor="mf-tier">Minimum tier</FieldLabel>
-                      <select
+                      <FieldLabel htmlFor="mf-tier">Minimum caller access</FieldLabel>
+                      <p className="text-[11px] text-gray-500 mb-1">
+                        Server-side gate for who may use this model. Routing-pool failover order is configured separately below.
+                      </p>
+                      <ModelFormSelect
                         id="mf-tier"
                         value={mfMinTier}
-                        onChange={(e) => setMfMinTier(e.target.value as ModelEntry['minTier'])}
-                        className={textInput}
-                      >
-                        <option value="free">free</option>
-                        <option value="paid">paid</option>
-                        <option value="business">business</option>
-                      </select>
+                        onChange={(value) => setMfMinTier(value as ModelEntry['minTier'])}
+                        options={[
+                          { value: 'free', label: 'free' },
+                          { value: 'paid', label: 'paid' },
+                          { value: 'business', label: 'business' },
+                        ]}
+                      />
                     </div>
 
                     {/* Priority */}
@@ -3031,28 +3055,28 @@ const AdminPortal: React.FC = () => {
                   <EmptyState message="No models configured yet. Use 'Add model' to create one." />
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full table-fixed text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           {/* 6 columns: identity · connection · access · state · test · actions.
                               Key-pool detail lives in the Key health section below; per-key
                               config is inside Edit — neither is duplicated here. */}
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                          <th className="w-[25%] px-3 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Model
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                          <th className="w-[24%] px-3 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Provider / key
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Tier
+                          <th className="w-[10%] px-3 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Access
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
-                            Status
+                          <th className="w-[14%] px-3 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                            Key Health
                           </th>
-                          <th className="px-5 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                          <th className="w-[15%] px-3 py-3 text-left text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Connectivity
                           </th>
-                          <th className="px-5 py-3 text-right text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+                          <th className="w-[12%] px-3 py-3 text-right text-[11px] font-medium tracking-wide text-gray-500 dark:text-gray-400 uppercase">
                             Actions
                           </th>
                         </tr>
@@ -3074,7 +3098,7 @@ const AdminPortal: React.FC = () => {
                           return (
                             <tr key={m.id} className="hover:bg-gray-50 transition-colors align-middle">
                               {/* Model — identity: icon, label, default badge, id */}
-                              <td className="px-5 py-3">
+                              <td className="px-3 py-3">
                                 <div className="flex items-start gap-2">
                                   <LlmProviderIcon text={iconText} className="mt-0.5" />
                                   <div className="min-w-0">
@@ -3089,6 +3113,11 @@ const AdminPortal: React.FC = () => {
                                           {t('admin.model.default_badge')}
                                         </span>
                                       )}
+                                      {!m.enabled && (
+                                        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                          disabled
+                                        </span>
+                                      )}
                                     </p>
                                     <p className="font-mono text-[11px] text-gray-500 mt-0.5">{m.id}</p>
                                   </div>
@@ -3096,8 +3125,8 @@ const AdminPortal: React.FC = () => {
                               </td>
 
                               {/* Provider / key — how the model connects and whose key it uses */}
-                              <td className="px-5 py-3 whitespace-nowrap">
-                                <p className="text-gray-700">
+                              <td className="px-3 py-3 whitespace-nowrap overflow-hidden">
+                                <p className="text-gray-700 truncate">
                                   {m.provider}
                                   {m.builtin && (
                                     <span className="ml-1.5 text-[10px] uppercase tracking-wide bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-medium">
@@ -3105,7 +3134,7 @@ const AdminPortal: React.FC = () => {
                                     </span>
                                   )}
                                 </p>
-                                <p className="font-mono text-[11px] text-gray-500 mt-0.5">
+                                <p className="font-mono text-[11px] text-gray-500 mt-0.5 truncate">
                                   {m.providerModel || <span className="text-gray-400">default model</span>}
                                   <span className="mx-1 text-gray-300" aria-hidden="true">·</span>
                                   {m.api_key
@@ -3118,8 +3147,8 @@ const AdminPortal: React.FC = () => {
                                 </p>
                               </td>
 
-                              {/* Tier — minimum plan that can select this model */}
-                              <td className="px-5 py-3">
+                              {/* Access — minimum caller access that can use this model */}
+                              <td className="px-3 py-3">
                                 <span
                                   className={`inline-block text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ${
                                     m.minTier === 'free'
@@ -3135,36 +3164,31 @@ const AdminPortal: React.FC = () => {
 
                               {/* Status — enabled/disabled pill + key-health dot in one glance
                                   (full health detail lives in the Key health section below) */}
-                              <td className="px-5 py-3 whitespace-nowrap">
-                                <span className="inline-flex items-center gap-2">
-                                  <span
-                                    className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded ${
-                                      m.enabled
-                                        ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                        : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                                    }`}
-                                  >
-                                    {m.enabled ? 'enabled' : 'disabled'}
-                                  </span>
-                                  {m.keyHealth && (() => {
-                                    const h = m.keyHealth!;
-                                    const cooled = h.anyCooled;
-                                    const tip = cooled
-                                      ? `Cooling down until ${h.cooldownUntil ?? '?'}${h.lastErrorCode ? ` - last error: ${h.lastErrorCode}` : ''}${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}`
-                                      : `OK${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}${h.lastFailureAt ? ` - last failure: ${h.lastFailureAt.slice(0, 16).replace('T', ' ')}` : ''}`;
-                                    return (
-                                      <span
-                                        title={tip}
-                                        className={`inline-block w-2.5 h-2.5 rounded-full ${cooled ? 'bg-amber-400' : 'bg-emerald-500'}`}
-                                        aria-label={cooled ? 'Key cooling' : 'Key healthy'}
-                                      />
-                                    );
-                                  })()}
-                                </span>
+                              <td className="px-3 py-3 whitespace-nowrap">
+                                {m.keyHealth ? (() => {
+                                  const h = m.keyHealth!;
+                                  const cooled = h.anyCooled;
+                                  const tip = cooled
+                                    ? `Cooling down until ${h.cooldownUntil ?? '?'}${h.lastErrorCode ? ` - last error: ${h.lastErrorCode}` : ''}${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}`
+                                    : `OK${h.failureCount !== undefined ? ` - failures: ${h.failureCount}` : ''}${h.lastFailureAt ? ` - last failure: ${h.lastFailureAt.slice(0, 16).replace('T', ' ')}` : ''}`;
+                                  return (
+                                    <span
+                                      title={tip}
+                                      className={`inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ${
+                                        cooled ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                      }`}
+                                    >
+                                      <span className={`h-1.5 w-1.5 rounded-full ${cooled ? 'bg-amber-500' : 'bg-emerald-500'}`} aria-hidden="true" />
+                                      {cooled ? 'cooling' : 'healthy'}
+                                    </span>
+                                  );
+                                })() : (
+                                  <span className="text-[11px] text-gray-400">no runtime data</span>
+                                )}
                               </td>
 
                               {/* Connectivity column */}
-                              <td className="px-5 py-3 whitespace-nowrap min-w-[180px]">
+                              <td className="px-3 py-3 whitespace-nowrap">
                                 {!canWriteModels ? (
                                   <span className="text-[11px] text-gray-400">Super only</span>
                                 ) : (
@@ -3206,7 +3230,7 @@ const AdminPortal: React.FC = () => {
                                         </span>
                                         {rts.ok && rts.text && (
                                           <span
-                                            className="font-mono text-[10px] text-emerald-600 max-w-[160px] truncate block"
+                                            className="font-mono text-[10px] text-emerald-600 max-w-[110px] truncate block"
                                             title={rts.text}
                                           >
                                             {rts.text}
@@ -3214,7 +3238,7 @@ const AdminPortal: React.FC = () => {
                                         )}
                                         {!rts.ok && rts.error && (
                                           <span
-                                            className="font-mono text-[10px] text-red-500 max-w-[160px] truncate block"
+                                            className="font-mono text-[10px] text-red-500 max-w-[110px] truncate block"
                                             title={rts.error}
                                           >
                                             {rts.error}
@@ -3227,24 +3251,13 @@ const AdminPortal: React.FC = () => {
                               </td>
 
                               {/* Actions — set default (super), edit, delete */}
-                              <td className="px-5 py-3 whitespace-nowrap text-right">
-                                {canWriteModels && m.id !== defaultModelId && (
-                                  <button
-                                    type="button"
-                                    disabled={!m.enabled}
-                                    onClick={() => setModelAsDefault(m.id)}
-                                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 transition-colors focus:outline-none focus:underline disabled:opacity-40 disabled:cursor-not-allowed mr-3"
-                                    title={!m.enabled ? 'Model must be enabled to set as default' : ''}
-                                  >
-                                    {t('admin.model.set_default_btn')}
-                                  </button>
-                                )}
+                              <td className="px-3 py-3 whitespace-nowrap text-right">
                                 {canWriteModels ? (
                                   <>
                                     <button
                                       type="button"
                                       onClick={() => openModelForm(m)}
-                                      className="text-xs text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:underline mr-3"
+                                      className="text-xs text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus:underline mr-2"
                                     >
                                       Edit
                                     </button>

@@ -104,7 +104,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'access.matrix.col_capability': 'Capability',
   'access.product.title': 'Product Roles',
   'access.product.subtitle':
-    'Application-side access by account type. Enforced by route guards and the server-side model tier gate (resolveProvider).',
+    'Application-side access by account type. Enforced by route guards and the server-side model access gate (resolveProvider).',
 
   // ── Web3 settings panel ──
   'web3.banner.title': 'Preview Module',

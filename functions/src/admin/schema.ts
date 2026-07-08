@@ -65,7 +65,7 @@ export interface ModelEntry {
   builtin?: "kairllm" | "deepseek";
   /** Model name passed to the provider. "" = provider default. */
   providerModel: string;
-  /** Minimum tier required to select this model. */
+  /** Minimum caller access required to use this model. */
   minTier: "free" | "paid" | "business";
   /** When false the model is hidden from pickers and cannot be resolved. */
   enabled: boolean;
@@ -97,7 +97,7 @@ export interface RoutingPoolMember {
   modelId: string;
   /** Optional key hash. Omit to let the model use its whole configured key pool. */
   keyHash?: string;
-  /** Lower tier numbers are tried first; higher tiers are fallback. */
+  /** Lower numbers are tried first; higher numbers are fallback. */
   tier: number;
   /** Relative traffic share inside the same tier. */
   weight: number;
@@ -192,7 +192,7 @@ export interface QuotasDoc {
   /**
    * Free-tier output-token ceiling (服务分级). Default 8192 = Gemini Flash's
    * native max, i.e. no artificial truncation — the genuine free/paid quality
-   * gap is the model tier. Admins may lower this for a harder boundary.
+   * gap is the model access class. Admins may lower this for a harder boundary.
    */
   free_max_output_tokens?: number;
   /**

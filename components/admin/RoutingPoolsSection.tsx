@@ -339,7 +339,7 @@ export const RoutingPoolsSection: React.FC<{
         <div>
           <SectionHeading>Routing Pools</SectionHeading>
           <p className="mt-1 text-xs text-gray-500">
-            Modules choose a pool before the dashboard default model is considered; lower tiers run first, and weights split traffic inside the same tier.
+            Modules choose a pool before the dashboard default model is considered; lower failover orders run first, and weights split traffic inside the same order.
           </p>
         </div>
         {canManage && <SaveButton onClick={save} loading={saving} label="Save routing" />}
@@ -449,7 +449,7 @@ export const RoutingPoolsSection: React.FC<{
                     <tr className="bg-white/70">
                       <th className={tableHead}>Model</th>
                       <th className={tableHead}>Saved key</th>
-                      <th className={`${tableHead} w-24`}>Tier</th>
+                      <th className={`${tableHead} w-24`}>Failover order</th>
                       <th className={`${tableHead} w-28`}>Weight</th>
                       <th className={tableHead}>State</th>
                       <th className={tableHead}>Connectivity</th>
