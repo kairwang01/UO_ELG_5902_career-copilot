@@ -147,13 +147,13 @@ type AccessControlTab = 'permissions' | 'product' | 'console' | 'reviewers';
 type ModelSectionId = 'routing' | 'health' | 'credentials' | 'registry';
 type QuotaSectionId = 'global' | 'plans' | 'tools' | 'posting' | 'interview';
 
-// Ordered by how often an operator touches each surface: the registry is the
-// primary working area, credentials are set-and-forget, health is monitoring.
+// Ordered by how often an operator touches each surface: registry and routing
+// first, health next, shared credentials last because most models use key pools.
 const MODEL_SECTIONS: { id: ModelSectionId; label: string }[] = [
   { id: 'registry', label: 'Model registry' },
   { id: 'routing', label: 'Routing pools' },
-  { id: 'credentials', label: 'Provider credentials' },
   { id: 'health', label: 'Key health' },
+  { id: 'credentials', label: 'Shared credentials' },
 ];
 
 const QUOTA_SECTIONS: { id: QuotaSectionId; label: string }[] = [
@@ -175,9 +175,9 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   ai: {
-    description: 'Manage the model registry, per-model API key pools, grouped module routing pools for candidate, employer, agency, and public API AI routes, explicit platform-model fallback, provider keys, backend-computed implicit fallback previews, and best-effort runtime key-health checks.',
+    description: 'Manage the model registry, per-model API key pools, grouped module routing pools for candidate, employer, agency, and public API AI routes, explicit platform-model fallback, shared builtin credentials, backend-computed implicit fallback previews, and best-effort runtime key-health checks.',
     roles: {
-      super: 'View and edit models, provider keys, key pools, grouped module routing pools across product areas, explicit fallback chains, and the platform default model used only as a fallback. Module selections expand to the underlying tool routes; implicit fallback previews are read-only and computed by the backend.',
+      super: 'View and edit models, per-model key pools, grouped module routing pools across product areas, explicit fallback chains, shared builtin credentials, and the platform default model used only as a fallback. Module selections expand to the underlying tool routes; implicit fallback previews are read-only and computed by the backend.',
       admin: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
       reviewer: 'View masked model, key-pool, routing-pool, fallback, implicit-preview, and runtime-health settings without editing.',
     },
@@ -3292,25 +3292,35 @@ const AdminPortal: React.FC = () => {
               />
             </section>
 
-            {/* SECTION C: PROVIDER CREDENTIALS (platform keys) */}
+            {/* SECTION C: KEY HEALTH (monitoring) */}
+            <section
+              ref={(node) => { modelSectionRefs.current.health = node; }}
+              className="scroll-mt-32"
+            >
+              <KeyPoolHealthSection models={models} />
+            </section>
+
+            {/* SECTION D: SHARED CREDENTIALS (builtin/legacy platform keys) */}
             <section
               ref={(node) => { modelSectionRefs.current.credentials = node; }}
               className="scroll-mt-32"
             >
               <div className="mb-4">
-                <SectionHeading>Provider credentials</SectionHeading>
+                <SectionHeading>Shared credentials</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
-                  {canWriteModels ? 'Rotate keys, update endpoints, and verify live connectivity before saving.' : 'Review masked provider keys and endpoints.'}
+                  Shared keys are used only by Gemini direct routes and models marked as builtin. Model registry key pools take precedence.
+                  {' '}
+                  {canWriteModels ? 'Rotate these shared keys only when a builtin model depends on them.' : 'Review masked shared keys and endpoints.'}
+                  {' '}
                   Raw keys are never echoed - only masked previews are shown.
                 </p>
               </div>
 
-              {/* Provider selector - single-select dropdown (mainstream API-console
-              style) so only the chosen provider's config renders, no 3-card clutter. */}
+              {/* Single provider selector keeps this low-frequency fallback config compact. */}
               <div className="mb-5 max-w-xs">
                 <UserSingleFilterDropdown
-                  label="Provider"
-                  ariaLabel="Choose LLM provider"
+                  label="Shared provider"
+                  ariaLabel="Choose shared LLM provider credentials"
                   leadingIcon={<LlmProviderIcon text={providerTab} />}
                   value={providerTab}
                   onChange={(next) => setProviderTab(next as 'gemini' | 'kairllm' | 'deepseek')}
@@ -3324,9 +3334,9 @@ const AdminPortal: React.FC = () => {
 
               {(() => {
                 const meta = {
-                  gemini: { label: 'Gemini', iconText: 'gemini', tier: 'free tier', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza... (leave blank to keep current)' },
-                  kairllm: { label: 'KairLLM', iconText: 'kairllm', tier: 'paid tier', tierClass: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/50', masked: llm.kairllm_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
-                  deepseek: { label: 'DeepSeek', iconText: 'deepseek', tier: 'business tier', tierClass: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', masked: llm.deepseek_api_key_masked, keyPlaceholder: 'leave blank to keep current' },
+                  gemini: { label: 'Gemini shared credentials', iconText: 'gemini', tier: 'direct routes', tierClass: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50', masked: llm.gemini_api_key_masked, keyPlaceholder: 'AIza... (leave blank to keep current)', note: 'Used by Gemini direct routes and as the Gemini environment fallback.' },
+                  kairllm: { label: 'KairLLM shared credentials', iconText: 'kairllm', tier: 'builtin only', tierClass: 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800/50', masked: llm.kairllm_api_key_masked, keyPlaceholder: 'leave blank to keep current', note: 'Used only by models whose Built-in field is set to kairllm.' },
+                  deepseek: { label: 'DeepSeek shared credentials', iconText: 'deepseek', tier: 'builtin only', tierClass: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', masked: llm.deepseek_api_key_masked, keyPlaceholder: 'leave blank to keep current', note: 'Used only by models whose Built-in field is set to deepseek.' },
                 }[providerTab];
 
                 const newKey = providerTab === 'gemini' ? geminiKey : providerTab === 'kairllm' ? kairllmKey : deepseekKey;
@@ -3382,16 +3392,17 @@ const AdminPortal: React.FC = () => {
                       </div>
                       <span className={`text-[10px] border px-2 py-0.5 rounded font-medium ${meta.tierClass}`}>{meta.tier}</span>
                     </div>
+                    <p className="text-xs text-gray-500">{meta.note}</p>
 
                     <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md px-3 py-2">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 shrink-0">Active key</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 shrink-0">Shared key</span>
                       <span className="font-mono text-xs text-gray-700 dark:text-gray-200 truncate flex-1">
                         {meta.masked || <em className="not-italic text-gray-400">not set</em>}
                       </span>
                     </div>
 
                     <div>
-                      <FieldLabel htmlFor="provider-key">New API key</FieldLabel>
+                      <FieldLabel htmlFor="provider-key">New shared API key</FieldLabel>
                       <input id="provider-key" type="password" value={newKey} onChange={(e) => onKeyChange(e.target.value)} placeholder={meta.keyPlaceholder} disabled={!canWriteModels} className={textInput} autoComplete="off" />
                     </div>
 
@@ -3444,14 +3455,6 @@ const AdminPortal: React.FC = () => {
                   <span className="font-mono">{llm.updated_by?.slice(0, 8)}...</span>
                 </p>
               )}
-            </section>
-
-            {/* SECTION D: KEY HEALTH (monitoring) */}
-            <section
-              ref={(node) => { modelSectionRefs.current.health = node; }}
-              className="scroll-mt-32"
-            >
-              <KeyPoolHealthSection models={models} />
             </section>
 
           </div>
