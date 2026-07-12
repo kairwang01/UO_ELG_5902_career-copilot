@@ -4155,12 +4155,12 @@ const AdminPortal: React.FC = () => {
                           const row = effectivePlanQuota(quotas, plan);
                           return (
                             <tr key={plan}>
-                              <td className="py-3 pr-3 whitespace-nowrap">
+                              <td className="py-3 pr-3 whitespace-nowrap align-top">
                                 <span className="block font-medium text-gray-900">{PLAN_LABELS[plan]}</span>
                                 <span className="mt-0.5 block text-[11px] text-gray-400">{plan}</span>
                               </td>
                               {PLAN_QUOTA_FIELDS.map((f) => (
-                                <td key={f.key} className="py-2 px-3 min-w-[130px]">
+                                <td key={f.key} className="py-2 px-3 min-w-[130px] align-top">
                                   <input
                                     type="number"
                                     min={0}
@@ -4169,17 +4169,19 @@ const AdminPortal: React.FC = () => {
                                     className={textInput}
                                     aria-label={`${PLAN_LABELS[plan]} ${f.header}`}
                                   />
-                                  {row[f.key] === 0 && f.zeroLabel && (
-                                    <span
-                                      className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                                        f.zeroLabel === 'Unlimited'
-                                          ? 'bg-blue-50 text-blue-700'
-                                          : 'bg-amber-50 text-amber-700'
-                                      }`}
-                                    >
-                                      {f.zeroLabel}
-                                    </span>
-                                  )}
+                                  <span className="mt-1 block min-h-[1.25rem]">
+                                    {row[f.key] === 0 && f.zeroLabel && (
+                                      <span
+                                        className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                          f.zeroLabel === 'Unlimited'
+                                            ? 'bg-blue-50 text-blue-700'
+                                            : 'bg-amber-50 text-amber-700'
+                                        }`}
+                                      >
+                                        {f.zeroLabel}
+                                      </span>
+                                    )}
+                                  </span>
                                 </td>
                               ))}
                             </tr>
