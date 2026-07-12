@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Card, SectionHeading } from './adminUi';
 import { at } from './adminText';
@@ -12,11 +12,11 @@ import {
 } from '../../config/featureFlags';
 
 /**
- * Web3 settings tab — experimental module control.
+ * Web3 settings tab: optional identity module control.
  *
  * Web3 in this product is strictly optional identity tooling: candidates may
  * connect a wallet and hold a Proof-of-Talent credential (Sepolia testnet).
- * Nothing in the core product — auth, payments, hiring portal, career tools —
+ * Nothing in the core product - auth, payments, hiring portal, career tools -
  * depends on a wallet. This panel turns the whole surface on/off.
  */
 export const Web3SettingsPanel: React.FC = () => {
@@ -91,7 +91,7 @@ export const Web3SettingsPanel: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="space-y-5">
       <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
@@ -138,9 +138,9 @@ export const Web3SettingsPanel: React.FC = () => {
 
       <Card className="p-5 space-y-4">
         <SectionHeading>{at('web3.usage.title')}</SectionHeading>
-        <ul className="space-y-2.5">
+        <ul className="grid gap-2.5 md:grid-cols-2">
           {[
-            ['Wallet connection (live)', 'Optional identity link on the candidate Account page. Connection failures fall back to the normal account — nothing is blocked.'],
+            ['Wallet connection (live)', 'Optional identity link on the candidate Account page. Connection failures fall back to the normal account flow; nothing is blocked.'],
             ['Proof-of-Talent credential (Sepolia preview)', 'Candidates scoring 85+ on resume analysis can issue a credential signal; employers see verified status in the talent pool.'],
             ['Credential verification (reserved)', 'Third-party verification will use the public contract path when the live contract is enabled.'],
             ['Partner settlement (not enabled)', 'Token-based settlement for API-platform partners is outside the current release scope.'],
@@ -210,3 +210,4 @@ export const Web3SettingsPanel: React.FC = () => {
     </div>
   );
 };
+

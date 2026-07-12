@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Info, X } from 'lucide-react';
 import { Card, EmptyState, FieldLabel, PrimaryButton, SectionHeading, SubsectionHeading, tableCell, tableHead, tableRow, textInput } from './adminUi';
 import { at } from './adminText';
@@ -55,7 +55,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
   const [keyName, setKeyName] = useState('');
   const [keyScopes, setKeyScopes] = useState<ApiKeyScope[]>(['jobs.read']);
   const [creatingKey, setCreatingKey] = useState(false);
-  // show-once secret modal (transient — secret lives only in this state)
+  // Show-once secret modal. The secret lives only in this transient state.
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [secretCopied, setSecretCopied] = useState(false);
   const [busyKeyId, setBusyKeyId] = useState<string | null>(null);
@@ -141,7 +141,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
 
   const requestCreateKey = () => {
     if (!keyModalApp || creatingKey || !keyName.trim() || keyScopes.length === 0) return;
-    // Production keys count against live quotas — require an explicit product-level confirm.
+    // Production keys count against live quotas; require an explicit product-level confirm.
     if (keyModalApp.environment === 'production') {
       setProductionKeyConfirmOpen(true);
       return;
@@ -201,7 +201,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
 
   return (
     <div className="space-y-6">
-      {/* Trust banner — clear about server-side secret handling */}
+      {/* Trust banner: clear about server-side secret handling */}
       <div className="flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
@@ -361,7 +361,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                         {apps.find((a) => a.id === key.app_id)?.name ?? key.app_id}
                       </span>
                     </td>
-                    <td className={`${tableCell} font-mono text-xs`}>{key.prefix}••••</td>
+                    <td className={`${tableCell} font-mono text-xs`}>{key.prefix}...</td>
                     <td className={tableCell}>
                       <span className="flex flex-wrap gap-1">
                         {key.scopes.map((s) => (
@@ -375,7 +375,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
                       </span>
                     </td>
                     <td className={`${tableCell} font-mono text-xs whitespace-nowrap`}>
-                      {key.rate_limit_per_min}/min · {key.monthly_quota.toLocaleString()}/mo
+                      {key.rate_limit_per_min}/min / {key.monthly_quota.toLocaleString()}/mo
                     </td>
                     <td className={`${tableCell} font-mono text-xs`}>{fmtDate(key.last_used_at)}</td>
                     {canManage && (
@@ -470,7 +470,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
               </tbody>
             </table>
             <p className="mt-2 text-[11px] text-gray-500">{at('api.docs.auth_hint')}</p>
-            <code className="mt-1 block overflow-x-auto rounded bg-gray-900 px-2 py-1 font-mono text-[11px] text-gray-100">Authorization: Bearer cc_live_…</code>
+            <code className="mt-1 block overflow-x-auto rounded bg-gray-900 px-2 py-1 font-mono text-[11px] text-gray-100">Authorization: Bearer cc_live_...</code>
           </div>
           <a
             href="/docs/api.md"
@@ -485,9 +485,9 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
 
       {/* Issue-key modal */}
       {keyModalApp && !createdSecret && (
-        <ViewportAwareDialog open onClose={() => setKeyModalApp(null)} closeOnBackdrop ariaLabel={`${at('api.modal.issue_title')} — ${keyModalApp.name}`} maxWidth={448} zIndex={80}>
+        <ViewportAwareDialog open onClose={() => setKeyModalApp(null)} closeOnBackdrop ariaLabel={`${at('api.modal.issue_title')} - ${keyModalApp.name}`} maxWidth={448} zIndex={80}>
           <div className="rounded-lg bg-white p-6 shadow-xl">
-            <SubsectionHeading>{at('api.modal.issue_title')} — {keyModalApp.name}</SubsectionHeading>
+            <SubsectionHeading>{at('api.modal.issue_title')} - {keyModalApp.name}</SubsectionHeading>
             <div className="mt-4 space-y-4">
               <div>
                 <FieldLabel htmlFor="new-key-name">{at('api.modal.key_name')}</FieldLabel>
@@ -531,7 +531,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
         </ViewportAwareDialog>
       )}
 
-      {/* Show-once secret modal — no backdrop/ESC close: storing the key must
+      {/* Show-once secret modal: no backdrop/ESC close; storing the key must
           be acknowledged explicitly before the secret disappears for good. */}
       {createdSecret && (
         <ViewportAwareDialog open onClose={closeSecretModal} closeOnBackdrop={false} closeOnEscape={false} ariaLabel={at('api.secret.title')} maxWidth={448} zIndex={80}>
@@ -591,7 +591,7 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
         open={Boolean(revokeTarget)}
         title={at('api.keys.revoke')}
         description={revokeTarget
-          ? `${at('api.revoke.confirm_prefix')} "${revokeTarget.name}" (${revokeTarget.prefix}…)? ${at('api.revoke.confirm_suffix')}`
+          ? `${at('api.revoke.confirm_prefix')} "${revokeTarget.name}" (${revokeTarget.prefix}...)? ${at('api.revoke.confirm_suffix')}`
           : ''}
         detail={revokeTarget?.name}
         cancelLabel={at('api.modal.cancel')}
@@ -612,3 +612,4 @@ export const ApiPlatformPanel: React.FC<{ canManage: boolean }> = ({ canManage }
     </div>
   );
 };
+

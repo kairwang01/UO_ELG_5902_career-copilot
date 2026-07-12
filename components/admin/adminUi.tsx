@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 
 /** Shared light-theme primitives for the admin console (matches AdminAuthLayout). */
 
@@ -86,11 +86,11 @@ const PLAN_COLORS: Record<string, string> = {
 };
 
 export const PlanBadge: React.FC<{ plan: string | null }> = ({ plan }) => {
-  if (!plan) return <span className="text-gray-400 text-xs">—</span>;
+  if (!plan) return <span className="text-gray-400 text-xs">-</span>;
   const cls = PLAN_COLORS[plan] ?? 'bg-gray-100 text-gray-700';
   return (
     <span className={`inline-block text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ${cls}`}>
-      {plan.replace('_', ' ')}
+      {plan.replace(/_/g, ' ')}
     </span>
   );
 };
@@ -114,7 +114,7 @@ export const ActionBadge: React.FC<{ action: string }> = ({ action }) => {
 
 export const AuditDetails: React.FC<{ details: Record<string, unknown> }> = ({ details }) => {
   const pairs = Object.entries(details);
-  if (pairs.length === 0) return <span className="text-gray-400">—</span>;
+  if (pairs.length === 0) return <span className="text-gray-400">-</span>;
   return (
     <span className="flex flex-wrap gap-x-3 gap-y-0.5">
       {pairs.map(([k, v]) => (
@@ -131,3 +131,4 @@ export const tableHead =
   'px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500';
 export const tableRow = 'border-b border-gray-100 hover:bg-gray-50/80 transition-colors';
 export const tableCell = 'px-5 py-3 text-sm text-gray-700';
+

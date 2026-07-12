@@ -1,13 +1,13 @@
-/**
+﻿/**
  * Copy for the platform-round admin panels (API Platform, Access Control,
  * Key Health, Web3). Same inline-stub convention as the STRINGS map in
  * AdminPortal.tsx: the console ships English-only as an internal tool, and
  * keeping every visible string behind at() means a future i18n migration is a
- * lookup swap in exactly two files (this one and AdminPortal's stub) — no
+ * lookup swap in exactly two files (this one and AdminPortal's stub) - no
  * component changes.
  */
 const ADMIN_TEXT: Record<string, string> = {
-  // ── API Platform panel ──
+  // API Platform panel
   'api.banner.title': 'Live Server-Backed Registry',
   'api.banner.body':
     'Applications and keys are stored server-side. Secrets are generated once, hashed at rest, and never shown again after the creation dialog closes.',
@@ -34,7 +34,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.apps.col_created': 'Created',
   'api.apps.issue_key': 'Issue key',
   'api.keys.title': 'API Keys',
-  'api.keys.subtitle': 'Only the prefix is stored for display — full secrets are shown once at creation.',
+  'api.keys.subtitle': 'Only the prefix is stored for display; full secrets are shown once at creation.',
   'api.keys.empty': 'No keys issued yet.',
   'api.keys.col_name': 'Name',
   'api.keys.col_key': 'Key',
@@ -78,7 +78,7 @@ const ADMIN_TEXT: Record<string, string> = {
   'api.error.load': 'Could not load the API platform data.',
   'api.error.retry': 'Retry',
 
-  // ── Key health section ──
+  // Key health section
   'pool.title': 'Key Health',
   'pool.subtitle':
     'Runtime key-pool observations from key_health. This is not a live Test result: records appear only after routed model calls use or fail a key.',
@@ -97,25 +97,25 @@ const ADMIN_TEXT: Record<string, string> = {
   'pool.route_implicit': 'Implicit by priority',
   'pool.route_none': 'none',
 
-  // ── Access control sections ──
+  // Access control sections
   'access.matrix.title': 'Roles & Permissions',
   'access.matrix.subtitle':
-    'Predefined roles — the server enforces every action; this matrix mirrors the registry in lib/access/permissions.ts.',
+    'Predefined roles. The server enforces every action; this matrix mirrors the registry in lib/access/permissions.ts.',
   'access.matrix.col_capability': 'Capability',
   'access.product.title': 'Product Roles',
   'access.product.subtitle':
     'Application-side access by account type. Enforced by route guards and the server-side model access gate (resolveProvider).',
 
-  // ── Web3 settings panel ──
+  // Web3 settings panel
   'web3.banner.title': 'Preview Module',
   'web3.banner.body':
     'Runs as an optional Sepolia preview. The core product never requires a wallet.',
   'web3.toggle.title': 'Web3 Identity Module',
   'web3.toggle.desc':
-    'Controls the candidate-facing surface: the wallet section in Account and the Identity & Wallet workspace view (Proof-of-Talent credential, staking, rewards). When off, both are hidden entirely — sign-in, payments and all AI features are unaffected.',
+    'Controls the candidate-facing surface: the wallet section in Account and the Identity & Wallet workspace view (Proof-of-Talent credential, staking, rewards). When off, both are hidden entirely; sign-in, payments, and all AI features are unaffected.',
   'web3.toggle.aria': 'Toggle Web3 module',
-  'web3.toggle.on': 'Enabled — candidates can see the wallet and credential surfaces.',
-  'web3.toggle.off': 'Disabled — all Web3 surfaces are hidden from the product.',
+  'web3.toggle.on': 'Enabled: candidates can see the wallet and credential surfaces.',
+  'web3.toggle.off': 'Disabled: all Web3 surfaces are hidden from the product.',
   'web3.toggle.scope_note':
     'Scope note: this switch is platform-wide. Candidate wallet and Identity & Wallet surfaces read the server config after mount; cached local state is used only as a first-paint fallback.',
   'web3.error.load': 'Could not load Web3 settings.',
@@ -128,10 +128,11 @@ const ADMIN_TEXT: Record<string, string> = {
   'web3.runtime.title': 'Runtime Mode',
   'web3.runtime.desc':
     'Preview saves credential state to the user profile. Live sends Sepolia transactions to the configured contract.',
-  'web3.runtime.preview': 'Preview mode — no on-chain transactions.',
-  'web3.runtime.live': 'Live mode — wallet actions use the contract.',
+  'web3.runtime.preview': 'Preview mode: no on-chain transactions.',
+  'web3.runtime.live': 'Live mode: wallet actions use the contract.',
   'web3.runtime.save': 'Save runtime settings',
   'web3.runtime.saving': 'Saving...',
 };
 
 export const at = (key: string): string => ADMIN_TEXT[key] ?? key;
+

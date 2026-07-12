@@ -136,7 +136,7 @@ const STRINGS: Record<string, string> = {
   'admin.dashboard.model_routing_implicit_inactive': 'Implicit fallback is inactive because an explicit fallback chain is configured.',
   'admin.dashboard.model_routing_none': 'Not configured',
   'admin.access.reviewer_only': 'You have reviewer access. Only Dashboard and Audit Log are available.',
-  'admin_free_cap_help': 'Free-tier output-token ceiling (鏈嶅姟鍒嗙骇). Requests from free users will be capped at this many output tokens. Default 8192 = Gemini Flash native max (no artificial truncation). Lower this value to create a harder free/paid quality boundary.',
+  'admin_free_cap_help': 'Free-plan output-token ceiling. Requests from users whose subscription_status is free are capped at this many output tokens. Default 8192 = Gemini Flash native max (no artificial truncation). Lower this value to create a clearer free vs paid quality boundary.',
   'admin.dashboard.model_routing_select': 'Change default model',
 };
 const t = (key: string) => STRINGS[key] ?? key;
@@ -199,8 +199,8 @@ const MODEL_SECTIONS: { id: ModelSectionId; label: string }[] = [
 const QUOTA_SECTIONS: { id: QuotaSectionId; label: string }[] = [
   { id: 'global', label: 'Global Quotas' },
   { id: 'plans', label: 'Plan Quotas' },
-  { id: 'tools', label: 'Tool Access' },
   { id: 'posting', label: 'Employer Posting' },
+  { id: 'tools', label: 'Tool Access' },
   { id: 'interview', label: 'Mock Interview' },
 ];
 
@@ -230,10 +230,10 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   quotas: {
-    description: 'Manage plan quotas, credit grants, run limits, and tool credit costs with sticky section shortcuts, top save, and unsaved-change warnings.',
+    description: 'Manage global quota enforcement, role-aware subscription plan quotas, credit grants, run limits, tool credit costs, employer posting caps, and mock-interview access with sticky section shortcuts and unsaved-change warnings.',
     roles: {
-      super: 'View and update quotas.',
-      admin: 'View and update quotas.',
+      super: 'View and update quota enforcement, subscription plan limits, tool access, posting caps, and mock-interview access.',
+      admin: 'View and update quota enforcement, subscription plan limits, tool access, posting caps, and mock-interview access.',
     },
   },
   users: {
@@ -264,9 +264,9 @@ const ADMIN_TAB_HELP: Record<Tab, AdminNavHelp> = {
     },
   },
   web3: {
-    description: 'Feature in development. This page is a placeholder for Web3 runtime settings.',
+    description: 'Manage the optional Web3 identity module, candidate wallet visibility, Sepolia preview/live runtime mode, and Proof-of-Talent contract address.',
     roles: {
-      super: 'Access the in-development Web3 settings surface.',
+      super: 'View and update Web3 module visibility and runtime contract settings.',
     },
   },
   audit: {
@@ -314,6 +314,28 @@ const PLAN_LABELS: Record<AdminPlanKey, string> = {
   single_post: 'Single Post',
   job_pack: 'Job Pack',
 };
+
+const PLAN_GROUPS: { label: string; description: string; plans: AdminPlanKey[] }[] = [
+  {
+    label: 'Shared free plan',
+    description: 'Used by candidate, employer, and agency accounts until a role-specific paid plan is active.',
+    plans: ['free'],
+  },
+  {
+    label: 'Candidate subscriptions',
+    description: 'Jobseeker plans that control saved AI results, credits, and candidate tool access.',
+    plans: ['essentials', 'accelerator', 'executive'],
+  },
+  {
+    label: 'Employer subscriptions',
+    description: 'Business plans and posting packs that control hiring tools, credits, and active job caps.',
+    plans: ['starter', 'growth', 'pro', 'single_post', 'job_pack'],
+  },
+];
+
+const PLAN_GROUP_LABEL_BY_PLAN = Object.fromEntries(
+  PLAN_GROUPS.flatMap((group) => group.plans.map((plan) => [plan, group.label])),
+) as Record<AdminPlanKey, string>;
 
 type UserFilterOption =
   | { type?: 'option'; value: string; label: string }
@@ -670,7 +692,7 @@ const PLAN_QUOTA_FIELDS: { key: keyof AdminPlanQuota; header: string; tip: strin
   { key: 'daily_run_limit', header: 'Daily runs', tip: 'Max AI tool runs per day for this plan. 0 = Unlimited (the plan relies on credits instead).', zeroLabel: 'Unlimited' },
   { key: 'daily_credit_limit', header: 'Daily credits', tip: 'Max credits a user on this plan can spend per day. 0 = Unlimited.', zeroLabel: 'Unlimited' },
   { key: 'monthly_credit_grant', header: 'Monthly grant', tip: 'Credits granted at the start of each billing cycle. 0 = no grant.', zeroLabel: null },
-  { key: 'active_job_limit', header: 'Active jobs', tip: 'Max simultaneously OPEN job posts. 0 = None allowed (blocks posting) ? set a positive number for employer plans.', zeroLabel: 'None' },
+  { key: 'active_job_limit', header: 'Active jobs', tip: 'Max simultaneously open job posts. 0 = none allowed, so employer posting is blocked until this is positive.', zeroLabel: 'None' },
 ];
 
 const effectivePlanQuota = (quotas: AdminQuotas, plan: AdminPlanKey): AdminPlanQuota => ({
@@ -2921,18 +2943,18 @@ const AdminPortal: React.FC = () => {
 
                     {/* Caller access */}
                     <div>
-                      <FieldLabel htmlFor="mf-tier">Minimum caller access</FieldLabel>
+                      <FieldLabel htmlFor="mf-tier">Minimum model access group</FieldLabel>
                       <p className="text-[11px] text-gray-500 mb-1">
-                        Server-side gate for who may use this model. Routing-pool failover order is configured separately below.
+                        Server-side access gate for model use. This is separate from subscription plan names and routing-pool failover order.
                       </p>
                       <ModelFormSelect
                         id="mf-tier"
                         value={mfMinTier}
                         onChange={(value) => setMfMinTier(value as ModelEntry['minTier'])}
                         options={[
-                          { value: 'free', label: 'free' },
-                          { value: 'paid', label: 'paid' },
-                          { value: 'business', label: 'business' },
+                          { value: 'free', label: 'Free and signed-in users' },
+                          { value: 'paid', label: 'Paid candidate plans' },
+                          { value: 'business', label: 'Employer/business access' },
                         ]}
                       />
                     </div>
@@ -3339,9 +3361,9 @@ const AdminPortal: React.FC = () => {
                   value={providerTab}
                   onChange={(next) => setProviderTab(next as 'gemini' | 'kairllm' | 'deepseek')}
                   options={[
-                    { value: 'gemini', label: 'Gemini - free tier' },
-                    { value: 'kairllm', label: 'KairLLM - paid tier' },
-                    { value: 'deepseek', label: 'DeepSeek - business tier' },
+                    { value: 'gemini', label: 'Gemini - direct routes' },
+                    { value: 'kairllm', label: 'KairLLM - builtin credential' },
+                    { value: 'deepseek', label: 'DeepSeek - builtin credential' },
                   ]}
                 />
               </div>
@@ -3995,19 +4017,20 @@ const AdminPortal: React.FC = () => {
               <div>
                 <SectionHeading>Global Quotas</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
-                  UTC day rolling window. Set to 0 for no limit on that dimension.
+                  Platform-level safety limits using the UTC day window. Set a numeric limit to protect spend, or 0 to leave that dimension uncapped.
                 </p>
               </div>
               <div className="grid md:grid-cols-3 gap-4">
                 {(
                   [
-                    ['daily_tool_run_limit', 'Daily tool run limit (platform-wide)'],
-                    ['daily_credit_spend_limit', 'Daily credit spend limit (platform-wide)'],
-                    ['per_user_daily_credit_limit', 'Per-user daily credit limit'],
+                    ['daily_tool_run_limit', 'Platform tool runs', 'Maximum AI tool runs across all users per UTC day.'],
+                    ['daily_credit_spend_limit', 'Platform credit spend', 'Maximum credits spent across all users per UTC day.'],
+                    ['per_user_daily_credit_limit', 'Per-user credit spend', 'Maximum credits one user can spend per UTC day.'],
                   ] as const
-                ).map(([key, label]) => (
-                  <div key={key}>
+                ).map(([key, label, description]) => (
+                  <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                     <FieldLabel htmlFor={key}>{label}</FieldLabel>
+                    <p className="mb-2 text-[11px] leading-relaxed text-gray-500">{description}</p>
                     <input
                       id={key}
                       type="number"
@@ -4018,12 +4041,17 @@ const AdminPortal: React.FC = () => {
                       }
                       className={textInput}
                     />
+                    {Number(quotas[key] ?? 0) === 0 && (
+                      <span className="mt-2 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                        Uncapped
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <FieldLabel htmlFor="free_max_output_tokens">Free-tier max output tokens</FieldLabel>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 leading-relaxed">
                     {t('admin_free_cap_help')}
@@ -4044,14 +4072,27 @@ const AdminPortal: React.FC = () => {
                     Range: 256-32768. Default 8192 = no artificial truncation.
                   </p>
                 </div>
-                <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer select-none self-end pb-2">
-                  <input
-                    type="checkbox"
-                    checked={quotas.enabled !== false}
-                    onChange={(e) => setQuotas((q) => ({ ...q, enabled: e.target.checked }))}
-                    className="w-4 h-4 rounded accent-blue-600"
-                  />
-                  Enforce quota limits
+                <label className="flex cursor-pointer select-none items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                  <span>
+                    <span className="block font-medium text-gray-900">Quota enforcement</span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-gray-500">
+                      When off, saved quota values remain visible but runtime gates do not enforce them.
+                    </span>
+                  </span>
+                  <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${quotas.enabled !== false ? 'bg-blue-700' : 'bg-gray-300'}`}>
+                    <input
+                      type="checkbox"
+                      checked={quotas.enabled !== false}
+                      onChange={(e) => setQuotas((q) => ({ ...q, enabled: e.target.checked }))}
+                      className="sr-only"
+                    />
+                    <span
+                      className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                        quotas.enabled !== false ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </span>
                 </label>
               </div>
             </Card>
@@ -4065,8 +4106,8 @@ const AdminPortal: React.FC = () => {
               <div>
                 <SectionHeading>Plan Quotas</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
-                  Per-user limits by subscription status. For daily runs &amp; credits, <strong>0 = Unlimited</strong>;
-                  for active jobs, <strong>0 = none allowed</strong> (blocks posting). Hover a column for details.
+                  Per-user limits by <code>subscription_status</code>, grouped the same way as the Users page plan filter.
+                  For daily runs and credits, <strong>0 = Unlimited</strong>; for active jobs, <strong>0 = none allowed</strong>.
                 </p>
                 <p className="mt-1 text-[11px] text-gray-400">
                   Source: <code>platform_config/quotas</code> (Firestore).{' '}
@@ -4075,6 +4116,14 @@ const AdminPortal: React.FC = () => {
                       : 'Loading...'}{' '}
                   Server enforcement cache refreshes within ~60s of a save.
                 </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                {PLAN_GROUPS.map((group) => (
+                  <div key={group.label} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold text-gray-900">{group.label}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{group.description}</p>
+                  </div>
+                ))}
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -4092,108 +4141,52 @@ const AdminPortal: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {PLAN_KEYS.map((plan) => {
-                      const row = effectivePlanQuota(quotas, plan);
-                      return (
-                        <tr key={plan}>
-                          <td className="py-2 pr-3 whitespace-nowrap font-medium text-gray-800">
-                            {PLAN_LABELS[plan]}
-                          </td>
-                          {PLAN_QUOTA_FIELDS.map((f) => (
-                            <td key={f.key} className="py-2 px-3 min-w-[130px]">
-                              <input
-                                type="number"
-                                min={0}
-                                value={row[f.key]}
-                                onChange={(e) => setPlanQuotaField(plan, f.key, Number(e.target.value))}
-                                className={textInput}
-                                aria-label={`${PLAN_LABELS[plan]} ${f.header}`}
-                              />
-                              {row[f.key] === 0 && f.zeroLabel && (
-                                <span
-                                  className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                                    f.zeroLabel === 'Unlimited'
-                                      ? 'bg-blue-50 text-blue-700'
-                                      : 'bg-amber-50 text-amber-700'
-                                  }`}
-                                >
-                                  {f.zeroLabel}
-                                </span>
-                              )}
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-            </section>
-
-            <section
-              ref={(node) => { quotaSectionRefs.current.tools = node; }}
-              className="scroll-mt-32"
-            >
-            <Card className="p-5 space-y-4">
-              <div>
-                <SectionHeading>Tool Access</SectionHeading>
-                <p className="mt-1 text-xs text-gray-500">
-                  Disable tools, edit credit prices, and choose which plans can run them.
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="text-xs text-gray-500 border-b border-gray-200">
-                    <tr>
-                      <th className="text-left py-2 pr-3 font-medium">Tool</th>
-                      <th className="text-left py-2 px-3 font-medium">Enabled</th>
-                      <th className="text-left py-2 px-3 font-medium">Credits</th>
-                      <th className="text-left py-2 pl-3 font-medium">Allowed plans</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {TOOL_KEYS.map((tool) => {
-                      const row = effectiveToolQuota(quotas, tool);
-                      return (
-                        <tr key={tool} className="align-top">
-                          <td className="py-3 pr-3 font-medium text-gray-800 whitespace-nowrap">{tool}</td>
-                          <td className="py-3 px-3">
-                            <input
-                              type="checkbox"
-                              checked={row.enabled}
-                              onChange={(e) => setToolQuotaField(tool, { enabled: e.target.checked })}
-                              className="w-4 h-4 rounded accent-blue-600"
-                              aria-label={`${tool} enabled`}
-                            />
-                          </td>
-                          <td className="py-2 px-3 min-w-[120px]">
-                            <input
-                              type="number"
-                              min={0}
-                              value={row.credit_cost}
-                              onChange={(e) => setToolQuotaField(tool, { credit_cost: Math.max(0, Number(e.target.value)) })}
-                              className={textInput}
-                            />
-                          </td>
-                          <td className="py-2 pl-3">
-                            <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-2 min-w-[560px]">
-                              {PLAN_KEYS.map((plan) => (
-                                <label key={plan} className="flex items-center gap-2 text-xs text-gray-700">
-                                  <input
-                                    type="checkbox"
-                                    checked={row.allowed_plans.includes(plan)}
-                                    onChange={() => toggleToolPlan(tool, plan)}
-                                    className="w-3.5 h-3.5 rounded accent-blue-600"
-                                  />
-                                  {PLAN_LABELS[plan]}
-                                </label>
-                              ))}
+                    {PLAN_GROUPS.map((group) => (
+                      <React.Fragment key={group.label}>
+                        <tr>
+                          <td colSpan={PLAN_QUOTA_FIELDS.length + 1} className="bg-gray-50 px-3 py-2">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                              <span className="text-xs font-semibold text-gray-900">{group.label}</span>
+                              <span className="text-[11px] text-gray-500">{group.description}</span>
                             </div>
                           </td>
                         </tr>
-                      );
-                    })}
+                        {group.plans.map((plan) => {
+                          const row = effectivePlanQuota(quotas, plan);
+                          return (
+                            <tr key={plan}>
+                              <td className="py-3 pr-3 whitespace-nowrap">
+                                <span className="block font-medium text-gray-900">{PLAN_LABELS[plan]}</span>
+                                <span className="mt-0.5 block text-[11px] text-gray-400">{plan}</span>
+                              </td>
+                              {PLAN_QUOTA_FIELDS.map((f) => (
+                                <td key={f.key} className="py-2 px-3 min-w-[130px]">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={row[f.key]}
+                                    onChange={(e) => setPlanQuotaField(plan, f.key, Number(e.target.value))}
+                                    className={textInput}
+                                    aria-label={`${PLAN_LABELS[plan]} ${f.header}`}
+                                  />
+                                  {row[f.key] === 0 && f.zeroLabel && (
+                                    <span
+                                      className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                        f.zeroLabel === 'Unlimited'
+                                          ? 'bg-blue-50 text-blue-700'
+                                          : 'bg-amber-50 text-amber-700'
+                                      }`}
+                                    >
+                                      {f.zeroLabel}
+                                    </span>
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -4225,6 +4218,101 @@ const AdminPortal: React.FC = () => {
             </section>
 
             <section
+              ref={(node) => { quotaSectionRefs.current.tools = node; }}
+              className="scroll-mt-32"
+            >
+            <Card className="p-5 space-y-4">
+              <div>
+                <SectionHeading>Tool Access</SectionHeading>
+                <p className="mt-1 text-xs text-gray-500">
+                  Disable tools, edit credit prices, and choose which subscription groups can run them.
+                  Candidate and employer plans are separate entitlements; free is shared across product roles.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="text-xs text-gray-500 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left py-2 pr-3 font-medium">Tool</th>
+                      <th className="text-left py-2 px-3 font-medium">Enabled</th>
+                      <th className="text-left py-2 px-3 font-medium">Credits</th>
+                      <th className="text-left py-2 pl-3 font-medium">Allowed plans</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {TOOL_KEYS.map((tool) => {
+                      const row = effectiveToolQuota(quotas, tool);
+                      return (
+                        <tr key={tool} className="align-top">
+                          <td className="py-3 pr-3 whitespace-nowrap">
+                            <span className="block font-medium text-gray-900">{tool}</span>
+                            {!row.enabled && (
+                              <span className="mt-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gray-500">
+                                disabled
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            <input
+                              type="checkbox"
+                              checked={row.enabled}
+                              onChange={(e) => setToolQuotaField(tool, { enabled: e.target.checked })}
+                              className="w-4 h-4 rounded accent-blue-600"
+                              aria-label={`${tool} enabled`}
+                            />
+                          </td>
+                          <td className="py-2 px-3 min-w-[120px]">
+                            <input
+                              type="number"
+                              min={0}
+                              value={row.credit_cost}
+                              onChange={(e) => setToolQuotaField(tool, { credit_cost: Math.max(0, Number(e.target.value)) })}
+                              className={textInput}
+                            />
+                          </td>
+                          <td className="py-2 pl-3">
+                            <div className="grid min-w-[680px] gap-3 lg:grid-cols-3">
+                              {PLAN_GROUPS.map((group) => (
+                                <fieldset key={group.label} className="rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2">
+                                  <legend className="px-1 text-[11px] font-semibold text-gray-700">{group.label}</legend>
+                                  <div className="mt-1 flex flex-wrap gap-1.5">
+                                    {group.plans.map((plan) => {
+                                      const checked = row.allowed_plans.includes(plan);
+                                      return (
+                                        <label
+                                          key={plan}
+                                          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors ${
+                                            checked
+                                              ? 'border-blue-200 bg-blue-50 text-blue-800'
+                                              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100'
+                                          }`}
+                                          title={`${PLAN_LABELS[plan]} - ${PLAN_GROUP_LABEL_BY_PLAN[plan]}`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => toggleToolPlan(tool, plan)}
+                                            className="h-3 w-3 rounded accent-blue-600"
+                                          />
+                                          {PLAN_LABELS[plan]}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </fieldset>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+            </section>
+
+            <section
               ref={(node) => { quotaSectionRefs.current.interview = node; }}
               className="scroll-mt-32"
             >
@@ -4232,24 +4320,30 @@ const AdminPortal: React.FC = () => {
               <div>
                 <SectionHeading>Mock Interview</SectionHeading>
                 <p className="mt-1 text-xs text-gray-500">
-                  Timed simulation access and locked-report unlock pricing.
+                  Timed simulation access and locked-report unlock pricing. Paid includes candidate and employer paid subscriptions.
                 </p>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel htmlFor="mi_min_tier">Minimum tier</FieldLabel>
+                <div className="flex flex-col">
+                  <FieldLabel htmlFor="mi_min_tier">Minimum subscription access</FieldLabel>
+                  <p className="mb-1 text-[11px] leading-relaxed text-gray-500">
+                    This is a product access gate, not a plan name. Choose whether free accounts can start timed interviews.
+                  </p>
                   <select
                     id="mi_min_tier"
                     value={quotas.mi_min_tier === 'free' ? 'free' : 'paid'}
                     onChange={(e) => setQuotas((q) => ({ ...q, mi_min_tier: e.target.value as 'free' | 'paid' }))}
                     className={textInput}
                   >
-                    <option value="paid">Paid plans only (default)</option>
-                    <option value="free">All users (free included)</option>
+                    <option value="paid">Paid subscriptions only (candidate or employer)</option>
+                    <option value="free">All signed-in users (free included)</option>
                   </select>
                 </div>
-                <div>
+                <div className="flex flex-col">
                   <FieldLabel htmlFor="mi_report_unlock_credits">Report unlock price (credits)</FieldLabel>
+                  <p className="mb-1 text-[11px] leading-relaxed text-gray-500">
+                    Credits charged when a user unlocks the detailed interview report after the simulation.
+                  </p>
                   <input
                     id="mi_report_unlock_credits"
                     type="number"

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Check } from 'lucide-react';
 import { Card, SectionHeading, tableCell, tableHead, tableRow } from './adminUi';
 import { at } from './adminText';
@@ -20,8 +20,8 @@ const ROLE_LABELS: Record<AdminRole, string> = {
 
 /**
  * Read-only permission comparison grid for the three console roles.
- * Data comes from lib/access/permissions — the same registry that drives tab
- * visibility — so this table can never drift from actual behaviour.
+ * Data comes from lib/access/permissions, the same registry that drives tab
+ * visibility, so this table can never drift from actual behavior.
  */
 export const PermissionMatrix: React.FC = () => (
   <Card className="overflow-hidden">
@@ -63,7 +63,7 @@ export const PermissionMatrix: React.FC = () => (
                         <Check className="h-4 w-4" aria-hidden="true" />
                       </span>
                     ) : (
-                      <span className="text-gray-300" aria-label={`${ROLE_LABELS[role]} not allowed`}>—</span>
+                      <span className="text-gray-300" aria-label={`${ROLE_LABELS[role]} not allowed`}>-</span>
                     )}
                   </td>
                 );
@@ -88,7 +88,7 @@ export const ProductRoleOverview: React.FC = () => (
           <ul className="mt-1.5 space-y-0.5">
             {def.access.map((line) => (
               <li key={line} className="text-[11px] leading-relaxed text-gray-600 flex gap-1.5">
-                <span className="text-gray-300 shrink-0">·</span>
+                <span className="text-gray-300 shrink-0">-</span>
                 {line}
               </li>
             ))}
@@ -98,3 +98,4 @@ export const ProductRoleOverview: React.FC = () => (
     </div>
   </Card>
 );
+
