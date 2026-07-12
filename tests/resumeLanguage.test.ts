@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getMarketLocalLanguage, resolveOutputLanguageName } from '../lib/resumeLanguage';
+import { getMarketLocalLanguage, marketDefaultLanguage, resolveOutputLanguageName } from '../lib/resumeLanguage';
 
 describe('resumeLanguage', () => {
   it('returns a local language for DE/FR/JP/VN/UAE', () => {
@@ -11,16 +11,30 @@ describe('resumeLanguage', () => {
   });
 
   it('returns null for English-native / multi-language markets', () => {
-    for (const m of ['Singapore', 'United States', 'Canada', 'Australia', 'United Kingdom']) {
+    for (const m of ['Singapore', 'United States', 'Australia', 'United Kingdom']) {
       expect(getMarketLocalLanguage(m)).toBeNull();
     }
+  });
+
+  // Canada is bilingual: the French toggle exists (Québec roles) but English
+  // stays the starting choice, unlike single-language markets.
+  it('offers French for Canada while defaulting to English', () => {
+    expect(getMarketLocalLanguage('Canada')).toEqual({
+      name: 'French',
+      labelKey: 'resume_lang_french',
+      defaultToEnglish: true,
+    });
+    expect(marketDefaultLanguage('Canada')).toBe('en');
+    expect(marketDefaultLanguage('Japan')).toBe('local');
+    expect(resolveOutputLanguageName('Canada', 'local')).toBe('French');
+    expect(resolveOutputLanguageName('Canada', 'en')).toBe('English');
   });
 
   it('resolves the language name passed to the model', () => {
     expect(resolveOutputLanguageName('Japan', 'local')).toBe('Japanese');
     expect(resolveOutputLanguageName('United Arab Emirates', 'local')).toBe('Arabic');
     expect(resolveOutputLanguageName('Japan', 'en')).toBe('English');
-    expect(resolveOutputLanguageName('Canada', 'local')).toBe('English'); // no local language → English
+    expect(resolveOutputLanguageName('United States', 'local')).toBe('English'); // no local language → English
   });
 
   // Regression: China used to be missing here, so localizing to China stayed in
