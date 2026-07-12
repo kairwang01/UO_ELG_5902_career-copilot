@@ -24,6 +24,7 @@ import {
   employerAnalysisLanguageProtocol,
 } from "../llm/languageProtocol";
 import { correctiveInstruction } from "../llm/draftQuality";
+import { isQuotaError } from "../llm/errorClassification";
 import { meterToolRun, recordFreeToolRun, refundCredits } from "../credits/deductCredits";
 import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
@@ -58,19 +59,6 @@ function tryParseJson(str: string): unknown {
       return undefined;
     }
   }
-}
-
-function isQuotaError(error: unknown): boolean {
-  const err = error as { code?: number | string; message?: string; status?: number };
-  const message = (err?.message ?? "").toLowerCase();
-  return (
-    err?.status === 429 ||
-    err?.code === 429 ||
-    err?.code === "resource-exhausted" ||
-    message.includes("resource_exhausted") ||
-    message.includes("quota exceeded") ||
-    message.includes("quota")
-  );
 }
 
 function addNotice(data: unknown, notice: string | undefined): unknown {

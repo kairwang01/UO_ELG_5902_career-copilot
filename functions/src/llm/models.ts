@@ -40,6 +40,7 @@ import { llmStubEnabled, makeStubProvider } from "./stubProvider";
 import { GeminiProvider } from "./providers/geminiProvider";
 import { OpenAICompatibleProvider } from "./providers/openAICompatibleProvider";
 import { keyHash } from "./keyHash";
+import { isAvailabilityError } from "./errorClassification";
 import {
   candidatesForPoolTier,
   implicitFallbackCandidates,
@@ -248,62 +249,9 @@ export function modelsForTier(tier: Tier, business = false): ModelEntry[] {
 // ---------------------------------------------------------------------------
 
 /** Stable 16-hex-char ID derived from a key — never stores the raw key. */
-/**
- * Failure classes that trigger key rotation (availability errors).
- * HTTP 401/403/429, timeout, empty response, provider quota errors.
- */
-function isAvailabilityError(err: unknown): boolean {
-  const e = err as { message?: string; status?: number; code?: number | string };
-  const msg = (e?.message ?? "").toLowerCase();
-  // HTTP status codes
-  if (e?.status === 401 || e?.status === 403 || e?.status === 429) return true;
-  if (e?.code === 401 || e?.code === 403 || e?.code === 429) return true;
-  // Detect status codes embedded in message strings (e.g. "LLM provider error 429: ...")
-  if (/llm provider error (401|403|429)/.test(msg)) return true;
-  // Modality mismatch from gateway routers (e.g. OpenRouter-style
-  // "No endpoints found that support image input") — this model cannot serve
-  // THIS request; rotating to a multimodal fallback can.
-  if (msg.includes("support image input") || msg.includes("no endpoints found")) return true;
-  // Timeout
-  if (msg.includes("timeout") || msg.includes("timed out")) return true;
-  // Empty response
-  if (msg.includes("empty response")) return true;
-  // Quota / rate-limit language from provider responses
-  if (
-    msg.includes("resource_exhausted") ||
-    msg.includes("quota exceeded") ||
-    msg.includes("quota") ||
-    msg.includes("rate limit") ||
-    msg.includes("rate_limit") ||
-    msg.includes("insufficient_quota") ||
-    msg.includes("overloaded")
-  )
-    return true;
-  // Gemini: status 429 embedded in error name
-  if (msg.includes("429") || msg.includes("401") || msg.includes("403")) return true;
-  // Dead/invalid API keys and exhausted key pools. Gemini reports a bad key as
-  // HTTP 400 "API key not valid" (NOT 401!), and RotatingKeyProvider throws
-  // "All API keys ... are unavailable" when the pool is empty/cooled — neither
-  // matched the patterns above, so the fallback chain silently never engaged
-  // (live audit 2026-06-10: a dead default model 500'd every tool instead of
-  // hopping to the healthy fallback). All of these mean "this model cannot
-  // serve right now", which is exactly what the chain exists for.
-  if (
-    msg.includes("api key not valid") ||
-    msg.includes("api_key_invalid") ||
-    msg.includes("invalid api key") ||
-    msg.includes("incorrect api key") ||
-    msg.includes("api key expired") ||
-    msg.includes("all api keys") ||
-    msg.includes("unavailable") ||
-    msg.includes("enotfound") ||
-    msg.includes("econnrefused") ||
-    msg.includes("econnreset") ||
-    msg.includes("fetch failed")
-  )
-    return true;
-  return false;
-}
+// Availability classification (what justifies key rotation / chain fallback /
+// pool rotation) lives in ./errorClassification.ts, shared with geminiProvider
+// and aiProxy and unit-tested against live-captured provider error shapes.
 
 const KEY_HEALTH_COLLECTION = "key_health";
 const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes

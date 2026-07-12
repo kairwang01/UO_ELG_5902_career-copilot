@@ -16,6 +16,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { LLMProvider, LLMRequest, LLMResult } from "../LLMProvider";
+import { isQuotaError, isModelUnavailableError } from "../errorClassification";
 import {
   getGeminiApiKey,
   getGeminiFallbackModel,
@@ -64,18 +65,6 @@ function extractJson(str: string): unknown {
       );
     }
   }
-}
-
-function isQuotaError(error: unknown): boolean {
-  const err = error as { message?: string; status?: number; code?: number | string };
-  const message = (err?.message ?? "").toLowerCase();
-  return (
-    err?.status === 429 ||
-    err?.code === 429 ||
-    message.includes("resource_exhausted") ||
-    message.includes("quota exceeded") ||
-    message.includes("quota")
-  );
 }
 
 export class GeminiProvider implements LLMProvider {
@@ -149,7 +138,11 @@ export class GeminiProvider implements LLMProvider {
     try {
       response = await generateWithModel(this.model);
     } catch (error) {
-      if (!this.fallbackModel || !isQuotaError(error)) {
+      // Fall back on quota exhaustion AND on a retired/unknown primary model —
+      // Gemini reports retirement as 404 "no longer available", which is not a
+      // quota error, so the fallback previously never fired for it (live-verified
+      // 2026-07-12: GEMINI_FALLBACK_MODEL did not rescue a retired primary).
+      if (!this.fallbackModel || !(isQuotaError(error) || isModelUnavailableError(error))) {
         throw error;
       }
       modelUsed = this.fallbackModel;
