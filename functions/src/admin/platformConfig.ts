@@ -176,7 +176,10 @@ export function getGeminiApiKey(): string {
 }
 
 export function getGeminiModel(): string {
-  return llmCache?.gemini_model || process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  // "gemini-2.0-flash" was retired upstream (404 "no longer available") and made
+  // every unconfigured Gemini route fail; the -latest alias tracks the current
+  // stable Flash model so the default cannot rot again.
+  return llmCache?.gemini_model || process.env.GEMINI_MODEL || "gemini-flash-latest";
 }
 
 export function getGeminiFallbackModel(): string | undefined {
