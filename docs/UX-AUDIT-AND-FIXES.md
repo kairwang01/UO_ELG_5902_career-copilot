@@ -27,7 +27,7 @@
 | `d5bf76f` | 【P0】互动弹窗付费后不再展示"空白简历"（按隐私模型改为清晰说明，保留匹配度+摘要+发起联系） |
 | `94bb945` | EnglishPro（~14 处）+ 作品集（~9 处）英文硬编码全部 i18n 化（中文/非英语用户不再中途看到英文）；新增 23 个 key，en+zh + public 同步 |
 
-> 注：以上为**纯前端/后端混合**改动。后端函数已**定向部署**到 Firebase（career-copilot-a3168）。**前端**改动需在你自己的服务器上 `git pull && npm run build` 重新发布（firebase.json 无 hosting，前端由 kairwang.cloud / static-server.mjs 托管 dist/）。
+> 注：以上为**纯前端/后端混合**改动。后端函数已**定向部署**到 Firebase（career-copilot-a3168）。**前端**改动需在部署 VM 上 `git pull && npm run build` 重新发布（Firebase Hosting 不提供正式 SPA，前端由 VM 上的 `static-server.mjs` 托管 `dist/`）。
 
 ---
 
@@ -418,5 +418,4 @@
 - **Now:** Detail modal auto-opens only for single-file general-mode runs; multi-file runs ignore the toggle.
 - **File:** `components/AgencyHub.tsx — auto-open gated on queue.length === 1 (lines 2037-2043):AgencyHub.tsx:2037`
 - **Fix:** Either document the single-file scope in the setting description or auto-open the top-ranked result after a multi-file run.
-
 

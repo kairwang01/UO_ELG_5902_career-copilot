@@ -1,6 +1,6 @@
 # Firebase and VM Deployment Guide
 
-This is the production runbook for Career CoPilot. It covers the Firebase backend and the Ubuntu VM that serves the web application at `copilot.kairwang.cloud`.
+This is the production runbook for Career CoPilot. It covers the Firebase backend and the Ubuntu VM that serves the web application. Domain names in this guide use `copilot.example.com`; replace that placeholder with the temporary demo domain or the final production domain for the environment being deployed.
 
 Follow the sections in order for a new environment. For an ordinary release, use the shorter checklist in [Routine releases](#routine-releases).
 
@@ -9,7 +9,7 @@ The commands below assume:
 - the repository is checked out at `/var/www/uottawa-copilot` on the VM;
 - the Firebase project is `career-copilot-a3168`;
 - Cloud Functions run in `us-central1`;
-- the public domain is `copilot.kairwang.cloud`;
+- the public domain is supplied by the deployment owner and may be temporary during the demo phase;
 - the static server listens on `127.0.0.1:9050` behind nginx.
 
 Replace those values when creating another environment. Never copy production keys into a staging project.
@@ -28,7 +28,7 @@ The application is split across two deployment targets:
 | Storage browser CORS | Google Cloud Storage bucket | `gcloud storage buckets update ... --cors-file=storage.cors.json` |
 | Firebase default site | Firebase Hosting | A redirect only; it sends `*.web.app` traffic to the VM domain |
 
-Firebase Hosting is not the production frontend host. Running `firebase deploy --only hosting` updates the redirect, not the application shown at `copilot.kairwang.cloud`.
+Firebase Hosting is not the production frontend host. Running `firebase deploy --only hosting` updates the redirect, not the application served by the VM domain.
 
 ## Values to collect before starting
 
@@ -47,7 +47,7 @@ Keep this worksheet outside the repository. A password manager or the deployment
 | Stripe webhook secret | `whsec_...` | Yes | Secret Manager |
 | Stripe publishable key | `pk_test_...` or `pk_live_...` | No | Frontend checkout |
 | Stripe Price IDs | `price_...` | No | Functions billing config |
-| Public app URL | `https://copilot.kairwang.cloud` | No | Redirects, email links, Stripe returns |
+| Public app URL | `https://copilot.example.com` | No | Redirects, email links, Stripe returns; use the current environment domain |
 | VM public IP | IPv4 address | No | DNS A record |
 
 The Firebase Web API key is an application identifier, not a server secret. Its safety comes from Firebase Auth, Firestore/Storage rules, API restrictions, and authorized domains. Gemini and Stripe secret keys must never appear in a `VITE_*` variable or a browser bundle.
@@ -200,7 +200,7 @@ The file has five sections:
 
 #### `hosting`
 
-`public` points to `dist`, but this project's Hosting rules redirect every path to `https://copilot.kairwang.cloud`. The `rewrites` entry is retained as a safe SPA fallback if the redirect is removed later.
+`public` points to `dist`, but this project's Hosting rules redirect every path to the configured VM domain. The `rewrites` entry is retained as a safe SPA fallback if the redirect is removed later.
 
 The currently deployed default site may be an older meta-refresh page rather than the 301 declared in `firebase.json`. Test a preview channel before replacing it:
 
@@ -327,8 +327,8 @@ git check-ignore -v functions/.env.career-copilot-a3168
 A production file can contain non-secret runtime choices and compatibility fallbacks:
 
 ```dotenv
-APP_BASE_URL=https://copilot.kairwang.cloud
-ALLOWED_REDIRECT_ORIGINS=https://copilot.kairwang.cloud
+APP_BASE_URL=https://copilot.example.com
+ALLOWED_REDIRECT_ORIGINS=https://copilot.example.com
 BILLING_SIMULATION=false
 OPPORTUNITY_USE_GOOGLE_SEARCH=true
 GEMINI_MODEL=gemini-3.5-flash
@@ -420,7 +420,7 @@ Set the canonical domain in `platform_config/app`:
 
 ```json
 {
-  "app_base_url": "https://copilot.kairwang.cloud"
+  "app_base_url": "https://copilot.example.com"
 }
 ```
 
@@ -469,7 +469,7 @@ Test the browser preflight:
 
 ```bash
 curl -i -X OPTIONS \
-  -H 'Origin: https://copilot.kairwang.cloud' \
+  -H 'Origin: https://copilot.example.com' \
   -H 'Access-Control-Request-Method: PUT' \
   -H 'Access-Control-Request-Headers: content-type' \
   'https://firebasestorage.googleapis.com/v0/b/career-copilot-a3168.firebasestorage.app/o/deploy-check'
@@ -600,13 +600,13 @@ Avoid `firebase functions:list --json` in shared logs. The raw output can includ
 Create an A record:
 
 ```text
-copilot.kairwang.cloud -> VM_PUBLIC_IPV4
+copilot.example.com -> VM_PUBLIC_IPV4
 ```
 
 Wait until it resolves from outside the VM:
 
 ```bash
-dig +short copilot.kairwang.cloud
+dig +short copilot.example.com
 ```
 
 ### Repository
@@ -689,7 +689,7 @@ Create `/etc/nginx/sites-available/uottawa-copilot`:
 server {
     listen 80;
     listen [::]:80;
-    server_name copilot.kairwang.cloud;
+    server_name copilot.example.com;
 
     client_max_body_size 25m;
 
@@ -715,7 +715,7 @@ sudo systemctl reload nginx
 Issue and install the certificate:
 
 ```bash
-sudo certbot --nginx -d copilot.kairwang.cloud
+sudo certbot --nginx -d copilot.example.com
 sudo certbot renew --dry-run
 ```
 
@@ -757,7 +757,7 @@ sudo systemctl restart uottawa-copilot.service
 
 curl --fail --silent --show-error \
   --retry 4 --retry-all-errors --retry-delay 1 \
-  https://copilot.kairwang.cloud/ >/dev/null
+  https://copilot.example.com/ >/dev/null
 
 echo "Rollback directory: $BACKUP"
 ```
@@ -772,7 +772,7 @@ After the release, keep the newest known-good rollback directory. Remove older r
 
 ```bash
 for path in / /pricing /employers /sample-report /workspace /privacy.html /robots.txt; do
-  curl -sS -o /dev/null -w "$path %{http_code}\n" "https://copilot.kairwang.cloud$path"
+  curl -sS -o /dev/null -w "$path %{http_code}\n" "https://copilot.example.com$path"
 done
 ```
 
@@ -850,7 +850,7 @@ sudo systemctl stop uottawa-copilot.service
 mv "$ROOT/dist" "$BAD"
 mv "$GOOD" "$ROOT/dist"
 sudo systemctl start uottawa-copilot.service
-curl --fail --retry 4 --retry-all-errors https://copilot.kairwang.cloud/
+curl --fail --retry 4 --retry-all-errors https://copilot.example.com/
 ```
 
 ### Functions rollback

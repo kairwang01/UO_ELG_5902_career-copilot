@@ -11,7 +11,7 @@ Run in order; every step is non-destructive.
 2. Populate Firestore (survives `firebase deploy --only functions`):
    - `platform_config/llm` ← LLM keys (via Admin Portal LLM config).
    - `platform_config/access` ← admin UIDs (Admin Portal RBAC).
-   - `platform_config/app` ← `{ "app_base_url": "https://copilot.kairwang.cloud" }`.
+   - `platform_config/app` ← `{ "app_base_url": "https://copilot.example.com" }`.
 
 3. Deploy the new code:
    `cd functions && npm run build && firebase deploy --only functions`
@@ -23,7 +23,7 @@ Run in order; every step is non-destructive.
    Firestore config.
 
 5. Verify:
-   - From https://copilot.kairwang.cloud: open Stripe portal → Return → lands on
-     copilot.kairwang.cloud.
+   - From https://copilot.example.com: open Stripe portal → Return → lands on
+     copilot.example.com.
    - Trigger an application-status-change email → "Open Career CoPilot" points at
-     copilot.kairwang.cloud.
+     copilot.example.com.

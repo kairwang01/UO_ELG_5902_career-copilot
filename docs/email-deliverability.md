@@ -49,8 +49,8 @@ locked-out user cannot reset their password if the email never arrives.
 ## Why the fix is deferred
 
 The fix is domain-bound (SPF/DKIM/DMARC + provider domain verification live on the
-sending domain). The current `kairwang.cloud` domain is temporary and will be
-replaced, so configuring delivery now would have to be redone after the switch.
+sending domain). A demo-stage VM domain is temporary and should be replaced, so
+configuring delivery now would have to be redone after the switch.
 
 **Decision (2026-07-01):** keep the default sender for now; revisit once the
 permanent domain is chosen. Treat proper sender setup as a **pre-launch
@@ -80,8 +80,8 @@ The response `oobLink` is the official verification link for that account.
    `sendEmailVerification()` / password-reset flows keep working; only delivery
    changes.
 
-The verification-link *landing* domain (the action URL, e.g.
-`copilot.kairwang.cloud`, resolved from `platform_config/app.app_base_url`) is a
+The verification-link *landing* domain (the action URL, for example the value
+resolved from `platform_config/app.app_base_url`) is a
 separate concern and does **not** affect deliverability.
 
 ## Related

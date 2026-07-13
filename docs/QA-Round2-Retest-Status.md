@@ -30,7 +30,7 @@
 | JS12 | ✅ Pass | — |
 | JS13 | ✅ Pass | — |
 | JS14 | ✅ Pass | — |
-| JS15 | ✅ Fixed (dev + bucket) | **Root cause: Storage CORS** lacked the production origin (`kairwang.cloud`) → all uploads blocked. Added to `storage.cors.json` + applied to the live bucket. |
+| JS15 | ✅ Fixed (dev + bucket) | **Root cause: Storage CORS** lacked the active demo VM origin, so all uploads were blocked. Added the environment origin to `storage.cors.json` and applied it to the live bucket. |
 | JS16 | ℹ️ Infra | LLM inference latency; bounded by timeouts + staged loaders. Tunable via model routing. |
 | JS17 | 🟡 Frontend (external) | Gemini image model has 0 free-tier quota (needs billing). Clear "quota reached" message instead of a 500 (`generateHeadshot.ts`). |
 | JS18 | ✅ Pass | — |
