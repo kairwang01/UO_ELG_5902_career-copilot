@@ -382,7 +382,7 @@ The first two commands prompt for the secret value without putting it on the com
 
 ```bash
 firebase deploy --project career-copilot-a3168 \
-  --only functions:createCheckoutSession,functions:stripeWebhook
+  --only functions:createCheckoutSession,functions:createBillingPortalSession,functions:stripeWebhook
 ```
 
 The current AI provider resolution order is:

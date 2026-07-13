@@ -1,7 +1,7 @@
-# Deploy Checklist — `dev` cutover
+# Production Deploy Checklist
 
-The complete, ordered runbook to take the current `dev` branch live. Maintained so
-deploys don't rely on hand-computing each round's delta.
+The complete, ordered runbook for promoting `main` to the production Firebase project
+and VM. Maintained so deploys do not rely on hand-computing each round's delta.
 
 > **Scope note:** this lists the **full backend delta of the Hiring Loop v2 + billing
 > arc** (commits `82ade3d` → `515a00a`). If every round was already deployed
@@ -14,14 +14,15 @@ deploys don't rely on hand-computing each round's delta.
 
 ## 0. Prerequisites (set BEFORE deploying functions)
 
-Functions read plain env vars from `functions/.env` (no Secret Manager binding).
+Functions read non-secret settings from the project-specific Functions environment
+file. Stripe credentials are bound from Google Secret Manager.
 
 | Var | Needed by | Notes |
 |-----|-----------|-------|
-| `STRIPE_SECRET_KEY` | `createCheckoutSession`, `stripeWebhook` | **required** or these crash |
+| `STRIPE_SECRET_KEY` | `createCheckoutSession`, `createBillingPortalSession`, `stripeWebhook` | Secret Manager only; never write it to the repository or frontend env |
 | `STRIPE_WEBHOOK_SECRET` | `stripeWebhook` | from the Stripe dashboard webhook |
 | `APP_BASE_URL` | `createCheckoutSession` | checkout success/cancel return URLs |
-| `STRIPE_PRICE_ESSENTIALS` `_ACCELERATOR` `_EXECUTIVE` `_STARTER` `_GROWTH` `_PRO` `_SINGLE_POST` `_JOB_PACK` | `createCheckoutSession` | one Stripe Price id per plan |
+| `STRIPE_PRICE_ESSENTIALS` `_ACCELERATOR` `_EXECUTIVE` `_STARTER` `_GROWTH` `_PRO` `_SINGLE_POST` `_JOB_PACK` `_PACK_100` `_PACK_500` `_PACK_1000` | `createCheckoutSession` | one Stripe Price ID per plan or credit pack |
 | `ALLOW_DEMO_GRANTS` | `setSubscriptionStatus` | `true` ONLY in demo/staging (zero-payment plan activation, tagged `demo_preview`). **Leave unset in production** so paid plans require a real `billing/{uid}.active`. |
 
 Frontend Hosting / build env:
@@ -30,7 +31,8 @@ Frontend Hosting / build env:
 |-----|-----------|-------|
 | `VITE_STRIPE_PUBLISHABLE_KEY` | embedded Checkout modal | Use `pk_test_*` for sandbox. If omitted, the client falls back to hosted Checkout redirects. Never use `sk_*` in frontend env. |
 
-Verify Java 21 for the emulator test gate: `JAVA_HOME=/opt/homebrew/opt/openjdk@21`.
+Verify Java 21 for emulator-only test gates with `java -version`. Do not hardcode a
+macOS Homebrew path on Linux CI or production VMs.
 
 ---
 
@@ -66,7 +68,9 @@ firebase deploy --only firestore:indexes
 
 **New** (don't exist in prod yet — the client already calls them):
 ```
-firebase deploy --only functions:createCheckoutSession,functions:stripeWebhook
+firebase deploy --only \
+  functions:createCheckoutSession,functions:createBillingPortalSession,functions:stripeWebhook,\
+  functions:confirmSimulatedCheckout,functions:cancelSubscriptionSimulated
 firebase deploy --only functions:sendApplicationMessage
 firebase deploy --only functions:bulkUpdateApplicationStatus
 ```
@@ -104,6 +108,19 @@ messaging, bulk, sourcing hide, SessionContext) ships in the same bundle.
 ---
 
 ## Deployment log
+
+### 2026-07-13 — Stripe sandbox Checkout enabled
+
+- `BILLING_SIMULATION=false` on all billing Functions.
+- Stripe test credentials are stored in Secret Manager; the publishable test key is
+  present only in the VM frontend build environment.
+- Eleven CAD test Prices cover candidate subscriptions, employer subscriptions,
+  employer one-time products, and credit packs.
+- `createCheckoutSession`, `createBillingPortalSession`, `stripeWebhook`,
+  `confirmSimulatedCheckout`, and `cancelSubscriptionSimulated` were redeployed.
+- The production callable created and immediately expired a real `cs_test_` Embedded
+  Checkout Session; no payment method was submitted and no charge was made.
+- The webhook signature and asynchronous-payment event path returned HTTP 200.
 
 ### 2026-06-20 — `career-copilot-a3168` (commit `9b8639a`)
 **Deployed:**

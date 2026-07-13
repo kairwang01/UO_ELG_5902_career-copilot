@@ -172,7 +172,9 @@ function getStripe(): Stripe {
   if (!key) {
     throw new HttpsError("failed-precondition", "Stripe is not configured.");
   }
-  return new Stripe(key, { apiVersion: "2026-05-27.dahlia" });
+  // The installed Stripe SDK pins its matching API version. Keeping the SDK on
+  // the current release avoids a stale, hand-written version override.
+  return new Stripe(key);
 }
 
 /**
@@ -395,11 +397,13 @@ export function buildCheckoutSessionParams(input: {
   price: string;
   baseUrl: string;
   email?: string | null;
+  customerId?: string | null;
   useEmbeddedCheckout: boolean;
 }): Stripe.Checkout.SessionCreateParams {
   const baseSessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: input.plan.mode,
-    customer_email: input.email ?? undefined,
+    customer: input.customerId ?? undefined,
+    customer_email: input.customerId ? undefined : input.email ?? undefined,
     client_reference_id: input.uid,
     line_items: [{ price: input.price, quantity: 1 }],
     metadata: {
@@ -523,12 +527,22 @@ export const createCheckoutSessionFunction = onCall({ secrets: [STRIPE_SECRET_KE
   const baseUrl = resolveAppBaseUrl(request.rawRequest);
   const stripe = getStripe();
   const email = stringOrNull(request.auth?.token.email);
+  const billingSnap = await db.collection(BILLING_COLLECTION).doc(uid).get();
+  const customerId = stringOrNull(billingSnap.get("stripe_customer_id"));
+  const subscriptionId = stringOrNull(billingSnap.get("stripe_subscription_id"));
+  if (billingSnap.get("active") === true && subscriptionId?.startsWith("sub_")) {
+    throw new HttpsError(
+      "failed-precondition",
+      "You already have an active Stripe subscription. Use Manage billing to change or cancel it.",
+    );
+  }
   const sessionParams = buildCheckoutSessionParams({
     uid,
     plan,
     price,
     baseUrl,
     email,
+    customerId: customerId?.startsWith("cus_") ? customerId : null,
     useEmbeddedCheckout,
   });
   const session = await stripe.checkout.sessions.create(sessionParams);
@@ -651,16 +665,23 @@ export async function createBillingPortalSessionImpl(uid: string, baseUrl?: stri
   return { url: session.url };
 }
 
-// No { secrets: [...] } declaration: in simulation mode this returns early and never
-// touches Stripe, and real mode reads STRIPE_SECRET_KEY via the process.env fallback in
-// getStripe()/secretOrEnv — so it deploys without requiring the secret to exist in
-// Secret Manager. Wire STRIPE_SECRET_KEY into the functions env when going live.
-export const createBillingPortalSessionFunction = onCall(async (request) => {
+export const createBillingPortalSessionFunction = onCall({ secrets: [STRIPE_SECRET_KEY] }, async (request) => {
   await ensurePlatformCaches();
   return createBillingPortalSessionImpl(requireAuth(request), resolveAppBaseUrl(request.rawRequest));
 });
 
+export function checkoutSessionHasCompletedPayment(session: Pick<Stripe.Checkout.Session, "payment_status">): boolean {
+  return session.payment_status === "paid" || session.payment_status === "no_payment_required";
+}
+
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  if (!checkoutSessionHasCompletedPayment(session)) {
+    logger.info("stripeWebhook: checkout completed before payment settled", {
+      session: session.id,
+      paymentStatus: session.payment_status,
+    });
+    return;
+  }
   const uid = stringOrNull(session.metadata?.uid) ?? stringOrNull(session.client_reference_id);
 
   // One-off credit-pack purchase (mode=payment) — grant credits, no plan/role change.
@@ -744,6 +765,14 @@ export const stripeWebhookFunction = onRequest({ secrets: [STRIPE_SECRET_KEY, ST
     switch (event.type) {
       case "checkout.session.completed":
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+      case "checkout.session.async_payment_succeeded":
+        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+      case "checkout.session.async_payment_failed":
+        logger.warn("stripeWebhook: asynchronous checkout payment failed", {
+          session: (event.data.object as Stripe.Checkout.Session).id,
+        });
         break;
       case "customer.subscription.deleted":
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
