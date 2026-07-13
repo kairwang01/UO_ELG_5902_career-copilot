@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "localization:sync": "node scripts/sync-localization.mjs",
+    "localization:check": "node scripts/sync-localization.mjs --check",
+    "test:localization": "node scripts/sync-localization.test.mjs",
+    "prebuild": "npm run localization:check",
     "build": "vite build",
     "preview": "vite preview",
     "marketing:qa": "node marketing/scripts/screenshot-qa.mjs",
@@ -37,7 +41,7 @@
   },
   "dependencies": {
     "@cucumber/cucumber": "^12.2.0",
-    "@google/genai": "^1.14.0",
+    "@google/genai": "^1.52.0",
     "@radix-ui/react-dialog": "^1.1.16",
     "@radix-ui/react-label": "^2.1.9",
     "@radix-ui/react-select": "^2.3.0",

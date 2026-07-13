@@ -10,6 +10,7 @@ import {
   extractTextFromUrl,
 } from "../services/aiClient";
 import { parseFile } from "../services/fileHelpers";
+import { getResumeFileValidationIssue, RESUME_FILE_ACCEPT } from "../lib/resumeFileValidation";
 import { SUPPORTED_MARKETS, DEFAULT_MARKET } from "../config";
 import { DownloadButtons } from "./tools/ToolUtils";
 import { listActiveEmployerJobs, type JobPosting } from "../lib/recruitingData";
@@ -65,15 +66,7 @@ interface AgencyFilterCounts {
   error: number;
 }
 
-const ACCEPTED_RESUME_TYPES = ".pdf,.docx,.txt,.png,.jpg,.jpeg";
-const ACCEPTED_RESUME_EXTENSIONS = new Set([
-  "pdf",
-  "docx",
-  "txt",
-  "png",
-  "jpg",
-  "jpeg",
-]);
+const ACCEPTED_RESUME_TYPES = RESUME_FILE_ACCEPT;
 
 const formatTranslation = (
   template: string,
@@ -89,13 +82,8 @@ const createFileId = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2, 11);
 
-const getFileExtension = (fileName: string) => {
-  const parts = fileName.toLowerCase().split(".");
-  return parts.length > 1 ? parts.pop() || "" : "";
-};
-
 const isAcceptedResumeFile = (file: File) =>
-  ACCEPTED_RESUME_EXTENSIONS.has(getFileExtension(file.name));
+  getResumeFileValidationIssue(file) === null;
 
 const buildPostedJobBrief = (job: JobPosting, t: TranslationFn) => {
   const sections = [

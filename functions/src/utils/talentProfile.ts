@@ -225,7 +225,7 @@ export function talentProfileToMatchText(profile: TalentProfileSnapshot | null):
  *  resume (write-capped at 200k) and the structured profile (≤20k) were being
  *  concatenated with no joint cap → up to ~220k chars/candidate × the parallel
  *  match fan-out. A match judgement does not need 200k chars of resume. */
-export const MAX_MATCH_CONTEXT_CHARS = 80_000;
+export const MAX_MATCH_CONTEXT_CHARS = 30_000;
 
 /** Combine resume text + structured-profile match text into one capped context.
  *  The structured profile is preserved in full; the resume is truncated to fit. */

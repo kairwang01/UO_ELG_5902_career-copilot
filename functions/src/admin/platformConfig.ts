@@ -36,11 +36,13 @@ let promptsCache: Record<string, string> | null = null;
 let appCache: AppConfigDoc | null = null;
 let cacheAt = 0;
 const TTL_MS = 60_000;
+let refreshInFlight: Promise<void> | null = null;
 
 const DEFAULT_SPEED_POOL_MEMBERS = [
-  { label: "Tencent Hunyuan 3", weight: 50 },
-  { label: "Auto · multi-model (legacy)", weight: 30 },
-  { label: "Deepseek V4 Flash(Limited Testing)", weight: 20 },
+  // The platform's direct Gemini route is the latency-certified default. Third-
+  // party/free gateways may be added deliberately as lower fallback tiers in the
+  // Admin Portal, but must not become the fresh-install primary by label alone.
+  { id: "gemini", label: "Gemini (default)", weight: 100 },
 ];
 
 const DEFAULT_QUALITY_POOL_MEMBERS = [
@@ -98,10 +100,13 @@ const normalizeModelLabel = (label: string): string => label.trim().toLowerCase(
 
 function defaultPoolMembersForLabels(
   registry: ModelEntry[],
-  specs: Array<{ label: string; weight: number }>
+  specs: Array<{ id?: string; label: string; weight: number }>
 ): RoutingPool["members"] {
   return specs.flatMap((spec) => {
-    const model = registry.find((entry) => normalizeModelLabel(entry.label) === normalizeModelLabel(spec.label));
+    const model = registry.find((entry) =>
+      (spec.id && entry.id === spec.id) ||
+      normalizeModelLabel(entry.label) === normalizeModelLabel(spec.label)
+    );
     return model ? [{ modelId: model.id, tier: 1, weight: spec.weight, enabled: true }] : [];
   });
 }
@@ -137,21 +142,29 @@ export function maskSecret(value: string | undefined): string {
 }
 
 export async function refreshPlatformCaches(): Promise<void> {
-  const [llmSnap, quotasSnap, modelsSnap, promptsSnap, appSnap] = await Promise.all([
-    db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.llm).get(),
-    db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.quotas).get(),
-    db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.models).get(),
-    db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.prompts).get(),
-    db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.app).get(),
-  ]);
-  llmCache = llmSnap.exists ? (llmSnap.data() as LlmConfigDoc) : {};
-  quotasCache = quotasSnap.exists ? (quotasSnap.data() as QuotasDoc) : {};
-  modelsCache = modelsSnap.exists ? (modelsSnap.data() as ModelsDoc) : {};
-  promptsCache = promptsSnap.exists
-    ? (promptsSnap.data() as Record<string, string>)
-    : {};
-  appCache = appSnap.exists ? (appSnap.data() as AppConfigDoc) : {};
-  cacheAt = Date.now();
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const [llmSnap, quotasSnap, modelsSnap, promptsSnap, appSnap] = await Promise.all([
+      db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.llm).get(),
+      db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.quotas).get(),
+      db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.models).get(),
+      db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.prompts).get(),
+      db.collection(PLATFORM_CONFIG_COLLECTION).doc(PLATFORM_DOCS.app).get(),
+    ]);
+    llmCache = llmSnap.exists ? (llmSnap.data() as LlmConfigDoc) : {};
+    quotasCache = quotasSnap.exists ? (quotasSnap.data() as QuotasDoc) : {};
+    modelsCache = modelsSnap.exists ? (modelsSnap.data() as ModelsDoc) : {};
+    promptsCache = promptsSnap.exists
+      ? (promptsSnap.data() as Record<string, string>)
+      : {};
+    appCache = appSnap.exists ? (appSnap.data() as AppConfigDoc) : {};
+    cacheAt = Date.now();
+  })();
+  try {
+    await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
 }
 
 export async function ensurePlatformCaches(): Promise<void> {
@@ -176,10 +189,9 @@ export function getGeminiApiKey(): string {
 }
 
 export function getGeminiModel(): string {
-  // "gemini-2.0-flash" was retired upstream (404 "no longer available") and made
-  // every unconfigured Gemini route fail; the -latest alias tracks the current
-  // stable Flash model so the default cannot rot again.
-  return llmCache?.gemini_model || process.env.GEMINI_MODEL || "gemini-flash-latest";
+  // Use the stable production id. Admins can deliberately choose an alias, but
+  // an unconfigured deployment should not silently hot-swap model behavior.
+  return llmCache?.gemini_model || process.env.GEMINI_MODEL || "gemini-3.5-flash";
 }
 
 export function getGeminiFallbackModel(): string | undefined {

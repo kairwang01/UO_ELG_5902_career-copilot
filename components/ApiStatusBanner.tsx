@@ -1,9 +1,11 @@
 
 import React from 'react';
 import { useApiStatus } from '../contexts/ApiStatusContext';
+import { useLocalization } from '../hooks/useLocalization';
 
 const ApiStatusBanner: React.FC = () => {
   const { apiStatus, lastError } = useApiStatus();
+  const { t } = useLocalization();
 
   if (apiStatus === 'online') {
     return null;
@@ -11,15 +13,19 @@ const ApiStatusBanner: React.FC = () => {
 
   const isDegraded = apiStatus === 'degraded';
   const bgColor = isDegraded ? 'bg-yellow-500' : 'bg-red-600';
-  const statusLabel = isDegraded ? 'Limited' : 'Offline';
-  const defaultMessage = isDegraded
-    ? 'AI services are currently experiencing high demand. Some features may be limited or slow.'
-    : 'AI services are temporarily offline. You may see cached data or templates.';
+  const statusLabel = t(isDegraded ? 'ai_status_limited_label' : 'ai_status_offline_label');
+  const message = lastError || t(isDegraded ? 'ai_error_busy' : 'ai_error_network');
 
   return (
-    <div className={`w-full p-2 text-center text-white text-sm font-medium ${bgColor}`}>
-      <span className="mr-2 font-semibold">{statusLabel}</span>
-      {lastError || defaultMessage}
+    <div
+      className={`w-full px-4 py-2 text-center text-sm font-medium text-white ${bgColor}`}
+      role={isDegraded ? 'status' : 'alert'}
+      aria-live={isDegraded ? 'polite' : 'assertive'}
+    >
+      <p>
+        <strong>{statusLabel}: </strong>
+        <span>{message}</span>
+      </p>
     </div>
   );
 };

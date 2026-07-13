@@ -15,6 +15,7 @@ import { httpsCallable } from 'firebase/functions';
 import { firebaseFunctions } from '../lib/firebaseClient';
 import { withInFlightDedupe } from '../lib/inFlightDedupe';
 import type { TalentProfile } from '../lib/talentProfile';
+import { resolveUiLanguagePreference } from '../lib/uiLanguage';
 import type {
   AnalysisResult, ResumeImage,
   FormattedResume, CoverLetter, LinkedInOptimization, CareerPathResult,
@@ -31,9 +32,45 @@ import type { AppSession as Session } from '../lib/data';
 // API status indicator — driven by callable outcomes (replaces the old client
 // geminiService status hook). CareerApp registers an updater on mount.
 type ApiStatus = 'online' | 'degraded' | 'offline';
-let updateApiStatus: (status: ApiStatus, error?: string) => void = () => {};
+const API_STATUS_INCIDENT_TTL_MS = 30_000;
+const noopApiStatusUpdater = () => {};
+let updateApiStatus: (status: ApiStatus, error?: string) => void = noopApiStatusUpdater;
+let statusIncidentGeneration = 0;
+let statusIncidentTimer: ReturnType<typeof setTimeout> | null = null;
+
+function publishApiStatus(status: ApiStatus, error?: string): void {
+  statusIncidentGeneration += 1;
+  const generation = statusIncidentGeneration;
+  if (statusIncidentTimer) {
+    clearTimeout(statusIncidentTimer);
+    statusIncidentTimer = null;
+  }
+  updateApiStatus(status, error);
+  if (status === 'online') return;
+
+  // This is a recent-request incident indicator, not a permanent health verdict.
+  // Expire it after the same 30-second retry window shown to users. A generation
+  // guard prevents an older timer from clearing a newer failure.
+  statusIncidentTimer = setTimeout(() => {
+    if (generation !== statusIncidentGeneration) return;
+    statusIncidentTimer = null;
+    updateApiStatus('online');
+  }, API_STATUS_INCIDENT_TTL_MS);
+}
+
+export function clearApiStatusIncident(): void {
+  publishApiStatus('online');
+}
+
 export const setApiStatusUpdater = (updater: (status: ApiStatus, error?: string) => void) => {
   updateApiStatus = updater;
+  return () => {
+    if (updateApiStatus !== updater) return;
+    statusIncidentGeneration += 1;
+    if (statusIncidentTimer) clearTimeout(statusIncidentTimer);
+    statusIncidentTimer = null;
+    updateApiStatus = noopApiStatusUpdater;
+  };
 };
 
 // Locale-aware error copy. CareerApp registers the app's translator on mount so
@@ -94,36 +131,32 @@ export function formatCallableError(err: unknown): string {
     lower.includes('is not set') ||
     lower.includes('not configured') ||
     lower.includes('admin portal') ||
-    lower.includes('api_key')
+    lower.includes('api_key') ||
+    // Chain-exhausted message from the backend names admin actions ("check the
+    // API keys in the admin console") — same operator concern, same neutral copy.
+    lower.includes('all configured ai models') ||
+    lower.includes('check the api keys')
   ) {
     return translateError('ai_error_unavailable', 'AI features are temporarily unavailable. Please try again shortly, or contact support if this continues.');
   }
   return message || translateError('ai_error_generic', 'Something went wrong with the AI service. Please try again.');
 }
 
-function reportStatusFromError(err: any): void {
+export function reportApiStatusFromError(err: any): void {
   const code = err?.code ?? '';
   const message = err?.message ?? '';
   const lower = message.toLowerCase();
   const friendly = formatCallableError(err);
 
   if (code === 'functions/resource-exhausted' || lower.includes('resource_exhausted') || lower.includes('quota')) {
-    updateApiStatus('degraded', friendly);
-  } else if (code === 'functions/unauthenticated') {
-    updateApiStatus('offline', friendly);
-  } else if (code === 'functions/permission-denied' || lower.includes('not authenticated')) {
-    updateApiStatus('offline', friendly);
-  } else if (code === 'functions/not-found') {
-    updateApiStatus('offline', friendly);
-  } else if (code === 'functions/internal') {
-    updateApiStatus('degraded', friendly);
+    publishApiStatus('degraded', friendly);
   } else if (lower.includes('network') || lower.includes('failed to fetch')) {
-    updateApiStatus('offline', translateError('ai_error_network', 'Network connection issue. Please check your internet connection.'));
-  } else if (code === 'functions/unavailable') {
+    publishApiStatus('offline', translateError('ai_error_network', 'Network connection issue. Please check your internet connection.'));
+  } else if (code === 'functions/unavailable' || code === 'functions/deadline-exceeded') {
     // Server reachable but the AI provider is down or unconfigured — not the
     // user's connection. Surface neutral "temporarily unavailable" copy and mark
     // AI degraded (the rest of the app still works) rather than blaming their network.
-    updateApiStatus('degraded', translateError('ai_error_unavailable', 'AI features are temporarily unavailable. Please try again shortly, or contact support if this continues.'));
+    publishApiStatus('degraded', friendly);
   }
 }
 
@@ -139,14 +172,18 @@ const inFlightDedicatedCalls = new Map<string, Promise<unknown>>();
  * fresh-per-call requestId can't dedup two distinct invocations, so a double-click /
  * rapid re-submit would otherwise bill twice server-side.
  */
-function callDedicated<T>(fn: () => Promise<T>, dedupeKey?: string): Promise<T> {
+function callDedicated<T>(
+  fn: () => Promise<T>,
+  dedupeKey?: string,
+  affectsAiStatus: boolean = true,
+): Promise<T> {
   return withInFlightDedupe(inFlightDedicatedCalls, dedupeKey, async () => {
     try {
       const result = await fn();
-      updateApiStatus('online');
+      if (affectsAiStatus) clearApiStatusIncident();
       return result;
     } catch (err) {
-      reportStatusFromError(err);
+      if (affectsAiStatus) reportApiStatusFromError(err);
       throw new Error(formatCallableError(err));
     }
   });
@@ -164,14 +201,15 @@ const inFlightAiProxyCalls = new Map<string, Promise<unknown>>();
 /** UI language ("zh", "fr", …) — the app persists it under preferred_language.
  *  Sent to the backend so AI coaching/analysis prose matches the user's UI. */
 const getUiLanguage = (): string | undefined => {
+  let storedLanguage: string | null = null;
   try {
-    return localStorage.getItem('preferred_language') || undefined;
+    storedLanguage = localStorage.getItem('preferred_language');
   } catch {
-    return undefined;
+    // Browser language still gives the backend a reliable first-visit default.
   }
+  const browserLanguage = typeof navigator !== 'undefined' ? navigator.language : null;
+  return resolveUiLanguagePreference(storedLanguage, browserLanguage);
 };
-const PLATFORM_SAFE_DEFAULT_MODEL_ID = 'deepseek-v4-flash';
-
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
@@ -205,8 +243,17 @@ async function callAiProxy<TResponse, TResult>(
 
   const promise = (async () => {
     const fn = httpsCallable<AiProxyPayload, TResponse>(firebaseFunctions, 'aiProxy', { timeout: 190_000 });
-    const res = await fn({ tool, payload, model, requestId: makeCallableRequestId('ai') });
-    updateApiStatus('online');
+    const request: AiProxyPayload = {
+      tool,
+      payload,
+      requestId: makeCallableRequestId('ai'),
+      // Platform-managed mode deliberately omits a concrete model. Sending a
+      // hardcoded DeepSeek id bypassed the admin Gemini default whenever a route
+      // was missing or invalid. Business BYOA remains the sole client override.
+      ...(model ? { model } : {}),
+    };
+    const res = await fn(request);
+    clearApiStatusIncident();
     return mapResult(res.data);
   })();
 
@@ -284,7 +331,7 @@ export const unlockInterviewReport = async (reportId: string): Promise<{ locked:
     const fn = httpsCallable<any, { locked: false } & InterviewSessionReport>(firebaseFunctions, 'mockInterview', { timeout: 190_000 });
     const res = await fn({ mode: 'unlock_report', reportId });
     return res.data;
-  });
+  }, undefined, false);
 
 // ---- Career coach chat (stateless callable) --------------------------------
 export interface CoachMessage { role: 'user' | 'model'; content: string }
@@ -333,8 +380,8 @@ const MODEL_STORAGE_KEY = 'preferred_ai_model';
 const _stored = typeof localStorage !== 'undefined' ? localStorage.getItem(MODEL_STORAGE_KEY) : null;
 let currentModelId: string | undefined = _stored === 'custom' ? 'custom' : undefined;
 
-function getEffectiveAiModelId(): string {
-  return currentModelId ?? PLATFORM_SAFE_DEFAULT_MODEL_ID;
+export function getEffectiveAiModelId(): string | undefined {
+  return currentModelId;
 }
 
 export const setAiModel = (id: string | undefined): void => {
@@ -356,7 +403,7 @@ export interface ListModelsResult {
 }
 
 const DEFAULT_MODEL_OPTIONS: ModelOption[] = [
-  { id: PLATFORM_SAFE_DEFAULT_MODEL_ID, label: 'DeepSeek V4 Flash', minTier: 'free' },
+  { id: 'gemini', label: 'Gemini (default)', minTier: 'free' },
 ];
 
 /** Returns the models the current user is allowed to select, plus the default. */
@@ -367,7 +414,7 @@ export const listModels = async (): Promise<ListModelsResult> => {
     return res.data;
   } catch {
     // listModels is a new callable whose Cloud Run invoker may not be set yet.
-    return { tier: 'free', defaultModelId: PLATFORM_SAFE_DEFAULT_MODEL_ID, models: DEFAULT_MODEL_OPTIONS, isBusiness: false };
+    return { tier: 'free', defaultModelId: 'gemini', models: DEFAULT_MODEL_OPTIONS, isBusiness: false };
   }
 };
 
@@ -413,6 +460,8 @@ export interface DiscoverTalentResult {
   candidates: DiscoveredCandidate[];
   scanned?: number;
   eligible?: number;
+  failures?: number;
+  analysisStatus?: 'complete' | 'partial';
 }
 
 /**
@@ -425,7 +474,7 @@ export const discoverTalent = (jobDescription?: string): Promise<DiscoverTalentR
     const fn = httpsCallable<{ jobDescription?: string }, DiscoverTalentResult>(firebaseFunctions, 'discoverTalent');
     const res = await fn(jobDescription ? { jobDescription } : {});
     return res.data;
-  });
+  }, undefined, Boolean(jobDescription));
 
 // ---- Employer applicant funnel (server-side; resumes never reach the browser) --
 
@@ -434,11 +483,12 @@ export interface JobApplicant {
   candidate_name: string;
   application_date: string | null;
   status: string;
-  compatibility_score: number;
+  compatibility_score: number | null;
   summary: string;
   strengths: string[];
   potentialGaps: string[];
   suggestedQuestions: string[];
+  analysis_status: 'complete' | 'failed' | 'not_requested' | 'no_context' | 'not_analyzed_cap';
   talent_profile: TalentProfile | null;
   status_history: ApplicationStatusHistoryEvent[];
   screener_answers: { question_id: string; prompt: string; answer: string }[];
@@ -499,10 +549,10 @@ export interface ApplicationStatusHistoryEvent {
  */
 export const listJobApplicants = (jobId: string, options: { includeAnalysis?: boolean } = {}): Promise<ListJobApplicantsResult> =>
   callDedicated(async () => {
-    const fn = httpsCallable<{ jobId: string; includeAnalysis?: boolean }, ListJobApplicantsResult>(firebaseFunctions, 'listJobApplicants', { timeout: 190_000 });
-    const res = await fn({ jobId, ...options });
+    const fn = httpsCallable<{ jobId: string; includeAnalysis?: boolean; requestId?: string }, ListJobApplicantsResult>(firebaseFunctions, 'listJobApplicants', { timeout: 190_000 });
+    const res = await fn({ jobId, ...options, requestId: makeCallableRequestId('list_job_applicants') });
     return res.data;
-  }, `listJobApplicants:${jobId}:${options.includeAnalysis !== false ? 'analysis' : 'basic'}`);
+  }, `listJobApplicants:${jobId}:${options.includeAnalysis !== false ? 'analysis' : 'basic'}`, false);
 
 export const updateApplicationStatus = (
   applicationId: string,
@@ -518,7 +568,7 @@ export const updateApplicationStatus = (
     >(firebaseFunctions, 'updateApplicationStatus', { timeout: 60_000 });
     const res = await fn({ applicationId, status, reason, candidateNote, action });
     return res.data;
-  });
+  }, undefined, false);
 
 export const bulkUpdateApplicationStatus = (
   applicationIds: string[],
@@ -546,7 +596,7 @@ export const bulkUpdateApplicationStatus = (
     >(firebaseFunctions, 'bulkUpdateApplicationStatus', { timeout: 120_000 });
     const res = await fn({ applicationIds, action, ...options });
     return res.data;
-  });
+  }, undefined, false);
 
 export interface ApplicantResumeFile {
   available: boolean;
@@ -567,7 +617,7 @@ export const getApplicantResumeFile = (applicationId: string): Promise<Applicant
     const fn = httpsCallable<{ applicationId: string }, ApplicantResumeFile>(firebaseFunctions, 'getApplicantResumeFile', { timeout: 120_000 });
     const res = await fn({ applicationId });
     return res.data;
-  });
+  }, undefined, false);
 
 /**
  * Returns the resume TEXT of a candidate who applied to a job the caller owns
@@ -580,25 +630,31 @@ export const getApplicantResumeText = (applicationId: string): Promise<{ resumeT
     const fn = httpsCallable<{ applicationId: string }, { resumeText: string }>(firebaseFunctions, 'getApplicantResumeText', { timeout: 60_000 });
     const res = await fn({ applicationId });
     return res.data;
-  });
+  }, undefined, false);
 
 /**
  * Dispatches a long-tail tool through the consolidated `aiProxy` callable, which
  * applies tier-gated model routing (Gemini / KairLLM / DeepSeek / custom). The
  * legacy per-tool functions are Gemini-only and ignore the selected model — this
  * is why selecting KairLLM/DeepSeek used to have no effect. aiProxy returns
- * `{ data, text, groundingChunks }`; the parsed result is `.data`.
+ * `{ data, groundingChunks, meta }`; unparseable/unstructured responses may also
+ * include `text`. The parsed result is `.data`.
  */
 async function callTool<T>(tool: string, payload: Record<string, unknown>): Promise<T> {
   try {
-    return await callAiProxy<{ data?: T; text?: string; groundingChunks?: unknown }, T>(
+    return await callAiProxy<{ data?: T; text?: string; groundingChunks?: unknown; meta?: unknown }, T>(
       'plain',
       tool,
       payload,
-      (data) => (data?.data ?? (data as unknown)) as T
+      (data) => {
+        if (data?.data === undefined || data.data === null) {
+          throw new Error(translateError('ai_error_empty_response', 'The AI returned an empty or unparseable response. Please try again.'));
+        }
+        return data.data;
+      }
     );
   } catch (err) {
-    reportStatusFromError(err);
+    reportApiStatusFromError(err);
     throw new Error(formatCallableError(err));
   }
 }
@@ -606,7 +662,7 @@ async function callTool<T>(tool: string, payload: Record<string, unknown>): Prom
 /** Like callTool, but merges aiProxy's separate groundingChunks back into the result. */
 async function callToolWithGrounding<T>(tool: string, payload: Record<string, unknown>): Promise<T> {
   try {
-    return await callAiProxy<{ data?: Record<string, unknown>; text?: string; groundingChunks?: unknown }, T>(
+    return await callAiProxy<{ data?: Record<string, unknown>; text?: string; groundingChunks?: unknown; meta?: unknown }, T>(
       'grounding',
       tool,
       payload,
@@ -619,7 +675,7 @@ async function callToolWithGrounding<T>(tool: string, payload: Record<string, un
       }
     );
   } catch (err) {
-    reportStatusFromError(err);
+    reportApiStatusFromError(err);
     throw new Error(formatCallableError(err));
   }
 }
@@ -631,6 +687,7 @@ export const applyResumeImprovements = (resumeText: string, improvements: Improv
 /** Parses a resume into the structured Talent Profile shape (keys match lib/talentProfile.ts). */
 export interface ExtractedTalentProfile {
   basic?: Record<string, string>;
+  intention?: Record<string, string>;
   education?: Record<string, string | string[]>[];
   experience?: Record<string, string | string[]>[];
   projects?: Record<string, string | string[]>[];
@@ -659,19 +716,25 @@ export const generateCoverLetter = async (resumeText: string, jobDescription: st
     return res.data;
   }, `coverLetter:${currentModelId ?? ''}:${stableStringify({ resumeText, jobDescription, marketName, outputLanguage })}`);
 
-export const generateCareerPath = async (resumeText: string, desiredRole: string, marketName: string, _session?: Session): Promise<CareerPathResult> =>
+export const generateCareerPath = async (
+  resumeText: string,
+  desiredRole: string,
+  marketName: string,
+  _session?: Session,
+  outputLanguage?: string,
+): Promise<CareerPathResult> =>
   callDedicated(async () => {
     const fn = httpsCallable<any, CareerPathResult>(firebaseFunctions, 'generateCareerPath', { timeout: 190_000 });
     const res = await fn({
       resumeText,
       desiredRole,
       marketName,
-      outputLanguage: getUiLanguage(),
+      outputLanguage: outputLanguage ?? getUiLanguage(),
       model: currentModelId,
       requestId: makeCallableRequestId('career_path'),
     });
     return res.data;
-  }, `careerPath:${currentModelId ?? ''}:${stableStringify({ resumeText, desiredRole, marketName })}`);
+  }, `careerPath:${currentModelId ?? ''}:${stableStringify({ resumeText, desiredRole, marketName, outputLanguage: outputLanguage ?? getUiLanguage() })}`);
 
 // ---- Matching / opportunities ---------------------------------------------
 export const calculateCompatibility = (resumeText: string, jobDescription: string) =>
@@ -684,8 +747,8 @@ export const findOpportunities = (resumeText: string, marketName: string, _sessi
 export const optimizeLinkedInProfile = (resumeText: string, marketName: string) =>
   callTool<LinkedInOptimization>('optimizeLinkedInProfile', { resumeText, marketName });
 
-export const optimizeLinkedInProfileFromText = (profileText: string, resumeText: string, marketName: string, customPrompt?: string, _additionalUrl?: string) =>
-  callTool<LinkedInOptimization>('optimizeLinkedInProfileFromText', { profileText, resumeText, marketName, customPrompt });
+export const optimizeLinkedInProfileFromText = (profileText: string, resumeText: string, marketName: string, customPrompt?: string, additionalUrl?: string) =>
+  callTool<LinkedInOptimization>('optimizeLinkedInProfileFromText', { profileText, resumeText, marketName, customPrompt, additionalUrl });
 
 // ---- Career path helpers ---------------------------------------------------
 export const generateSkillBridgeProject = (resumeText: string, desiredRole: string, skill: string) =>
@@ -743,13 +806,13 @@ export const generateJobDescription = (jobTitle: string, keyResponsibilities: st
   callTool<{ jobDescription: string }>('generateJobDescription', { jobTitle, keyResponsibilities, companyName, companyDescription });
 
 export const analyzeSalary = (jobTitle: string, location: string, jobDescription: string) =>
-  callTool<{ yearlySalary: string; monthlySalary: string }>('analyzeSalary', { jobTitle, location, jobDescription });
+  callTool<{ yearlySalary: string; monthlySalary: string; sources?: string[]; notice?: string }>('analyzeSalary', { jobTitle, location, jobDescription });
 
 export const checkInclusivity = (jobDescription: string) =>
   callTool<{ suggestions: InclusivitySuggestion[] }>('checkInclusivity', { jobDescription });
 
 export const formatJobDescription = (jobDescription: string) =>
-  callTool<{ formattedDescription: string; jobTitle: string | null; location: string | null }>('formatJobDescription', { jobDescription });
+  callTool<{ formattedDescription: string; jobTitle: string; location: string }>('formatJobDescription', { jobDescription });
 
 export const analyzeCandidateMatch = (resumeText: string, jobDescription: string) =>
   callTool<CandidateMatchAnalysis>('analyzeCandidateMatch', { resumeText, jobDescription });
@@ -796,11 +859,16 @@ export const generateCandidatePrepKit = (
   });
 
 // ---- Image generation & URL extraction (dedicated callables) ---------------
-export const generateProfessionalHeadshot = async (imageBase64: string): Promise<string[]> =>
+export interface GeneratedHeadshot {
+  data: string;
+  mimeType: string;
+}
+
+export const generateProfessionalHeadshot = async (imageBase64: string): Promise<GeneratedHeadshot[]> =>
   callDedicated(async () => {
     // Legacy production name is generateProfessionalHeadshot (IAM already set).
-    const fn = httpsCallable<any, { images: string[] }>(firebaseFunctions, 'generateProfessionalHeadshot', { timeout: 190_000 });
-    const res = await fn({ imageBase64 });
+    const fn = httpsCallable<any, { images: GeneratedHeadshot[] }>(firebaseFunctions, 'generateProfessionalHeadshot', { timeout: 190_000 });
+    const res = await fn({ imageBase64, requestId: makeCallableRequestId('headshot') });
     return res.data.images;
   });
 

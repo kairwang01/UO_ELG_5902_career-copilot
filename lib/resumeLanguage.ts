@@ -30,6 +30,26 @@ export const marketDefaultLanguage = (market: string): OutputLanguageChoice => {
   return local && !local.defaultToEnglish ? 'local' : 'en';
 };
 
+// Reverse lookup used by language-sync actions. Keep a compatible current market,
+// otherwise prefer a market where that language is the default professional norm.
+// This prevents bilingual English-first Canada from winning French over France just
+// because Canada appears first in the market list.
+export const getMarketForLocalLanguage = (
+  languageName: string,
+  preferredMarket?: string,
+): string | null => {
+  if (preferredMarket && MARKET_LOCAL_LANGUAGE[preferredMarket]?.name === languageName) {
+    return preferredMarket;
+  }
+  let bilingualFallback: string | null = null;
+  for (const [market, local] of Object.entries(MARKET_LOCAL_LANGUAGE)) {
+    if (local.name !== languageName) continue;
+    if (!local.defaultToEnglish) return market;
+    if (bilingualFallback === null) bilingualFallback = market;
+  }
+  return bilingualFallback;
+};
+
 // Resolves the user's choice into the concrete language name handed to the prompt.
 export const resolveOutputLanguageName = (
   market: string,

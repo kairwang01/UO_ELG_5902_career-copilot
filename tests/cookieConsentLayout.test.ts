@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getCookieConsentBottomSpaceCss } from '../components/CookieConsent';
+import { COOKIE_CONSENT_LAYER_Z_INDEX, getCookieConsentBottomSpaceCss } from '../components/CookieConsent';
 
 describe('cookie consent layout reserve', () => {
+  it('stays actionable above the candidate auth backdrop', () => {
+    expect(COOKIE_CONSENT_LAYER_Z_INDEX).toBeGreaterThan(100);
+  });
+
   it('reserves banner height, bottom offset, gap, and safe-area when bottom positioned', () => {
     expect(getCookieConsentBottomSpaceCss({
       height: 96.2,

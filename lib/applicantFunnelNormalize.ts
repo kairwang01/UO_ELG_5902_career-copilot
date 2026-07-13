@@ -55,7 +55,10 @@ export function normalizeApplicantForFunnel(applicant: JobApplicant): JobApplica
     status: cleanString(raw.status) || 'Submitted',
     compatibility_score: typeof raw.compatibility_score === 'number' && Number.isFinite(raw.compatibility_score)
       ? raw.compatibility_score
-      : 0,
+      : null,
+    analysis_status: ['complete', 'failed', 'not_requested', 'no_context', 'not_analyzed_cap'].includes(String(raw.analysis_status))
+      ? raw.analysis_status as JobApplicant['analysis_status']
+      : (typeof raw.compatibility_score === 'number' && Number.isFinite(raw.compatibility_score) ? 'complete' : 'not_requested'),
     summary: cleanString(raw.summary),
     strengths: stringArray(raw.strengths),
     potentialGaps: stringArray(raw.potentialGaps),

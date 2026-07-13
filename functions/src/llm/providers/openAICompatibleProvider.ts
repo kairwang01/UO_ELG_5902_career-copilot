@@ -90,10 +90,10 @@ export class OpenAICompatibleProvider implements LLMProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-        // Free community routers (KairLLM auto) regularly take 60-90s for large
-        // structured outputs — 60s aborted convertResumeFormat/findOpportunities
-        // mid-flight. The callable layer enforces its own deadline above this.
-        signal: AbortSignal.timeout(150_000),
+        // Direct/quality routes retain the historical generous ceiling. A
+        // latency-priority routing pool injects a much smaller timeoutMs so a
+        // dead candidate cannot block every fallback for 150 seconds.
+        signal: AbortSignal.timeout(normalizeTimeoutMs(req.timeoutMs, 150_000)),
       });
 
     let resp = await post(body);
@@ -132,10 +132,16 @@ export class OpenAICompatibleProvider implements LLMProvider {
       text,
       raw,
       model: json?.model ?? this.model,
+      provider: this.name,
       usage: {
         inputTokens: json?.usage?.prompt_tokens,
         outputTokens: json?.usage?.completion_tokens,
       },
     };
   }
+}
+
+function normalizeTimeoutMs(value: number | undefined, fallback: number): number {
+  if (!Number.isFinite(value) || (value ?? 0) < 1_000) return fallback;
+  return Math.min(180_000, Math.floor(value!));
 }

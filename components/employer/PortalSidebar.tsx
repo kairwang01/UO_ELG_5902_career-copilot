@@ -13,6 +13,7 @@ import {
   LogOut,
   Sun,
   Moon,
+  X,
 } from 'lucide-react';
 import type { UserProfile } from '../../types';
 import LanguageSwitcher from '../LanguageSwitcher';
@@ -42,6 +43,7 @@ interface PortalSidebarProps {
   t: (key: string) => string;
   /** Rendered inside the mobile drawer overlay (always visible, fills the drawer height). */
   mobile?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export function PortalSidebar({
@@ -56,6 +58,7 @@ export function PortalSidebar({
   onLanguageChange,
   t,
   mobile = false,
+  onCloseMobile,
 }: PortalSidebarProps) {
   const dm = darkMode;
   const navItem = (page: PortalPage, label: string, Icon: React.ElementType) => {
@@ -83,9 +86,19 @@ export function PortalSidebar({
     <aside
       data-qa={mobile ? 'employer-mobile-sidebar' : 'employer-sidebar'}
       className={`${
-        mobile ? 'flex h-full w-72 max-w-[85vw]' : 'hidden h-screen w-64 lg:flex'
-      } flex-shrink-0 flex-col border-r border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900`}
+        mobile ? 'flex h-full w-72 max-w-[85vw]' : 'hidden h-dvh w-64 lg:flex'
+      } relative flex-shrink-0 flex-col border-r border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900`}
     >
+      {mobile && onCloseMobile && (
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="absolute right-3 top-3 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:text-slate-300 dark:hover:bg-slate-800"
+          aria-label="Close navigation"
+        >
+          <X className="h-5 w-5" aria-hidden="true" />
+        </button>
+      )}
       <div className="border-b border-gray-100 p-6 dark:border-slate-800">
         <button
           onClick={onGoHome}
@@ -98,7 +111,7 @@ export function PortalSidebar({
 
       <nav className="flex-1 space-y-6 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-slate-800">
         <div className="space-y-1">
-          <h3 className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
+          <h3 className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-600 dark:text-slate-400">
             {t('portal_nav_workspace_group')}
           </h3>
           {navItem('dashboard', t('portal_nav_dashboard'), LayoutDashboard)}
@@ -110,7 +123,7 @@ export function PortalSidebar({
         </div>
 
         <div className="space-y-1">
-          <h3 className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500">
+          <h3 className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-600 dark:text-slate-400">
             {t('portal_nav_settings_group')}
           </h3>
           {navItem('company-profile', t('portal_nav_org_profile'), User)}
@@ -124,7 +137,7 @@ export function PortalSidebar({
             <CreditCard className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase text-gray-400 dark:text-slate-500">{t('portal_credits_label')}</p>
+            <p className="text-[10px] font-bold uppercase text-gray-600 dark:text-slate-400">{t('portal_credits_label')}</p>
             <p className="text-xs font-bold tracking-tight text-gray-900 dark:text-white">{(profile?.credits ?? 0).toLocaleString()} CR</p>
           </div>
         </div>

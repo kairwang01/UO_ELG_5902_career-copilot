@@ -21,6 +21,23 @@ export function routingPoolForRoute(
   return poolId ? pools.find((pool) => pool.id === poolId && pool.enabled) ?? null : null;
 }
 
+/** True for pools whose product contract prioritizes interactive latency. */
+export function isLatencyPriorityPool(pool: Pick<RoutingPool, "id" | "label">): boolean {
+  return /speed|fast|latency|quick|rapid|速度|快速|极速/i.test(`${pool.id} ${pool.label}`);
+}
+
+/** Chooses an attempt deadline without exceeding the route or caller budget. */
+export function routingAttemptTimeoutMs(
+  attemptBudgetMs: number,
+  remainingRouteMs: number,
+  requestTimeoutMs?: number
+): number {
+  return Math.max(
+    1_000,
+    Math.min(attemptBudgetMs, remainingRouteMs, requestTimeoutMs ?? attemptBudgetMs)
+  );
+}
+
 export function candidatesForPoolTier(
   pool: RoutingPool,
   registry: ModelEntry[],

@@ -38,6 +38,8 @@ import {
   getMockInterviewMinTier,
   getMiReportUnlockCredits,
 } from "../config/env";
+import { requireStructuredResult } from "../llm/structuredResult";
+import { validateAgainstSchema } from "../llm/schemaValidation";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -95,16 +97,21 @@ interface EvaluateResult {
 // Schemas
 // ---------------------------------------------------------------------------
 
-const GENERATE_SCHEMA = {
+export const GENERATE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     questions: {
       type: Type.ARRAY,
+      minItems: "8",
+      maxItems: "8",
       items: {
         type: Type.OBJECT,
         properties: {
           question:  { type: Type.STRING },
-          category:  { type: Type.STRING },
+          category: {
+            type: Type.STRING,
+            enum: ["Behavioural", "Technical", "Situational", "Culture/Motivation"],
+          },
           tip:       { type: Type.STRING },
         },
         required: ["question", "category", "tip"],
@@ -114,36 +121,41 @@ const GENERATE_SCHEMA = {
   required: ["questions"],
 };
 
-const EVALUATE_SCHEMA = {
+export const EVALUATE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    score:        { type: Type.NUMBER },
-    strengths:    { type: Type.ARRAY, items: { type: Type.STRING } },
-    improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+    score:        { type: Type.INTEGER, minimum: 0, maximum: 100 },
+    strengths:    { type: Type.ARRAY, items: { type: Type.STRING }, minItems: "2", maxItems: "4" },
+    improvements: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: "2", maxItems: "4" },
     modelAnswer:  { type: Type.STRING },
   },
   required: ["score", "strengths", "improvements", "modelAnswer"],
 };
 
-const SESSION_EVAL_SCHEMA = {
+export const SESSION_EVAL_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    overallScore: { type: Type.NUMBER },
-    verdict:      { type: Type.STRING }, // "Strong Hire" | "Hire" | "Leaning Hire" | "Leaning No Hire" | "No Hire"
+    overallScore: { type: Type.INTEGER, minimum: 0, maximum: 100 },
+    verdict: {
+      type: Type.STRING,
+      enum: ["Strong Hire", "Hire", "Leaning Hire", "Leaning No Hire", "No Hire"],
+    },
     summary:      { type: Type.STRING },
-    strengths:    { type: Type.ARRAY, items: { type: Type.STRING } },
-    improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+    strengths:    { type: Type.ARRAY, items: { type: Type.STRING }, minItems: "3", maxItems: "5" },
+    improvements: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: "3", maxItems: "5" },
     perQuestion: {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
         properties: {
           question: { type: Type.STRING },
-          score:    { type: Type.NUMBER },
+          score:    { type: Type.INTEGER, minimum: 0, maximum: 100 },
           feedback: { type: Type.STRING },
         },
         required: ["question", "score", "feedback"],
       },
+      minItems: "1",
+      maxItems: "20",
     },
   },
   required: ["overallScore", "verdict", "summary", "strengths", "improvements", "perQuestion"],
@@ -174,12 +186,18 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
     if (!data.jobDescription?.trim()) {
       throw new HttpsError("invalid-argument", "jobDescription is required for generate mode.");
     }
+    if (data.resumeText.length > 100_000 || data.jobDescription.length > 100_000) {
+      throw new HttpsError("invalid-argument", "Resume or job description is too long.");
+    }
   } else if (data.mode === "evaluate") {
     if (!data.question?.trim()) {
       throw new HttpsError("invalid-argument", "question is required for evaluate mode.");
     }
     if (!data.answer?.trim()) {
       throw new HttpsError("invalid-argument", "answer is required for evaluate mode.");
+    }
+    if (data.question.length > 2_000 || data.answer.length > 12_000 || (data.jobDescription?.length ?? 0) > 100_000) {
+      throw new HttpsError("invalid-argument", "Interview evaluation input is too long.");
     }
   } else if (data.mode === "evaluate_session") {
     // evaluate_session: a bounded, well-formed transcript
@@ -240,12 +258,20 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       // resolveProvider builds the provider (and reads the API key) — keep it inside
       // the try so a missing-key/build failure also triggers the refund below.
       const provider = await resolveProvider(uid, modelId, "mockInterview");
+      const generationStartedAt = Date.now();
       const result = await provider.generate({
         prompt,
         responseSchema: GENERATE_SCHEMA,
+        maxOutputTokens: 4_096,
+        thinkingLevel: "low",
       });
 
-      return result.raw as GenerateResult;
+      return requireStructuredResult<GenerateResult>(
+        "mockInterview.generate",
+        result,
+        GENERATE_SCHEMA,
+        generationStartedAt
+      );
     } catch (err) {
       await refundCredits(uid, metered.creditCost);
       // A plain Error reaches the client as a bare "INTERNAL" with no detail. Wrap
@@ -271,11 +297,19 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
 
     try {
       const provider = await resolveProvider(uid, modelId, "mockInterview");
+      const generationStartedAt = Date.now();
       const result = await provider.generate({
         prompt,
         responseSchema: EVALUATE_SCHEMA,
+        maxOutputTokens: 2_048,
+        thinkingLevel: "low",
       });
-      return result.raw as EvaluateResult;
+      return requireStructuredResult<EvaluateResult>(
+        "mockInterview.evaluate",
+        result,
+        EVALUATE_SCHEMA,
+        generationStartedAt
+      );
     } catch (err) {
       if (err instanceof HttpsError) throw err;
       throw new HttpsError("internal", err instanceof Error ? err.message : "Mock interview evaluation failed.");
@@ -299,19 +333,35 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       transcript,
     });
 
-    let result;
+    let report: Record<string, unknown>;
     try {
       const provider = await resolveProvider(uid, modelId, "mockInterview");
-      result = await provider.generate({
+      const generationStartedAt = Date.now();
+      const result = await provider.generate({
         prompt,
         responseSchema: SESSION_EVAL_SCHEMA,
+        maxOutputTokens: 8_192,
+        thinkingLevel: "low",
       });
+      report = requireStructuredResult<Record<string, unknown>>(
+        "mockInterview.evaluate_session",
+        result,
+        SESSION_EVAL_SCHEMA,
+        generationStartedAt
+      );
+      const perQuestion = report.perQuestion as Array<Record<string, unknown>>;
+      if (perQuestion.length !== data.qa!.length) {
+        throw new Error("The AI response did not cover every interview question.");
+      }
+      // Preserve exact input ordering/text even if the model paraphrases a label.
+      report.perQuestion = perQuestion.map((item, index) => ({
+        ...item,
+        question: data.qa![index].question,
+      }));
     } catch (err) {
       if (err instanceof HttpsError) throw err;
       throw new HttpsError("internal", err instanceof Error ? err.message : "Mock interview session evaluation failed.");
     }
-
-    const report = result.raw as Record<string, unknown>;
 
     // ── Report entitlement (the monetization point). Paid tiers get the full
     //    report included. Other tiers (reachable only once mi_min_tier is
@@ -359,6 +409,10 @@ export const mockInterviewFunction = onCall({ invoker: "public", timeoutSeconds:
       throw new HttpsError("not-found", "Report not found.");
     }
     const stored = snap.data() as { report: Record<string, unknown>; unlocked?: boolean };
+    const storedIssues = validateAgainstSchema(stored.report, SESSION_EVAL_SCHEMA);
+    if (storedIssues.length > 0) {
+      throw new HttpsError("data-loss", "Stored interview report is incomplete. Please generate a new report.");
+    }
     if (!stored.unlocked) {
       const price = getMiReportUnlockCredits();
       if (price > 0) {

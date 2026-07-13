@@ -65,6 +65,9 @@ describe('llm error classification', () => {
   });
 
   it('keeps the existing availability triggers', () => {
+    expect(isAvailabilityError({ status: 402, message: 'free trial quota exhausted' })).toBe(true);
+    expect(isAvailabilityError({ status: 503, message: 'service unavailable' })).toBe(true);
+    expect(isAvailabilityError({ code: 504 })).toBe(true);
     expect(isAvailabilityError({ status: 429 })).toBe(true);
     expect(isAvailabilityError({ message: 'LLM provider error 403: forbidden' })).toBe(true);
     expect(isAvailabilityError({ message: 'No endpoints found that support image input' })).toBe(true);

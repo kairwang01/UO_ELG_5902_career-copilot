@@ -46,6 +46,8 @@ import {
   implicitFallbackCandidates,
   routingPoolForRoute,
   routingPoolTiers,
+  isLatencyPriorityPool,
+  routingAttemptTimeoutMs,
   selectWeightedCandidate,
   RoutingCandidate,
 } from "./routingPools";
@@ -187,6 +189,11 @@ export const DEFAULT_MODEL_ID = "gemini";
  */
 export function modelSupportsImageInput(entry: ModelEntry): boolean {
   return entry.provider === "gemini" || entry.supportsImageInput === true;
+}
+
+/** Built-in Google Search grounding is implemented only by GeminiProvider. */
+export function modelSupportsGoogleSearch(entry: ModelEntry): boolean {
+  return entry.provider === "gemini";
 }
 
 const TIER_RANK: Record<Tier, number> = { free: 0, paid: 1, business: 0 };
@@ -335,9 +342,14 @@ function extractErrorCode(err: unknown): string {
   if (e?.status) return String(e.status);
   if (e?.code) return String(e.code);
   const msg = (e?.message ?? "").toLowerCase();
-  const match = msg.match(/\b(401|403|429|500|503)\b/);
+  const match = msg.match(/\b(401|402|403|408|425|429|500|502|503|504)\b/);
   if (match) return match[1];
-  if (msg.includes("timeout") || msg.includes("timed out")) return "timeout";
+  if (
+    msg.includes("timeout") ||
+    msg.includes("timed out") ||
+    msg.includes("abort") ||
+    (err as { code?: unknown })?.code === 23
+  ) return "timeout";
   if (msg.includes("empty response")) return "empty";
   return "unknown";
 }
@@ -396,7 +408,7 @@ function resolveKeyPool(entry: ModelEntry): string[] {
  */
 function buildProviderWithKey(entry: ModelEntry, apiKey?: string): LLMProvider {
   if (entry.provider === "gemini") {
-    return new GeminiProvider();
+    return new GeminiProvider(entry.providerModel || undefined);
   }
 
   // openai-compatible: resolve base_url
@@ -661,17 +673,38 @@ class RoutingPoolProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResult> {
+    const latencyPriority = isLatencyPriorityPool(this.pool);
+    const totalBudgetMs = latencyPriority
+      ? envDurationMs("LLM_SPEED_ROUTE_TOTAL_TIMEOUT_MS", 45_000, 5_000, 120_000)
+      : undefined;
+    const attemptBudgetMs = latencyPriority
+      ? envDurationMs("LLM_SPEED_ROUTE_ATTEMPT_TIMEOUT_MS", 30_000, 3_000, 60_000)
+      : undefined;
+    const deadlineAt = totalBudgetMs ? Date.now() + totalBudgetMs : undefined;
     let lastErr: unknown;
     for (const tier of routingPoolTiers(this.pool)) {
       let candidates = candidatesForPoolTier(this.pool, this.registry, this.allowedModelIds, tier);
       while (candidates.length > 0) {
+        const remainingMs = deadlineAt ? deadlineAt - Date.now() : undefined;
+        if (remainingMs !== undefined && remainingMs < 1_000) {
+          throw lastErr ?? new Error(`Routing pool "${this.pool.id}" exhausted its latency budget.`);
+        }
         const selected = selectWeightedCandidate(candidates);
         if (!selected) break;
         candidates = candidates.filter((candidate) => candidate !== selected);
         const provider = buildProviderForPoolMember(selected);
         if (!provider) continue;
         try {
-          return await provider.generate(req);
+          const timeoutMs = attemptBudgetMs
+            ? routingAttemptTimeoutMs(
+                attemptBudgetMs,
+                remainingMs ?? attemptBudgetMs,
+                req.timeoutMs
+              )
+            : req.timeoutMs;
+          return await provider.generate(
+            timeoutMs === req.timeoutMs ? req : { ...req, timeoutMs }
+          );
         } catch (err: unknown) {
           lastErr = err;
           if (!isAvailabilityError(err)) throw err;
@@ -737,7 +770,7 @@ class FreeTierOutputCapProvider implements LLMProvider {
  */
 export function buildProvider(entry: ModelEntry, rawKeyOverride?: string): LLMProvider {
   if (entry.provider === "gemini") {
-    return new GeminiProvider();
+    return new GeminiProvider(entry.providerModel || undefined);
   }
 
   // If caller supplies a raw key override (e.g. admin testing a specific key),
@@ -797,7 +830,7 @@ export async function resolveProvider(
   uid: string,
   requestedModelId?: string,
   routeKey?: string,
-  opts?: { needsImageInput?: boolean }
+  opts?: { needsImageInput?: boolean; needsGoogleSearch?: boolean }
 ): Promise<LLMProvider> {
   // E2E happy-path harness (SCRUM-42): deterministic, free, schema-valid output.
   // Gated on E2E_LLM_STUB so it can never short-circuit a real production request.
@@ -863,9 +896,15 @@ export async function resolveProvider(
   // standard path both read this set, so a text-only pool member is skipped
   // instead of 404ing the whole request.
   const needsImageInput = opts?.needsImageInput === true;
-  const allowedWithAuto = needsImageInput
+  const modalityAllowed = needsImageInput
     ? allowedWithAutoUnfiltered.filter(modelSupportsImageInput)
     : allowedWithAutoUnfiltered;
+  // Google Search grounding is a Gemini capability in this provider layer.
+  // OpenAI-compatible routes explicitly ignore useGoogleSearch; allowing them
+  // here silently returned ungrounded data while the UI presented source affordances.
+  const allowedWithAuto = opts?.needsGoogleSearch
+    ? modalityAllowed.filter(modelSupportsGoogleSearch)
+    : modalityAllowed;
   const allowedIds = new Set(allowedWithAuto.map((m) => m.id));
 
   // Module routing pools take precedence over requestedModelId. This is safe
@@ -989,4 +1028,15 @@ export async function resolveProvider(
   }
 
   return finalProvider;
+}
+
+function envDurationMs(
+  name: string,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  const parsed = Number(process.env[name]);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(parsed)));
 }

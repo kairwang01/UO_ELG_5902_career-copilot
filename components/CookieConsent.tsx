@@ -11,6 +11,9 @@ const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 const MOBILE_BOTTOM_OFFSET_PX = 12; // bottom-3
 const DESKTOP_BOTTOM_OFFSET_PX = 24; // sm:bottom-6
 const RESERVED_GAP_PX = 12;
+// Candidate auth uses z-index 100. Consent must remain actionable while that
+// modal is open instead of sitting underneath its full-screen backdrop.
+export const COOKIE_CONSENT_LAYER_Z_INDEX = 105;
 
 export function getCookieConsentBottomSpaceCss({
     height,
@@ -120,10 +123,10 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false, 
 
     const useTopPlacement = placement === 'top';
     const positionClass = useTopPlacement
-        ? 'fixed inset-x-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-50 sm:left-1/2 sm:right-auto sm:w-[min(44rem,calc(100vw-2rem))] sm:-translate-x-1/2'
+        ? 'fixed inset-x-3 top-[calc(4.5rem+env(safe-area-inset-top))] sm:left-1/2 sm:right-auto sm:w-[min(44rem,calc(100vw-2rem))] sm:-translate-x-1/2'
         : avoidSidebar
-        ? 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:bottom-auto sm:left-auto sm:right-4 sm:top-[calc(4.25rem+env(safe-area-inset-top))] sm:w-[min(26rem,calc(100vw-18rem))] sm:max-w-[calc(100vw-1.5rem)]'
-        : 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-6 sm:right-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:w-[30rem]';
+        ? 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-auto sm:right-4 sm:top-[calc(4.25rem+env(safe-area-inset-top))] sm:w-[min(26rem,calc(100vw-18rem))] sm:max-w-[calc(100vw-1.5rem)]'
+        : 'fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:left-6 sm:right-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:w-[28rem] sm:max-w-[calc(100vw-3rem)] lg:w-[30rem]';
     const panelClass = useTopPlacement || avoidSidebar
         ? 'rounded-xl border border-slate-200 bg-white/95 text-slate-700 shadow-lg shadow-slate-900/10 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-200'
         : 'rounded-2xl border border-slate-700 bg-slate-950/95 text-gray-200 shadow-2xl shadow-slate-950/25 backdrop-blur';
@@ -138,6 +141,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ t, avoidSidebar = false, 
         <div
             ref={bannerRef}
             className={`${positionClass} pointer-events-none`}
+            style={{ zIndex: COOKIE_CONSENT_LAYER_Z_INDEX }}
             role="region"
             aria-live="polite"
             aria-label="Cookie consent"

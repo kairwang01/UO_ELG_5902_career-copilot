@@ -84,9 +84,9 @@ const AdminShell: React.FC<AdminShellProps> = ({
   }, [helpOpen]);
 
   return (
-    <div className="h-screen overflow-hidden bg-[#f0f2f5] flex" data-qa-shell="admin" data-qa-admin-tab={activeTab}>
+    <div className="flex h-dvh overflow-hidden bg-[#f0f2f5]" data-qa-shell="admin" data-qa-admin-tab={activeTab}>
       {/* Sidebar */}
-      <aside className="hidden md:flex sticky top-0 h-screen w-60 lg:w-64 shrink-0 flex-col bg-[#0f2744] text-white">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col bg-[#0f2744] text-white md:flex lg:w-64">
         <div className="px-5 py-6 border-b border-white/10">
           <div className="flex items-center gap-2.5">
             <BrandLogo size="sm" surface="dark" subtitle="Admin Console" />
@@ -136,7 +136,7 @@ const AdminShell: React.FC<AdminShellProps> = ({
       </aside>
 
       {/* Main column */}
-      <div className="flex-1 flex h-screen flex-col min-w-0 overflow-hidden" data-admin-light>
+      <div className="flex h-dvh min-w-0 flex-1 flex-col overflow-hidden" data-admin-light>
         {/* Top bar */}
         <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">

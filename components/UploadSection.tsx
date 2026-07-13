@@ -5,6 +5,12 @@ import type { ResumeImage } from '../types';
 import { SUPPORTED_MARKETS } from '../config';
 import { extractTextFromUrl } from '../services/aiClient';
 import { parseFile } from '../services/fileHelpers';
+import {
+  getResumeFileValidationIssue,
+  RESUME_FILE_ACCEPT,
+  ResumeFileValidationError,
+  type ResumeFileValidationCode,
+} from '../lib/resumeFileValidation';
 import ResumePreview from './ResumePreview';
 import ConfirmActionDialog from './ConfirmActionDialog';
 
@@ -86,8 +92,33 @@ const UploadSection: React.FC<UploadSectionProps> = ({
       t(key),
     );
 
+  const translatedOrFallback = (key: string, fallback: string) => {
+    const translated = t(key);
+    return translated === key ? fallback : translated;
+  };
+
+  const fileValidationErrorMessage = (code: ResumeFileValidationCode) => {
+    switch (code) {
+      case 'unsupported':
+        return t('upload_file_unsupported_type');
+      case 'file_too_large':
+        return t('resume_file_too_large');
+      case 'image_too_large':
+        return translatedOrFallback('upload_file_image_too_large', 'Resume image must be smaller than 5 MB.');
+      case 'too_many_pdf_pages':
+        return translatedOrFallback('upload_file_pdf_page_limit', 'PDF resume must have no more than 8 pages.');
+      case 'text_too_large':
+        return translatedOrFallback('upload_file_text_too_long', 'The extracted resume text is too long to analyze.');
+      case 'image_payload_too_large':
+        return translatedOrFallback('upload_file_scan_too_large', 'The scanned resume is too large to analyze. Use a smaller or text-based PDF.');
+    }
+  };
+
   const parseFileErrorMessage = (parseError: unknown) => {
     if (!(parseError instanceof Error)) return t('upload_file_parse_failed');
+    if (parseError instanceof ResumeFileValidationError) {
+      return fileValidationErrorMessage(parseError.code);
+    }
     switch (parseError.message) {
       case 'Could not extract text or images from PDF.':
         return t('upload_file_pdf_extract_failed');
@@ -152,6 +183,14 @@ const UploadSection: React.FC<UploadSectionProps> = ({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validationIssue = getResumeFileValidationIssue(file);
+    if (validationIssue) {
+      setError(fileValidationErrorMessage(validationIssue));
+      setInfoMessage(null);
+      e.target.value = '';
+      return;
+    }
 
     clearInputs();
     const myRun = ++runIdRef.current;
@@ -305,7 +344,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({
                       ref={fileInputRef}
                       onChange={handleFileChange}
                       className="hidden"
-                      accept=".txt,.png,.jpg,.jpeg,.pdf,.docx,.doc"
+                      accept={RESUME_FILE_ACCEPT}
                       aria-label={t('upload_file_input_aria')}
                     />
                     {resumeImages && resumeImages.length > 0 ? (
@@ -355,12 +394,12 @@ const UploadSection: React.FC<UploadSectionProps> = ({
         </div>
 
         {error && (
-          <div className="bg-[var(--site-risk-bg)] text-[var(--site-risk)] p-4 rounded-[var(--site-radius)] border border-[var(--site-risk)]/20">
+          <div role="alert" className="bg-[var(--site-risk-bg)] text-[var(--site-risk)] p-4 rounded-[var(--site-radius)] border border-[var(--site-risk)]/20">
             <p>{error}</p>
           </div>
         )}
         {infoMessage && (
-          <div className="bg-[var(--site-surface-muted)] text-[var(--site-text)] p-4 rounded-[var(--site-radius)] border border-[var(--site-border)]">
+          <div role="status" aria-live="polite" className="bg-[var(--site-surface-muted)] text-[var(--site-text)] p-4 rounded-[var(--site-radius)] border border-[var(--site-border)]">
             <p>{infoMessage}</p>
           </div>
         )}

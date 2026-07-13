@@ -24,6 +24,9 @@ export interface LLMContentPart {
   };
 }
 
+/** Provider-neutral reasoning effort. Gemini 3 maps this to thinkingLevel. */
+export type LLMThinkingLevel = "minimal" | "low" | "medium" | "high";
+
 /** Input to any LLM provider call. */
 export interface LLMRequest {
   /** Optional system instruction (model-level persona / rules). */
@@ -59,6 +62,18 @@ export interface LLMRequest {
    * (服务分级 — free/paid output-quality boundary).
    */
   maxOutputTokens?: number;
+  /**
+   * Optional reasoning effort. Providers that do not expose a compatible knob
+   * ignore it. Gemini 3 defaults to `low` in GeminiProvider to keep interactive
+   * tools responsive; callers may explicitly request a different level.
+   */
+  thinkingLevel?: LLMThinkingLevel;
+  /**
+   * Per-provider-attempt deadline in milliseconds. Routing pools lower this for
+   * latency-priority routes so one dead upstream cannot consume the callable's
+   * entire 180-second deadline before fallback starts.
+   */
+  timeoutMs?: number;
 }
 
 /** Output from any LLM provider call. */
@@ -72,6 +87,10 @@ export interface LLMResult {
   raw?: unknown;
   /** Name of the model that answered (e.g. "gemini-3-pro-preview"). */
   model: string;
+  /** Concrete provider/model entry that served the request. */
+  provider?: string;
+  /** Provider stop reason; incomplete responses are rejected before returning. */
+  finishReason?: string;
   /**
    * Web-search grounding sources, populated when LLMRequest.useGoogleSearch was set.
    * Shape mirrors Gemini's groundingMetadata.groundingChunks.

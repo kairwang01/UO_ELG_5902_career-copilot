@@ -17,6 +17,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAuth } from "../middleware/auth";
 import { recordObservedToolRun } from "../admin/usageLog";
+import { recordFreeToolRun } from "../credits/deductCredits";
 import { resolveProvider } from "../llm/models";
 import { buildPrompt } from "../llm/prompts";
 import { chatLanguageProtocol } from "../llm/languageProtocol";
@@ -38,6 +39,7 @@ interface CareerCoachRequest {
   model?: string;
   /** UI language hint for ambiguous first messages, e.g. "zh", "en". */
   outputLanguage?: string;
+  requestId?: string;
 }
 
 export const careerCoachFunction = onCall({ invoker: "public", timeoutSeconds: 180 }, async (request) => {
@@ -47,9 +49,28 @@ export const careerCoachFunction = onCall({ invoker: "public", timeoutSeconds: 1
   if (!Array.isArray(data.messages) || data.messages.length === 0) {
     throw new HttpsError("invalid-argument", "messages is required.");
   }
+  if (data.messages.length > 20) {
+    throw new HttpsError("invalid-argument", "messages may contain at most 20 turns.");
+  }
+  let transcriptChars = 0;
+  for (const message of data.messages) {
+    if (!message || (message.role !== "user" && message.role !== "model") ||
+        typeof message.content !== "string" || !message.content.trim()) {
+      throw new HttpsError("invalid-argument", "Each message needs a valid role and non-empty content.");
+    }
+    if (message.content.length > 8_000) {
+      throw new HttpsError("invalid-argument", "A coach message is too long.");
+    }
+    transcriptChars += message.content.length;
+  }
+  if (transcriptChars > 50_000 || (data.resumeText?.length ?? 0) > 100_000) {
+    throw new HttpsError("invalid-argument", "Career coach context is too long.");
+  }
 
-  // Observability only — uncharged tool, never capped (see recordObservedToolRun).
+  // Keep the existing observability event and apply the shared free-tool cap so
+  // this authenticated endpoint cannot become an unmetered LLM faucet.
   void recordObservedToolRun(uid, "career-coach");
+  await recordFreeToolRun(uid, "career-coach", { requestId: data.requestId });
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
   await ensurePlatformCaches();
@@ -81,6 +102,23 @@ export const careerCoachFunction = onCall({ invoker: "public", timeoutSeconds: 1
       .join("\n") + "\nAlex:";
 
   const provider = await resolveProvider(uid, data.model, "careerCoach");
-  const result = await provider.generate({ system: systemInstruction, prompt: transcript });
+  const generationStartedAt = Date.now();
+  const result = await provider.generate({
+    system: systemInstruction,
+    prompt: transcript,
+    maxOutputTokens: 1_024,
+    thinkingLevel: "minimal",
+    timeoutMs: 20_000,
+  });
+  console.info(JSON.stringify({
+    event: "ai_unstructured_result",
+    tool: "careerCoach",
+    modelUsed: result.model,
+    providerUsed: result.provider ?? null,
+    generationMs: Date.now() - generationStartedAt,
+    inputTokens: result.usage?.inputTokens ?? null,
+    outputTokens: result.usage?.outputTokens ?? null,
+  }));
+  if (!result.text.trim()) throw new HttpsError("unavailable", "The career coach returned an empty reply.");
   return { reply: result.text };
 });

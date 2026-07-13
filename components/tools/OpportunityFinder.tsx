@@ -35,6 +35,7 @@ import {
 } from '../../hooks/useJobPreferences';
 import { buildJobContextFromOpportunity, buildSalaryContextFromOpportunity } from '../../lib/toolPrefill';
 import type { ScreenerQuestion } from '../../lib/recruitingData';
+import { normalizeOpportunityResult } from '../../lib/aiResultGuards';
 
 interface OpportunityFinderProps {
   resumeText: string;
@@ -390,38 +391,47 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
     const alive = begin();
     setError(null);
     try {
-      await fetchAppliedJobsWithinLimit();
-
-      // Platform postings: a fast, free, additive Firestore read (returns [] on any
-      // failure) — fetched first so they still show even if the AI search errors.
-      const internal = await fetchInternalJobsWithinLimit();
-
       // Feed job preferences into the AI search.
       const resumeForSearch = activeJobPrefs
         ? preferencesToPromptBlock(activeJobPrefs) + '\n\n---\n\n' + resumeText
         : resumeText;
 
-      try {
-        // findOpportunities accepts session for legacy signature compatibility;
-        // the closure value is fine here — we only fix deps to use the primitive.
-        const apiResult = await findOpportunities(resumeForSearch, market, session);
-        if (!alive()) return;
+      // Start the two additive Firestore reads and the paid AI search in the same
+      // turn. Previously the AI request waited behind two 6.5s watchdogs, adding
+      // up to 13 seconds before provider generation even began.
+      const appliedJobsPromise = fetchAppliedJobsWithinLimit();
+      const internalJobsPromise = fetchInternalJobsWithinLimit();
+      // findOpportunities accepts session for legacy signature compatibility;
+      // the closure value is fine here — we only fix deps to use the primitive.
+      const opportunitiesPromise = findOpportunities(resumeForSearch, market, session).then(
+        (value) => ({ ok: true as const, value }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
+
+      const [, internal, opportunities] = await Promise.all([
+        appliedJobsPromise,
+        internalJobsPromise,
+        opportunitiesPromise,
+      ]);
+      if (!alive()) return;
+
+      if (opportunities.ok === true) {
+        const normalizedResult = normalizeOpportunityResult(opportunities.value);
         // Internal platform jobs first (one-click apply + tracked status), then the
         // AI's external web suggestions.
-        setResult({ ...apiResult, opportunities: [...internal.opps, ...apiResult.opportunities] });
+        setResult({ ...normalizedResult, opportunities: [...internal.opps, ...normalizedResult.opportunities] });
         setInternalJobData(internal.meta);
         // FIX 2: clear any non-fatal side-error (e.g. fetchAppliedJobs) now that we
         // have a good result so the cards render.
         setError(null);
-      } catch (extErr) {
+      } else {
         // External AI search failed (e.g. quota). Still surface platform jobs if any.
-        if (!alive()) return;
         if (internal.opps.length > 0) {
           setResult({ opportunities: internal.opps, jobSearchStrategies: [], groundingChunks: undefined });
           setInternalJobData(internal.meta);
           setError(null);
         } else {
-          throw extErr;
+          throw opportunities.error;
         }
       }
     } catch (err) {
@@ -625,7 +635,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ resumeText, marke
 
       {savedPanel}
 
-      {jobSearchStrategies.length === 0 && (
+      {(!jobSearchStrategies || jobSearchStrategies.length === 0) && (
         <div className="flex flex-col gap-3 rounded-lg border border-fuchsia-100 bg-fuchsia-50 p-4 text-sm text-fuchsia-950 dark:border-fuchsia-900/60 dark:bg-fuchsia-950/20 dark:text-fuchsia-100 sm:flex-row sm:items-center sm:justify-between">
           <p>{t('tool_opportunity_finder_ai_search_prompt')}</p>
           <button

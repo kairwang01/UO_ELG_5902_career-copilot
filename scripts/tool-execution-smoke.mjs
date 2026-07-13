@@ -610,6 +610,17 @@ async function runCareerPath(page) {
   await page.locator('[data-qa="career-path-generate"]').click();
   await page.locator('[data-qa="career-path-tool"][data-qa-tool-state="result"]').waitFor({ timeout: 60_000 });
   await assertResultHasSampleText(page, '[data-qa="career-path-tool"][data-qa-tool-state="result"]', 'career path');
+  const gapCards = page.locator('[data-qa="career-path-gap-card"]');
+  const gapCount = await gapCards.count();
+  assert(gapCount > 0, 'career path: expected at least one skill gap card');
+  for (let index = 0; index < gapCount; index += 1) {
+    const cardBox = await gapCards.nth(index).boundingBox();
+    const reasonBox = await gapCards.nth(index).locator('[data-qa="career-path-gap-reason"]').boundingBox();
+    const actionsBox = await gapCards.nth(index).locator('[data-qa="career-path-gap-actions"]').boundingBox();
+    assert(cardBox && reasonBox && actionsBox, `career path: skill gap ${index + 1} layout boxes are missing`);
+    assert(reasonBox.width >= cardBox.width - 40, `career path: skill gap ${index + 1} text is compressed beside its actions`);
+    assert(actionsBox.y >= reasonBox.y + reasonBox.height, `career path: skill gap ${index + 1} actions overlap its description`);
+  }
   await assertSavedToolResultRestore(page, 'career-path', 'career path', '[data-qa="career-path-tool"][data-qa-tool-state="result"]');
   await assertNoToolCrash(page, 'career path');
   await assertNoOverflow(page, 'career path result');

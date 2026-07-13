@@ -92,6 +92,7 @@ export const SiteRouter: React.FC = () => (
         </Suspense>
       }
     />
+    <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
   </>
 );

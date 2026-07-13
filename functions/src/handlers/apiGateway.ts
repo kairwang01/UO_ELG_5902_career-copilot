@@ -28,6 +28,12 @@ import { buildPrompt } from "../llm/prompts";
 import { ANALYSIS_SCHEMA } from "./analyzeResume";
 import { COVER_LETTER_SCHEMA } from "./generateCoverLetter";
 import { ensurePlatformCaches } from "../config/env";
+import {
+  candidateAnalysisLanguageProtocol,
+  coverLetterLanguageProtocol,
+} from "../llm/languageProtocol";
+import { requireStructuredResult } from "../llm/structuredResult";
+import { correctiveInstruction, coverLetterDraftIssues } from "../llm/draftQuality";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -200,14 +206,32 @@ async function handleResumeAnalyze(key: AuthedKey, body: unknown): Promise<unkno
     throw fail(400, "invalid_request", "'resume_text' exceeds the 50000 character limit.");
   }
   await ensurePlatformCaches();
-  const prompt = `${buildPrompt("handler_resume_analysis", { marketName })}\n\nResume:\n${resumeText}`;
+  const outputLanguage = typeof payload.language === "string" ? payload.language : undefined;
+  const prompt = `${buildPrompt("handler_resume_analysis", {
+    marketName,
+    outputLanguageInstruction: candidateAnalysisLanguageProtocol({ outputLanguage, marketName }),
+  })}\n\nResume:\n${resumeText}`;
   // Partner traffic routes via the owning admin's tier so pooling/tiering apply
   // (contract req #6); the gateway never reads provider keys directly.
   let provider;
   try {
     provider = await resolveProvider(key.created_by, undefined, "apiResumeAnalyze");
-    const result = await provider.generate({ prompt, responseSchema: ANALYSIS_SCHEMA });
-    return { analysis: result.raw };
+    const generationStartedAt = Date.now();
+    const result = await provider.generate({
+      prompt,
+      responseSchema: ANALYSIS_SCHEMA,
+      maxOutputTokens: 4_096,
+      thinkingLevel: "low",
+      timeoutMs: 45_000,
+    });
+    return {
+      analysis: requireStructuredResult(
+        "apiResumeAnalyze",
+        result,
+        ANALYSIS_SCHEMA,
+        generationStartedAt
+      ),
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
     if (/is not set|api_key/i.test(message)) {
@@ -232,11 +256,53 @@ async function handleCoverLetter(key: AuthedKey, body: unknown): Promise<unknown
     throw fail(400, "invalid_request", "'resume_text'/'job_description' exceed the 50000 character limit.");
   }
   await ensurePlatformCaches();
-  const prompt = buildPrompt("handler_cover_letter", { marketName, resumeText, jobDescription });
+  const outputLanguage = typeof payload.language === "string" ? payload.language : undefined;
+  const prompt = buildPrompt("handler_cover_letter", {
+    marketName,
+    resumeText,
+    jobDescription,
+    outputLanguageInstruction: coverLetterLanguageProtocol({ outputLanguage, marketName }),
+  });
   try {
     const provider = await resolveProvider(key.created_by, undefined, "apiCoverLetter");
-    const result = await provider.generate({ prompt, responseSchema: COVER_LETTER_SCHEMA });
-    return { cover_letter: result.raw };
+    const generationStartedAt = Date.now();
+    let result = await provider.generate({
+      prompt,
+      responseSchema: COVER_LETTER_SCHEMA,
+      maxOutputTokens: 2_048,
+      thinkingLevel: "low",
+      timeoutMs: 45_000,
+    });
+    let parsed = requireStructuredResult<{ letter: string }>(
+      "apiCoverLetter",
+      result,
+      COVER_LETTER_SCHEMA,
+      generationStartedAt
+    );
+    const issues = coverLetterDraftIssues(parsed.letter);
+    if (issues.length > 0 && Date.now() - generationStartedAt < 25_000) {
+      const retry = await provider.generate({
+        prompt: `${prompt}\n\n${correctiveInstruction(issues)}`,
+        responseSchema: COVER_LETTER_SCHEMA,
+        maxOutputTokens: 2_048,
+        thinkingLevel: "minimal",
+        timeoutMs: 15_000,
+      });
+      const retryParsed = requireStructuredResult<{ letter: string }>(
+        "apiCoverLetter.repair",
+        retry,
+        COVER_LETTER_SCHEMA,
+        Date.now()
+      );
+      if (coverLetterDraftIssues(retryParsed.letter).length < issues.length) {
+        result = retry;
+        parsed = retryParsed;
+      }
+    }
+    if (coverLetterDraftIssues(parsed.letter).length > 0) {
+      throw new Error("Cover letter draft did not pass quality review.");
+    }
+    return { cover_letter: parsed };
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
     if (/is not set|api_key/i.test(message)) {
@@ -305,8 +371,12 @@ export const publicApiFunction = onRequest({ invoker: "public", cors: true }, as
       throw fail(404, "not_found", `No endpoint matches ${req.method} ${path}.`);
     }
 
-    await recordUsage(key, label, 200, Date.now() - startedAt);
     res.status(200).json({ ok: true, data: result });
+    try {
+      await recordUsage(key, label, 200, Date.now() - startedAt);
+    } catch (logError) {
+      console.warn("Public API success logging failed", logError);
+    }
   } catch (err) {
     const statusCode = err instanceof GatewayError ? err.statusCode : 500;
     const code = err instanceof GatewayError ? err.code : "internal_error";

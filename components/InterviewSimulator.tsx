@@ -43,6 +43,7 @@ import { useRecentApplications } from '../hooks/useRecentApplications';
 import { listAllActiveJobPostings, type JobPosting } from '../lib/recruitingData';
 import { saveInterviewSession, subscribeInterviewSessions, type InterviewSessionHistoryItem } from '../lib/interviewSessionHistory';
 import { parseToolJobContext, parseToolInterviewSeed } from '../lib/toolPrefill';
+import { normalizeInterviewSessionReport } from '../lib/aiResultGuards';
 import InterviewerAvatar from './InterviewerAvatar';
 import { DownloadButtons } from './tools/ToolUtils';
 import { ViewportAwareDialog } from './ViewportAwareDialog';
@@ -876,9 +877,9 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
                 setLockedReport(res);
                 setReport(null);
             } else {
-                const { locked: _locked, ...rep } = res;
-                setReport(rep as InterviewSessionReport);
-                persistInterviewHistory(rep as InterviewSessionReport);
+                const rep = normalizeInterviewSessionReport(res);
+                setReport(rep);
+                persistInterviewHistory(rep);
                 setLockedReport(null);
             }
             setStage('report');
@@ -903,9 +904,9 @@ const InterviewSimulator: React.FC<InterviewSimulatorProps> = ({ resumeText, mar
         try {
             const res = await unlockInterviewReport(lockedReport.reportId);
             if (!mountedRef.current) return;
-            const { locked: _locked, ...rep } = res;
-            setReport(rep as InterviewSessionReport);
-            persistInterviewHistory(rep as InterviewSessionReport);
+            const rep = normalizeInterviewSessionReport(res);
+            setReport(rep);
+            persistInterviewHistory(rep);
             setLockedReport(null);
         } catch (err) {
             if (mountedRef.current) setError(err instanceof Error ? err.message : 'Unlock failed.');
@@ -1503,13 +1504,13 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                     <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40 p-4">
                         <h5 className="font-bold text-emerald-800 dark:text-emerald-300 text-sm mb-2">{t('mi_report_strengths')}</h5>
                         <ul className="list-disc list-inside space-y-1 text-sm text-emerald-900/80 dark:text-emerald-200/80">
-                            {report.strengths.map((s, i) => <li key={i}>{s}</li>)}
+                            {(report.strengths ?? []).map((s, i) => <li key={i}>{s}</li>)}
                         </ul>
                     </div>
                     <div className="rounded-xl bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/40 p-4">
                         <h5 className="font-bold text-amber-800 dark:text-amber-300 text-sm mb-2">{t('mi_report_improvements')}</h5>
                         <ul className="list-disc list-inside space-y-1 text-sm text-amber-900/80 dark:text-amber-200/80">
-                            {report.improvements.map((s, i) => <li key={i}>{s}</li>)}
+                            {(report.improvements ?? []).map((s, i) => <li key={i}>{s}</li>)}
                         </ul>
                     </div>
                 </div>
@@ -1517,7 +1518,7 @@ ${rep.perQuestion.map((pq, i) => `<div class="q"><strong>Q${i + 1} (${Math.round
                 <div>
                     <h5 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-2">{t('mi_report_breakdown')}</h5>
                     <div data-qa="mock-interview-report-breakdown" className="divide-y divide-gray-100 dark:divide-slate-700 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
-                        {report.perQuestion.map((pq, i) => (
+                        {(report.perQuestion ?? []).map((pq, i) => (
                             <div key={i} className="bg-white dark:bg-slate-800">
                                 <button
                                     type="button"

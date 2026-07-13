@@ -15,9 +15,14 @@ View your app in AI Studio: https://ai.studio/apps/357be20a-981b-40f8-8692-d21f3
 
 1. Install dependencies:
    `npm install`
-2. Set `VITE_API_KEY` in [.env.local](.env.local) to your Gemini API key
-   Optional model overrides:
-   - `VITE_GEMINI_PRIMARY_MODEL=gemini-3-flash-preview`
-   - `VITE_GEMINI_FALLBACK_MODEL=gemini-flash-latest`
+2. Configure the public `VITE_FIREBASE_*` web-app values in `.env.local`.
+   Gemini credentials and model routing are server-side only and are managed by
+   the admin model registry; never place an AI provider key in a `VITE_*` value.
 3. Run the app:
    `npm run dev`
+
+## Production deployment
+
+The production system uses Firebase for the backend and an nginx-fronted Ubuntu
+VM for the web application. The complete setup, release, verification, and
+rollback procedure is in [docs/deployment/README.md](docs/deployment/README.md).

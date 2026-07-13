@@ -37,6 +37,9 @@ import {
   talentProfileToMatchText,
   type TalentProfileSnapshot,
 } from "../utils/talentProfile";
+import { mapSettledWithConcurrency } from "../utils/asyncPool";
+import { recordFreeToolRun } from "../credits/deductCredits";
+import { validateAgainstSchema } from "../llm/schemaValidation";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -44,7 +47,9 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 /** Hard per-request cap — each analyzed applicant is one LLM call. */
-const MATCH_CANDIDATE_CAP = 25;
+const MATCH_CANDIDATE_CAP = 12;
+const MATCH_CONCURRENCY = 3;
+const MATCH_TIMEOUT_MS = 12_000;
 
 interface ScreenerAnswer {
   question_id: string;
@@ -57,11 +62,12 @@ interface SafeApplicant {
   candidate_name: string;
   application_date: string | null;
   status: string;
-  compatibility_score: number;
+  compatibility_score: number | null;
   summary: string;
   strengths: string[];
   potentialGaps: string[];
   suggestedQuestions: string[];
+  analysis_status: "complete" | "failed" | "not_requested" | "no_context" | "not_analyzed_cap";
   talent_profile: TalentProfileSnapshot | null;
   status_history: StatusHistoryEvent[];
   screener_answers: ScreenerAnswer[];
@@ -85,6 +91,16 @@ interface StatusHistoryEvent {
   candidate_note: string | null;
   skipped_statuses: string[];
   created_at: string | null;
+}
+
+function withoutContactInfo(profile: TalentProfileSnapshot | null): TalentProfileSnapshot | null {
+  if (!profile) return null;
+  return {
+    ...profile,
+    basic: profile.basic
+      ? { ...profile.basic, email: "", phone: "" }
+      : profile.basic,
+  };
 }
 
 /** Mirrors aiProxy/discoverTalent lenient JSON parsing (markdown fences, trailing commas). */
@@ -114,27 +130,31 @@ function emptyApplicant(
   a: ApplicationRow,
   talentProfile: TalentProfileSnapshot | null,
   statusHistory: StatusHistoryEvent[],
+  analysisStatus: SafeApplicant["analysis_status"] = "not_requested",
 ): SafeApplicant {
   return {
     id: a.application_id,
     candidate_name: a.candidate_name,
     application_date: a.application_date,
     status: a.status,
-    compatibility_score: 0,
+    compatibility_score: null,
     summary: "",
     strengths: [],
     potentialGaps: [],
     suggestedQuestions: [],
-    talent_profile: talentProfile,
+    analysis_status: analysisStatus,
+    talent_profile: withoutContactInfo(talentProfile),
     status_history: statusHistory,
     screener_answers: a.screener_answers,
   };
 }
 
-export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (request) => {
+export const listJobApplicantsFunction = onCall(
+  { invoker: "public", timeoutSeconds: 90 },
+  async (request) => {
   const uid = requireAuth(request);
 
-  const raw = (request.data ?? {}) as { jobId?: unknown; includeAnalysis?: unknown };
+  const raw = (request.data ?? {}) as { jobId?: unknown; includeAnalysis?: unknown; requestId?: unknown };
   const jobId = typeof raw.jobId === "string" ? raw.jobId.trim() : "";
   const includeAnalysis = raw.includeAnalysis !== false;
   if (!jobId) {
@@ -300,6 +320,7 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
         a,
         talentProfileById.get(a.candidate_id) ?? null,
         statusHistoryByAppId.get(a.application_id) ?? [],
+        "not_requested",
       )),
     };
   }
@@ -313,6 +334,9 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
     throw new HttpsError("internal", "analyzeCandidateMatch is not registered.");
   }
   const provider = await resolveProvider(uid, undefined, "listJobApplicants");
+  await recordFreeToolRun(uid, "list-job-applicants-analysis", {
+    requestId: typeof raw.requestId === "string" ? raw.requestId : undefined,
+  });
 
   const strArr = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 10) : [];
@@ -324,16 +348,27 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
   const pool = analyzable.slice(0, MATCH_CANDIDATE_CAP);
   const poolIds = new Set(pool.map((a) => a.application_id));
 
-  const analyzed = await Promise.all(
-    pool.map(async (a): Promise<SafeApplicant> => {
+  const analyzedSettled = await mapSettledWithConcurrency(
+    pool,
+    MATCH_CONCURRENCY,
+    async (a): Promise<SafeApplicant> => {
       try {
         const llmRequest = spec.build({ resumeText: candidateContextById.get(a.candidate_id)!, jobDescription });
+        llmRequest.timeoutMs = MATCH_TIMEOUT_MS;
+        llmRequest.maxOutputTokens = Math.min(llmRequest.maxOutputTokens ?? 1_200, 1_200);
+        llmRequest.thinkingLevel = "low";
         const result = await provider.generate(llmRequest);
         const parsed = (result.raw !== undefined ? result.raw : tryParseJson(result.text)) as
           | Record<string, unknown>
           | undefined;
-        if (!parsed || typeof parsed.score !== "number") {
-          return emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null, statusHistoryByAppId.get(a.application_id) ?? []);
+        if (!parsed || !llmRequest.responseSchema ||
+            validateAgainstSchema(parsed, llmRequest.responseSchema).length > 0) {
+          return emptyApplicant(
+            a,
+            talentProfileById.get(a.candidate_id) ?? null,
+            statusHistoryByAppId.get(a.application_id) ?? [],
+            "failed"
+          );
         }
         return {
           id: a.application_id,
@@ -345,24 +380,48 @@ export const listJobApplicantsFunction = onCall({ invoker: "public" }, async (re
           strengths: strArr(parsed.strengths),
           potentialGaps: strArr(parsed.potentialGaps),
           suggestedQuestions: strArr(parsed.suggestedQuestions),
-          talent_profile: talentProfileById.get(a.candidate_id) ?? null,
+          analysis_status: "complete",
+          talent_profile: withoutContactInfo(talentProfileById.get(a.candidate_id) ?? null),
           status_history: statusHistoryByAppId.get(a.application_id) ?? [],
           screener_answers: a.screener_answers,
         };
       } catch (e) {
         console.error(`listJobApplicants: match failed for candidate ${a.candidate_id}:`, e);
-        return emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null, statusHistoryByAppId.get(a.application_id) ?? []);
+        return emptyApplicant(
+          a,
+          talentProfileById.get(a.candidate_id) ?? null,
+          statusHistoryByAppId.get(a.application_id) ?? [],
+          "failed"
+        );
       }
-    }),
+    },
+  );
+  const analyzed = analyzedSettled.map((outcome, index) =>
+    outcome.status === "fulfilled"
+      ? outcome.value
+      : emptyApplicant(
+          pool[index],
+          talentProfileById.get(pool[index].candidate_id) ?? null,
+          statusHistoryByAppId.get(pool[index].application_id) ?? [],
+          "failed"
+        )
   );
 
   const unanalyzed = applications
     .filter((a) => !poolIds.has(a.application_id))
-    .map((a) => emptyApplicant(a, talentProfileById.get(a.candidate_id) ?? null, statusHistoryByAppId.get(a.application_id) ?? []));
+    .map((a) => emptyApplicant(
+      a,
+      talentProfileById.get(a.candidate_id) ?? null,
+      statusHistoryByAppId.get(a.application_id) ?? [],
+      (candidateContextById.get(a.candidate_id) ?? "").trim().length > 0
+        ? "not_analyzed_cap"
+        : "no_context"
+    ));
 
   const applicants = [...analyzed, ...unanalyzed].sort(
-    (x, y) => y.compatibility_score - x.compatibility_score,
+    (x, y) => (y.compatibility_score ?? -1) - (x.compatibility_score ?? -1),
   );
 
   return { applicants };
-});
+  }
+);

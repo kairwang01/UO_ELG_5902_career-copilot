@@ -4,6 +4,7 @@ import { data } from '../../lib/data';
 import type { UserProfile } from '../../types';
 import { parseFile } from '../../services/fileHelpers';
 import { uploadResumeFile, deleteResumeFile, type ResumeFileMeta } from '../../services/resumeStorage';
+import { RESUME_FILE_ACCEPT } from '../../lib/resumeFileValidation';
 import { BrandMark } from '../BrandLogo';
 import { loadJobPreferences, saveJobPreferences, type JobPreferences } from '../../hooks/useJobPreferences';
 import {
@@ -356,7 +357,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ uid, profile, t, theme,
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.doc,.docx,.txt"
+                accept={RESUME_FILE_ACCEPT}
                 className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
               />

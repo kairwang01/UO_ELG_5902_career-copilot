@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getMarketLocalLanguage, marketDefaultLanguage, resolveOutputLanguageName } from '../lib/resumeLanguage';
+import { getMarketForLocalLanguage, getMarketLocalLanguage, marketDefaultLanguage, resolveOutputLanguageName } from '../lib/resumeLanguage';
 
 describe('resumeLanguage', () => {
   it('returns a local language for DE/FR/JP/VN/UAE', () => {
@@ -28,6 +28,13 @@ describe('resumeLanguage', () => {
     expect(marketDefaultLanguage('Japan')).toBe('local');
     expect(resolveOutputLanguageName('Canada', 'local')).toBe('French');
     expect(resolveOutputLanguageName('Canada', 'en')).toBe('English');
+  });
+
+  it('routes a French regeneration to France unless the current market is already French-compatible', () => {
+    expect(getMarketForLocalLanguage('French')).toBe('France');
+    expect(getMarketForLocalLanguage('French', 'United States')).toBe('France');
+    expect(getMarketForLocalLanguage('French', 'France')).toBe('France');
+    expect(getMarketForLocalLanguage('French', 'Canada')).toBe('Canada');
   });
 
   it('resolves the language name passed to the model', () => {

@@ -23,6 +23,10 @@ import { useToolResults } from '../../contexts/ToolResultsContext';
 import type { AppSession as Session } from '../../lib/data';
 import { deriveSmartSuggestions, SmartSuggestChips } from '../SmartSuggest';
 import { buildLearningPlanContextFromSkillGap } from '../../lib/toolPrefill';
+import { normalizeCareerPathResult } from '../../lib/aiResultGuards';
+import { useLocalization } from '../../hooks/useLocalization';
+import { LanguageSyncBanner } from '../LanguageSyncBanner';
+import { TOOL_CREDIT_COSTS } from '../../config/credits';
 
 interface CareerPathPlannerProps {
   resumeText: string;
@@ -34,6 +38,7 @@ interface CareerPathPlannerProps {
 
 type SavedCareerPathResult = CareerPathResult & {
   targetRole?: string;
+  resultLanguage?: string;
 };
 
 const SAMPLE_ROLE = 'Senior Product Manager';
@@ -77,6 +82,8 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   const { canSave, saved, saveState, persist, clear } = useToolResults<SavedCareerPathResult>();
   const [fromSaved, setFromSaved] = useState(false);
   const [desiredRole, setDesiredRole] = useState('');
+  const { currentLang } = useLocalization();
+  const [langSyncDismissed, setLangSyncDismissed] = useState<string | null>(null);
 
   const [generatingProjectForSkill, setGeneratingProjectForSkill] = useState<string | null>(null);
   const [generatedProject, setGeneratedProject] = useState<SkillBridgeProject | null>(null);
@@ -92,7 +99,11 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
   useEffect(() => {
     if (saved && !result) {
-      setResult(saved.result);
+      setResult({
+        ...normalizeCareerPathResult(saved.result),
+        targetRole: typeof saved.result.targetRole === 'string' ? saved.result.targetRole : undefined,
+        resultLanguage: typeof saved.result.resultLanguage === 'string' ? saved.result.resultLanguage : currentLang,
+      });
       setFromSaved(true);
     }
   }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -104,6 +115,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
     setGeneratedProject(null);
     setProjectError(null);
     setLastProjectSkill(null);
+    setLangSyncDismissed(null);
   };
 
   const handleGenerateProject = async (skill: string) => {
@@ -145,9 +157,13 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
     setError(null);
     setResult(null);
     try {
-      const apiResult = await generateCareerPath(resumeText, targetRole, market, session);
+      const apiResult = await generateCareerPath(resumeText, targetRole, market, session, currentLang);
       if (!alive()) return;
-      const nextResult: SavedCareerPathResult = { ...apiResult, targetRole };
+      const nextResult: SavedCareerPathResult = {
+        ...normalizeCareerPathResult(apiResult),
+        targetRole,
+        resultLanguage: currentLang,
+      };
       setResult(nextResult);
       setFromSaved(false);
       persist(nextResult);
@@ -164,31 +180,36 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
   };
 
   const formatForDownload = (res: SavedCareerPathResult): string => {
+    const {
+      overallSkillGaps = [],
+      roadmap = [],
+      bridgeRoles = [],
+    } = res;
     let content = `# Your Career Path to: ${res.targetRole || desiredRole || 'Target role'}\n\n`;
     content += `## Summary\n${res.summary}\n\n`;
     content += `## Overall Skill Gaps\n`;
-    res.overallSkillGaps.forEach((gap) => {
+    overallSkillGaps.forEach((gap) => {
       content += `* **${gap.skill}:** ${gap.reason}\n`;
     });
     content += `\n## Your Roadmap\n`;
-    res.roadmap.forEach((phase) => {
+    roadmap.forEach((phase) => {
       content += `### ${phase.phaseTitle} (${phase.estimatedDuration})\n`;
       content += `**Goal:** ${phase.goal}\n\n`;
       content += `**Actionable Steps:**\n`;
-      phase.actionableSteps.forEach((step) => {
+      (phase.actionableSteps ?? []).forEach((step) => {
         content += `* **${step.type.charAt(0).toUpperCase() + step.type.slice(1)}:** ${step.description}\n`;
         if (step.resources && step.resources.length > 0) {
           content += `  * Resources: ${step.resources.join(', ')}\n`;
         }
       });
       content += `\n**Milestones:**\n`;
-      phase.milestones.forEach((milestone) => {
+      (phase.milestones ?? []).forEach((milestone) => {
         content += `* ${milestone}\n`;
       });
       content += `\n`;
     });
     content += `## Potential Bridge Roles\n`;
-    res.bridgeRoles.forEach((role) => {
+    bridgeRoles.forEach((role) => {
       content += `* **${role.title}:** ${role.reason}\n`;
     });
     return content;
@@ -375,6 +396,20 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
 
     return (
       <div data-qa="career-path-tool" data-qa-tool-state="result" className="mx-auto max-w-7xl space-y-5 animate-fade-in">
+        {result.resultLanguage && result.resultLanguage !== currentLang && langSyncDismissed !== currentLang && (
+          <LanguageSyncBanner
+            contentLang={result.resultLanguage}
+            uiLang={currentLang}
+            availableLangs={[result.resultLanguage]}
+            creditCost={TOOL_CREDIT_COSTS['career-path']}
+            canPersist={canSave}
+            busy={loading}
+            t={t}
+            onSwitch={() => {}}
+            onRegenerate={() => { void runTool(targetRole); }}
+            onDismiss={() => setLangSyncDismissed(currentLang)}
+          />
+        )}
         <SavedResultBar
           t={t}
           canSave={canSave}
@@ -470,24 +505,36 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-100">{t('tool_career_path_skill_gaps')}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{t('ws_plan_skill_gaps_desc')}</p>
+                <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{t('tool_career_path_skill_gaps_desc')}</p>
               </div>
             </div>
             {overallSkillGaps.length > 0 ? (
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {overallSkillGaps.map((gap) => (
-                  <div key={gap.skill} className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p data-qa="career-path-gap-skill" className="font-semibold text-amber-950 dark:text-amber-100">{gap.skill}</p>
-                        <p className="mt-2 text-sm leading-relaxed text-amber-900 dark:text-amber-200">{gap.reason}</p>
-                      </div>
-                      <div className="flex shrink-0 flex-col gap-2">
+                {overallSkillGaps.map((gap, index) => (
+                  <div
+                    key={`${gap.skill}-${index}`}
+                    data-qa="career-path-gap-card"
+                    className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20"
+                  >
+                    <div className="min-w-0">
+                      <p
+                        data-qa="career-path-gap-skill"
+                        className="break-words font-semibold text-amber-950 [overflow-wrap:anywhere] dark:text-amber-100"
+                      >
+                        {gap.skill}
+                      </p>
+                      <p
+                        data-qa="career-path-gap-reason"
+                        className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-amber-900 [overflow-wrap:anywhere] dark:text-amber-200"
+                      >
+                        {gap.reason}
+                      </p>
+                      <div data-qa="career-path-gap-actions" className="mt-4 flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => openLearningPlanForGap(gap, targetRole)}
                           data-qa="career-path-build-learning-plan"
-                          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-950 dark:text-violet-200 dark:hover:bg-violet-950/30"
+                          className="inline-flex min-h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-center text-xs font-semibold leading-snug text-violet-800 transition hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-950 dark:text-violet-200 dark:hover:bg-violet-950/30"
                         >
                           <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
                           {t('tool_career_path_learning_plan_button')}
@@ -497,7 +544,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                           onClick={() => handleGenerateProject(gap.skill)}
                           disabled={generatingProjectForSkill === gap.skill}
                           data-qa="career-path-generate-project"
-                          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-800 dark:bg-slate-950 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                          className="inline-flex min-h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-center text-xs font-semibold leading-snug text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-800 dark:bg-slate-950 dark:text-amber-200 dark:hover:bg-amber-950/30"
                         >
                           {generatingProjectForSkill === gap.skill ? (
                             <>
@@ -516,7 +563,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                 <EmptyResultBlock
                   icon={CheckCircle2}
                   title={t('tool_career_path_skill_gaps')}
-                  description="No critical gaps were returned for this role. Use the roadmap below as your operating plan."
+                  description={t('tool_career_path_skill_gaps_empty_desc')}
                 />
               </div>
             )}
@@ -541,7 +588,7 @@ const CareerPathPlanner: React.FC<CareerPathPlannerProps> = ({ resumeText, marke
                 <EmptyResultBlock
                   icon={Briefcase}
                   title={t('tool_career_path_bridge_roles')}
-                  description="No bridge role was returned. Start from the first roadmap phase and re-run with a more specific target role if needed."
+                  description={t('tool_career_path_bridge_roles_empty_desc')}
                 />
               </div>
             )}

@@ -112,6 +112,7 @@ function formatTranslation(template: string, values: Record<string, string | num
 }
 
 function hasApplicantAnalysis(applicant: Applicant): boolean {
+    if (applicant.analysis_status === 'complete') return true;
     return Boolean(
         applicant.summary ||
         applicant.strengths.length > 0 ||
@@ -1958,6 +1959,7 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
         if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
             window.requestAnimationFrame(() => {
                 detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                detailRef.current?.focus({ preventScroll: true });
             });
         }
     }, []);
@@ -2471,14 +2473,16 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
 	                                                        {formatTranslation(t('applicant_funnel_applied_on'), { date: formatDate(applicant.application_date) })}
 	                                                    </p>
 	                                                </div>
-	                                                <div className={`shrink-0 text-lg font-bold tabular-nums ${getScoreTone(score)}`}>{score}%</div>
+	                                                <div className={`shrink-0 text-lg font-bold tabular-nums ${analyzed ? getScoreTone(score) : 'text-gray-400'}`}>
+	                                                    {analyzed ? `${score}%` : '—'}
+	                                                </div>
 	                                            </div>
 	                                            <div className="mt-3 flex flex-wrap items-center gap-2">
 	                                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
 	                                                    {getStatusLabel(applicant.status)}
 	                                                </span>
 	                                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-	                                                    {t('applicant_funnel_match_score')}: {score}%
+	                                                    {t('applicant_funnel_match_score')}: {analyzed ? `${score}%` : '—'}
 	                                                </span>
 	                                                {!analyzed && (
 	                                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
@@ -2502,7 +2506,10 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                 <section
                     ref={detailRef}
                     className="min-h-[520px] scroll-mt-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2 lg:h-[72vh] lg:overflow-y-auto"
-                    aria-live="polite"
+                    aria-label={selectedApplicant
+                        ? `${selectedApplicant.candidate_name || t('applicant_funnel_unnamed_candidate')} application details`
+                        : t('applicant_funnel_select_prompt')}
+                    tabIndex={-1}
                 >
                     <RecoverableSectionBoundary
                         resetKey={`${selectedApplicant?.id ?? 'none'}:${selectedApplicant?.status ?? ''}`}
@@ -2537,8 +2544,8 @@ const ApplicantFunnel: React.FC<ApplicantFunnelProps> = ({ job: rawJob, employer
                                     <div className="flex flex-col items-stretch gap-2 sm:items-end">
                                         <div className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-left shadow-sm dark:border-blue-900/60 dark:bg-gray-800 sm:text-right">
                                             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{t('applicant_funnel_match_score')}</p>
-                                            <p className={`mt-1 text-3xl font-bold tabular-nums ${getScoreTone(selectedApplicant.compatibility_score ?? 0)}`}>
-                                                {selectedApplicant.compatibility_score ?? 0}%
+                                            <p className={`mt-1 text-3xl font-bold tabular-nums ${hasApplicantAnalysis(selectedApplicant) ? getScoreTone(selectedApplicant.compatibility_score ?? 0) : 'text-gray-400'}`}>
+                                                {hasApplicantAnalysis(selectedApplicant) ? `${selectedApplicant.compatibility_score ?? 0}%` : '—'}
                                             </p>
                                         </div>
                                         <button

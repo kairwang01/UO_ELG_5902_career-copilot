@@ -29,7 +29,9 @@ import { resolveProvider } from "../llm/models";
 import { ensurePlatformCaches } from "../config/env";
 import { TOOL_REGISTRY } from "../llm/toolRegistry";
 import { buildCandidateMatchContext, normalizeTalentProfile, talentProfileToMatchText } from "../utils/talentProfile";
+import { mapSettledWithConcurrency } from "../utils/asyncPool";
 import { getWeb3ConfigImpl } from "./web3Config";
+import { validateAgainstSchema } from "../llm/schemaValidation";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -39,6 +41,8 @@ const db = admin.firestore();
 const MAX_JD_CHARS = 20_000;
 /** Hard per-search cap — each matched candidate is one LLM call. */
 const MATCH_CANDIDATE_CAP = 8;
+const MATCH_CONCURRENCY = 3;
+const MATCH_TIMEOUT_MS = 12_000;
 const VERIFIED_LIST_CAP = 10;
 const CANDIDATE_SCAN_LIMIT = 60;
 const MIN_CONTEXT_CHARS = 80;
@@ -171,18 +175,24 @@ export async function discoverTalentImpl(uid: string, data: Record<string, unkno
   const provider = await resolveProvider(uid, undefined, "discoverTalent");
 
   const pool = withContext.slice(0, MATCH_CANDIDATE_CAP);
-  const settled = await Promise.allSettled(
-    pool.map(async (c) => {
+  const settled = await mapSettledWithConcurrency(
+    pool,
+    MATCH_CONCURRENCY,
+    async (c) => {
       const llmRequest = spec.build({ resumeText: c.candidate_text, jobDescription });
+      llmRequest.timeoutMs = MATCH_TIMEOUT_MS;
+      llmRequest.maxOutputTokens = Math.min(llmRequest.maxOutputTokens ?? 1_200, 1_200);
+      llmRequest.thinkingLevel = "low";
       const result = await provider.generate(llmRequest);
       const parsed = (result.raw !== undefined ? result.raw : tryParseJson(result.text)) as
         | Record<string, unknown>
         | undefined;
-      if (!parsed || typeof parsed.score !== "number") {
+      if (!parsed || !llmRequest.responseSchema ||
+          validateAgainstSchema(parsed, llmRequest.responseSchema).length > 0) {
         throw new Error(`unparseable match result for candidate ${c.id}`);
       }
       return toSafe(c, parsed as Parameters<typeof toSafe>[1]);
-    }),
+    },
   );
 
   const candidates = settled
@@ -195,7 +205,13 @@ export async function discoverTalentImpl(uid: string, data: Record<string, unkno
     console.warn(`discoverTalent: ${failures}/${settled.length} candidate matches failed`);
   }
 
-  return { candidates, scanned: pool.length, eligible: withContext.length };
+  return {
+    candidates,
+    scanned: pool.length,
+    eligible: withContext.length,
+    failures,
+    analysisStatus: failures > 0 ? "partial" : "complete",
+  };
 }
 
 export const discoverTalentFunction = onCall({ invoker: "public" }, async (request) => {

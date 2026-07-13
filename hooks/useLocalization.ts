@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getTranslations } from '../localization';
+import { normalizeUiLanguage, resolveUiLanguagePreference } from '../lib/uiLanguage';
 
 type Translations = { [key: string]: string };
 
@@ -16,12 +17,12 @@ const readStoredLanguage = () => {
 };
 
 const getBrowserLanguage = () => {
-    if (typeof navigator === 'undefined') return 'en';
-    return navigator.language.split('-')[0] || 'en';
+    if (typeof navigator === 'undefined') return null;
+    return navigator.language || null;
 };
 
 const resolveInitialLanguage = (initialLanguage?: string) =>
-    initialLanguage || readStoredLanguage() || getBrowserLanguage() || 'en';
+    normalizeUiLanguage(initialLanguage) || resolveUiLanguagePreference(readStoredLanguage(), getBrowserLanguage());
 
 export const useLocalization = (initialLanguage?: string) => {
     const [language, setLanguage] = useState(() => resolveInitialLanguage(initialLanguage));
@@ -33,15 +34,16 @@ export const useLocalization = (initialLanguage?: string) => {
     const [isLoaded, setIsLoaded] = useState(false);
 
     const changeLanguage = useCallback((newLang: string) => {
-        if (!newLang) return;
-        setLanguage((current) => (current === newLang ? current : newLang));
+        const normalizedLanguage = normalizeUiLanguage(newLang);
+        if (!normalizedLanguage) return;
+        setLanguage((current) => (current === normalizedLanguage ? current : normalizedLanguage));
         try {
-            localStorage.setItem(LANGUAGE_STORAGE_KEY, newLang);
+            localStorage.setItem(LANGUAGE_STORAGE_KEY, normalizedLanguage);
         } catch {
             /* Preference persistence is non-critical; keep the in-memory switch. */
         }
         if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent(LANGUAGE_CHANGE_EVENT, { detail: { language: newLang } }));
+            window.dispatchEvent(new CustomEvent(LANGUAGE_CHANGE_EVENT, { detail: { language: normalizedLanguage } }));
         }
     }, []);
 

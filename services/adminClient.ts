@@ -241,7 +241,8 @@ export interface ModelEntry {
   api_key?: string;
   /**
    * Multi-key pool. Masked from server on list responses.
-   * On upsert: existing saved keys are not echoed back; new entries are appended server-side.
+   * On upsert: existing saved keys are not echoed back; supplied entries are
+   * appended and de-duplicated server-side.
    */
   api_keys?: string[];
   api_key_hash?: string;
@@ -493,8 +494,25 @@ export const adminSetDefaultModel = (id: string) =>
     'adminSetDefaultModel',
   )({ id }).then((r) => r.data);
 
-export const adminUpsertModel = (model: ModelEntry) =>
-  call<{ model: ModelEntry }, { models: ModelEntry[] }>('adminUpsertModel')({ model }).then(
+export type ModelClearableField =
+  | 'builtin'
+  | 'base_url'
+  | 'api_key'
+  | 'api_keys'
+  | 'fallbackChain'
+  | 'priority'
+  | 'supportsImageInput';
+
+export interface ModelUpsertMutation {
+  /** Optional stored fields to remove. Omission always means preserve on update. */
+  clearFields?: ModelClearableField[];
+}
+
+export const adminUpsertModel = (model: ModelEntry, mutation: ModelUpsertMutation = {}) =>
+  call<{ model: ModelEntry; clearFields?: ModelClearableField[] }, { models: ModelEntry[] }>('adminUpsertModel')({
+    model,
+    ...(mutation.clearFields?.length ? { clearFields: mutation.clearFields } : {}),
+  }).then(
     (r) => r.data,
   );
 

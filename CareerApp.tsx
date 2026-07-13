@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowRight, BarChart3, Menu, MessageSquareText } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AnalysisResult, ResumeImage, UserProfile } from './types';
-import { analyzeResume, setApiStatusUpdater, setAiModel, setErrorTranslator } from './services/aiClient';
+import { analyzeResume, clearApiStatusIncident, setApiStatusUpdater, setAiModel, setErrorTranslator } from './services/aiClient';
 import { DEFAULT_MARKET } from './config';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from './lib/firebaseClient';
@@ -266,8 +266,9 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   // Admin authority is handled by the dedicated /admin route. It must not
   // override the user's product role here: admin-candidates still need the
   // candidate workspace, and admin-employers still need the hiring portal.
+  const candidateMobileNavRef = useRef<HTMLDivElement | null>(null);
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
-  useModalBehavior(closeMobileNav, isMobileNavOpen);
+  useModalBehavior(closeMobileNav, isMobileNavOpen, true, candidateMobileNavRef);
 
   const confirmShowcaseLeave = useCallback(() => {
     if (dashboardView !== 'portfolio' || !showcaseHasUnsavedPortfolio) return true;
@@ -313,13 +314,22 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
   }, [web3Enabled, dashboardView, setWorkspaceView]);
 
   useEffect(() => {
-    setApiStatusUpdater((status, errorMsg) => {
+    const unregister = setApiStatusUpdater((status, errorMsg) => {
         setApiStatus(status);
-        if (errorMsg) {
-            setLastError(errorMsg);
-        }
+        setLastError(errorMsg ?? null);
     });
+    const handleOnline = () => clearApiStatusIncident();
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      unregister();
+    };
   }, [setApiStatus, setLastError]);
+
+  // A prior account's transient AI failure must not leak into a new session.
+  useEffect(() => {
+    clearApiStatusIncident();
+  }, [session?.user?.id]);
 
   // Localize callable-error copy: resolve the key, but fall back to the baked-in
   // English when a locale is missing the key (t returns the key itself on a miss).
@@ -917,22 +927,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
       // into — or write the profile of — a session that's no longer current.
       if (currentUserIdRef.current !== uidAtStart) return;
 
-      if (session?.user) {
-        try {
-            const eventId = await logToolUsage(session.user.id, 'resume-analysis', { market });
-            await logResumeAnalysis(session.user.id, eventId, {
-              score: result.score,
-              market_name: market,
-              summary: result.summary,
-              strengths: result.strengths,
-              improvements: result.improvements,
-              keywords: result.keywords,
-            });
-        } catch {
-            addToast(t('analysis_history_update_failed'), 'info');
-        }
-      }
-      
       setAnalysisResult(result);
       // Track the analysis language and fold it into the per-language version
       // library (persisted for paid tiers), so switching UI language can offer a
@@ -946,26 +940,60 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         }
         return nextLib;
       });
+      let extractedResumeText = '';
       if (result.extractedText) {
-          const extractedResumeText = resumeTextForProfile(result.extractedText);
-          setResumeText(extractedResumeText);
-          if (session?.user && extractedResumeText) {
-            try {
-              await data.profiles.update(session.user.id, {
-                resume_text: extractedResumeText,
-                updated_at: new Date().toISOString(),
-              });
-            } catch {
-              addToast(t('dashboard_resume_save_warning'), 'info');
-            }
-          }
+        extractedResumeText = resumeTextForProfile(result.extractedText);
+        setResumeText(extractedResumeText);
       }
       setIsUpdatingResume(false);
 
-      // Resume analysis is metered server-side (meterToolRun). Re-fetch the
-      // profile so the credits badge updates to the post-charge balance right
-      // away instead of staying stale until the next load.
-      if (currentUserIdRef.current === uidAtStart) void getProfile();
+      // History and profile persistence are non-critical follow-up work. Launch
+      // them without awaiting so the completed model result can render as soon as
+      // this function reaches finally and clears the loader.
+      if (uidAtStart) {
+        void (async () => {
+          try {
+            const eventId = await logToolUsage(uidAtStart, 'resume-analysis', { market });
+            await logResumeAnalysis(uidAtStart, eventId, {
+              score: result.score,
+              market_name: market,
+              summary: result.summary,
+              strengths: result.strengths,
+              improvements: result.improvements,
+              keywords: result.keywords,
+            });
+          } catch {
+            // Do not surface a stale toast after an account switch.
+            if (currentUserIdRef.current === uidAtStart) {
+              addToast(t('analysis_history_update_failed'), 'info');
+            }
+          }
+        })();
+
+        void (async () => {
+          if (extractedResumeText) {
+            try {
+              const { error: updateError } = await data.profiles.update(uidAtStart, {
+                resume_text: extractedResumeText,
+                updated_at: new Date().toISOString(),
+              });
+              if (updateError) throw new Error(updateError.message);
+            } catch {
+              // The write targets the original user; only show feedback if that
+              // account is still active in this tab.
+              if (currentUserIdRef.current === uidAtStart) {
+                addToast(t('dashboard_resume_save_warning'), 'info');
+              }
+            }
+          }
+
+          // Resume analysis is metered server-side. Preserve ordering with the
+          // extracted-resume save, then refresh credits without blocking results.
+          if (currentUserIdRef.current === uidAtStart) {
+            await getProfile();
+          }
+        })();
+      }
 
     } catch (err) {
       if (err instanceof Error) {
@@ -1442,10 +1470,12 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
         {/* Mobile navigation drawer — the sidebar is hidden below lg */}
         {isMobileNavOpen && (
           <div
+            ref={candidateMobileNavRef}
             className="fixed inset-0 z-50 lg:hidden"
             role="dialog"
             aria-modal="true"
             aria-label={t('portal_open_navigation')}
+            tabIndex={-1}
             data-qa="candidate-mobile-nav-drawer"
           >
             <div
@@ -1454,11 +1484,11 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               aria-hidden="true"
             />
             <div className="absolute inset-y-0 left-0 animate-slide-in-left">
-              <Sidebar {...sidebarProps} mobile />
+              <Sidebar {...sidebarProps} mobile onCloseMobile={closeMobileNav} />
             </div>
           </div>
         )}
-        <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        <div className="flex-1 flex h-dvh flex-col overflow-hidden">
           <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-8 shrink-0">
             <button
               type="button"
@@ -1469,7 +1499,6 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
             >
               <Menu className="h-5 w-5" aria-hidden="true" />
             </button>
-            <ApiStatusBanner />
             {/* Profile access is consolidated into the sidebar "My Profile" block
                 (bottom-left) — no duplicate top-right account menu. */}
             <div className="flex items-center gap-3 ml-auto">
@@ -1478,6 +1507,7 @@ const AppContent: React.FC<AppContentProps> = ({ entry = 'workspace' }) => {
               </span>
             </div>
           </header>
+          <ApiStatusBanner />
           <main
             className="flex-1 overflow-y-auto bg-slate-50 px-6 pb-[calc(1.5rem+var(--cookie-consent-bottom-space,0px))] pt-6 transition-[padding-bottom] duration-200 dark:bg-slate-950 md:px-10 md:pb-10 md:pt-10"
             data-qa-workspace-view={dashboardView}

@@ -10,7 +10,7 @@ import { useToolResults } from '../../contexts/ToolResultsContext';
 import { SUPPORTED_MARKETS } from '../../config';
 import ResumePreview from '../ResumePreview';
 import { assessFormattedResume, cleanResumeDisplay, getResumeMarketStyle } from '../../lib/resumePreview';
-import { getMarketLocalLanguage, marketDefaultLanguage, resolveOutputLanguageName, type OutputLanguageChoice } from '../../lib/resumeLanguage';
+import { getMarketForLocalLanguage, getMarketLocalLanguage, marketDefaultLanguage, resolveOutputLanguageName, type OutputLanguageChoice } from '../../lib/resumeLanguage';
 import { ResumeFormatterDownloadGate } from './ResumeFormatterActions';
 import { buildLinkedInContextFromFormattedResume } from '../../lib/toolPrefill';
 import { LanguageSyncBanner } from '../LanguageSyncBanner';
@@ -66,12 +66,13 @@ const resumeContentLangCode = (
 
 // Reverse lookup: the market whose local language equals a UI language code
 // (data-driven from resumeLanguage.ts so it stays in sync with the markets).
-const marketForLocalLangCode = (code: string): string | null => {
-  for (const m of SUPPORTED_MARKETS) {
-    const local = getMarketLocalLanguage(m);
-    if (local && RESUME_LANG_NAME_TO_CODE[local.name] === code) return m;
-  }
-  return null;
+// Keeps `preferredMarket` when it already speaks the language, and otherwise
+// prefers markets where the language is the professional norm over
+// bilingual-but-English-first ones (e.g. 'fr' targets France, not Canada).
+const marketForLocalLangCode = (code: string, preferredMarket?: string): string | null => {
+  const languageName = Object.entries(RESUME_LANG_NAME_TO_CODE)
+    .find(([, languageCode]) => languageCode === code)?.[0];
+  return languageName ? getMarketForLocalLanguage(languageName, preferredMarket) : null;
 };
 
 // (b) sample cover letter — does NOT touch resumeText
@@ -294,7 +295,6 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
       const apiResult = await convertResumeFormat(resumeText, runMarket, options.coverLetter, languageName);
       if (!alive()) return;
       const formattedText = cleanResumeDisplay(apiResult.formattedText);
-      const validation = assessFormattedResume(formattedText, { outputLanguage: languageName });
       const normalizedResult = {
         ...apiResult,
         formattedText,
@@ -303,9 +303,9 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
       };
       setResult(normalizedResult);
       setFromSaved(false);
-      if (validation.status !== 'needs_regen') {
-        persist(upsertResumeFormatterVersion(saved?.result, normalizedResult));
-      }
+      // Always persist: the run was charged, so even a draft the quality gate
+      // flags must not be lost (the gate still shows its regenerate warning).
+      persist(upsertResumeFormatterVersion(saved?.result, normalizedResult));
     } catch (err) {
       if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error'));
     } finally {
@@ -576,7 +576,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
         void runTool({ coverLetter: currentCoverLetter, market: generatedMarket, outputLanguage: 'en' });
         return;
       }
-      const localMarket = marketForLocalLangCode(lang);
+      const localMarket = marketForLocalLangCode(lang, generatedMarket);
       if (localMarket) void runTool({ coverLetter: currentCoverLetter, market: localMarket, outputLanguage: 'local' });
     };
     return (
@@ -615,7 +615,7 @@ const ResumeFormatter: React.FC<ResumeFormatterProps> = ({ resumeText, initialIn
               const nextVersion = getPreferredResumeFormatterVersion(nextLibrary, targetMarket, outputLanguage);
               if (nextVersion) {
                 setTargetMarket(nextVersion.targetMarket || targetMarket);
-                setOutputLanguage(nextVersion.outputLanguage || (getMarketLocalLanguage(nextVersion.targetMarket || targetMarket) ? 'local' : 'en'));
+                setOutputLanguage(nextVersion.outputLanguage || marketDefaultLanguage(nextVersion.targetMarket || targetMarket));
                 setResult(nextVersion);
                 setFromSaved(true);
               } else {

@@ -18,6 +18,7 @@ import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
 import { candidateAnalysisLanguageProtocol } from "../llm/languageProtocol";
 import { ensurePlatformCaches } from "../config/env";
+import { requireStructuredResult } from "../llm/structuredResult";
 
 // ---------------------------------------------------------------------------
 // Request / Response types  (mirror types.ts in repo root)
@@ -67,7 +68,7 @@ interface CareerPathResult {
 // Schema
 // ---------------------------------------------------------------------------
 
-const CAREER_PATH_SCHEMA = {
+export const CAREER_PATH_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     summary: { type: Type.STRING },
@@ -81,6 +82,8 @@ const CAREER_PATH_SCHEMA = {
         },
         required: ["skill", "reason"],
       },
+      minItems: "3",
+      maxItems: "6",
     },
     roadmap: {
       type: Type.ARRAY,
@@ -95,7 +98,10 @@ const CAREER_PATH_SCHEMA = {
             items: {
               type: Type.OBJECT,
               properties: {
-                type:        { type: Type.STRING },
+                type: {
+                  type: Type.STRING,
+                  enum: ["course", "certification", "project", "networking", "self-study"],
+                },
                 description: { type: Type.STRING },
                 resources:   { type: Type.ARRAY, items: { type: Type.STRING } },
               },
@@ -106,6 +112,8 @@ const CAREER_PATH_SCHEMA = {
         },
         required: ["phaseTitle", "estimatedDuration", "goal", "actionableSteps", "milestones"],
       },
+      minItems: "2",
+      maxItems: "4",
     },
     bridgeRoles: {
       type: Type.ARRAY,
@@ -117,6 +125,7 @@ const CAREER_PATH_SCHEMA = {
         },
         required: ["title", "reason"],
       },
+      maxItems: "3",
     },
   },
   required: ["summary", "overallSkillGaps", "roadmap", "bridgeRoles"],
@@ -140,13 +149,23 @@ export const generateCareerPathFunction = onCall({ invoker: "public", timeoutSec
   if (!data.marketName?.trim()) {
     throw new HttpsError("invalid-argument", "marketName is required.");
   }
+  if (data.resumeText.length > 100_000 || data.desiredRole.length > 300 || data.marketName.length > 120) {
+    throw new HttpsError("invalid-argument", "Career path input is too long.");
+  }
 
   const metered = await meterToolRun(uid, "career-path", TOOL_CREDIT_COSTS["career-path"], {
     requestId: data.requestId,
   });
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
-  await ensurePlatformCaches();
+  try {
+    await ensurePlatformCaches();
+  } catch (err) {
+    await refundCredits(uid, metered.creditCost);
+    throw err instanceof HttpsError
+      ? err
+      : new HttpsError("unavailable", "AI configuration is temporarily unavailable.");
+  }
 
   const prompt = buildPrompt("handler_career_path", {
     marketName: data.marketName,
@@ -161,13 +180,27 @@ export const generateCareerPathFunction = onCall({ invoker: "public", timeoutSec
   try {
     // resolveProvider builds the provider (and reads the API key) — keep it inside
     // the try so a missing-key/build failure also triggers the refund below.
-    const provider = await resolveProvider(uid, (request.data as { model?: string })?.model, "generateCareerPath");
+    const provider = await resolveProvider(
+      uid,
+      (request.data as { model?: string })?.model,
+      "generateCareerPath",
+      { needsGoogleSearch: true }
+    );
+    const generationStartedAt = Date.now();
     const result = await provider.generate({
       prompt,
       responseSchema: CAREER_PATH_SCHEMA,
+      useGoogleSearch: true,
+      maxOutputTokens: 4_096,
+      thinkingLevel: "low",
     });
 
-    return result.raw as CareerPathResult;
+    return requireStructuredResult<CareerPathResult>(
+      "generateCareerPath",
+      result,
+      CAREER_PATH_SCHEMA,
+      generationStartedAt
+    );
   } catch (err) {
     await refundCredits(uid, metered.creditCost);
     // A plain Error reaches the client as a bare "INTERNAL" with no detail. Wrap

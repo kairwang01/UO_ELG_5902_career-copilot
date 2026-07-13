@@ -4,7 +4,6 @@ import { generateCoverLetter } from '../../services/aiClient';
 import type { CoverLetter } from '../../types';
 import StagedLoader from '../StagedLoader';
 import { DownloadButtons, SavedResultBar, ToolError } from './ToolUtils';
-import { useApiStatus } from '../../contexts/ApiStatusContext';
 import { useToolResults } from '../../contexts/ToolResultsContext';
 import { useCancellableLoading } from '../../hooks/useCancellableLoading';
 import { useRecentApplications, type RecentApplication } from '../../hooks/useRecentApplications';
@@ -136,7 +135,9 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   const [langSyncDismissed, setLangSyncDismissed] = useState<string | null>(null);
   const [jobDescription, setJobDescription] = useState(initialInput);
   const [editableResult, setEditableResult] = useState('');
-  const { apiStatus } = useApiStatus();
+  const [browserOffline, setBrowserOffline] = useState(
+    () => typeof navigator !== 'undefined' && navigator.onLine === false,
+  );
   const { applications } = useRecentApplications(session);
   const lastAutoRunKey = useRef<string | null>(null);
   const autoRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -164,6 +165,17 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     draftContext: isChineseUi ? '草稿上下文' : 'Draft context',
     roleNotDetected: isChineseUi ? '未识别到岗位' : 'Role not detected',
   };
+
+  useEffect(() => {
+    const handleOnline = () => setBrowserOffline(false);
+    const handleOffline = () => setBrowserOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (!saved || result) return;
@@ -197,7 +209,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
   useEffect(() => {
     setJobDescription(initialInput);
-    if (!initialInput || !resumeText?.trim() || apiStatus !== 'online') {
+    if (!initialInput || !resumeText?.trim() || browserOffline) {
       return;
     }
     const key = `${initialInput}|${resumeText.length}`;
@@ -216,7 +228,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
         autoRunTimerRef.current = null;
       }
     };
-  }, [initialInput, resumeText, apiStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialInput, resumeText, browserOffline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetResult = () => {
     setResult(null);
@@ -234,7 +246,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
 
   const runTool = async (input: string) => {
     const nextInput = input.trim();
-    if (apiStatus !== 'online') {
+    if (browserOffline) {
       setError(t('tool_cover_letter_ai_unavailable_error'));
       return;
     }
@@ -393,7 +405,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
               required
             />
 
-            {error && apiStatus === 'online' && (
+            {error && (
               <div className="mt-4">
                 <ToolError message={error} onRetry={() => void runTool(jobDescription)} retryLabel={t('tool_cover_letter_retry')} />
               </div>
@@ -452,7 +464,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
   );
 
   const renderResult = () => {
-    if (!result) return apiStatus !== 'online' ? renderFallback() : renderInput();
+    if (!result) return browserOffline ? renderFallback() : renderInput();
     const jobTitle = extractJobTitle(result.jobDescription || jobDescription);
     const company = extractCompany(result.jobDescription || jobDescription);
     const letterLength = describeTextLength(editableResult, isChineseUi);
@@ -618,7 +630,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ resumeText,
     );
   }
 
-  return result ? renderResult() : (apiStatus !== 'online' ? renderFallback() : renderInput());
+  return result ? renderResult() : (browserOffline ? renderFallback() : renderInput());
 };
 
 export default CoverLetterGenerator;

@@ -18,7 +18,8 @@ import {
   Settings,
   LogOut,
   Sun,
-  Moon
+  Moon,
+  X,
 } from 'lucide-react';
 import type { UserProfile } from '../types';
 import { ALL_TOOLS_CONFIG } from '../constants/tools';
@@ -45,6 +46,7 @@ interface SidebarProps {
   onHome?: () => void;
   /** Rendered inside the mobile drawer overlay (always visible, fills the drawer height). */
   mobile?: boolean;
+  onCloseMobile?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -62,6 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLanguageChange,
   onHome,
   mobile = false,
+  onCloseMobile,
 }) => {
   // Default collapsed: the full tool list is long, so the sidebar leads with a single
   // "Browse all tools" entry (the dedicated gallery) and keeps the quick-list one tap away.
@@ -109,9 +112,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     <aside
       data-qa={mobile ? 'candidate-mobile-sidebar' : 'candidate-sidebar'}
       className={`${
-        mobile ? 'flex w-72 max-w-[85vw] h-full' : 'hidden lg:flex w-64 h-screen sticky top-0'
-      } flex-shrink-0 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex-col`}
+        mobile ? 'flex w-72 max-w-[85vw] h-full' : 'hidden lg:flex w-64 h-dvh sticky top-0'
+      } relative flex-shrink-0 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex-col`}
     >
+      {mobile && onCloseMobile && (
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="absolute right-3 top-3 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:text-slate-300 dark:hover:bg-slate-800"
+          aria-label="Close navigation"
+        >
+          <X className="h-5 w-5" aria-hidden="true" />
+        </button>
+      )}
       {/* Brand — a single product name; clicking it returns to the public homepage. */}
       <div className="p-6 border-b border-gray-100 dark:border-slate-800">
         <button
@@ -129,7 +142,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         {/* Workspace Section */}
         <div className="space-y-1">
-            <h3 className="px-4 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-2">{t('ws_section_workspace')}</h3>
+            <h3 className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-600 dark:text-slate-400">{t('ws_section_workspace')}</h3>
             {workspaceItems.map((item) => {
                 const isActive = activeView === item.id;
                 return (
@@ -158,7 +171,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* AI Toolkit Section */}
         <div className="space-y-1">
             <div className="flex items-center justify-between px-4 mb-2">
-                <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">{t('ws_section_tools')} <span className="text-gray-300 dark:text-slate-600">· {ALL_TOOLS_CONFIG.length}</span></h3>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-600 dark:text-slate-400">{t('ws_section_tools')} <span className="text-gray-500 dark:text-slate-400">· {ALL_TOOLS_CONFIG.length}</span></h3>
                 <button 
                     onClick={() => setIsToolkitExpanded(!isToolkitExpanded)}
                     aria-expanded={isToolkitExpanded}
@@ -228,7 +241,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <CreditCard className="h-4 w-4" />
             </div>
             <div>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase">{t('ws_credits_label')}</p>
+                <p className="text-[10px] font-bold uppercase text-gray-600 dark:text-slate-400">{t('ws_credits_label')}</p>
                 <p className="text-xs font-bold text-gray-900 dark:text-white tracking-tight">
                     {credits.toLocaleString()} CR
                 </p>

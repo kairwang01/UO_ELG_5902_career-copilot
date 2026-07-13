@@ -61,10 +61,10 @@ export function isAvailabilityError(err: unknown): boolean {
   const e = err as ErrorShape;
   const msg = (e?.message ?? "").toLowerCase();
   // HTTP status codes
-  if (e?.status === 401 || e?.status === 403 || e?.status === 429) return true;
-  if (e?.code === 401 || e?.code === 403 || e?.code === 429) return true;
+  if ([401, 402, 403, 408, 425, 429, 500, 502, 503, 504].includes(Number(e?.status))) return true;
+  if ([401, 402, 403, 408, 425, 429, 500, 502, 503, 504].includes(Number(e?.code))) return true;
   // Detect status codes embedded in message strings (e.g. "LLM provider error 429: ...")
-  if (/llm provider error (401|403|429)/.test(msg)) return true;
+  if (/llm provider error (401|402|403|408|425|429|500|502|503|504)/.test(msg)) return true;
   // Modality mismatch from gateway routers (e.g. OpenRouter-style
   // "No endpoints found that support image input") — this model cannot serve
   // THIS request; rotating to a multimodal fallback can.

@@ -25,7 +25,7 @@ describe('image-input modality routing', () => {
     expect(modelSupportsImageInput(entry({ supportsImageInput: undefined }))).toBe(false);
   });
 
-  it('validateEntry persists supportsImageInput only when explicitly true', () => {
+  it('validateEntry persists explicit supportsImageInput booleans', () => {
     const base = {
       id: 'gw',
       label: 'Gateway',
@@ -40,6 +40,9 @@ describe('image-input modality routing', () => {
 
     const unmarked = _testRoutingValidation.validateEntry(base, true);
     expect(unmarked.supportsImageInput).toBeUndefined();
+
+    const disabled = _testRoutingValidation.validateEntry({ ...base, supportsImageInput: false }, true);
+    expect(disabled.supportsImageInput).toBe(false);
 
     const truthyButNotTrue = _testRoutingValidation.validateEntry({ ...base, supportsImageInput: 'yes' }, true);
     expect(truthyButNotTrue.supportsImageInput).toBeUndefined();

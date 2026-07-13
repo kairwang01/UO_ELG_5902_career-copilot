@@ -27,14 +27,18 @@ const generationSteps = [
   'Preparing the sample report',
 ];
 
-const ReportGenerationState: React.FC<{ activeStep: number; onSkip: () => void }> = ({ activeStep, onSkip }) => {
+const ReportGenerationState: React.FC<{
+  activeStep: number;
+  onSkip: () => void;
+  t: (key: string) => string;
+}> = ({ activeStep, onSkip, t }) => {
   const progress = Math.min(100, Math.round(((activeStep + 1) / generationSteps.length) * 100));
 
   return (
     <div className="rounded-[calc(var(--site-radius)*2)] border border-[var(--site-border)] bg-white p-5 sm:p-6 shadow-sm">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <SectionLabel>Generating sample report</SectionLabel>
+          <SectionLabel>{t('site_sample_generating_label')}</SectionLabel>
           <div className="flex items-center gap-3">
             <div className="h-5 w-5 shrink-0 rounded-full border-2 border-[var(--site-border)] border-t-[var(--site-action)] animate-spin" />
             <h2 className="text-xl sm:text-2xl font-bold tracking-[-0.035em] text-[var(--site-text)]">
@@ -173,7 +177,7 @@ export const SampleReportPage: React.FC = () => {
               <p className="mt-4 max-w-2xl text-base sm:text-lg leading-8 text-[var(--site-text-muted)]">{intro}</p>
             </div>
             <div className="rounded-[calc(var(--site-radius)*2)] border border-[var(--site-border)] bg-white p-5 shadow-sm">
-              <SectionLabel>Submission</SectionLabel>
+              <SectionLabel>{t('site_sample_submission_label')}</SectionLabel>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-xs text-[var(--site-text-muted)]">Candidate</p>
@@ -196,12 +200,12 @@ export const SampleReportPage: React.FC = () => {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           {!reportReady ? (
-            <ReportGenerationState activeStep={activeStep} onSkip={() => setReportReady(true)} />
+            <ReportGenerationState activeStep={activeStep} onSkip={() => setReportReady(true)} t={t} />
           ) : (
           <>
           <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] animate-fade-in">
             <div className="rounded-[calc(var(--site-radius)*2)] border border-[var(--site-border)] bg-white p-5 sm:p-6 shadow-sm">
-              <SectionLabel>Submitted resume excerpt</SectionLabel>
+              <SectionLabel>{t('site_sample_resume_excerpt_label')}</SectionLabel>
               <div className="space-y-4 text-sm leading-7 text-[var(--site-text-muted)]">
                 <div>
                   <p className="font-semibold text-[var(--site-text)]">Software Developer</p>

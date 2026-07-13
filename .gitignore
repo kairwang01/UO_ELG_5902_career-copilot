@@ -15,6 +15,10 @@ node_modules
 # Build outputs
 dist
 dist-ssr
+dist.new
+dist.prev
+dist.release-*
+dist.rollback-*
 
 # Environment, Keys & Firebase
 *.local

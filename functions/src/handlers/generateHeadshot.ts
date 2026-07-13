@@ -14,19 +14,38 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { GoogleGenAI } from "@google/genai";
 import { requireAuth } from "../middleware/auth";
 import { recordObservedToolRun } from "../admin/usageLog";
+import { recordFreeToolRun } from "../credits/deductCredits";
 import { ensurePlatformCaches, getGeminiApiKey } from "../config/env";
 
 interface GenerateHeadshotRequest {
   imageBase64: string;
+  requestId?: string;
 }
 
 // ~6MB of base64 (≈4.5MB raw) upper bound to keep request size / cost sane.
 const MAX_IMAGE_BASE64_LEN = 8_000_000;
 
-export const generateHeadshotFunction = onCall({ invoker: "public" }, async (request) => {
+export function extractImageVariants(parts: unknown): Array<{ data: string; mimeType: string }> {
+  if (!Array.isArray(parts)) return [];
+  const images: Array<{ data: string; mimeType: string }> = [];
+  for (const part of parts) {
+    if (!part || typeof part !== "object" || (part as { thought?: unknown }).thought === true) continue;
+    const inlineData = (part as { inlineData?: { data?: unknown; mimeType?: unknown } }).inlineData;
+    if (typeof inlineData?.data !== "string" || !inlineData.data) continue;
+    images.push({
+      data: inlineData.data,
+      mimeType: typeof inlineData.mimeType === "string" && inlineData.mimeType
+        ? inlineData.mimeType
+        : "image/png",
+    });
+  }
+  return images;
+}
+
+export const generateHeadshotFunction = onCall({ invoker: "public", timeoutSeconds: 60 }, async (request) => {
   const uid = requireAuth(request);
 
-  const { imageBase64 } = (request.data ?? {}) as GenerateHeadshotRequest;
+  const { imageBase64, requestId } = (request.data ?? {}) as GenerateHeadshotRequest;
   if (!imageBase64 || typeof imageBase64 !== "string") {
     throw new HttpsError("invalid-argument", "imageBase64 is required.");
   }
@@ -36,6 +55,7 @@ export const generateHeadshotFunction = onCall({ invoker: "public" }, async (req
 
   // Observability only — uncharged tool, never capped (see recordObservedToolRun).
   void recordObservedToolRun(uid, "generate-headshot");
+  await recordFreeToolRun(uid, "generate-headshot", { requestId });
 
   // Warm the platform-config cache so the key getter reads the admin-configured
   // Firestore value (this handler reads the key directly, not via resolveProvider).
@@ -50,11 +70,14 @@ export const generateHeadshotFunction = onCall({ invoker: "public" }, async (req
           { inlineData: { data: imageBase64, mimeType: "image/jpeg" } },
           {
             text:
-              "Generate 3 variations of this image as a professional corporate headshot. " +
+              "Generate one polished professional corporate headshot from this image. " +
               "Maintain the person's identity. Provide a neutral, soft-focus background. " +
               "Ensure a professional and polished look.",
           },
         ],
+      },
+      config: {
+        httpOptions: { timeout: 45_000, retryOptions: { attempts: 1 } },
       },
     });
   } catch (err) {
@@ -89,10 +112,7 @@ export const generateHeadshotFunction = onCall({ invoker: "public" }, async (req
     );
   }
 
-  const images: string[] = [];
-  for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-    if (part.inlineData?.data) images.push(part.inlineData.data);
-  }
+  const images = extractImageVariants(response.candidates?.[0]?.content?.parts);
   if (images.length === 0) {
     throw new HttpsError("internal", "The AI did not return any images.");
   }

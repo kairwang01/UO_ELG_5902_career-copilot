@@ -165,6 +165,7 @@ describe('LLM routing pools', () => {
 
   it('builds demo speed and quality pools from current model labels', () => {
     const registry: ModelEntry[] = [
+      { ...model('gemini'), provider: 'gemini', label: 'Gemini (Google direct)' },
       { ...model('hunyuan'), label: 'Tencent Hunyuan 3' },
       { ...model('auto'), label: 'Auto · multi-model (legacy)' },
       { ...model('deepseek-flash'), label: 'Deepseek V4 Flash(Limited Testing)' },
@@ -174,9 +175,7 @@ describe('LLM routing pools', () => {
     const pools = defaultRoutingPoolsForRegistry(registry);
 
     expect(pools.find((pool) => pool.id === 'speed')?.members).toEqual([
-      { modelId: 'hunyuan', tier: 1, weight: 50, enabled: true },
-      { modelId: 'auto', tier: 1, weight: 30, enabled: true },
-      { modelId: 'deepseek-flash', tier: 1, weight: 20, enabled: true },
+      { modelId: 'gemini', tier: 1, weight: 100, enabled: true },
     ]);
     expect(pools.find((pool) => pool.id === 'quality')?.members).toEqual([
       { modelId: 'deepseek-pro', tier: 1, weight: 100, enabled: true },

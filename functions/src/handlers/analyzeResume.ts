@@ -25,6 +25,7 @@ import { TOOL_CREDIT_COSTS } from "../credits/schema";
 import { buildPrompt } from "../llm/prompts";
 import { candidateAnalysisLanguageProtocol } from "../llm/languageProtocol";
 import { ensurePlatformCaches } from "../config/env";
+import { requireStructuredResult } from "../llm/structuredResult";
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -70,9 +71,9 @@ interface AnalysisResult {
 export const ANALYSIS_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    score: { type: Type.NUMBER },
+    score: { type: Type.INTEGER, minimum: 0, maximum: 100 },
     summary: { type: Type.STRING },
-    strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+    strengths: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: "4", maxItems: "6" },
     improvements: {
       type: Type.ARRAY,
       items: {
@@ -83,11 +84,18 @@ export const ANALYSIS_SCHEMA = {
         },
         required: ["area", "suggestion"],
       },
+      minItems: "4",
+      maxItems: "6",
     },
-    keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+    keywords: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: "8", maxItems: "15" },
     extractedText: { type: Type.STRING },
   },
   required: ["score", "summary", "strengths", "improvements", "keywords"],
+};
+
+export const ANALYSIS_IMAGE_SCHEMA = {
+  ...ANALYSIS_SCHEMA,
+  required: [...ANALYSIS_SCHEMA.required, "extractedText"],
 };
 
 // ---------------------------------------------------------------------------
@@ -101,7 +109,7 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
   // Step 2: Validate input
   const data = request.data as AnalyzeResumeRequest;
 
-  if (!data.marketName) {
+  if (typeof data.marketName !== "string" || !data.marketName.trim() || data.marketName.length > 120) {
     throw new HttpsError("invalid-argument", "marketName is required.");
   }
 
@@ -128,13 +136,19 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
     if (imgs.length > MAX_IMAGES) {
       throw new HttpsError("invalid-argument", `Too many images (max ${MAX_IMAGES}).`);
     }
+    let totalImageChars = 0;
+    const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
     for (const img of imgs) {
       if (typeof img?.data !== "string" || img.data.length === 0 || img.data.length > MAX_IMAGE_BASE64) {
         throw new HttpsError("invalid-argument", "An image is missing or too large.");
       }
-      if (typeof img?.mimeType !== "string" || !img.mimeType.startsWith("image/")) {
+      totalImageChars += img.data.length;
+      if (typeof img?.mimeType !== "string" || !allowedMimeTypes.has(img.mimeType)) {
         throw new HttpsError("invalid-argument", "Unsupported image type.");
       }
+    }
+    if (totalImageChars > 20_000_000) {
+      throw new HttpsError("invalid-argument", "The combined resume images are too large.");
     }
   }
 
@@ -145,7 +159,12 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
   });
 
   // Warm the cache so an admin prompt override applies even on a cold instance.
-  await ensurePlatformCaches();
+  try {
+    await ensurePlatformCaches();
+  } catch (err) {
+    await refundCredits(uid, metered.creditCost);
+    throw err;
+  }
 
   // Step 4: Build the prompt
   let prompt: string;
@@ -187,14 +206,23 @@ export const analyzeResumeFunction = onCall({ invoker: "public", timeoutSeconds:
       // member would 404 with "No endpoints found that support image input".
       needsImageInput: hasImages,
     });
+    const generationStartedAt = Date.now();
+    const responseSchema = hasImages ? ANALYSIS_IMAGE_SCHEMA : ANALYSIS_SCHEMA;
     const result = await provider.generate({
       prompt,
       parts,
-      responseSchema: ANALYSIS_SCHEMA,
+      responseSchema,
+      maxOutputTokens: hasImages ? 8_192 : 4_096,
+      thinkingLevel: "low",
     });
 
     // Step 6: Return the structured result
-    return result.raw as AnalysisResult;
+    return requireStructuredResult<AnalysisResult>(
+      "analyzeResume",
+      result,
+      responseSchema,
+      generationStartedAt
+    );
   } catch (err) {
     // Model call failed after charging — refund so the user isn't billed for nothing.
     await refundCredits(uid, metered.creditCost);

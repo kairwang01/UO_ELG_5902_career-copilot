@@ -979,7 +979,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
         // Client watchdog: even if the call hangs, resolve to a retryable error.
         const results = await Promise.race([
             generateProfessionalHeadshot(uploadedImage.data),
-            new Promise<string[]>((_, reject) =>
+            new Promise<HeadshotImage[]>((_, reject) =>
                 setTimeout(() => reject(new Error(t('tool_portfolio_headshot_timeout'))), 120_000)),
         ]);
         if (!mountedRef.current || headshotRunRef.current !== runId) return; // cancelled / superseded
@@ -988,7 +988,7 @@ const PortfolioWebsiteBuilder: React.FC<PortfolioWebsiteBuilderProps> = ({ resum
           setHeadshotStep('photo_uploaded');
           return;
         }
-        setGeneratedImages(results.map(imgData => ({ mimeType: 'image/jpeg', data: imgData })));
+        setGeneratedImages(results);
         setHeadshotStep('generated');
     } catch (err) {
         if (!mountedRef.current || headshotRunRef.current !== runId) return;

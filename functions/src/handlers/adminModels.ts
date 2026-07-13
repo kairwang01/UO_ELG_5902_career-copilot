@@ -11,12 +11,13 @@
  *     create/overwrite api_key / api_keys material.
  *   - api_key and api_keys are NEVER returned raw — masked via maskSecret.
  *   - Raw keys are never written to the audit log — only an api_keys_changed flag.
- *   - Empty api_key on an update == "keep the existing key".
+ *   - Omitted optional fields on update are preserved; clearFields removes them.
+ *   - api_keys supplied on update are appended and de-duplicated, never replaced.
  *   - The "gemini" default model and the "custom" BYOA sentinel cannot be deleted.
  *
  * New fields (multi-key pooling + tier chains):
  *   api_keys   — pool of API keys (≤10, each ≤200 chars). Preferred over api_key.
- *   priority   — integer sort priority (higher = earlier in listings).
+ *   priority   — integer sort priority (lower = earlier for implicit fallback).
  *   fallbackChain — ordered model ids to try on availability failure (≤5 entries).
  */
 
@@ -67,6 +68,18 @@ const MAX_POOL_MEMBERS = 60;
 const MAX_MODULE_ROUTES = 80;
 const SLUG_RE = /^[a-zA-Z0-9_-]{1,48}$/;
 const KEY_HEALTH_COLLECTION = "key_health";
+
+const CLEARABLE_MODEL_FIELDS = [
+  "builtin",
+  "base_url",
+  "api_key",
+  "api_keys",
+  "fallbackChain",
+  "priority",
+  "supportsImageInput",
+] as const;
+type ClearableModelField = typeof CLEARABLE_MODEL_FIELDS[number];
+const CLEARABLE_MODEL_FIELD_SET = new Set<string>(CLEARABLE_MODEL_FIELDS);
 
 type ModelKeyHealth = {
   failureCount: number;
@@ -255,7 +268,8 @@ function validateEntry(raw: unknown, isCreate: boolean): ModelEntry {
   const enabled = m.enabled !== false; // default true
   // Multimodal capability: only an explicit boolean true marks a gateway model
   // as image-capable (gemini models are implicitly capable at runtime).
-  const supportsImageInput = m.supportsImageInput === true;
+  const supportsImageInput =
+    typeof m.supportsImageInput === "boolean" ? m.supportsImageInput : undefined;
 
   // --- api_keys pool validation ---
   let api_keys: string[] | undefined;
@@ -321,18 +335,32 @@ function validateEntry(raw: unknown, isCreate: boolean): ModelEntry {
     if (cleanedChain.length > 0) fallbackChain = cleanedChain;
   }
 
-  // For openai-compatible entries with no builtin, validate base_url on create.
-  if (provider === "openai-compatible" && !builtin) {
-    if (!base_url) {
+  const hasDirectConnectionFields = !!(base_url || api_key || (api_keys && api_keys.length > 0));
+  if (provider === "gemini" && (builtin || hasDirectConnectionFields)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Gemini models cannot include builtin, base_url, api_key, or api_keys fields."
+    );
+  }
+  if (provider === "openai-compatible" && builtin && hasDirectConnectionFields) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Builtin models inherit their connection and cannot include base_url, api_key, or api_keys fields."
+    );
+  }
+
+  // Existing connection fields may be omitted on update and are validated after
+  // merging. Creates must be complete unless this is the custom BYOA sentinel.
+  if (provider === "openai-compatible" && !builtin && id !== "custom") {
+    if (base_url && !base_url.startsWith("https://")) {
+      throw new HttpsError("invalid-argument", "model.base_url must start with https://");
+    }
+    if (isCreate && !base_url) {
       throw new HttpsError(
         "invalid-argument",
         "model.base_url (https URL) is required for openai-compatible models without a builtin."
       );
     }
-    if (!base_url.startsWith("https://")) {
-      throw new HttpsError("invalid-argument", "model.base_url must start with https://");
-    }
-    // On create, require at least one key (api_key or api_keys) when no builtin
     if (isCreate && !api_key && (!api_keys || api_keys.length === 0)) {
       throw new HttpsError(
         "invalid-argument",
@@ -358,9 +386,106 @@ function validateEntry(raw: unknown, isCreate: boolean): ModelEntry {
   // priority / fallbackChain
   if (priority !== undefined) entry.priority = priority;
   if (fallbackChain && fallbackChain.length > 0) entry.fallbackChain = fallbackChain;
-  if (supportsImageInput) entry.supportsImageInput = true;
+  if (supportsImageInput !== undefined) entry.supportsImageInput = supportsImageInput;
 
   return entry;
+}
+
+function validateClearFields(
+  raw: unknown,
+  isCreate: boolean,
+  rawModel: unknown
+): ClearableModelField[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    throw new HttpsError("invalid-argument", "clearFields must be an array.");
+  }
+  if (isCreate && raw.length > 0) {
+    throw new HttpsError("invalid-argument", "clearFields is only valid when updating a model.");
+  }
+
+  const model = rawModel && typeof rawModel === "object"
+    ? rawModel as Record<string, unknown>
+    : {};
+  const fields: ClearableModelField[] = [];
+  for (const candidate of raw) {
+    if (typeof candidate !== "string" || !CLEARABLE_MODEL_FIELD_SET.has(candidate)) {
+      throw new HttpsError(
+        "invalid-argument",
+        `clearFields contains unsupported field "${String(candidate)}".`
+      );
+    }
+    const field = candidate as ClearableModelField;
+    if (Object.prototype.hasOwnProperty.call(model, field)) {
+      throw new HttpsError(
+        "invalid-argument",
+        `model.${field} cannot be supplied and cleared in the same request.`
+      );
+    }
+    if (!fields.includes(field)) fields.push(field);
+  }
+  return fields;
+}
+
+function canonicalizeConnectionFields(entry: ModelEntry): ModelEntry {
+  const canonical = { ...entry };
+  if (canonical.provider === "gemini" || canonical.id === "custom") {
+    delete canonical.builtin;
+    delete canonical.base_url;
+    delete canonical.api_key;
+    delete canonical.api_keys;
+    return canonical;
+  }
+  if (canonical.builtin) {
+    delete canonical.base_url;
+    delete canonical.api_key;
+    delete canonical.api_keys;
+  }
+  return canonical;
+}
+
+function validateEffectiveConnection(entry: ModelEntry): void {
+  if (entry.id === "custom" || entry.provider === "gemini" || entry.builtin) return;
+  if (!entry.base_url || !entry.base_url.startsWith("https://")) {
+    throw new HttpsError(
+      "invalid-argument",
+      "model.base_url (https URL) is required for openai-compatible models without a builtin."
+    );
+  }
+  if (!entry.api_key && (!entry.api_keys || entry.api_keys.length === 0)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "An openai-compatible model without a builtin must retain at least one API key."
+    );
+  }
+}
+
+function mergeModelEntry(
+  existing: ModelEntry,
+  validated: ModelEntry,
+  clearFields: ClearableModelField[]
+): ModelEntry {
+  const merged: ModelEntry = { ...existing, ...validated };
+
+  // api_keys on an update are additions. The admin never receives raw saved
+  // keys, so treating this field as replacement would irreversibly drop them.
+  if (validated.api_keys?.length) {
+    merged.api_keys = [...new Set([...(existing.api_keys ?? []), ...validated.api_keys])];
+    if (merged.api_keys.length > MAX_API_KEYS) {
+      throw new HttpsError(
+        "invalid-argument",
+        `model.api_keys would contain ${merged.api_keys.length} keys; the maximum is ${MAX_API_KEYS}.`
+      );
+    }
+  }
+
+  for (const field of clearFields) {
+    delete merged[field];
+  }
+
+  const canonical = canonicalizeConnectionFields(merged);
+  validateEffectiveConnection(canonical);
+  return canonical;
 }
 
 // ---------------------------------------------------------------------------
@@ -543,7 +668,8 @@ export const adminListModelsFunction = onCall({ invoker: "public" }, async (requ
 /**
  * Creates or updates a model entry by id.
  *
- * - On update: empty api_key = keep existing api_key; omitted api_keys = keep existing.
+ * - On update: omitted optional fields are preserved; clearFields removes them.
+ * - api_keys supplied on update are appended and de-duplicated.
  * - Always refreshes the in-memory cache after writing.
  * - Never logs raw api_key / api_keys — only api_keys_changed boolean.
  *
@@ -551,7 +677,7 @@ export const adminListModelsFunction = onCall({ invoker: "public" }, async (requ
  */
 export const adminUpsertModelFunction = onCall({ invoker: "public" }, async (request) => {
   const { uid: adminUid } = await requireRole(request, "super");
-  const data = (request.data ?? {}) as { model?: unknown };
+  const data = (request.data ?? {}) as { model?: unknown; clearFields?: unknown };
 
   // Read current registry to determine create vs. update.
   await ensurePlatformCaches();
@@ -570,38 +696,32 @@ export const adminUpsertModelFunction = onCall({ invoker: "public" }, async (req
   const isCreate = existingIndex === -1;
 
   const validated = validateEntry(data.model, isCreate);
-
-  // Validate fallbackChain references against the current registry + the entry itself
-  validateChainReferences(validated, current);
+  const clearFields = validateClearFields(data.clearFields, isCreate, data.model);
 
   let nextRegistry: ModelEntry[];
+  let savedEntry: ModelEntry;
   if (isCreate) {
-    nextRegistry = [...current, validated];
+    savedEntry = canonicalizeConnectionFields(validated);
+    validateEffectiveConnection(savedEntry);
+    nextRegistry = [...current, savedEntry];
   } else {
     const existing = current[existingIndex];
-
-    // Preserve existing api_key when none supplied on update.
-    const mergedApiKey = validated.api_key || existing.api_key;
-    // Preserve existing api_keys pool when none supplied on update.
-    const mergedApiKeys =
-      validated.api_keys && validated.api_keys.length > 0
-        ? validated.api_keys
-        : existing.api_keys;
-
-    const merged: ModelEntry = { ...existing, ...validated };
-    if (mergedApiKey) {
-      merged.api_key = mergedApiKey;
-    } else {
-      delete merged.api_key;
-    }
-    if (mergedApiKeys && mergedApiKeys.length > 0) {
-      merged.api_keys = mergedApiKeys;
-    } else {
-      delete merged.api_keys;
-    }
-
-    nextRegistry = [...current.slice(0, existingIndex), merged, ...current.slice(existingIndex + 1)];
+    savedEntry = mergeModelEntry(existing, validated, clearFields);
+    nextRegistry = [
+      ...current.slice(0, existingIndex),
+      savedEntry,
+      ...current.slice(existingIndex + 1),
+    ];
   }
+
+  // Revalidate the effective entry after merge and every saved fallback/pin
+  // reference before writing. A credential clear must never leave routing pools
+  // pointing at a key the runtime can no longer use.
+  for (const entry of nextRegistry) validateChainReferences(entry, nextRegistry);
+  const currentRoutingPools = snap.exists
+    ? ((snap.data() as ModelsDoc).routing_pools ?? getRoutingPools())
+    : getRoutingPools();
+  validateRoutingPools(currentRoutingPools, nextRegistry);
 
   await ref.set({ models: nextRegistry } satisfies Partial<ModelsDoc>, { merge: true });
   await refreshPlatformCaches();
@@ -615,12 +735,18 @@ export const adminUpsertModelFunction = onCall({ invoker: "public" }, async (req
       provider: validated.provider,
       minTier: validated.minTier,
       enabled: validated.enabled,
-      builtin: validated.builtin ?? null,
-      base_url: validated.base_url ?? null,
-      priority: validated.priority ?? null,
-      fallbackChain: validated.fallbackChain ?? null,
+      builtin: savedEntry.builtin ?? null,
+      base_url: savedEntry.base_url ?? null,
+      priority: savedEntry.priority ?? null,
+      fallbackChain: savedEntry.fallbackChain ?? null,
+      cleared_fields: clearFields,
       // NEVER log raw keys — only whether keys were supplied.
-      api_keys_changed: !!(validated.api_key || (validated.api_keys && validated.api_keys.length > 0)),
+      api_keys_changed: !!(
+        validated.api_key ||
+        (validated.api_keys && validated.api_keys.length > 0) ||
+        clearFields.includes("api_key") ||
+        clearFields.includes("api_keys")
+      ),
     },
   });
 
@@ -720,7 +846,10 @@ export const adminUpdateModelRoutingFunction = onCall({ invoker: "public" }, asy
 export const _testRoutingValidation = {
   aggregateKeyHealth,
   implicitFallbackPreviewByTier,
+  mergeModelEntry,
   validateEntry,
+  validateClearFields,
+  validateEffectiveConnection,
   validateRoutingPools,
   validateModuleRoutes,
 };

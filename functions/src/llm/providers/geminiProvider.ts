@@ -14,8 +14,8 @@
  * for free-tier tasks and GeminiProvider("gemini-3-pro-preview") for heavy reasoning.
  */
 
-import { GoogleGenAI } from "@google/genai";
-import { LLMProvider, LLMRequest, LLMResult } from "../LLMProvider";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { LLMProvider, LLMRequest, LLMResult, LLMThinkingLevel } from "../LLMProvider";
 import { isQuotaError, isModelUnavailableError } from "../errorClassification";
 import {
   getGeminiApiKey,
@@ -35,12 +35,12 @@ import {
  * Ported from frontend services/geminiService.ts extractJson() so both sides
  * handle malformed responses the same way.
  */
-function extractJson(str: string): unknown {
+export function extractJson(str: string): unknown {
   const match = str.match(/```json\s*([\s\S]*?)\s*```/);
-  let jsonStr = (match?.[1] ?? str).trim();
+  const candidate = (match?.[1] ?? str).trim();
 
-  const firstBracket = jsonStr.indexOf("{");
-  const firstSquare = jsonStr.indexOf("[");
+  const firstBracket = candidate.indexOf("{");
+  const firstSquare = candidate.indexOf("[");
 
   let start = -1;
   if (firstBracket === -1) start = firstSquare;
@@ -51,7 +51,7 @@ function extractJson(str: string): unknown {
     throw new Error("No JSON object or array found in the AI response.");
   }
 
-  jsonStr = jsonStr.substring(start);
+  const jsonStr = firstCompleteJsonValue(candidate, start);
 
   try {
     return JSON.parse(jsonStr);
@@ -65,6 +65,32 @@ function extractJson(str: string): unknown {
       );
     }
   }
+}
+
+function firstCompleteJsonValue(input: string, start: number): string {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < input.length; index += 1) {
+    const char = input[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{" || char === "[") stack.push(char);
+    if (char === "}" || char === "]") {
+      const expected = char === "}" ? "{" : "[";
+      if (stack.pop() !== expected) break;
+      if (stack.length === 0) return input.slice(start, index + 1);
+    }
+  }
+  return input.slice(start);
 }
 
 export class GeminiProvider implements LLMProvider {
@@ -96,26 +122,25 @@ export class GeminiProvider implements LLMProvider {
         .map((p) => ({ inlineData: p.inlineData! }));
       contents = { parts: [textPart, ...binaryParts] };
     } else {
-      // Text-only: prepend system instruction if provided
-      contents = req.system
-        ? `${req.system}\n\n${req.prompt}`
-        : req.prompt;
+      contents = req.prompt;
     }
 
     // Build the config object
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const config: Record<string, any> = {};
+    if (req.system) {
+      // Keep policy/persona instructions at model priority. Concatenating them
+      // into user content made them easier for transcript text to override and
+      // dropped them completely on multimodal requests.
+      config.systemInstruction = req.system;
+    }
     if (req.useGoogleSearch) {
-      // Google Search grounding and structured output (responseSchema /
-      // responseMimeType) CANNOT be combined in one Gemini request — the API
-      // rejects the pair with HTTP 400, which is not a quota error so the quota
-      // fallback never fires and the whole tool call throws. When grounding is on
-      // we send only the search tool and recover JSON from the response text via
-      // extractJson() below (req.responseSchema still drives that parse), so
-      // callers that asked for JSON + grounding (findOpportunities,
-      // findIndustryEvents) keep working and return live-sourced results.
+      // Gemini 3 supports built-in tools and structured output in one request.
+      // Keeping the schema enabled is essential: otherwise search tools return
+      // best-effort JSON whose keys may not match the frontend contract.
       config.tools = [{ googleSearch: {} }];
-    } else if (req.responseSchema) {
+    }
+    if (req.responseSchema) {
       config.responseMimeType = "application/json";
       config.responseSchema = req.responseSchema;
     }
@@ -125,13 +150,29 @@ export class GeminiProvider implements LLMProvider {
     if (req.maxOutputTokens !== undefined) {
       config.maxOutputTokens = req.maxOutputTokens;
     }
+    // The SDK otherwise retries up to five times and has no useful request-level
+    // deadline. Outer routing owns fallback, so keep SDK retries bounded and let
+    // the route's remaining budget decide how long this attempt may run.
+    config.httpOptions = {
+      // Most callable surfaces have a 60-second outer deadline. Leave enough
+      // time for validation, logging, and credit refunds when callers do not
+      // provide a tighter routing budget.
+      timeout: normalizeTimeoutMs(req.timeoutMs, 45_000),
+      retryOptions: { attempts: 1 },
+    };
 
-    const generateWithModel = (model: string) =>
-      this.ai.models.generateContent({
+    const generateWithModel = (model: string) => {
+      const modelConfig = { ...config };
+      const thinkingLevel = resolveThinkingLevel(model, req.thinkingLevel);
+      if (thinkingLevel) {
+        modelConfig.thinkingConfig = { thinkingLevel };
+      }
+      return this.ai.models.generateContent({
         model,
         contents,
-        ...(Object.keys(config).length > 0 ? { config } : {}),
+        ...(Object.keys(modelConfig).length > 0 ? { config: modelConfig } : {}),
       });
+    };
 
     let modelUsed = this.model;
     let response;
@@ -153,6 +194,15 @@ export class GeminiProvider implements LLMProvider {
       throw new Error("Gemini returned an empty response.");
     }
 
+    const finishReason = response.candidates?.[0]?.finishReason;
+    if (finishReason && finishReason !== "STOP") {
+      throw new Error(
+        finishReason === "MAX_TOKENS"
+          ? "Gemini response was truncated before completion."
+          : `Gemini response stopped before completion (${finishReason}).`
+      );
+    }
+
     const text = response.text;
     const raw = req.responseSchema ? extractJson(text) : undefined;
     const groundingChunks = req.useGoogleSearch
@@ -163,6 +213,8 @@ export class GeminiProvider implements LLMProvider {
       text,
       raw,
       model: modelUsed,
+      provider: this.name,
+      finishReason,
       groundingChunks,
       usage: {
         inputTokens: response.usageMetadata?.promptTokenCount,
@@ -170,4 +222,35 @@ export class GeminiProvider implements LLMProvider {
       },
     };
   }
+}
+
+const THINKING_LEVEL_MAP: Record<LLMThinkingLevel, ThinkingLevel> = {
+  minimal: ThinkingLevel.MINIMAL,
+  low: ThinkingLevel.LOW,
+  medium: ThinkingLevel.MEDIUM,
+  high: ThinkingLevel.HIGH,
+};
+
+/**
+ * `gemini-flash-latest` currently aliases Gemini 3.5 Flash. Earlier Gemini
+ * generations reject thinkingLevel, so only known Gemini 3 ids/aliases receive
+ * the setting. Low is Google's recommended lower-latency level for analysis and
+ * writing tools and remains overridable per request.
+ */
+export function resolveThinkingLevel(
+  model: string,
+  requested?: LLMThinkingLevel
+): ThinkingLevel | undefined {
+  const normalized = model.trim().toLowerCase();
+  const supportsThinkingLevel =
+    /^gemini-3(?:[.-]|$)/.test(normalized) ||
+    normalized === "gemini-flash-latest" ||
+    normalized === "gemini-pro-latest";
+  if (!supportsThinkingLevel) return undefined;
+  return THINKING_LEVEL_MAP[requested ?? "low"];
+}
+
+function normalizeTimeoutMs(value: number | undefined, fallback: number): number {
+  if (!Number.isFinite(value) || (value ?? 0) < 1_000) return fallback;
+  return Math.min(180_000, Math.floor(value!));
 }

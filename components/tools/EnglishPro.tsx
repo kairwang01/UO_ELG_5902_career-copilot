@@ -410,7 +410,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 prompt: writtenInput,
                 result: res,
             });
-            await handlePracticeCompletion(alive);
+            void handlePracticeCompletion(alive);
         } catch (err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
@@ -430,7 +430,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 transcript: finalTranscript,
                 result: res,
             });
-            await handlePracticeCompletion(alive);
+            void handlePracticeCompletion(alive);
         } catch (err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     }, [targetIeltsBand, currentTopic, persistEnglishProResult, handlePracticeCompletion, begin, end]);
@@ -573,7 +573,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 answers: [],
                 evaluation: null,
             });
-            await handlePracticeCompletion(alive);
+            void handlePracticeCompletion(alive);
         } catch(err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
@@ -618,7 +618,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 answers: normalizedAnswers,
                 evaluation,
             });
-            await handlePracticeCompletion(alive);
+            void handlePracticeCompletion(alive);
         } catch(err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
@@ -652,7 +652,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                 transcription: userTranscription,
                 result: res,
             });
-            await handlePracticeCompletion(alive);
+            void handlePracticeCompletion(alive);
         } catch(err) { if (alive()) setError(err instanceof Error ? err.message : t('unexpected_error')); }
         finally { if (alive()) end(); }
     };
@@ -935,8 +935,11 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                 </button>
                             </div>
                             <div className="p-4 border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 space-y-3">
-                                <h5 className="font-bold text-gray-800 dark:text-gray-100">{t('tool_english_pro_reading_paste_text')}</h5>
+                                <label htmlFor="english-pro-reading-input" className="block font-bold text-gray-800 dark:text-gray-100">
+                                    {t('tool_english_pro_reading_paste_text')}
+                                </label>
                                 <textarea
+                                    id="english-pro-reading-input"
                                     data-qa="english-pro-reading-input"
                                     value={readingUserInput}
                                     onChange={e => setReadingUserInput(e.target.value)}
@@ -972,7 +975,8 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
                         {/* Vocabulary list (only on analyzed user text) */}
                         {!practiceResult?.passage && (practiceResult as EnglishReadingAnalysisResult | null)?.vocabularyList?.length ? renderResultCard(t('tool_english_pro_key_vocabulary'), (
-                            <table className="w-full text-xs">
+                            <div className="overflow-x-auto">
+                            <table className="min-w-[640px] w-full text-xs">
                                 <thead><tr className="text-left text-gray-500 dark:text-gray-400 border-b dark:border-slate-600"><th className="pb-1 pr-2">{t('tool_english_pro_vocab_word')}</th><th className="pb-1 pr-2">{t('tool_english_pro_vocab_definition')}</th><th className="pb-1">{t('tool_english_pro_vocab_example')}</th></tr></thead>
                                 <tbody>
                                     {(practiceResult as EnglishReadingAnalysisResult).vocabularyList.map((v, i) => (
@@ -984,6 +988,7 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         )) : null}
 
                         {/* Summary (analyzed text only) */}
@@ -997,27 +1002,38 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
                             <ol className="space-y-4 mt-1">
                                 {questions.map((q, i) => (
                                     <li key={i} className="space-y-1">
-                                        <p className="font-medium text-gray-800 dark:text-gray-100">{i + 1}. {q.question}</p>
                                         {!readingEvaluation ? (
-                                            <input
-                                                data-qa={`english-pro-reading-answer-${i + 1}`}
-                                                type="text"
-                                                value={userAnswers[i] ?? ''}
-                                                onChange={e => {
-                                                    const next = [...userAnswers];
-                                                    next[i] = e.target.value;
-                                                    setUserAnswers(next);
-                                                }}
-                                                placeholder={t('tool_english_pro_reading_your_answer')}
-                                                className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm text-sm px-3 py-1.5"
-                                            />
+                                            <>
+                                                <label
+                                                    htmlFor={`english-pro-reading-answer-${i + 1}`}
+                                                    className="block font-medium text-gray-800 dark:text-gray-100"
+                                                >
+                                                    {i + 1}. {q.question}
+                                                </label>
+                                                <input
+                                                    id={`english-pro-reading-answer-${i + 1}`}
+                                                    data-qa={`english-pro-reading-answer-${i + 1}`}
+                                                    type="text"
+                                                    value={userAnswers[i] ?? ''}
+                                                    onChange={e => {
+                                                        const next = [...userAnswers];
+                                                        next[i] = e.target.value;
+                                                        setUserAnswers(next);
+                                                    }}
+                                                    placeholder={t('tool_english_pro_reading_your_answer')}
+                                                    className="w-full border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm text-sm px-3 py-1.5"
+                                                />
+                                            </>
                                         ) : (
-                                            <div data-qa={`english-pro-reading-evaluation-${i + 1}`} className={`p-3 rounded-md text-sm ${readingEvaluation[i]?.isCorrect ? 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700'}`}>
+                                            <div>
+                                                <p className="font-medium text-gray-800 dark:text-gray-100">{i + 1}. {q.question}</p>
+                                                <div data-qa={`english-pro-reading-evaluation-${i + 1}`} className={`mt-1 p-3 rounded-md text-sm ${readingEvaluation[i]?.isCorrect ? 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700'}`}>
                                                 <p className="font-semibold">{readingEvaluation[i]?.isCorrect ? t('tool_english_pro_correct') : t('tool_english_pro_incorrect')}</p>
                                                 <p className="text-gray-600 dark:text-gray-300">{readingEvaluation[i]?.feedback}</p>
                                                 {!readingEvaluation[i]?.isCorrect && (
                                                     <p className="mt-1"><span className="font-medium">{t('tool_english_pro_reading_correct_answer')}:</span> {q.answer}</p>
                                                 )}
+                                                </div>
                                             </div>
                                         )}
                                     </li>
@@ -1271,8 +1287,9 @@ const EnglishPro: React.FC<EnglishProProps> = ({ t, session, profile, refreshPro
 
                         {/* Transcription input */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_english_pro_listening_desc')}</label>
+                            <label htmlFor="english-pro-listening-transcription" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('tool_english_pro_listening_desc')}</label>
                             <textarea
+                                id="english-pro-listening-transcription"
                                 data-qa="english-pro-listening-transcription"
                                 value={userTranscription}
                                 onChange={e => setUserTranscription(e.target.value)}

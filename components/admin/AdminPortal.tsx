@@ -61,6 +61,7 @@ import {
   type AdminToolQuota,
   type AdminUserRow,
   type AuditLogEntry,
+  type ModelClearableField,
   type ModelEntry,
   type ModuleRoutes,
   type PromptEntry,
@@ -81,6 +82,7 @@ import Avatar from '../Avatar';
 import { ToastProvider } from '../Toast';
 import ConfirmActionDialog from '../ConfirmActionDialog';
 import { ViewportAwareDialog } from '../ViewportAwareDialog';
+import { useModalBehavior } from '../../hooks/useModalBehavior';
 
 // Minimal i18n stub ? keys returned in StructuredOutput.
 const STRINGS: Record<string, string> = {
@@ -938,6 +940,7 @@ const AdminPortal: React.FC = () => {
   // paint its data under a user the admin has since switched to.
   const selectedUidRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
+  const accountDialogRef = useRef<HTMLDivElement | null>(null);
   const modelPanelRef = useRef<HTMLDivElement | null>(null);
   const modelSectionRefs = useRef<Partial<Record<ModelSectionId, HTMLElement | null>>>({});
   const modelScrollTargetRef = useRef<ModelSectionId | null>(null);
@@ -997,6 +1000,7 @@ const AdminPortal: React.FC = () => {
   const [mfProviderModel, setMfProviderModel] = useState('');
   const [mfMinTier, setMfMinTier] = useState<ModelEntry['minTier']>('free');
   const [mfEnabled, setMfEnabled] = useState(true);
+  const [mfSupportsImageInput, setMfSupportsImageInput] = useState(false);
 
   // LLM form fields
   const [geminiKey, setGeminiKey] = useState('');
@@ -1041,6 +1045,8 @@ const AdminPortal: React.FC = () => {
   const [accountSaving, setAccountSaving] = useState(false);
   const [accountPasswordSaving, setAccountPasswordSaving] = useState(false);
   const [accountMessage, setAccountMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const closeAccountDialog = useCallback(() => setAccountOpen(false), []);
+  useModalBehavior(closeAccountDialog, accountOpen, true, accountDialogRef);
 
   const [adminConfirm, setAdminConfirm] = useState<AdminConfirmState | null>(null);
   const [adminConfirmLoading, setAdminConfirmLoading] = useState(false);
@@ -1537,30 +1543,6 @@ const AdminPortal: React.FC = () => {
 
   // Mutators.
 
-  const saveLlm = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const updated = await adminUpdateLlmConfig({
-        gemini_api_key: geminiKey || undefined,
-        gemini_model: geminiModel || undefined,
-        gemini_fallback_model: geminiFallbackModel || undefined,
-        kairllm_api_key: kairllmKey || undefined,
-        kairllm_base_url: kairllmUrl || undefined,
-        deepseek_api_key: deepseekKey || undefined,
-        deepseek_base_url: deepseekUrl || undefined,
-      });
-      setLlm(updated);
-      setGeminiKey('');
-      setKairllmKey('');
-      setDeepseekKey('');
-    } catch (e) {
-      setError(formatAdminPortalError(e, adminRole, 'Save model and key settings', 'Save failed'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const saveQuotas = async () => {
     setLoading(true);
     setError(null);
@@ -1894,12 +1876,13 @@ const AdminPortal: React.FC = () => {
       setMfProviderModel('');
       setMfMinTier('free');
       setMfEnabled(true);
+      setMfSupportsImageInput(false);
     } else {
       setMfId(entry.id);
       setMfLabel(entry.label);
       setMfProvider(entry.provider);
-      setMfBuiltin(entry.builtin ?? '');
-      setMfBaseUrl(entry.base_url ?? '');
+      setMfBuiltin(entry.provider === 'openai-compatible' ? entry.builtin ?? '' : '');
+      setMfBaseUrl(entry.provider === 'openai-compatible' && !entry.builtin ? entry.base_url ?? '' : '');
       setMfApiKey(''); // never pre-fill ? masked value is display-only
       setMfApiKeys(''); // new keys textarea starts empty
       setMfFallbackChain((entry.fallbackChain ?? []).filter((id) => id !== 'custom'));
@@ -1907,6 +1890,7 @@ const AdminPortal: React.FC = () => {
       setMfProviderModel(entry.providerModel);
       setMfMinTier(entry.minTier);
       setMfEnabled(entry.enabled);
+      setMfSupportsImageInput(entry.supportsImageInput === true);
     }
     setModelForm(entry);
   };
@@ -1919,9 +1903,11 @@ const AdminPortal: React.FC = () => {
     // client-side validation
     if (!id) { setError('Model id is required.'); return; }
     if (!label) { setError('Display label is required.'); return; }
+    const isCustomSentinel = id === 'custom';
     if (
       mfProvider === 'openai-compatible' &&
       !mfBuiltin &&
+      !isCustomSentinel &&
       (!baseUrl || !baseUrl.startsWith('https://'))
     ) {
       setError('Base URL must start with https:// for openai-compatible models without a builtin.');
@@ -1934,18 +1920,73 @@ const AdminPortal: React.FC = () => {
       .map((k) => k.trim())
       .filter(Boolean);
 
+    const original = modelForm !== 'new' ? modelForm : null;
+    const usesDirectCredentials =
+      mfProvider === 'openai-compatible' && !mfBuiltin && !isCustomSentinel;
+    const originalUsesDirectCredentials = !!original &&
+      original.provider === 'openai-compatible' && !original.builtin;
+    const hasSavedDirectKey = !!original?.api_key || (original?.api_keys?.length ?? 0) > 0;
+    if (
+      usesDirectCredentials &&
+      !mfApiKey.trim() &&
+      newKeys.length === 0 &&
+      (!originalUsesDirectCredentials || !hasSavedDirectKey)
+    ) {
+      setError('At least one API key is required for an openai-compatible model without a builtin.');
+      return;
+    }
+
+    const clearFields: ModelClearableField[] = [];
+    const clearIfStored = (field: ModelClearableField, stored: boolean) => {
+      if (original && stored && !clearFields.includes(field)) clearFields.push(field);
+    };
+
+    if (mfProvider === 'gemini') {
+      clearIfStored('builtin', !!original?.builtin);
+      clearIfStored('base_url', !!original?.base_url);
+      clearIfStored('api_key', !!original?.api_key);
+      clearIfStored('api_keys', (original?.api_keys?.length ?? 0) > 0);
+      clearIfStored('supportsImageInput', original?.supportsImageInput !== undefined);
+    } else if (mfBuiltin) {
+      clearIfStored('base_url', !!original?.base_url);
+      clearIfStored('api_key', !!original?.api_key);
+      clearIfStored('api_keys', (original?.api_keys?.length ?? 0) > 0);
+    } else {
+      clearIfStored('builtin', !!original?.builtin);
+    }
+    if (mfFallbackChain.length === 0) {
+      clearIfStored('fallbackChain', (original?.fallbackChain?.length ?? 0) > 0);
+    }
+    if (mfPriority === '') {
+      clearIfStored('priority', original?.priority !== undefined);
+    }
+
+    const removesSavedCredentials = !!original && !usesDirectCredentials &&
+      (!!original.api_key || (original.api_keys?.length ?? 0) > 0);
+    if (
+      removesSavedCredentials &&
+      !window.confirm('Changing this connection mode will permanently remove its saved direct API keys. Continue?')
+    ) {
+      return;
+    }
+
     const entry: ModelEntry = {
       id,
       label,
       provider: mfProvider,
-      ...(mfBuiltin ? { builtin: mfBuiltin as ModelEntry['builtin'] } : {}),
-      ...(baseUrl ? { base_url: baseUrl } : {}),
+      ...(mfProvider === 'openai-compatible' && mfBuiltin
+        ? { builtin: mfBuiltin as ModelEntry['builtin'] }
+        : {}),
+      ...(usesDirectCredentials && baseUrl ? { base_url: baseUrl } : {}),
       // send api_key only if non-empty; empty = keep existing
-      ...(mfApiKey ? { api_key: mfApiKey } : {}),
+      ...(usesDirectCredentials && mfApiKey.trim() ? { api_key: mfApiKey.trim() } : {}),
       // send api_keys only if new keys were typed
-      ...(newKeys.length > 0 ? { api_keys: newKeys } : {}),
+      ...(usesDirectCredentials && newKeys.length > 0 ? { api_keys: newKeys } : {}),
       ...(mfFallbackChain.length > 0 ? { fallbackChain: mfFallbackChain } : {}),
       ...(mfPriority !== '' ? { priority: Number(mfPriority) } : {}),
+      ...(mfProvider === 'openai-compatible'
+        ? { supportsImageInput: mfSupportsImageInput }
+        : {}),
       providerModel: mfProviderModel.trim(),
       minTier: mfMinTier,
       enabled: mfEnabled,
@@ -1954,7 +1995,7 @@ const AdminPortal: React.FC = () => {
     setModelSaving(true);
     setError(null);
     try {
-      const res = await adminUpsertModel(entry);
+      const res = await adminUpsertModel(entry, { clearFields });
       setModels(res.models);
       setModelForm(null);
     } catch (e) {
@@ -2137,16 +2178,24 @@ const AdminPortal: React.FC = () => {
       onSignOut={() => data.auth.signOut()}
     >
         {accountOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4" role="dialog" aria-modal="true" aria-labelledby="admin-account-title">
-            <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4" role="presentation">
+            <div
+              ref={accountDialogRef}
+              className="w-full max-w-lg rounded-lg bg-white shadow-xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="admin-account-title"
+              aria-describedby="admin-account-description"
+              tabIndex={-1}
+            >
               <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
                 <div>
                   <h2 id="admin-account-title" className="text-base font-semibold text-gray-900">Account details</h2>
-                  <p className="mt-0.5 text-xs text-gray-500">Signed in to the admin console.</p>
+                  <p id="admin-account-description" className="mt-0.5 text-xs text-gray-500">Signed in to the admin console.</p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setAccountOpen(false)}
+                  onClick={closeAccountDialog}
                   className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   aria-label="Close account details"
                 >
@@ -2760,7 +2809,18 @@ const AdminPortal: React.FC = () => {
                       <ModelFormSelect
                         id="mf-provider"
                         value={mfProvider}
-                        onChange={(value) => setMfProvider(value as ModelEntry['provider'])}
+                        onChange={(value) => {
+                          const provider = value as ModelEntry['provider'];
+                          setMfProvider(provider);
+                          setTest('__form__', { state: 'idle' });
+                          if (provider === 'gemini') {
+                            setMfBuiltin('');
+                            setMfBaseUrl('');
+                            setMfApiKey('');
+                            setMfApiKeys('');
+                            setMfSupportsImageInput(false);
+                          }
+                        }}
                         options={[
                           { value: 'gemini', label: 'gemini' },
                           { value: 'openai-compatible', label: 'openai-compatible' },
@@ -2769,27 +2829,38 @@ const AdminPortal: React.FC = () => {
                     </div>
 
                     {/* Builtin */}
-                    <div>
-                      <FieldLabel htmlFor="mf-builtin">
-                        Built-in{' '}
-                        <span className="font-normal text-gray-500 text-xs">
-                          (inherits platform key/url)
-                        </span>
-                      </FieldLabel>
-                      <ModelFormSelect
-                        id="mf-builtin"
-                        value={mfBuiltin || '__none__'}
-                        onChange={(value) => setMfBuiltin(value === '__none__' ? '' : value as ModelEntry['builtin'])}
-                        options={[
-                          { value: '__none__', label: 'none' },
-                          { value: 'kairllm', label: 'kairllm' },
-                          { value: 'deepseek', label: 'deepseek' },
-                        ]}
-                      />
-                    </div>
+                    {mfProvider === 'openai-compatible' && mfId !== 'custom' && (
+                      <div>
+                        <FieldLabel htmlFor="mf-builtin">
+                          Built-in{' '}
+                          <span className="font-normal text-gray-500 text-xs">
+                            (inherits platform key/url)
+                          </span>
+                        </FieldLabel>
+                        <ModelFormSelect
+                          id="mf-builtin"
+                          value={mfBuiltin || '__none__'}
+                          onChange={(value) => {
+                            const builtin = value === '__none__' ? '' : value as ModelEntry['builtin'];
+                            setMfBuiltin(builtin);
+                            setTest('__form__', { state: 'idle' });
+                            if (builtin) {
+                              setMfBaseUrl('');
+                              setMfApiKey('');
+                              setMfApiKeys('');
+                            }
+                          }}
+                          options={[
+                            { value: '__none__', label: 'none' },
+                            { value: 'kairllm', label: 'kairllm' },
+                            { value: 'deepseek', label: 'deepseek' },
+                          ]}
+                        />
+                      </div>
+                    )}
 
                     {/* Base URL ? only relevant for openai-compatible non-builtin */}
-                    {mfProvider === 'openai-compatible' && !mfBuiltin && (
+                    {mfProvider === 'openai-compatible' && !mfBuiltin && mfId !== 'custom' && (
                       <div className="sm:col-span-2">
                         <FieldLabel htmlFor="mf-base-url">Base URL</FieldLabel>
                         <input
@@ -2803,7 +2874,7 @@ const AdminPortal: React.FC = () => {
                     )}
 
                     {/* API Key ? only for openai-compatible non-builtin */}
-                    {mfProvider === 'openai-compatible' && !mfBuiltin && (
+                    {mfProvider === 'openai-compatible' && !mfBuiltin && mfId !== 'custom' && (
                       <div className="sm:col-span-2 space-y-3">
                         <div>
                           <FieldLabel htmlFor="mf-api-key">API key (single)</FieldLabel>
@@ -2878,6 +2949,23 @@ const AdminPortal: React.FC = () => {
                           </p>
                         </div>
                       </div>
+                    )}
+
+                    {mfProvider === 'openai-compatible' && mfId !== 'custom' && (
+                      <label className="sm:col-span-2 flex items-start gap-3 text-sm text-gray-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={mfSupportsImageInput}
+                          onChange={(e) => setMfSupportsImageInput(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded accent-blue-600"
+                        />
+                        <span>
+                          Supports image input
+                          <span className="block text-[11px] font-normal text-gray-500">
+                            Enable only when this provider model accepts inline image parts.
+                          </span>
+                        </span>
+                      </label>
                     )}
                     </div>
                   </div>
@@ -2990,19 +3078,46 @@ const AdminPortal: React.FC = () => {
                   {/* Form Test + Save row */}
                   {(() => {
                     const fts = testStatus['__form__'] ?? { state: 'idle' };
+                    const original = modelForm !== 'new' ? modelForm : null;
+                    const pendingPoolKey = mfApiKeys
+                      .split('\n')
+                      .map((key) => key.trim())
+                      .find(Boolean);
+                    const pendingTestKey = mfApiKey.trim() || pendingPoolKey || '';
+                    const connectionChanged = !!original && (
+                      mfProvider !== original.provider ||
+                      (mfProvider === 'openai-compatible' ? mfBuiltin : '') !== (original.builtin ?? '') ||
+                      (mfProvider === 'openai-compatible' && !mfBuiltin ? mfBaseUrl.trim() : '') !== (original.base_url ?? '') ||
+                      mfProviderModel.trim() !== original.providerModel
+                    );
+                    const originalUsesDirectCredentials = !!original && original.id !== 'custom' &&
+                      original.provider === 'openai-compatible' && !original.builtin;
+                    const usesDirectCredentials =
+                      mfId !== 'custom' && mfProvider === 'openai-compatible' && !mfBuiltin;
+                    const testsSavedConnection = !!original && !pendingTestKey && (
+                      !connectionChanged ||
+                      (usesDirectCredentials && originalUsesDirectCredentials)
+                    );
                     const runFormTest = async () => {
                       setTest('__form__', { state: 'running' });
                       try {
-                        const input = modelForm !== 'new' && !mfApiKey && !mfBaseUrl
-                          // saved model with no changes typed ? test by id
+                        if (
+                          usesDirectCredentials &&
+                          !pendingTestKey &&
+                          (!original || !originalUsesDirectCredentials)
+                        ) {
+                          throw new Error('Enter an API key to test this unsaved direct connection.');
+                        }
+                        const input = testsSavedConnection
+                          // Stored secrets are intentionally masked. Test the saved
+                          // registry entry unless a fresh raw key makes ad-hoc testing possible.
                           ? { id: mfId }
                           : {
                               config: {
                                 provider: mfProvider,
                                 ...(mfBuiltin ? { builtin: mfBuiltin as 'kairllm' | 'deepseek' } : {}),
-                                ...(mfBaseUrl ? { base_url: mfBaseUrl } : {}),
-                                // only send api_key if the admin has typed a fresh one
-                                ...(mfApiKey ? { api_key: mfApiKey } : {}),
+                                ...(usesDirectCredentials && mfBaseUrl.trim() ? { base_url: mfBaseUrl.trim() } : {}),
+                                ...(usesDirectCredentials && pendingTestKey ? { api_key: pendingTestKey } : {}),
                                 ...(mfProviderModel ? { providerModel: mfProviderModel } : {}),
                               },
                             };
@@ -3026,10 +3141,15 @@ const AdminPortal: React.FC = () => {
                             ) : (
                               <Zap className="h-3.5 w-3.5" aria-hidden="true" />
                             )}
-                            Test connection
+                            {testsSavedConnection ? 'Test saved connection' : 'Test connection'}
                           </button>
                           <SaveButton onClick={saveModel} loading={modelSaving} label="Save model" />
                         </div>
+                        {testsSavedConnection && connectionChanged && (
+                          <p className="text-[11px] text-amber-700">
+                            Unsaved endpoint or model changes require a fresh API key to test; this checks the currently saved connection.
+                          </p>
+                        )}
                         {fts.state === 'done' && (
                           <div className={`rounded-md px-3 py-2 text-xs flex flex-col gap-0.5 ${fts.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
                             <span className="inline-flex items-center gap-1.5 font-medium">
@@ -3077,7 +3197,7 @@ const AdminPortal: React.FC = () => {
                   <EmptyState message="No models configured yet. Use 'Add model' to create one." />
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full table-fixed text-sm">
+                    <table className="min-w-[900px] w-full table-fixed text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           {/* 6 columns: identity · connection · access · state · test · actions.
@@ -3446,7 +3566,7 @@ const AdminPortal: React.FC = () => {
                       <>
                         <div>
                           <FieldLabel htmlFor="gemini-model">Model</FieldLabel>
-                          <input id="gemini-model" value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} placeholder="gemini-2.0-flash" disabled={!canWriteModels} className={textInput} />
+                          <input id="gemini-model" value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} placeholder="gemini-3.5-flash" disabled={!canWriteModels} className={textInput} />
                         </div>
                         <div>
                           <FieldLabel htmlFor="gemini-fallback-model">Fallback model</FieldLabel>
@@ -4523,11 +4643,21 @@ const AdminPortal: React.FC = () => {
                           onClick={() => openUser(u.uid)}
                         >
                           <td className="px-5 py-3 text-gray-900 font-medium">
-                            {u.full_name || (
-                              <span className="font-mono text-xs text-gray-500">
-                                {u.uid.slice(0, 10)}...
-                              </span>
-                            )}
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openUser(u.uid);
+                              }}
+                              className="rounded text-left hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                              aria-label={`Open user ${userLabel}`}
+                            >
+                              {u.full_name || (
+                                <span className="font-mono text-xs text-gray-500">
+                                  {u.uid.slice(0, 10)}...
+                                </span>
+                              )}
+                            </button>
                           </td>
                           <td className="px-5 py-3 text-gray-600">
                             <div className="flex flex-wrap items-center gap-2">
@@ -5159,7 +5289,3 @@ const AdminPortal: React.FC = () => {
 };
 
 export default AdminPortal;
-
-
-
-

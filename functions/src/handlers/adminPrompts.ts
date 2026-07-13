@@ -154,6 +154,22 @@ function validateKeyAndContent(key: unknown, content: unknown): void {
       `content exceeds maximum length of ${PROMPT_MAX_LENGTH} characters.`
     );
   }
+  const missing = missingPromptPlaceholders(key, content as string);
+  if (missing.length > 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      `content is missing required placeholders: ${missing.map((name) => `{{${name}}}`).join(", ")}`
+    );
+  }
+}
+
+export function missingPromptPlaceholders(promptKey: string, content: string): string[] {
+  const required = [...getPromptDefault(promptKey).matchAll(/\{\{\s*(\w+)\s*\}\}/g)]
+    .map((match) => match[1]);
+  const present = new Set(
+    [...content.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((match) => match[1])
+  );
+  return [...new Set(required)].filter((name) => !present.has(name));
 }
 
 // ---------------------------------------------------------------------------

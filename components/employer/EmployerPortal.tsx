@@ -27,6 +27,7 @@ import {
   type JobPostingWithCount,
 } from '../../lib/recruitingData';
 import { useToast } from '../Toast';
+import { useModalBehavior } from '../../hooks/useModalBehavior';
 
 interface KpiData {
   activeJobs: number;
@@ -78,6 +79,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const [jobToEdit, setJobToEdit] = useState<JobPostingWithCount | null>(null);
   const [planSaving, setPlanSaving] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const mobileNavDialogRef = useRef<HTMLDivElement | null>(null);
   const [talentPoolInitialJobId, setTalentPoolInitialJobId] = useState<string | null>(null);
   const { addToast } = useToast();
   const mainRef = useRef<HTMLElement | null>(null);
@@ -90,6 +92,8 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   // Previous page before entering post-job/funnel views
   const [prevPage, setPrevPage] = useState<PortalPage>('dashboard');
   const [accountBackPage, setAccountBackPage] = useState<PortalPage>('dashboard');
+  const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
+  useModalBehavior(closeMobileNav, isMobileNavOpen, true, mobileNavDialogRef);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -300,19 +304,21 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   const renderMobileNavDrawer = (page: PortalPage) =>
     isMobileNavOpen ? (
       <div
+        ref={mobileNavDialogRef}
         className="fixed inset-0 z-50 lg:hidden"
         role="dialog"
         aria-modal="true"
         aria-label={t('portal_open_navigation')}
+        tabIndex={-1}
         data-qa="employer-mobile-nav-drawer"
       >
         <div
           className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
-          onClick={() => setIsMobileNavOpen(false)}
+          onClick={closeMobileNav}
           aria-hidden="true"
         />
         <div className="absolute inset-y-0 left-0 animate-slide-in-left">
-          <PortalSidebar {...sidebarProps} currentPage={page} mobile />
+          <PortalSidebar {...sidebarProps} currentPage={page} mobile onCloseMobile={closeMobileNav} />
         </div>
       </div>
     ) : null;
@@ -321,7 +327,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
   if (jobForFunnel) {
     return (
       <PortalAccountMenuProvider value={accountMenuProps}>
-        <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className={`flex h-dvh w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
           <PortalSidebar {...sidebarProps} currentPage={prevPage} />
           {renderMobileNavDrawer(prevPage)}
           <main
@@ -356,7 +362,7 @@ export const EmployerPortal: React.FC<EmployerPortalProps> = ({
 
   return (
     <PortalAccountMenuProvider value={accountMenuProps}>
-      <div className={`flex h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`flex h-dvh w-full ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
         <PortalSidebar {...sidebarProps} currentPage={currentPage} />
         {renderMobileNavDrawer(currentPage)}
 

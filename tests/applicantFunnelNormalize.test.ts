@@ -59,7 +59,7 @@ describe('applicant funnel normalization', () => {
     expect(applicant.candidate_name).toBe('');
     expect(applicant.application_date).toBeNull();
     expect(applicant.status).toBe('Submitted');
-    expect(applicant.compatibility_score).toBe(0);
+    expect(applicant.compatibility_score).toBeNull();
     expect(applicant.summary).toBe('');
     expect(applicant.strengths).toEqual(['React']);
     expect(applicant.potentialGaps).toEqual([]);
@@ -108,7 +108,7 @@ describe('applicant funnel normalization', () => {
     expect(malformed.suggestedQuestions).toEqual([]);
     expect(malformed.status_history).toEqual([]);
     expect(malformed.screener_answers).toEqual([]);
-    expect(malformed.compatibility_score).toBe(0);
+    expect(malformed.compatibility_score).toBeNull();
   });
 
   it('drops non-renderable applicant rows before they reach the funnel UI', () => {

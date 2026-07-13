@@ -20,14 +20,17 @@ import {
   uploadBytesResumable,
 } from 'firebase/storage';
 import { app } from '../lib/firebaseClient';
+import {
+  assertResumeFileAccepted,
+  isSupportedResumeFile,
+  MAX_RESUME_FILE_BYTES,
+  ResumeFileValidationError,
+} from '../lib/resumeFileValidation';
 
 // Resumes can be larger and slower to upload than avatars, so allow more time.
 const UPLOAD_TIMEOUT_MS = 60_000;
-export const MAX_RESUME_BYTES = 10 * 1024 * 1024; // 10 MB — matches storage.rules
-
-// Accept the same formats parseFile() handles (extension OR mime).
-const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'doc', 'txt', 'png', 'jpg', 'jpeg'];
-const ALLOWED_MIME_PREFIXES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats', 'text/', 'image/'];
+export const MAX_RESUME_BYTES = MAX_RESUME_FILE_BYTES; // Matches storage.rules.
+export { isSupportedResumeFile };
 
 export interface ResumeFileMeta {
   resume_file_url: string;
@@ -42,28 +45,17 @@ const extensionOf = (name: string): string => {
   return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
 };
 
-/** True when the file is a format we both parse and are allowed to store. */
-export const isSupportedResumeFile = (file: File): boolean => {
-  const ext = extensionOf(file.name);
-  if (ext && ALLOWED_EXTENSIONS.includes(ext)) return true;
-  const mime = (file.type || '').toLowerCase();
-  return ALLOWED_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
-};
-
 /**
  * Upload `file` to resumes/{uid}/{uuid}.{ext} and return the metadata to persist
  * on the user profile. Throws on oversize / unsupported / timeout / upload error.
  */
 export const uploadResumeFile = async (uid: string, file: File): Promise<ResumeFileMeta> => {
   if (!uid) throw new Error('A signed-in user is required to save a resume file.');
-  if (file.size >= MAX_RESUME_BYTES) {
-    // Reject at exactly 10 MB so the client stays strictly stricter than the
-    // Storage rule (size < 10 MB) and the friendly message fires instead of an
-    // opaque rules denial.
-    throw new Error('Resume file must be smaller than 10 MB.');
-  }
-  if (!isSupportedResumeFile(file)) {
-    throw new Error('Unsupported file type. Upload a PDF, Word document, or text file.');
+  try {
+    assertResumeFileAccepted(file);
+  } catch (error) {
+    if (error instanceof ResumeFileValidationError) throw error;
+    throw new Error('Unsupported file type. Upload a PDF, DOCX, text, PNG, or JPEG file.');
   }
 
   const ext = extensionOf(file.name) || 'bin';
